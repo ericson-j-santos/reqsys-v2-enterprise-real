@@ -124,15 +124,24 @@ if ([string]::IsNullOrWhiteSpace($ProjetoDir)) {
     $ProjetoDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 }
 
-$composePath = Join-Path $ProjetoDir 'docker-compose.yml'
-$envPath = Join-Path $ProjetoDir '.env'
+$preflightScript = Join-Path $PSScriptRoot 'testar-preflight-docker.ps1'
+if (-not (Test-Path -LiteralPath $preflightScript -PathType Leaf)) {
+    throw "Preflight Docker nao encontrado: $preflightScript"
+}
 
-if (-not (Test-Path $composePath)) {
-    throw "docker-compose.yml nao encontrado em: $ProjetoDir"
-}
-if (-not (Test-Path $envPath)) {
-    throw ".env nao encontrado em: $ProjetoDir"
-}
+$preflight = & $preflightScript -ProjetoDir $ProjetoDir -Ambiente dev -ExigirEnv -Quiet
+$ProjetoDir = $preflight.ProjetoDir
+
+$composePath = Join-Path $ProjetoDir 'docker-compose.yml'
+$composeDevPath = Join-Path $ProjetoDir 'docker-compose.dev.yml'
+$envPath = Join-Path $ProjetoDir '.env'
+$composeArgs = @(
+    'compose',
+    '--project-directory', $ProjetoDir,
+    '--project-name', 'reqsys-dev',
+    '-f', $composePath,
+    '-f', $composeDevPath
+)
 
 Step "Projeto: $ProjetoDir"
 Set-Location $ProjetoDir
@@ -184,14 +193,20 @@ if (-not $dockerOk) {
 
 Ok "Docker disponivel."
 
-Step "Subindo stack"
-docker compose up -d
+Step "Validando configuracao Compose"
+& docker @composeArgs config --quiet
 if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao executar docker compose up -d"
+    throw "Configuracao Docker Compose invalida. Nenhum container foi iniciado."
+}
+
+Step "Subindo stack"
+& docker @composeArgs up -d --wait --wait-timeout 120
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao iniciar a stack dev ou aguardar servicos saudaveis."
 }
 
 Step "Status dos containers"
-docker compose ps
+& docker @composeArgs ps
 
 $gatewayFinal = $novoGateway
 $ssrsBase = 'http://localhost:8082/ReportServer'

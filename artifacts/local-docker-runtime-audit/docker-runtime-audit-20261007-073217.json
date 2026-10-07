@@ -1,0 +1,3282 @@
+{
+  "schema_version": 2,
+  "generated_at_utc": "2026-10-07T10:32:17.5450769Z",
+  "collection_started_at_utc": "2026-10-07T10:30:16.0262858Z",
+  "collection_finished_at_utc": "2026-10-07T10:32:17.5450769Z",
+  "log_lookback_minutes": 30,
+  "host_scope": "local-workstation-redacted",
+  "path_alias_scheme": "sha256-prefix-12-and-leaf",
+  "restart_threshold": 3,
+  "summary": {
+    "total_containers": 69,
+    "running": 17,
+    "restarting": 0,
+    "running_unhealthy": 0,
+    "historical_unhealthy": 5,
+    "running_without_resource_limits": 17,
+    "running_json_file_without_rotation": 17,
+    "running_with_missing_compose": 7,
+    "missing_bind_sources": 10,
+    "bind_source_type_mismatches": 3,
+    "critical_findings": 2,
+    "high_findings": 70
+  },
+  "findings": [
+    {
+      "container": "reqsys-selfhost-rehearsal2-20261002-api-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "state": "exited",
+      "severity": "high",
+      "code": "unhealthy",
+      "detail": "state=exited; health=unhealthy"
+    },
+    {
+      "container": "reqsys-selfhost-rehearsal2-20261002-db-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "state": "exited",
+      "severity": "high",
+      "code": "unhealthy",
+      "detail": "state=exited; health=unhealthy"
+    },
+    {
+      "container": "reqsys-selfhost-rehearsal-20261002-db-1",
+      "project": "reqsys-selfhost-rehearsal-20261002",
+      "state": "exited",
+      "severity": "high",
+      "code": "unhealthy",
+      "detail": "state=exited; health=unhealthy"
+    },
+    {
+      "container": "reqsys-live-api-1",
+      "project": "reqsys-live",
+      "state": "running",
+      "severity": "high",
+      "code": "persistent-dev-restart",
+      "detail": "project=reqsys-live; policy=unless-stopped"
+    },
+    {
+      "container": "reqsys-live-frontend-1",
+      "project": "reqsys-live",
+      "state": "running",
+      "severity": "high",
+      "code": "persistent-dev-restart",
+      "detail": "project=reqsys-live; policy=unless-stopped"
+    },
+    {
+      "container": "reqsys-dev-failover-tunnel",
+      "project": "",
+      "state": "running",
+      "severity": "critical",
+      "code": "cloudflare-tunnel-not-found",
+      "detail": "matches_30m=118"
+    },
+    {
+      "container": "reqsys-dev-gateway-tunnel",
+      "project": "",
+      "state": "running",
+      "severity": "critical",
+      "code": "cloudflare-tunnel-not-found",
+      "detail": "matches_30m=108"
+    },
+    {
+      "container": "github-main-frontend-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+    },
+    {
+      "container": "github-main-api-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "unhealthy",
+      "detail": "state=exited; health=unhealthy"
+    },
+    {
+      "container": "github-main-api-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+    },
+    {
+      "container": "github-main-kb-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+    },
+    {
+      "container": "github-main-nginx-1",
+      "project": "github-main",
+      "state": "created",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+    },
+    {
+      "container": "github-main-db-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "unhealthy",
+      "detail": "state=exited; health=unhealthy"
+    },
+    {
+      "container": "github-main-db-1",
+      "project": "github-main",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+    },
+    {
+      "container": "reqsys-test-nginx-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "bind-source-type-mismatch",
+      "detail": "source=<LOCAL_PATH:b84dc3e3b888>/default.dev.conf; destination=/etc/nginx/conf.d/default.conf; expected=file; actual=directory"
+    },
+    {
+      "container": "reqsys-test-nginx-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-test-nginx-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+    },
+    {
+      "container": "reqsys-test-frontend-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "historical-restart-storm",
+      "detail": "state=exited; restart_count=6991"
+    },
+    {
+      "container": "reqsys-test-frontend-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-test-frontend-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+    },
+    {
+      "container": "reqsys-test-api-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-test-api-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+    },
+    {
+      "container": "reqsys-test-kb-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-test-kb-1",
+      "project": "reqsys-test",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+    },
+    {
+      "container": "reqsys-v2-enterprise-real-kb-1",
+      "project": "reqsys-v2-enterprise-real",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-v2-enterprise-real-kb-1",
+      "project": "reqsys-v2-enterprise-real",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+    },
+    {
+      "container": "reqsys-dev-kb-1",
+      "project": "reqsys-dev",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-dev-kb-1",
+      "project": "reqsys-dev",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:97dcc34a0091>/docker-compose.dev.yml"
+    },
+    {
+      "container": "reqsys-dev-kb-1",
+      "project": "reqsys-dev",
+      "state": "running",
+      "severity": "high",
+      "code": "persistent-dev-restart",
+      "detail": "project=reqsys-dev; policy=unless-stopped"
+    },
+    {
+      "container": "reqsys-prod-nginx-1",
+      "project": "reqsys-prod",
+      "state": "exited",
+      "severity": "high",
+      "code": "bind-source-type-mismatch",
+      "detail": "source=<LOCAL_PATH:c74302271e6e>/default.prod.conf; destination=/etc/nginx/conf.d/default.conf; expected=file; actual=directory"
+    },
+    {
+      "container": "reqsys-prod-nginx-1",
+      "project": "reqsys-prod",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-prod-nginx-1",
+      "project": "reqsys-prod",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+    },
+    {
+      "container": "reqsys-prod-frontend-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-prod-frontend-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+    },
+    {
+      "container": "reqsys-prod-api-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-prod-api-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+    },
+    {
+      "container": "reqsys-prod-kb-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+    },
+    {
+      "container": "reqsys-prod-kb-1",
+      "project": "reqsys-prod",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+    },
+    {
+      "container": "mvp_intelligence-web-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:d12fa7f61011>/nginx.conf; destination=/etc/nginx/nginx.conf; expected=file; actual=missing"
+    },
+    {
+      "container": "mvp_intelligence-web-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:db481afae7e8>/frontend; destination=/usr/share/nginx/html; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "mvp_intelligence-web-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+    },
+    {
+      "container": "mvp_intelligence-api-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:e7d2d10f34b3>/mvp_intelligence; destination=/app; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "mvp_intelligence-api-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+    },
+    {
+      "container": "mvp_intelligence-sqlserver-1",
+      "project": "mvp_intelligence",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+    },
+    {
+      "container": "redmine-proxy",
+      "project": "redmine-docker",
+      "state": "exited",
+      "severity": "high",
+      "code": "bind-source-type-mismatch",
+      "detail": "source=<LOCAL_PATH:5d9ae133b2b0>/Caddyfile; destination=/etc/caddy/Caddyfile; expected=file; actual=directory"
+    },
+    {
+      "container": "redmine-proxy",
+      "project": "redmine-docker",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+    },
+    {
+      "container": "redmine-app",
+      "project": "redmine-docker",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+    },
+    {
+      "container": "redmine-db",
+      "project": "redmine-docker",
+      "state": "running",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+    },
+    {
+      "container": "egovhub-frontend",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+    },
+    {
+      "container": "egovhub-backend",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+    },
+    {
+      "container": "cpf_suite_monorepo_v1_1_0-api-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+    },
+    {
+      "container": "cpf_suite_monorepo_v1_1_0-worker-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+    },
+    {
+      "container": "cpf_suite_monorepo_v1_1_0-front-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+    },
+    {
+      "container": "db-stack-docker-web-1",
+      "project": "db-stack-docker",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:30fb9bcb37d5>/certs; destination=/etc/nginx/certs; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "db-stack-docker-web-1",
+      "project": "db-stack-docker",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+    },
+    {
+      "container": "db-stack-docker-api-1",
+      "project": "db-stack-docker",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-nginx-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-app-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "infra-worker-1",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-grafana-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:d859d47146bb>/dashboards; destination=/etc/grafana/provisioning/dashboards; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-grafana-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:899520fab74a>/datasources; destination=/etc/grafana/provisioning/datasources; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-grafana-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:a67bbf56af64>/dashboard.json; destination=/var/lib/grafana/dashboards/dashboard.json; expected=file; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-grafana-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-prometheus-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:cf622b217bec>/prometheus.yml; destination=/etc/prometheus/prometheus.yml; expected=file; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-prometheus-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-appdb-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:de9be3267dc9>/appdb; destination=/docker-entrypoint-initdb.d; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-appdb-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "console_seguro_bundle_compose-rodb-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-bind-source",
+      "detail": "source=<LOCAL_PATH:6303f122bf32>/init_rodb; destination=/docker-entrypoint-initdb.d; expected=unspecified; actual=missing"
+    },
+    {
+      "container": "console_seguro_bundle_compose-rodb-1",
+      "project": "console_seguro_bundle_compose",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+    },
+    {
+      "container": "infra-redis-1",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+    },
+    {
+      "container": "infra-postgres-1",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+    },
+    {
+      "container": "infra-rabbitmq-1",
+      "project": "infra",
+      "state": "exited",
+      "severity": "high",
+      "code": "missing-compose-file",
+      "detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+    }
+  ],
+  "containers": [
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-caddy-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "caddy",
+      "image": "caddy:2-alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:53:07.027621794Z",
+      "started_at": "2026-10-02T18:53:20.988405856Z",
+      "finished_at": "2026-10-02T18:53:24.694356404Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-gateway-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "gateway",
+      "image": "nginx:1.28-alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:53:06.74293051Z",
+      "started_at": "2026-10-02T18:53:20.423272643Z",
+      "finished_at": "2026-10-02T18:53:25.670950209Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-api-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "api",
+      "image": "reqsys-selfhost-rehearsal2-20261002-api",
+      "state": "exited",
+      "health": "unhealthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:53:06.43105613Z",
+      "started_at": "2026-10-02T18:53:07.888245071Z",
+      "finished_at": "2026-10-02T18:53:26.867382719Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "unhealthy",
+          "Detail": "state=exited; health=unhealthy"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-frontend-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "frontend",
+      "image": "reqsys-selfhost-rehearsal2-20261002-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:53:06.294381421Z",
+      "started_at": "2026-10-02T18:53:07.374311467Z",
+      "finished_at": "2026-10-02T18:53:26.02587995Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-db-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "db",
+      "image": "postgres:16-alpine",
+      "state": "exited",
+      "health": "unhealthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:51:11.99886907Z",
+      "started_at": "2026-10-02T18:51:12.461971804Z",
+      "finished_at": "2026-10-02T18:53:28.094743115Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "unhealthy",
+          "Detail": "state=exited; health=unhealthy"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal2-20261002-redis-1",
+      "project": "reqsys-selfhost-rehearsal2-20261002",
+      "service": "redis",
+      "image": "redis:7-alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:51:11.973126048Z",
+      "started_at": "2026-10-02T18:51:12.369263553Z",
+      "finished_at": "2026-10-02T18:53:27.751283055Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal-20261002-db-1",
+      "project": "reqsys-selfhost-rehearsal-20261002",
+      "service": "db",
+      "image": "postgres:16-alpine",
+      "state": "exited",
+      "health": "unhealthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:47:50.690151209Z",
+      "started_at": "2026-10-02T18:47:51.741182289Z",
+      "finished_at": "2026-10-02T18:53:29.499205938Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "unhealthy",
+          "Detail": "state=exited; health=unhealthy"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-selfhost-rehearsal-20261002-redis-1",
+      "project": "reqsys-selfhost-rehearsal-20261002",
+      "service": "redis",
+      "image": "redis:7-alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-10-02T18:44:13.710224851Z",
+      "started_at": "2026-10-02T18:44:14.092549462Z",
+      "finished_at": "2026-10-02T18:53:29.510314987Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:b1bcab0a33c9>/compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-live-api-1",
+      "project": "reqsys-live",
+      "service": "api",
+      "image": "reqsys-live-api",
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-22T17:53:22.163505928Z",
+      "started_at": "2026-10-01T20:46:43.392523155Z",
+      "finished_at": "2026-10-01T20:46:40.54535381Z",
+      "cpu": "3.43%",
+      "memory": "134.2MiB / 7.603GiB",
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:e9ef57596ef1>/docker-compose.yml",
+        "<LOCAL_PATH:0bb0362a7a78>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "persistent-dev-restart",
+          "Detail": "project=reqsys-live; policy=unless-stopped"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-live-frontend-1",
+      "project": "reqsys-live",
+      "service": "frontend",
+      "image": "reqsys-live-frontend",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-22T16:37:30.329556403Z",
+      "started_at": "2026-10-01T20:46:43.615829589Z",
+      "finished_at": "2026-10-01T20:46:40.548350094Z",
+      "cpu": "0.00%",
+      "memory": "167.2MiB / 7.603GiB",
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:e9ef57596ef1>/docker-compose.yml",
+        "<LOCAL_PATH:0bb0362a7a78>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "persistent-dev-restart",
+          "Detail": "project=reqsys-live; policy=unless-stopped"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-dev-failover-tunnel",
+      "project": "",
+      "service": "",
+      "image": "cloudflare/cloudflared:latest",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-20T19:52:29.550893759Z",
+      "started_at": "2026-10-01T20:46:43.434738142Z",
+      "finished_at": "2026-10-01T20:46:40.539050569Z",
+      "cpu": "4.18%",
+      "memory": "59.06MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {
+        "cloudflare-tunnel-not-found": 118
+      },
+      "findings": [
+        {
+          "Severity": "critical",
+          "Code": "cloudflare-tunnel-not-found",
+          "Detail": "matches_30m=118"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-dev-gateway-tunnel",
+      "project": "",
+      "service": "",
+      "image": "cloudflare/cloudflared:latest",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-20T19:52:26.285819232Z",
+      "started_at": "2026-10-01T20:46:43.595002547Z",
+      "finished_at": "2026-10-01T20:46:40.539018335Z",
+      "cpu": "0.00%",
+      "memory": "20.81MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {
+        "cloudflare-tunnel-not-found": 108
+      },
+      "findings": [
+        {
+          "Severity": "critical",
+          "Code": "cloudflare-tunnel-not-found",
+          "Detail": "matches_30m=108"
+        }
+      ]
+    },
+    {
+      "name": "todo-global-24x7-gateway-1",
+      "project": "todo-global-24x7",
+      "service": "gateway",
+      "image": "todo-global-24x7-gateway",
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0,
+      "restart_count": 1,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-15T23:52:37.053315099Z",
+      "started_at": "2026-10-01T20:46:49.795050747Z",
+      "finished_at": "2026-10-01T20:46:47.974375008Z",
+      "cpu": "0.34%",
+      "memory": "68.39MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:89640447822a>/docker-compose.pc24x7.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "todo-global-24x7-db-1",
+      "project": "todo-global-24x7",
+      "service": "db",
+      "image": "postgres:16-alpine",
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-09-15T23:41:33.583279912Z",
+      "started_at": "2026-10-01T20:46:43.282301612Z",
+      "finished_at": "2026-10-01T20:46:40.548395037Z",
+      "cpu": "10.14%",
+      "memory": "31.11MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:89640447822a>/docker-compose.pc24x7.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "kettle-bottle-20260914",
+      "project": "",
+      "service": "",
+      "image": "ghcr.io/homebrew/core/kettle:9.4.0.0-343",
+      "state": "created",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-09-14T20:10:50.744675167Z",
+      "started_at": "0001-01-01T00:00:00Z",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "github-main-frontend-1",
+      "project": "github-main",
+      "service": "frontend",
+      "image": "github-main-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 143,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-08-06T23:47:23.898128333Z",
+      "started_at": "2026-10-01T20:46:43.575311703Z",
+      "finished_at": "2026-10-07T09:51:36.098760174Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:dd09ad39a761>/docker-compose.yml",
+        "<LOCAL_PATH:da214d209928>/docker-compose.dev.yml",
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+        }
+      ]
+    },
+    {
+      "name": "github-main-api-1",
+      "project": "github-main",
+      "service": "api",
+      "image": "github-main-api",
+      "state": "exited",
+      "health": "unhealthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-08-06T23:47:19.63557871Z",
+      "started_at": "2026-10-01T20:46:43.586541301Z",
+      "finished_at": "2026-10-07T09:51:31.834227562Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:dd09ad39a761>/docker-compose.yml",
+        "<LOCAL_PATH:da214d209928>/docker-compose.dev.yml",
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "unhealthy",
+          "Detail": "state=exited; health=unhealthy"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+        }
+      ]
+    },
+    {
+      "name": "github-main-kb-1",
+      "project": "github-main",
+      "service": "kb",
+      "image": "github-main-kb",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-08-06T23:47:19.2324026Z",
+      "started_at": "2026-10-01T20:46:43.61233221Z",
+      "finished_at": "2026-10-07T09:51:36.553913338Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:dd09ad39a761>/docker-compose.yml",
+        "<LOCAL_PATH:da214d209928>/docker-compose.dev.yml",
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+        }
+      ]
+    },
+    {
+      "name": "github-main-nginx-1",
+      "project": "github-main",
+      "service": "nginx",
+      "image": "nginx:alpine",
+      "state": "created",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-08-06T23:40:42.632002455Z",
+      "started_at": "0001-01-01T00:00:00Z",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:dd09ad39a761>/docker-compose.yml",
+        "<LOCAL_PATH:da214d209928>/docker-compose.dev.yml",
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+        }
+      ]
+    },
+    {
+      "name": "github-main-db-1",
+      "project": "github-main",
+      "service": "db",
+      "image": "postgres:16-alpine",
+      "state": "exited",
+      "health": "unhealthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-08-06T23:40:26.294996283Z",
+      "started_at": "2026-10-01T20:46:43.635713604Z",
+      "finished_at": "2026-10-07T09:51:28.593786183Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": true,
+      "compose_files": [
+        "<LOCAL_PATH:dd09ad39a761>/docker-compose.yml",
+        "<LOCAL_PATH:da214d209928>/docker-compose.dev.yml",
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "unhealthy",
+          "Detail": "state=exited; health=unhealthy"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:a6c120120ab8>/docker-compose.kb-host.yml"
+        }
+      ]
+    },
+    {
+      "name": "fila-dashboard-redis",
+      "project": "fila-dashboard",
+      "service": "redis",
+      "image": "redis:7-alpine",
+      "state": "exited",
+      "health": "starting",
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-07-06T23:29:18.139443107Z",
+      "started_at": "2026-07-06T23:29:18.867624806Z",
+      "finished_at": "2026-07-07T19:40:13.91504062Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:9895498e3274>/docker-compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-live-nginx-1",
+      "project": "reqsys-live",
+      "service": "nginx",
+      "image": "nginx:alpine",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-06-15T20:14:40.323686138Z",
+      "started_at": "2026-10-01T20:46:43.640876843Z",
+      "finished_at": "2026-10-01T20:46:40.538597914Z",
+      "cpu": "0.00%",
+      "memory": "10.91MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:e9ef57596ef1>/docker-compose.yml",
+        "<LOCAL_PATH:0bb0362a7a78>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "docker-maven-run-9caabc41cd76",
+      "project": "docker",
+      "service": "maven",
+      "image": "maven:3.9.9-eclipse-temurin-21",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-14T19:43:11.023523062Z",
+      "started_at": "2026-06-14T19:43:11.45735539Z",
+      "finished_at": "2026-06-15T12:43:43.712755776Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml",
+        "<LOCAL_PATH:b0830420ed54>/docker-compose.maven.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "docker-maven-run-c29b5105d60e",
+      "project": "docker",
+      "service": "maven",
+      "image": "maven:3.9.9-eclipse-temurin-21",
+      "state": "exited",
+      "health": null,
+      "exit_code": 137,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-14T19:26:30.180307941Z",
+      "started_at": "2026-06-14T19:26:30.534892487Z",
+      "finished_at": "2026-06-14T19:37:27.954166131Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml",
+        "<LOCAL_PATH:b0830420ed54>/docker-compose.maven.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "docker-maven-run-c3431d8b04f5",
+      "project": "docker",
+      "service": "maven",
+      "image": "maven:3.9.9-eclipse-temurin-21",
+      "state": "exited",
+      "health": null,
+      "exit_code": 1,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-14T19:23:28.537625593Z",
+      "started_at": "2026-06-14T19:23:28.750720471Z",
+      "finished_at": "2026-06-14T19:23:30.577311731Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml",
+        "<LOCAL_PATH:b0830420ed54>/docker-compose.maven.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "docker-maven-run-36c139051787",
+      "project": "docker",
+      "service": "maven",
+      "image": "maven:3.9.9-eclipse-temurin-21",
+      "state": "exited",
+      "health": null,
+      "exit_code": 1,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-14T19:18:21.132419809Z",
+      "started_at": "2026-06-14T19:18:21.771938792Z",
+      "finished_at": "2026-06-14T19:18:45.593958014Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml",
+        "<LOCAL_PATH:b0830420ed54>/docker-compose.maven.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-java-enterprise-api",
+      "project": "docker",
+      "service": "maven",
+      "image": "maven:3.9.9-eclipse-temurin-21",
+      "state": "exited",
+      "health": null,
+      "exit_code": 1,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-14T18:30:16.413716811Z",
+      "started_at": "2026-06-14T18:30:18.318179887Z",
+      "finished_at": "2026-06-14T18:30:30.39752513Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml",
+        "<LOCAL_PATH:b0830420ed54>/docker-compose.maven.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-sqlserver",
+      "project": "docker",
+      "service": "sqlserver",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "state": "exited",
+      "health": "starting",
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-06-12T03:39:44.338622028Z",
+      "started_at": "2026-06-14T18:28:23.948325703Z",
+      "finished_at": "2026-06-15T12:43:43.712354885Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:6ff11e28cd7f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-test-nginx-1",
+      "project": "reqsys-test",
+      "service": "nginx",
+      "image": "nginx:alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 127,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-21T21:54:49.394504616Z",
+      "started_at": "2026-05-27T11:42:04.923045462Z",
+      "finished_at": "2026-05-28T19:15:30.712220891Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:b84dc3e3b888>/default.dev.conf",
+          "destination": "/etc/nginx/conf.d/default.conf",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "bind_mount_issues": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:b84dc3e3b888>/default.dev.conf",
+          "destination": "/etc/nginx/conf.d/default.conf",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "bind-source-type-mismatch",
+          "Detail": "source=<LOCAL_PATH:b84dc3e3b888>/default.dev.conf; destination=/etc/nginx/conf.d/default.conf; expected=file; actual=directory"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-test-frontend-1",
+      "project": "reqsys-test",
+      "service": "frontend",
+      "image": "reqsys-test-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 254,
+      "restart_count": 6991,
+      "restart_policy": "no",
+      "created_at": "2026-05-21T21:54:49.044497031Z",
+      "started_at": "2026-10-07T09:40:19.000119317Z",
+      "finished_at": "2026-10-07T09:40:30.083742742Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "historical-restart-storm",
+          "Detail": "state=exited; restart_count=6991"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-test-api-1",
+      "project": "reqsys-test",
+      "service": "api",
+      "image": "reqsys-test-api",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-21T21:54:48.748930131Z",
+      "started_at": "2026-10-01T20:46:43.456847137Z",
+      "finished_at": "2026-10-07T09:51:37.484296528Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-test-kb-1",
+      "project": "reqsys-test",
+      "service": "kb",
+      "image": "reqsys-test-kb",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-21T21:54:48.653575306Z",
+      "started_at": "2026-10-01T20:46:43.210325851Z",
+      "finished_at": "2026-10-07T09:51:35.597032356Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-v2-enterprise-real-kb-1",
+      "project": "reqsys-v2-enterprise-real",
+      "service": "kb",
+      "image": "reqsys-v2-enterprise-real-kb",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T23:34:46.977608444Z",
+      "started_at": "2026-10-01T20:46:43.327758963Z",
+      "finished_at": "2026-10-01T20:46:40.522256564Z",
+      "cpu": "0.26%",
+      "memory": "55.36MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:136e7f15034f>/docker-compose.test.yml"
+        }
+      ]
+    },
+    {
+      "name": "ai-metrics-dev-frontend-1",
+      "project": "ai-metrics-dev",
+      "service": "frontend",
+      "image": "ai-metrics-dev-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 143,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-06T00:10:52.213342747Z",
+      "started_at": "2026-10-01T20:46:43.388956167Z",
+      "finished_at": "2026-10-07T09:51:33.770429684Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:965b6c3b7bbd>/docker-compose.yml",
+        "<LOCAL_PATH:d624fe691da4>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "ai-metrics-dev-api-1",
+      "project": "ai-metrics-dev",
+      "service": "api",
+      "image": "ai-metrics-dev-api",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-06T00:10:50.227150709Z",
+      "started_at": "2026-10-01T20:46:43.628773647Z",
+      "finished_at": "2026-10-07T09:51:33.59302017Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:965b6c3b7bbd>/docker-compose.yml",
+        "<LOCAL_PATH:d624fe691da4>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-dev-kb-1",
+      "project": "reqsys-dev",
+      "service": "kb",
+      "image": "reqsys-dev-kb",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:08:31.785349177Z",
+      "started_at": "2026-10-01T20:46:43.629181656Z",
+      "finished_at": "2026-10-01T20:46:40.522086061Z",
+      "cpu": "0.31%",
+      "memory": "50.29MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:97dcc34a0091>/docker-compose.dev.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:97dcc34a0091>/docker-compose.dev.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:97dcc34a0091>/docker-compose.dev.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "persistent-dev-restart",
+          "Detail": "project=reqsys-dev; policy=unless-stopped"
+        }
+      ]
+    },
+    {
+      "name": "ai-metrics-prod-frontend-1",
+      "project": "ai-metrics-prod",
+      "service": "frontend",
+      "image": "ai-metrics-prod-frontend",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:04:34.71989191Z",
+      "started_at": "2026-10-01T20:46:43.572172221Z",
+      "finished_at": "2026-10-01T20:46:40.545306175Z",
+      "cpu": "0.00%",
+      "memory": "10.22MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:965b6c3b7bbd>/docker-compose.yml",
+        "<LOCAL_PATH:cfdd63b6fc96>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "ai-metrics-prod-api-1",
+      "project": "ai-metrics-prod",
+      "service": "api",
+      "image": "ai-metrics-prod-api",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:04:34.439998494Z",
+      "started_at": "2026-10-01T20:46:43.589943885Z",
+      "finished_at": "2026-10-01T20:46:40.522183077Z",
+      "cpu": "0.98%",
+      "memory": "206.8MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:965b6c3b7bbd>/docker-compose.yml",
+        "<LOCAL_PATH:cfdd63b6fc96>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "reqsys-prod-nginx-1",
+      "project": "reqsys-prod",
+      "service": "nginx",
+      "image": "nginx:alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 127,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:03:39.980740072Z",
+      "started_at": "2026-05-27T11:42:04.581159441Z",
+      "finished_at": "2026-05-28T19:15:30.713611153Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:c74302271e6e>/default.prod.conf",
+          "destination": "/etc/nginx/conf.d/default.conf",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "bind_mount_issues": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:c74302271e6e>/default.prod.conf",
+          "destination": "/etc/nginx/conf.d/default.conf",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "bind-source-type-mismatch",
+          "Detail": "source=<LOCAL_PATH:c74302271e6e>/default.prod.conf; destination=/etc/nginx/conf.d/default.conf; expected=file; actual=directory"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-prod-frontend-1",
+      "project": "reqsys-prod",
+      "service": "frontend",
+      "image": "reqsys-prod-frontend",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:03:39.022712297Z",
+      "started_at": "2026-10-01T20:46:43.347372342Z",
+      "finished_at": "2026-10-01T20:46:40.548130756Z",
+      "cpu": "0.00%",
+      "memory": "15.11MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-prod-api-1",
+      "project": "reqsys-prod",
+      "service": "api",
+      "image": "reqsys-prod-api",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:03:37.605805823Z",
+      "started_at": "2026-10-01T20:46:43.608099228Z",
+      "finished_at": "2026-10-01T20:46:40.539257206Z",
+      "cpu": "0.92%",
+      "memory": "162.3MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+        }
+      ]
+    },
+    {
+      "name": "reqsys-prod-kb-1",
+      "project": "reqsys-prod",
+      "service": "kb",
+      "image": "reqsys-prod-kb",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-06T00:03:37.449012297Z",
+      "started_at": "2026-10-01T20:46:43.202848497Z",
+      "finished_at": "2026-10-01T20:46:40.538619861Z",
+      "cpu": "0.26%",
+      "memory": "70.17MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml",
+        "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:846f1de38ec6>/docker-compose.yml"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:fb97e1182d23>/docker-compose.prod.yml"
+        }
+      ]
+    },
+    {
+      "name": "kb",
+      "project": "kb",
+      "service": "kb",
+      "image": "kb:1.0.0",
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-05T18:55:59.749279131Z",
+      "started_at": "2026-10-01T20:46:43.581295827Z",
+      "finished_at": "2026-10-01T20:46:40.545426237Z",
+      "cpu": "0.28%",
+      "memory": "52.57MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:5e22b6e42423>/docker-compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "teams-outbox-v2-bundle-backend-1",
+      "project": "teams-outbox-v2-bundle",
+      "service": "backend",
+      "image": "teams-outbox-v2-bundle-backend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-04T22:19:10.682354037Z",
+      "started_at": "2026-05-04T22:19:14.540068953Z",
+      "finished_at": "2026-05-05T10:27:28.524949957Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:70c7b0ea9f8d>/docker-compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "sqlserver-linux",
+      "project": "",
+      "service": "",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-04T22:13:38.213899889Z",
+      "started_at": "2026-05-04T22:13:39.048063234Z",
+      "finished_at": "2026-05-05T10:27:28.525142605Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "teams-outbox-v2-bundle-frontend-1",
+      "project": "teams-outbox-v2-bundle",
+      "service": "frontend",
+      "image": "teams-outbox-v2-bundle-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-04T22:11:18.704873473Z",
+      "started_at": "2026-05-04T22:11:20.866729542Z",
+      "finished_at": "2026-05-05T10:27:28.524684863Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:70c7b0ea9f8d>/docker-compose.yml"
+      ],
+      "missing_compose_files": [],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": []
+    },
+    {
+      "name": "mvp_intelligence-web-1",
+      "project": "mvp_intelligence",
+      "service": "web",
+      "image": "nginx:alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-02T03:30:09.022116733Z",
+      "started_at": "2026-05-03T21:07:31.880109234Z",
+      "finished_at": "2026-05-04T11:29:29.005344387Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:d12fa7f61011>/nginx.conf",
+        "<LOCAL_PATH:db481afae7e8>/frontend"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:d12fa7f61011>/nginx.conf",
+          "destination": "/etc/nginx/nginx.conf",
+          "expected_type": "file",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        },
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:db481afae7e8>/frontend",
+          "destination": "/usr/share/nginx/html",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:d12fa7f61011>/nginx.conf; destination=/etc/nginx/nginx.conf; expected=file; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:db481afae7e8>/frontend; destination=/usr/share/nginx/html; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "mvp_intelligence-api-1",
+      "project": "mvp_intelligence",
+      "service": "api",
+      "image": "mvp_intelligence-api",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-02T03:25:38.019047123Z",
+      "started_at": "2026-05-03T21:07:30.009394336Z",
+      "finished_at": "2026-05-04T11:29:29.055173808Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:e7d2d10f34b3>/mvp_intelligence"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:e7d2d10f34b3>/mvp_intelligence",
+          "destination": "/app",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:e7d2d10f34b3>/mvp_intelligence; destination=/app; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "mvp_intelligence-sqlserver-1",
+      "project": "mvp_intelligence",
+      "service": "sqlserver",
+      "image": "mcr.microsoft.com/mssql/server:2019-latest",
+      "state": "exited",
+      "health": "starting",
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-05-02T03:25:37.6820418Z",
+      "started_at": "2026-05-03T21:07:19.515732696Z",
+      "finished_at": "2026-05-04T11:29:29.05495601Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:61328094fd45>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "redmine-proxy",
+      "project": "redmine-docker",
+      "service": "redmine-proxy",
+      "image": "caddy:2-alpine",
+      "state": "exited",
+      "health": null,
+      "exit_code": 127,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-01T20:55:31.92712278Z",
+      "started_at": "2026-05-04T11:29:34.636023831Z",
+      "finished_at": "2026-05-05T10:27:28.525078098Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:5d9ae133b2b0>/Caddyfile",
+          "destination": "/etc/caddy/Caddyfile",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": true
+        }
+      ],
+      "bind_mount_issues": [
+        {
+          "code": "bind-source-type-mismatch",
+          "source": "<LOCAL_PATH:5d9ae133b2b0>/Caddyfile",
+          "destination": "/etc/caddy/Caddyfile",
+          "expected_type": "file",
+          "actual_type": "directory",
+          "docker_desktop_path_normalized": true
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "bind-source-type-mismatch",
+          "Detail": "source=<LOCAL_PATH:5d9ae133b2b0>/Caddyfile; destination=/etc/caddy/Caddyfile; expected=file; actual=directory"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "redmine-app",
+      "project": "redmine-docker",
+      "service": "redmine",
+      "image": "redmine:5.1-alpine",
+      "state": "running",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-05-01T20:55:29.703466134Z",
+      "started_at": "2026-10-01T20:46:43.302595318Z",
+      "finished_at": "2026-10-01T20:46:40.532705412Z",
+      "cpu": "0.02%",
+      "memory": "186.8MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "redmine-db",
+      "project": "redmine-docker",
+      "service": "redmine-db",
+      "image": "postgres:16-alpine",
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "created_at": "2026-04-30T22:54:05.887159939Z",
+      "started_at": "2026-10-01T20:46:43.407689167Z",
+      "finished_at": "2026-10-01T20:46:40.522122344Z",
+      "cpu": "0.00%",
+      "memory": "28.41MiB / 7.603GiB",
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:cb2239146c41>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "egovhub-frontend",
+      "project": "infra",
+      "service": "frontend",
+      "image": "infra-frontend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:19:22.747679509Z",
+      "started_at": "2026-04-30T19:19:24.289395244Z",
+      "finished_at": "2026-05-01T19:36:57.314041369Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "egovhub-backend",
+      "project": "infra",
+      "service": "backend",
+      "image": "infra-backend",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:19:20.697847941Z",
+      "started_at": "2026-04-30T19:19:23.980168144Z",
+      "finished_at": "2026-05-01T19:36:57.341785451Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:67b68fa170be>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "cpf_suite_monorepo_v1_1_0-api-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "service": "api",
+      "image": "cpf_suite_monorepo_v1_1_0-api",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:18:53.246339128Z",
+      "started_at": "2026-04-30T19:18:56.177400142Z",
+      "finished_at": "2026-05-01T19:36:57.314121919Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "cpf_suite_monorepo_v1_1_0-worker-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "service": "worker",
+      "image": "cpf_suite_monorepo_v1_1_0-worker",
+      "state": "exited",
+      "health": null,
+      "exit_code": 0,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:18:53.243732604Z",
+      "started_at": "2026-04-30T19:18:56.173874999Z",
+      "finished_at": "2026-04-30T19:19:10.138473558Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "cpf_suite_monorepo_v1_1_0-front-1",
+      "project": "cpf_suite_monorepo_v1_1_0",
+      "service": "front",
+      "image": "cpf_suite_monorepo_v1_1_0-front",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:18:53.24030711Z",
+      "started_at": "2026-04-30T19:18:56.181632051Z",
+      "finished_at": "2026-05-01T19:36:57.346302018Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": true,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:8d1aee14b9de>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "db-stack-docker-web-1",
+      "project": "db-stack-docker",
+      "service": "web",
+      "image": "db-stack-docker-web",
+      "state": "exited",
+      "health": null,
+      "exit_code": 1,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:18:29.432726142Z",
+      "started_at": "2026-04-30T19:18:31.064250127Z",
+      "finished_at": "2026-04-30T19:18:31.770401013Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:30fb9bcb37d5>/certs"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:30fb9bcb37d5>/certs",
+          "destination": "/etc/nginx/certs",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:30fb9bcb37d5>/certs; destination=/etc/nginx/certs; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "db-stack-docker-api-1",
+      "project": "db-stack-docker",
+      "service": "api",
+      "image": "db-stack-docker-api",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T19:18:26.560637378Z",
+      "started_at": "2026-04-30T19:18:29.937060833Z",
+      "finished_at": "2026-05-01T19:36:57.333009522Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:1a43f4d11aca>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-nginx-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "nginx",
+      "image": "console_seguro_bundle_compose-nginx",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:56:04.279610234Z",
+      "started_at": "2026-04-30T12:56:10.818310975Z",
+      "finished_at": "2026-05-01T19:36:57.31400853Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-app-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "app",
+      "image": "console_seguro_bundle_compose-app",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:56:04.005048071Z",
+      "started_at": "2026-04-30T12:56:10.570331503Z",
+      "finished_at": "2026-05-01T19:36:57.313907722Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "infra-worker-1",
+      "project": "infra",
+      "service": "worker",
+      "image": "infra-worker",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:55:45.544129709Z",
+      "started_at": "2026-04-30T12:55:48.928083603Z",
+      "finished_at": "2026-05-01T19:36:57.314207191Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-grafana-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "grafana",
+      "image": "grafana/grafana:10.2.3",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:44:32.250146467Z",
+      "started_at": "2026-04-30T12:56:11.380638776Z",
+      "finished_at": "2026-05-01T19:36:57.333209105Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:d859d47146bb>/dashboards",
+        "<LOCAL_PATH:899520fab74a>/datasources",
+        "<LOCAL_PATH:a67bbf56af64>/dashboard.json"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:d859d47146bb>/dashboards",
+          "destination": "/etc/grafana/provisioning/dashboards",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        },
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:899520fab74a>/datasources",
+          "destination": "/etc/grafana/provisioning/datasources",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        },
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:a67bbf56af64>/dashboard.json",
+          "destination": "/var/lib/grafana/dashboards/dashboard.json",
+          "expected_type": "file",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:d859d47146bb>/dashboards; destination=/etc/grafana/provisioning/dashboards; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:899520fab74a>/datasources; destination=/etc/grafana/provisioning/datasources; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:a67bbf56af64>/dashboard.json; destination=/var/lib/grafana/dashboards/dashboard.json; expected=file; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-prometheus-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "prometheus",
+      "image": "prom/prometheus:latest",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:44:32.098430378Z",
+      "started_at": "2026-04-30T12:56:11.10060992Z",
+      "finished_at": "2026-05-01T19:36:57.332115606Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:cf622b217bec>/prometheus.yml"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:cf622b217bec>/prometheus.yml",
+          "destination": "/etc/prometheus/prometheus.yml",
+          "expected_type": "file",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": false
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:cf622b217bec>/prometheus.yml; destination=/etc/prometheus/prometheus.yml; expected=file; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-appdb-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "appdb",
+      "image": "postgres:15",
+      "state": "exited",
+      "health": "starting",
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:44:31.49568603Z",
+      "started_at": "2026-04-30T12:56:04.677007072Z",
+      "finished_at": "2026-05-01T19:36:57.314188822Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:de9be3267dc9>/appdb"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:de9be3267dc9>/appdb",
+          "destination": "/docker-entrypoint-initdb.d",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": true
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:de9be3267dc9>/appdb; destination=/docker-entrypoint-initdb.d; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "console_seguro_bundle_compose-rodb-1",
+      "project": "console_seguro_bundle_compose",
+      "service": "rodb",
+      "image": "postgres:15",
+      "state": "exited",
+      "health": "starting",
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:44:31.495484889Z",
+      "started_at": "2026-04-30T12:56:04.671571724Z",
+      "finished_at": "2026-05-01T19:36:57.345976426Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [
+        "<LOCAL_PATH:6303f122bf32>/init_rodb"
+      ],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [
+        {
+          "code": "missing-bind-source",
+          "source": "<LOCAL_PATH:6303f122bf32>/init_rodb",
+          "destination": "/docker-entrypoint-initdb.d",
+          "expected_type": "unspecified",
+          "actual_type": "missing",
+          "docker_desktop_path_normalized": true
+        }
+      ],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-bind-source",
+          "Detail": "source=<LOCAL_PATH:6303f122bf32>/init_rodb; destination=/docker-entrypoint-initdb.d; expected=unspecified; actual=missing"
+        },
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:4cb5e2f2565f>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "infra-redis-1",
+      "project": "infra",
+      "service": "redis",
+      "image": "redis:7",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:31:08.424001438Z",
+      "started_at": "2026-04-30T12:55:48.390306379Z",
+      "finished_at": "2026-05-01T19:36:57.333722531Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "infra-postgres-1",
+      "project": "infra",
+      "service": "postgres",
+      "image": "postgres:16",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:31:08.407995166Z",
+      "started_at": "2026-04-30T12:55:48.414330786Z",
+      "finished_at": "2026-05-01T19:36:57.333324467Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+        }
+      ]
+    },
+    {
+      "name": "infra-rabbitmq-1",
+      "project": "infra",
+      "service": "rabbitmq",
+      "image": "rabbitmq:3-management",
+      "state": "exited",
+      "health": null,
+      "exit_code": 255,
+      "restart_count": 0,
+      "restart_policy": "no",
+      "created_at": "2026-04-30T12:31:08.393387826Z",
+      "started_at": "2026-04-30T12:55:48.408636487Z",
+      "finished_at": "2026-05-01T19:36:57.342033456Z",
+      "cpu": null,
+      "memory": null,
+      "dev_watcher": false,
+      "has_resource_limits": false,
+      "log_driver": "json-file",
+      "has_log_rotation": false,
+      "compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_compose_files": [
+        "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+      ],
+      "missing_bind_sources": [],
+      "type_mismatched_bind_sources": [],
+      "bind_mount_issues": [],
+      "log_signatures_30m": {},
+      "findings": [
+        {
+          "Severity": "high",
+          "Code": "missing-compose-file",
+          "Detail": "<LOCAL_PATH:138f8b4e2af8>/docker-compose.yml"
+        }
+      ]
+    }
+  ]
+}

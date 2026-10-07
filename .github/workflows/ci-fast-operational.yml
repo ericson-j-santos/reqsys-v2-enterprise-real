@@ -5,6 +5,11 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - ".github/workflows/**"
+      - "docker-compose*.yml"
+      - "docker-compose*.yaml"
+      - "frontend/Dockerfile*"
+      - "frontend/nginx.static.conf"
+      - "infra/nginx/**"
       - "scripts/**"
       - "tests/**"
       - "docs/runbooks/**"
@@ -48,8 +53,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install pytest
+          python -m pip install pytest pyyaml
           python -m pytest \
+            tests/test_local_docker_restart_guard.py \
             tests/test_pr_ci_watch.py \
             tests/test_workflow_command_center.py \
             tests/test_auto_rerun_governed.py \

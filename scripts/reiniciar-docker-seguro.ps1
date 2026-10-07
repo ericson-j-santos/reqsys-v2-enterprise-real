@@ -51,8 +51,6 @@ if ([string]::IsNullOrWhiteSpace($ProjetoDir)) {
     $ProjetoDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 }
 
-$composePath = Join-Path $ProjetoDir 'docker-compose.yml'
-
 Step "1) Teste inicial do Docker Engine"
 if (Test-DockerEngine) {
     Ok "Docker ja esta respondendo."
@@ -128,16 +126,32 @@ catch {
 }
 
 if ($SubirStackReqSys) {
-    if (-not (Test-Path $composePath)) {
-        Fail "docker-compose.yml nao encontrado em $ProjetoDir"
+    $preflightScript = Join-Path $PSScriptRoot 'testar-preflight-docker.ps1'
+    if (-not (Test-Path -LiteralPath $preflightScript -PathType Leaf)) {
+        Fail "Preflight Docker nao encontrado: $preflightScript"
         exit 3
     }
+    $preflight = & $preflightScript -ProjetoDir $ProjetoDir -Ambiente dev -Quiet
+    $ProjetoDir = $preflight.ProjetoDir
+
+    $composeArgs = @(
+        'compose',
+        '--project-directory', $ProjetoDir,
+        '--project-name', 'reqsys-dev',
+        '-f', (Join-Path $ProjetoDir 'docker-compose.yml'),
+        '-f', (Join-Path $ProjetoDir 'docker-compose.dev.yml')
+    )
 
     Step "6) Subir stack do ReqSys"
-    Set-Location $ProjetoDir
-    docker compose up -d
+    & docker @composeArgs config --quiet
     if ($LASTEXITCODE -ne 0) {
-        Fail "Falha no docker compose up -d"
+        Fail "Configuracao Docker Compose dev invalida"
+        exit 4
+    }
+
+    & docker @composeArgs up -d --wait --wait-timeout 120
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Falha ao iniciar a stack dev ou aguardar servicos saudaveis"
         exit 4
     }
 

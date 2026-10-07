@@ -1,0 +1,74 @@
+services:
+  # Recuperacao produtiva limitada: tolera falhas transitorias sem transformar
+  # erro persistente de configuracao/runtime em loop infinito.
+  api:
+    restart: "on-failure:5"
+    environment:
+      APP_ENV: production
+      PUBLIC_ENVIRONMENT: production
+      ALLOW_DEMO_LOGIN: "false"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required for production}
+      JWT_ISSUER: ${JWT_ISSUER:?JWT_ISSUER is required for production}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?JWT_AUDIENCE is required for production}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:?AZURE_TENANT_ID is required for production}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?AZURE_CLIENT_ID is required for production}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required for production}
+      # Nao herdar o MailHog local quando o relay corporativo for opcional.
+      # O sender falha de forma explicita se a funcionalidade for usada sem host.
+      MOVIMENTO_EMAIL_SMTP_HOST: ${MOVIMENTO_EMAIL_SMTP_HOST:-}
+      MOVIMENTO_EMAIL_SMTP_PORT: ${MOVIMENTO_EMAIL_SMTP_PORT:-587}
+      MOVIMENTO_EMAIL_SMTP_USE_TLS: ${MOVIMENTO_EMAIL_SMTP_USE_TLS:-true}
+      MOVIMENTO_EMAIL_SMTP_FROM: ${MOVIMENTO_EMAIL_SMTP_FROM:-}
+      MOVIMENTO_EMAIL_RECIPIENTS: ${MOVIMENTO_EMAIL_RECIPIENTS:-}
+    depends_on: !override
+      db:
+        condition: service_healthy
+
+  db:
+    restart: "on-failure:5"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for production}
+
+  mailhog:
+    # Ferramenta local: fica fora da stack produtiva salvo opt-in explicito.
+    profiles: [local-mail]
+    restart: "no"
+
+  frontend:
+    restart: "on-failure:5"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  kb:
+    restart: "on-failure:5"
+
+  nginx:
+    restart: "on-failure:5"
+    ports:
+      - "${GATEWAY_PORT:-8081}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      kb:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1/ && wget -q --spider http://127.0.0.1/api/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
