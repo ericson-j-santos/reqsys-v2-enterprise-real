@@ -20,3 +20,11 @@ def test_real_baseline_change_remains_human_approved():
     assert 'if [[ "${APPROVALS}" -ge 1 ]]' in text
     assert 'EXPECTED="/confirm-domain-baseline ${HEAD_SHA}"' in text
     assert 'test "${CONFIRMATIONS}" -ge 1' in text
+
+
+def test_scope_router_aggregates_all_pr_pages():
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "--paginate --slurp" in text
+    assert ".[][] | .filename" in text
+    assert "files?per_page=100" in text
