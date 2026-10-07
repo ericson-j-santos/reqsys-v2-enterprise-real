@@ -1,0 +1,101 @@
+name: Desktop SQL Transport Diagnose
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose SQL batch transport on final desktop
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      SQL_CONTAINER: reqsys-noteri-migration-sql2025
+      SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+    steps:
+      - name: Run one bounded sanitized SQL batch probe
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') { throw 'UNEXPECTED_HOST' }
+          $identity = (docker.exe container inspect --format '{{.Image}}|{{.HostConfig.NetworkMode}}' $env:SQL_CONTAINER).Trim()
+          if ($LASTEXITCODE -ne 0 -or $identity -ne "$env:SQL_IMAGE_ID|none") {
+            throw 'SQLSERVER_DIAGNOSTIC_CONTAINER_IDENTITY_MISMATCH'
+          }
+
+          $token = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $localScript = Join-Path $env:RUNNER_TEMP "reqsys-sql-probe-$token.sql"
+          $containerScript = "/tmp/reqsys-sql-probe-$token.sql"
+          $out = 'artifacts/desktop-sql-transport-diagnose'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          @(
+            'SET NOCOUNT ON;'
+            "SELECT CONVERT(varchar(10), SERVERPROPERTY('ProductMajorVersion'));"
+            'GO'
+          ) | Set-Content -LiteralPath $localScript -Encoding Ascii
+
+          $protectedPath = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\secrets\sql2025-sa.dpapi'
+          if (-not (Test-Path -LiteralPath $protectedPath -PathType Leaf)) {
+            throw 'DPAPI_SQLSERVER_SECRET_MISSING'
+          }
+          $protected = (Get-Content -LiteralPath $protectedPath -Raw).Trim()
+          $secure = $protected | ConvertTo-SecureString
+          $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+          $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+          $queryExit = -1
+          $queryOutput = @()
+          $metadata = ''
+          $containerCleanup = $false
+          $localCleanup = $false
+          try {
+            docker.exe cp $localScript "${env:SQL_CONTAINER}:$containerScript" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'SQL_PROBE_COPY_FAILED' }
+            $metadata = (docker.exe exec --user 0 $env:SQL_CONTAINER /usr/bin/stat -c '%U|%G|%a|%s' $containerScript).Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'SQL_PROBE_STAT_FAILED' }
+            $env:SQLCMDPASSWORD = $plain
+            $ErrorActionPreference = 'Continue'
+            $queryOutput = @(docker.exe exec --env SQLCMDPASSWORD $env:SQL_CONTAINER `
+              /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -V 11 -l 15 `
+              -h -1 -W -w 65535 -s '|' -i $containerScript 2>&1)
+            $queryExit = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+          } finally {
+            $env:SQLCMDPASSWORD = $null
+            if ($bstr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+            $plain = $null
+            $ErrorActionPreference = 'SilentlyContinue'
+            docker.exe exec --user 0 $env:SQL_CONTAINER /bin/rm -f $containerScript | Out-Null
+            $containerCleanup = $LASTEXITCODE -eq 0
+            Remove-Item -LiteralPath $localScript -Force
+            $localCleanup = -not (Test-Path -LiteralPath $localScript)
+            $ErrorActionPreference = 'Stop'
+          }
+
+          $sanitized = @($queryOutput | Select-Object -Last 20 | ForEach-Object {
+            $line = [string]$_
+            $line = [regex]::Replace($line, '(?i)(password|pwd)\s*[=:]\s*\S+', '$1=<redacted>')
+            if ($line.Length -gt 500) { $line.Substring(0, 500) } else { $line }
+          })
+          [ordered]@{
+            schema = 'desktop-sql-transport-diagnose.v1'
+            host = $env:COMPUTERNAME
+            container = $env:SQL_CONTAINER
+            file_metadata = $metadata
+            query_exit = $queryExit
+            query_output = $sanitized
+            container_cleanup = $containerCleanup
+            local_cleanup = $localCleanup
+            secret_emitted = $false
+            production_touched = $false
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized transport evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sql-transport-diagnose-${{ github.run_id }}
+          path: artifacts/desktop-sql-transport-diagnose/evidence.json
+          if-no-files-found: error
+          retention-days: 3
