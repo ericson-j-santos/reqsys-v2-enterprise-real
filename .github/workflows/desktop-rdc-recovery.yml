@@ -151,6 +151,22 @@ jobs:
               Select-Object -ExpandProperty Name
           } | Sort-Object -Unique)
 
+          $principal = New-Object Security.Principal.WindowsPrincipal(
+            [Security.Principal.WindowsIdentity]::GetCurrent()
+          )
+          $openSshServer = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          $network = [ordered]@{
+            ipv4 = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.IPAddress -notlike '127.*' -and
+                $_.IPAddress -notlike '169.254.*' -and
+                $_.InterfaceAlias -notmatch 'vEthernet|Loopback'
+              } | Select-Object -ExpandProperty IPAddress -Unique)
+            ssh_port_listening = [bool](Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)
+            openssh_server_state = if ($openSshServer) { [string]$openSshServer.State } else { 'Unavailable' }
+          }
+
           $evidence = [ordered]@{
             schema_version = 'desktop-migration-readiness.v1'
             observed_at_utc = [DateTimeOffset]::UtcNow.ToString('o')
@@ -165,6 +181,11 @@ jobs:
             docker = $docker
             wsl = $wsl
             application_markers = $appMarkers
+            runner_identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+            runner_is_administrator = $principal.IsInRole(
+              [Security.Principal.WindowsBuiltInRole]::Administrator
+            )
+            network = $network
             runner_name = $env:RUNNER_NAME
             runner_labels_expected = @('self-hosted', 'Windows', 'X64', 'pc24x7', 'reqsys-dev')
             production_touched = $false
