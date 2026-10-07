@@ -40,4 +40,7 @@ def test_workflow_runs_focused_tests_and_publishes_only_sanitized_artifact() -> 
     assert 'tests/test_pc24x7_teams_queue.py' in text
     assert 'scripts/pc24x7_teams_ephemeral_e2e.py' in text
     assert 'artifacts/pc24x7-teams-ephemeral-e2e/evidence.json' in text
-    assert 'actions/upload-artifact@v4' in text
+    assert (
+        'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
+        in text
+    )
