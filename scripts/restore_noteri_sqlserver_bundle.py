@@ -17,7 +17,9 @@ import re
 import socket
 import stat
 import subprocess
+import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -244,7 +246,6 @@ def _docker(
     *,
     code: str,
     extra_env: dict[str, str] | None = None,
-    input_text: str | None = None,
     allow_failure: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
@@ -260,7 +261,6 @@ def _docker(
             encoding="utf-8",
             errors="strict",
             env=environment,
-            input=input_text,
             timeout=300,
         )
     except (OSError, subprocess.SubprocessError, UnicodeError):
@@ -515,38 +515,70 @@ def prepare_container(bundle_dir: Path, image_id: str, password: str) -> None:
 
 
 def _sqlcmd(query: str, password: str, *, code: str) -> list[str]:
-    result = _docker(
-        [
-            "exec",
-            "--interactive",
-            "--env",
-            "SQLCMDPASSWORD",
-            CONTAINER_NAME,
-            SQLCMD,
-            "-S",
-            "localhost",
-            "-U",
-            "sa",
-            "-C",
-            "-b",
-            "-V",
-            "11",
-            "-l",
-            "60",
-            "-h",
-            "-1",
-            "-W",
-            "-w",
-            "65535",
-            "-s",
-            "|",
-            "-i",
-            "/dev/stdin",
-        ],
-        code=code,
-        extra_env={"SQLCMDPASSWORD": password},
-        input_text="SET NOCOUNT ON; " + query + "\nGO\n",
-    )
+    container_script = f"/tmp/reqsys-migration-{uuid.uuid4().hex}.sql"
+    result: subprocess.CompletedProcess[str] | None = None
+    with tempfile.TemporaryDirectory(prefix="reqsys-sql-query-") as temporary:
+        local_script = Path(temporary) / "query.sql"
+        try:
+            local_script.write_text(
+                "SET NOCOUNT ON; " + query + "\nGO\n", encoding="utf-8"
+            )
+            local_script.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
+        except OSError:
+            reject("sql_query_stage_failed")
+        _docker(
+            ["cp", str(local_script), f"{CONTAINER_NAME}:{container_script}"],
+            code="sql_query_copy_failed",
+        )
+        try:
+            result = _docker(
+                [
+                    "exec",
+                    "--env",
+                    "SQLCMDPASSWORD",
+                    CONTAINER_NAME,
+                    SQLCMD,
+                    "-S",
+                    "localhost",
+                    "-U",
+                    "sa",
+                    "-C",
+                    "-b",
+                    "-V",
+                    "11",
+                    "-l",
+                    "60",
+                    "-h",
+                    "-1",
+                    "-W",
+                    "-w",
+                    "65535",
+                    "-s",
+                    "|",
+                    "-i",
+                    container_script,
+                ],
+                code=code,
+                extra_env={"SQLCMDPASSWORD": password},
+            )
+        finally:
+            cleanup = _docker(
+                [
+                    "exec",
+                    "--user",
+                    "0",
+                    CONTAINER_NAME,
+                    "/bin/rm",
+                    "-f",
+                    container_script,
+                ],
+                code="sql_query_cleanup_failed",
+                allow_failure=True,
+            )
+            if result is not None and cleanup.returncode != 0:
+                reject("sql_query_cleanup_failed")
+    if result is None:
+        reject(code)
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 

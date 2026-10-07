@@ -206,19 +206,26 @@ def test_same_path_accepts_only_exact_docker_desktop_bind_mapping(tmp_path):
     assert not restore._same_path(mapped + "-other", expected)
 
 
-def test_sqlcmd_streams_batch_without_command_line_query(monkeypatch):
+def test_sqlcmd_copies_batch_without_command_line_query(monkeypatch):
     observed = {}
 
     def fake_docker(arguments, **kwargs):
-        observed["arguments"] = arguments
-        observed["kwargs"] = kwargs
-        return subprocess.CompletedProcess(["docker", *arguments], 0, "17\n", "")
+        observed.setdefault("calls", []).append((arguments, kwargs))
+        if arguments[0] == "cp":
+            observed["batch"] = Path(arguments[1]).read_text(encoding="utf-8")
+        stdout = "17\n" if restore.SQLCMD in arguments else ""
+        return subprocess.CompletedProcess(["docker", *arguments], 0, stdout, "")
 
     monkeypatch.setattr(restore, "_docker", fake_docker)
 
     assert restore._sqlcmd("SELECT 17;", "Secret-Example-123!", code="probe") == ["17"]
-    assert "--interactive" in observed["arguments"]
-    assert "-Q" not in observed["arguments"]
-    assert observed["arguments"][-2:] == ["-i", "/dev/stdin"]
-    assert observed["kwargs"]["input_text"] == "SET NOCOUNT ON; SELECT 17;\nGO\n"
-    assert observed["kwargs"]["extra_env"] == {"SQLCMDPASSWORD": "Secret-Example-123!"}
+    copy_arguments, _ = observed["calls"][0]
+    execute_arguments, execute_kwargs = observed["calls"][1]
+    cleanup_arguments, _ = observed["calls"][2]
+    container_script = copy_arguments[2].split(":", 1)[1]
+    assert observed["batch"] == "SET NOCOUNT ON; SELECT 17;\nGO\n"
+    assert copy_arguments[2] == f"{restore.CONTAINER_NAME}:{container_script}"
+    assert "-Q" not in execute_arguments
+    assert execute_arguments[-2:] == ["-i", container_script]
+    assert execute_kwargs["extra_env"] == {"SQLCMDPASSWORD": "Secret-Example-123!"}
+    assert cleanup_arguments[-3:] == ["/bin/rm", "-f", container_script]
