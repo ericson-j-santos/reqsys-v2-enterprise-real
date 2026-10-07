@@ -523,7 +523,9 @@ def _sqlcmd(query: str, password: str, *, code: str) -> list[str]:
             local_script.write_text(
                 "SET NOCOUNT ON; " + query + "\nGO\n", encoding="utf-8"
             )
-            local_script.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
+            local_script.chmod(
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH
+            )
         except OSError:
             reject("sql_query_stage_failed")
         _docker(

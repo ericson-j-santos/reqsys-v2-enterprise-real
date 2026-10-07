@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -213,6 +214,7 @@ def test_sqlcmd_copies_batch_without_command_line_query(monkeypatch):
         observed.setdefault("calls", []).append((arguments, kwargs))
         if arguments[0] == "cp":
             observed["batch"] = Path(arguments[1]).read_text(encoding="utf-8")
+            observed["batch_mode"] = Path(arguments[1]).stat().st_mode
         stdout = "17\n" if restore.SQLCMD in arguments else ""
         return subprocess.CompletedProcess(["docker", *arguments], 0, stdout, "")
 
@@ -224,6 +226,7 @@ def test_sqlcmd_copies_batch_without_command_line_query(monkeypatch):
     cleanup_arguments, _ = observed["calls"][2]
     container_script = copy_arguments[2].split(":", 1)[1]
     assert observed["batch"] == "SET NOCOUNT ON; SELECT 17;\nGO\n"
+    assert observed["batch_mode"] & stat.S_IROTH
     assert copy_arguments[2] == f"{restore.CONTAINER_NAME}:{container_script}"
     assert "-Q" not in execute_arguments
     assert execute_arguments[-2:] == ["-i", container_script]
