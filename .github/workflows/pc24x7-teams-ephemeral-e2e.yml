@@ -2,6 +2,12 @@ name: PC24x7 Teams Ephemeral E2E — DEV
 
 on:
   workflow_dispatch:
+    inputs:
+      diagnose_main_runtime:
+        description: Executa o script da ref selecionada contra o SHA vigente da main.
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
@@ -85,8 +91,17 @@ jobs:
         env:
           REQSYS_API_BASE_URL: ${{ steps.locator.outputs.base_url }}
           EXPECTED_SHA: ${{ github.sha }}
+          DIAGNOSE_MAIN_RUNTIME: ${{ inputs.diagnose_main_runtime || 'false' }}
         run: |
           set -euo pipefail
+          if [[ "$DIAGNOSE_MAIN_RUNTIME" == "true" ]]; then
+            EXPECTED_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+              echo "main_head_sha_unavailable" >&2
+              exit 1
+            }
+            export EXPECTED_SHA
+          fi
           python - <<'PY'
           import json
           import os
