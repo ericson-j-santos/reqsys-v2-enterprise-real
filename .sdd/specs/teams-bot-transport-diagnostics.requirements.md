@@ -1,0 +1,24 @@
+# Diagnóstico seguro do transporte Teams Bot
+
+## Contexto
+
+O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é reduzida a `provider_delivery_failed`. A correção causal exige preservar a classe operacional da falha sem transportar texto, URL, credencial ou corpo devolvido pelo provedor.
+
+## Requisitos
+
+1. O gateway deve converter falhas de circuito, conexão, timeout, token e resposta inválida em códigos estáveis e não sensíveis.
+2. Exceções não reconhecidas devem expor somente o nome normalizado da classe, nunca `str(exc)` na fila ou evidência.
+3. Respostas HTTP do provedor continuam representadas exclusivamente pelo status numérico.
+4. O E2E deve propagar somente categorias allowlisted ou códigos estruturados com prefixo `provider_`.
+5. O fluxo permanece fail-closed enquanto `teams_delivered` não for verdadeiro.
+6. O workflow pode diagnosticar a `main` a partir de uma ref de correção somente quando solicitado explicitamente e após resolver e validar o SHA remoto vigente de `main`.
+7. O runtime DEV observado deve reportar exatamente esse SHA antes de qualquer mutação E2E.
+8. Nenhum segredo, endpoint privado ou corpo de resposta pode aparecer na evidência publicada.
+
+## Critérios de aceite
+
+- testes focados do gateway e do E2E aprovados;
+- contrato SDD aprovado no SHA do PR;
+- diagnóstico físico identifica uma categoria estruturada após integração e reconciliação;
+- entrega real ao Teams é a única condição que aprova o E2E final;
+- nenhum valor sensível aparece em logs ou artifacts.
