@@ -30,12 +30,15 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         self.assertIn('"${{ github.ref }}" -eq "refs/heads/main"', workflow)
         self.assertIn("APPLY-FABRIC-HML-NONSECRET-VARS", workflow)
 
-    def test_workflow_provisions_python_with_node24_action(self):
+    def test_workflow_uses_preinstalled_python_on_self_hosted_runner(self):
         workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
-        setup = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
-        self.assertEqual(workflow.count(setup), 2)
-        self.assertIn("python-version: '3.12'", workflow)
-        self.assertIn("architecture: 'x64'", workflow)
+        self.assertNotIn("actions/setup-python@", workflow)
+        self.assertEqual(workflow.count("Resolve Python 3.12 on self-hosted runner"), 2)
+        self.assertIn("python_3_12_not_available_on_self_hosted_runner", workflow)
+        self.assertIn("python_3_12_required_on_self_hosted_runner", workflow)
+        self.assertIn("PYTHON_EXE=", workflow)
+        self.assertIn('& "$env:PYTHON_EXE" @probeArgs', workflow)
+        self.assertIn('& "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py', workflow)
 
 
 if __name__ == "__main__":

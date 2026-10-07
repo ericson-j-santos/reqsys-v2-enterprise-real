@@ -42,11 +42,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
-      - name: Setup Python 3.12 on self-hosted runner
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-          architecture: 'x64'
+      - name: Resolve Python 3.12 on self-hosted runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Get-Command python -ErrorAction SilentlyContinue
+          if (-not $python) {
+            throw "python_3_12_not_available_on_self_hosted_runner"
+          }
+          $versionOutput = & $python.Source --version
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^Python 3\.12\.') {
+            throw "python_3_12_required_on_self_hosted_runner:$versionOutput"
+          }
+          "PYTHON_EXE=$($python.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Python 3.12 disponivel: $versionOutput"
 
       - name: Probe read-only ou aplicar apenas variables nao sensiveis
         shell: powershell
@@ -67,7 +76,7 @@ jobs:
           if ($authorizedBootstrapPr -or $authorizedDispatch) {
             $probeArgs += @("--apply-nonsecret-vars", "--confirm", "APPLY-FABRIC-HML-NONSECRET-VARS")
           }
-          python @probeArgs
+          & "$env:PYTHON_EXE" @probeArgs
 
       - name: Upload sanitized evidence
         if: always()
@@ -92,15 +101,24 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Setup Python 3.12 on self-hosted runner
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-          architecture: 'x64'
+      - name: Resolve Python 3.12 on self-hosted runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Get-Command python -ErrorAction SilentlyContinue
+          if (-not $python) {
+            throw "python_3_12_not_available_on_self_hosted_runner"
+          }
+          $versionOutput = & $python.Source --version
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^Python 3\.12\.') {
+            throw "python_3_12_required_on_self_hosted_runner:$versionOutput"
+          }
+          "PYTHON_EXE=$($python.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Python 3.12 disponivel: $versionOutput"
 
       - name: Criar ou capturar secret HML sem expor valor
         shell: powershell
-        run: python scripts/fabric_hml_secret_bootstrap_temp.py
+        run: '& "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py'
 
       - name: Forcar flag E2E para false sem validacao real
         if: always()
