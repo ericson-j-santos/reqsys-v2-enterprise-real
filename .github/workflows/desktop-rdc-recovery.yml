@@ -154,8 +154,17 @@ jobs:
           $principal = New-Object Security.Principal.WindowsPrincipal(
             [Security.Principal.WindowsIdentity]::GetCurrent()
           )
-          $openSshServer = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' -ErrorAction SilentlyContinue |
-            Select-Object -First 1
+          $openSshServer = $null
+          $openSshServerState = 'Unavailable'
+          try {
+            $openSshServer = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' -ErrorAction Stop |
+              Select-Object -First 1
+            if ($openSshServer) {
+              $openSshServerState = [string]$openSshServer.State
+            }
+          } catch {
+            $openSshServerState = 'RequiresElevation'
+          }
           $network = [ordered]@{
             ipv4 = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
               Where-Object {
@@ -164,7 +173,7 @@ jobs:
                 $_.InterfaceAlias -notmatch 'vEthernet|Loopback'
               } | Select-Object -ExpandProperty IPAddress -Unique)
             ssh_port_listening = [bool](Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)
-            openssh_server_state = if ($openSshServer) { [string]$openSshServer.State } else { 'Unavailable' }
+            openssh_server_state = $openSshServerState
           }
 
           $evidence = [ordered]@{
