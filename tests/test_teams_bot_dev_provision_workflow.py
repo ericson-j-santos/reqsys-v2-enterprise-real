@@ -62,6 +62,17 @@ def test_identity_bootstrap_uses_noteri_and_governed_gateways() -> None:
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in text
 
 
+def test_identity_bootstrap_uses_setup_python_instead_of_stale_noteri_shim() -> None:
+    text = _text()
+
+    assert "Preparar Python isolado no runner Noteri" in text
+    assert "uses: actions/setup-python@v5" in text
+    assert 'Get-Command python -CommandType Application -ErrorAction Stop' in text
+    assert '"REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV' in text
+    assert "$raw = & $env:REQSYS_PYTHON $launcher @launcherArgs" in text
+    assert "& $env:REQSYS_PYTHON $gateway @riskArgs" in text
+
+
 def test_identity_bootstrap_preserves_dev_only_evidence_contract() -> None:
     text = _text()
 

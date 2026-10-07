@@ -73,6 +73,23 @@ jobs:
           path: _rules
           fetch-depth: 1
 
+      - name: Preparar Python isolado no runner Noteri
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fixar executável Python válido
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonExe = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+          if (-not (Test-Path -LiteralPath $pythonExe -PathType Leaf)) {
+            throw "NOTERI_PYTHON_EXECUTABLE_INVALID"
+          }
+          & $pythonExe --version
+          if ($LASTEXITCODE -ne 0) { throw "NOTERI_PYTHON_EXECUTION_FAILED" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
+
       - name: Validar host e tenant esperados
         shell: powershell
         run: |
@@ -99,7 +116,7 @@ jobs:
             "--expected-head", "${{ github.sha }}",
             "--sync-ref", "origin/main"
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -119,7 +136,7 @@ jobs:
           Push-Location $env:TARGET_PATH
           try {
             $args = @("scripts/configure_teams_bot_dev_identity_risk3.py", "--enable", "--ttl-minutes", "30", "--confirm", "ENABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE")
-            & python @args
+            & $env:REQSYS_PYTHON @args
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           finally {
@@ -140,7 +157,7 @@ jobs:
             "--timeout", "300",
             "--correlation-id", $env:CORRELATION_ID
           )
-          & python $gateway @riskArgs
+          & $env:REQSYS_PYTHON $gateway @riskArgs
           exit $LASTEXITCODE
 
       - name: Remover autorização Risk3 temporária
@@ -154,7 +171,7 @@ jobs:
           Push-Location $env:TARGET_PATH
           try {
             $args = @("scripts/configure_teams_bot_dev_identity_risk3.py", "--disable", "--confirm", "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE")
-            & python @args
+            & $env:REQSYS_PYTHON @args
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           finally {
