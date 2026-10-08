@@ -29,7 +29,7 @@ jobs:
           python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
           python tests/test_teams_graph_gateway_autocontido.py
-          python -m pytest -q tests/test_teams_commit_notification_fallback_contract.py
+          python tests/test_teams_commit_notification_fallback_contract.py
           grep -Fq "scripts/notificar_teams.py" .github/workflows/teams-commit-notification.yml
           grep -Fq -- "--modo" .github/workflows/teams-commit-notification.yml
           grep -Fq '"flow_bot"' .github/workflows/teams-commit-notification.yml
