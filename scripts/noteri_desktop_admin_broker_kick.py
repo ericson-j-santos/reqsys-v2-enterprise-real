@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Solicita pelo Noteri somente o start da tarefa existente do Desktop Admin Broker."""
+"""Solicita localmente somente o start da tarefa existente do Desktop Admin Broker."""
 from __future__ import annotations
 
 import argparse
@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-EXPECTED_SOURCE_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
+EXPECTED_SOURCE_HOST = TARGET_HOST
 TASK_NAME = r"\Automation\ReqSysDesktopAdminBroker"
 CONFIRM = "KICK-EXISTING-DESKTOP-ADMIN-BROKER"
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
@@ -31,7 +31,7 @@ def sanitize(value: Any, limit: int = 600) -> str:
     return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())[:limit]
 
 
-def require_noteri(host: str | None = None, platform: str | None = None) -> None:
+def require_desktop(host: str | None = None, platform: str | None = None) -> None:
     actual_host = host or socket.gethostname()
     actual_platform = platform or os.name
     if actual_host.casefold() != EXPECTED_SOURCE_HOST.casefold():
@@ -78,13 +78,11 @@ def kick(
 ) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise KickError("confirmation_invalid")
-    require_noteri(source_host, platform)
+    require_desktop(source_host, platform)
 
     argv = [
         str(schtasks_executable()),
         "/Run",
-        "/S",
-        TARGET_HOST,
         "/TN",
         TASK_NAME,
     ]
@@ -94,6 +92,9 @@ def kick(
         "generated_at_utc": now_iso(),
         "source_host": EXPECTED_SOURCE_HOST,
         "target_host": TARGET_HOST,
+        "execution_mode": "local_pc24x7_runner",
+        "remote_access_attempted": False,
+        "rdc_required": False,
         "task_name": TASK_NAME,
         "run_returncode": int(completed.returncode),
         "run_requested": completed.returncode == 0,
