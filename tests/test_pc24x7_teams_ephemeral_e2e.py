@@ -181,6 +181,8 @@ def _success_request_recorder(calls, secret='service-token-must-never-appear'):
             return 200, ready_payload()
         if method == 'POST' and url.endswith('/ai-conversations'):
             assert body['enviar_teams'] is False
+            assert body['teams_modo'] == 'bot'
+            assert body['teams_permitir_fallback'] is False
             return 200, creation_payload()
         if method == 'POST' and url.endswith('/conv-dev-1/reply'):
             reply_count['value'] += 1
@@ -297,6 +299,24 @@ def test_delivery_summary_prefers_sanitized_provider_http_status():
     assert summary['provider_http_status'] == 401
     assert summary['delivery_failure_category'] == 'provider_http_401'
     assert 'provider rejected request' not in str(summary)
+
+
+def test_delivery_summary_prefers_sanitized_direct_bot_failure():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'teams': {
+                'modo': 'fila_gateway',
+                'direct_failure_category': 'provider_http_401',
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'motivo_falha': 'Entrega nao confirmada.',
+                },
+            },
+        },
+    })
+
+    assert summary['delivery_failure_category'] == 'provider_http_401'
 
 
 @pytest.mark.parametrize(

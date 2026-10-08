@@ -21,6 +21,9 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 12. Antes do transporte, a `conversationReference` deve estar vinculada ao Bot App ID e tenant atualmente configurados; campos ausentes ou divergentes bloqueiam o envio com código sanitizado.
 13. A evidência E2E pode propagar códigos `conversation_reference_*`, mas nunca os identificadores observados ou esperados.
 14. Exceções inesperadas entre fila e gateway devem persistir somente `provider_exception_<classe>`, sem `str(exc)`.
+15. O E2E exclusivo do Bot deve criar a conversa com `teams_permitir_fallback=false`, impedindo que outra rota masque a falha do transporte sob teste.
+16. Quando o envio direto falhar, a API deve preservar somente uma categoria allowlisted (`provider_*`, `conversation_reference_*` ou `bot_direct_*`) para a evidência E2E.
+17. `HTTPStatusError` do Bot Framework deve ser reduzido a `provider_http_<status>`, sem corpo, URL ou cabeçalhos do provedor.
 
 ## Critérios de aceite
 
