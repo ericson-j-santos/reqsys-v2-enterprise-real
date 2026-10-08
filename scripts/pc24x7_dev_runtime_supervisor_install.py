@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 TASK_NAME = "ReqSys-Dev-Runtime-Supervisor"
-SUPERVISOR_INTERVAL_MINUTES = 7
+SUPERVISOR_INTERVAL_MINUTES = 6
 LOCATOR_TTL_MINUTES = 15
 MISSED_CYCLE_TOLERANCE = 1
 NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT = 250
@@ -31,6 +31,9 @@ BASE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ReqSys"
 RUNTIME_DIR = BASE_DIR / "RuntimeSupervisor"
 SCRIPTS_DIR = RUNTIME_DIR / "scripts"
 LOG_DIR = BASE_DIR / "PublicRuntime"
+RUNTIME_PYTHON_DIR = RUNTIME_DIR / "python"
+RUNTIME_PYTHON = RUNTIME_PYTHON_DIR / "Scripts" / "python.exe"
+RUNTIME_PYTHON_PACKAGES = ("cryptography==50.0.0", "pywin32==312")
 PERSISTENT_SUPERVISOR = SCRIPTS_DIR / "pc24x7_dev_runtime_supervisor.py"
 WRAPPER = LOG_DIR / "run-dev-supervisor.cmd"
 MANIFEST = RUNTIME_DIR / "manifest.json"
@@ -68,6 +71,8 @@ def materialize_runtime() -> dict[str, str]:
         "source_head": source_head(),
         "source_root": str(ROOT),
         "supervisor": str(PERSISTENT_SUPERVISOR),
+        "runtime_python": str(RUNTIME_PYTHON),
+        "runtime_python_packages": list(RUNTIME_PYTHON_PACKAGES),
         "cost_policy": "zero_additional_cost",
         "supervisor_interval_minutes": SUPERVISOR_INTERVAL_MINUTES,
         "locator_ttl_minutes": LOCATOR_TTL_MINUTES,
@@ -82,9 +87,42 @@ def materialize_runtime() -> dict[str, str]:
     return copied
 
 
-def write_wrapper() -> None:
+def runtime_python_ready(python: Path) -> bool:
+    if not python.is_file():
+        return False
+    completed = run([
+        str(python),
+        "-c",
+        "import cryptography, win32crypt; print('runtime_python_ready')",
+    ])
+    return completed.returncode == 0 and completed.stdout.strip() == "runtime_python_ready"
+
+
+def ensure_runtime_python() -> Path:
+    if os.name != "nt":
+        raise RuntimeError("windows_runtime_python_required")
+    if runtime_python_ready(RUNTIME_PYTHON):
+        return RUNTIME_PYTHON
+    if not RUNTIME_PYTHON.is_file():
+        created = run([sys.executable, "-m", "venv", str(RUNTIME_PYTHON_DIR)])
+        if created.returncode != 0 or not RUNTIME_PYTHON.is_file():
+            raise RuntimeError("runtime_python_venv_failed")
+    installed = run([
+        str(RUNTIME_PYTHON),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-input",
+        *RUNTIME_PYTHON_PACKAGES,
+    ])
+    if installed.returncode != 0 or not runtime_python_ready(RUNTIME_PYTHON):
+        raise RuntimeError("runtime_python_dependencies_failed")
+    return RUNTIME_PYTHON
+
+
+def write_wrapper(python: Path) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    python = Path(sys.executable)
     WRAPPER.write_text(
         "@echo off\r\n"
         f'"{python}" "{PERSISTENT_SUPERVISOR}" --apply '
@@ -131,7 +169,12 @@ def harden_task_settings() -> dict:
 
 def install() -> int:
     copied = materialize_runtime()
-    write_wrapper()
+    try:
+        runtime_python = ensure_runtime_python()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    write_wrapper(runtime_python)
     created = run([
         "schtasks", "/Create", "/F",
         "/TN", TASK_NAME,
@@ -149,6 +192,8 @@ def install() -> int:
         "task": TASK_NAME,
         "wrapper": str(WRAPPER),
         "persistent_supervisor": str(PERSISTENT_SUPERVISOR),
+        "runtime_python": str(runtime_python),
+        "runtime_python_ready": True,
         "copied": copied,
         "settings": settings,
         "trigger_returncode": triggered.returncode,

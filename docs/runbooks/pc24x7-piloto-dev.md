@@ -60,13 +60,26 @@ host. O estado corrente é salvo fora do repositório em
 
 ### Cadência e orçamento do locator
 
-A tarefa `ReqSys-Dev-Runtime-Supervisor` usa intervalo de 7 minutos (`PT7M`).
+A tarefa `ReqSys-Dev-Runtime-Supervisor` usa intervalo de 6 minutos (`PT6M`).
 Como o publisher envia no máximo uma mensagem por ciclo, o teto recorrente é de
-206 ciclos em 24 horas (`ceil(24 * 60 / 7)`), abaixo do limite anônimo de 250
+240 ciclos em 24 horas (`ceil(24 * 60 / 6)`), abaixo do limite anônimo de 250
 mensagens por visitante/IP do ntfy. O locator continua com TTL de 15 minutos:
-uma execução perdida leva a próxima tentativa prevista a 14 minutos, ainda antes
-da expiração. A folga de um minuto não cobre duas falhas consecutivas ou uma
-execução anormalmente longa.
+uma execução perdida leva a próxima tentativa prevista a 12 minutos, mantendo
+três minutos de folga antes da expiração.
+
+O instalador mantém um Python dedicado em
+`%LOCALAPPDATA%/ReqSys/RuntimeSupervisor/python`, com dependências fixadas para
+DPAPI e Ed25519. O wrapper da tarefa aponta somente para esse interpretador;
+remoção ou atualização do Python usado no checkout não interrompe mais a
+renovação.
+
+O workflow `PC24x7 DEV Locator Watch` executa a cada 10 minutos em runner
+GitHub-hosted e valida assinatura, contrato e TTL mínimo de 300 segundos. A
+primeira transição para indisponível/expirando alerta o Teams pelo webhook
+governado de contingência; repetições consecutivas não geram novo alerta. Quando
+o locator volta a ficar fresco após uma execução falha, o workflow envia uma
+única notificação de recuperação. O run permanece vermelho enquanto o locator
+não estiver fresco e publica evidência sanitizada por 30 dias.
 
 Não reduza o intervalo sem recalcular esse orçamento. Execuções manuais são
 operacionais e devem permanecer excepcionais, pois também consomem a cota do
@@ -159,6 +172,7 @@ DEV público só passa de contingência para canônico quando:
 - HTTPS válido;
 - frontend e `/api/health` verdes;
 - reinício recupera stack e publicação;
-- tarefa recorrente usa intervalo de 7 minutos, tolera um ciclo perdido e mantém o orçamento do ntfy;
+- tarefa recorrente usa intervalo de 6 minutos, tolera um ciclo perdido com três minutos de folga e mantém o orçamento do ntfy;
+- monitor externo valida TTL mínimo de 300 segundos e alerta somente nas transições de falha/recuperação;
 - nenhuma porta de backend está exposta diretamente;
 - evidência vinculada ao SHA corrente.

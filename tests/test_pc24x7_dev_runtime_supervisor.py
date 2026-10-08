@@ -42,13 +42,33 @@ def test_installer_uses_user_level_recurring_task_and_persistent_copy():
         "pc24x7_public_dev_tunnel.py",
         "pc24x7_dev_locator_publisher.py",
     }
+    assert installer.RUNTIME_PYTHON.name == "python.exe"
+    assert "RuntimeSupervisor" in str(installer.RUNTIME_PYTHON)
+    assert installer.RUNTIME_PYTHON_PACKAGES == (
+        "cryptography==50.0.0",
+        "pywin32==312",
+    )
+
+
+def test_installer_wrapper_uses_dedicated_runtime_python(monkeypatch, tmp_path):
+    monkeypatch.setattr(installer, "LOG_DIR", tmp_path / "logs")
+    monkeypatch.setattr(installer, "WRAPPER", tmp_path / "logs" / "run.cmd")
+    monkeypatch.setattr(installer, "PERSISTENT_SUPERVISOR", tmp_path / "supervisor.py")
+    runtime_python = tmp_path / "runtime-python" / "python.exe"
+
+    installer.write_wrapper(runtime_python)
+
+    wrapper = installer.WRAPPER.read_text(encoding="utf-8")
+    assert str(runtime_python) in wrapper
+    assert str(installer.PERSISTENT_SUPERVISOR) in wrapper
+    assert str(Path(installer.sys.executable)) not in wrapper
 
 
 def test_installer_keeps_scheduled_publication_under_ntfy_anonymous_daily_budget():
-    assert installer.SUPERVISOR_INTERVAL_MINUTES == 7
+    assert installer.SUPERVISOR_INTERVAL_MINUTES == 6
     assert installer.LOCATOR_TTL_MINUTES == 15
     assert installer.MISSED_CYCLE_TOLERANCE == 1
-    assert installer.MAX_SCHEDULED_PUBLICATIONS_PER_DAY == 206
+    assert installer.MAX_SCHEDULED_PUBLICATIONS_PER_DAY == 240
     assert installer.NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT == 250
     assert (
         installer.MAX_SCHEDULED_PUBLICATIONS_PER_DAY
@@ -67,6 +87,7 @@ def test_installer_cadence_tolerates_one_missed_cycle_before_locator_expiry():
         * (installer.MISSED_CYCLE_TOLERANCE + 1)
     )
     assert renewal_after_one_missed_cycle < installer.LOCATOR_TTL_MINUTES
+    assert installer.LOCATOR_TTL_MINUTES - renewal_after_one_missed_cycle >= 3
 
 
 def test_supervisor_has_no_tailscale_or_nport_critical_dependency():
