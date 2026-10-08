@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Recuperação governada no runner do Desktop que consulta e inicia somente a tarefa watchdog já existente via schtasks local, após Session Launcher e exclusivamente por Command Gateway risco 2.",
+  "description": "Recuperação governada no runner do Desktop que consulta e inicia a tarefa watchdog via schtasks local e, quando ela estiver inequivocamente ausente, repara somente essa tarefa com runtime persistente verificado, após Session Launcher e exclusivamente por Command Gateway risco 2.",
   "scope": "local-dev",
   "files": [
     "scripts/noteri_desktop_watchdog_rpc_recovery.py",
@@ -25,14 +25,14 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed local Desktop host/task; dedicated clean C:\\\\dev\\\\chatgpt-workers\\\\reqsys-watchdog-session-source clone created from immutable checkout, bound to canonical origin and validated at the exact origin/main SHA before Session Launcher; runner checkout under LOCALAPPDATA and divergent operational clone are never target_repo; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; local Query+Run with no /S or credentials; negative authorization/config tests; exact gateway dispatch and Desktop runner pickup."
+    "evidence_contract": "Fixed local Desktop host/task; dedicated clean C:\\\\dev\\\\chatgpt-workers\\\\reqsys-watchdog-session-source clone created from immutable checkout, bound to canonical origin and validated at the exact origin/main SHA before Session Launcher; runner checkout under LOCALAPPDATA and divergent operational clone are never target_repo; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; watchdog repair materializes that verified runtime under LOCALAPPDATA only when absent; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; local Query+Run, plus exact passwordless local Create only after an unequivocal missing-task result; no /S or credentials; independent XML proves enabled+AtStartup+S4U; negative authorization/config tests; exact gateway dispatch and Desktop runner pickup."
   },
   "risk": {
     "production": false,
     "deploy": false,
     "reboot": false,
     "secrets": false,
-    "task_creation_or_mutation": false
+    "task_creation_or_mutation": "exact_missing_watchdog_repair_only"
   },
   "runtime_shell": "powershell",
   "increment_type": "gap_fix",
@@ -51,7 +51,7 @@
     "O Session Launcher exige SESSION_LAUNCH_OK e state_validated=true no SHA exato.",
     "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
     "O único destino de execução técnica é o worktree governado criado a partir do clone dedicado limpo do Desktop.",
-    "A operação local permanece limitada a Query+Run da tarefa watchdog existente; /S, criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
+    "A operação local permanece limitada a Query+Run da tarefa watchdog; somente após resultado inequívoco de ausência, Create local sem senha é permitido para reparar o nome exato e deve ser validado por XML independente; /S, alteração arbitrária, segredo, credencial e produção são proibidos.",
     "Pickup real no runner Desktop é pré-condição e prova do host executor.",
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."

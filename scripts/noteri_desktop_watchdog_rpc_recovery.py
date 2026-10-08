@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import locale
 import os
@@ -19,6 +20,7 @@ TASK_NAME = r"\Automation\ReqSysDesktopControlPlaneWatchdog"
 CONFIRM = "RUN-EXISTING-DESKTOP-WATCHDOG"
 TASK_LOGON_S4U = "S4U"
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
+TaskRepair = Callable[[], dict[str, Any]]
 
 
 class RecoveryError(RuntimeError):
@@ -68,8 +70,14 @@ def parse_task_xml(xml_text: str) -> dict[str, Any]:
     except ET.ParseError as exc:
         raise RecoveryError("task_xml_invalid") from exc
     ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    enabled = root.findtext(
+        ".//t:Settings/t:Enabled",
+        default="true",
+        namespaces=ns,
+    )
     return {
         "exists": True,
+        "enabled": str(enabled or "true").strip().casefold() == "true",
         "trigger_at_startup": root.find(".//t:BootTrigger", ns) is not None,
         "logon_type": root.findtext(
             ".//t:Principal/t:LogonType",
@@ -113,11 +121,79 @@ def write_evidence(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def repair_watchdog_task(source_sha: str) -> dict[str, Any]:
+    if len(source_sha) != 40 or any(ch not in "0123456789abcdefABCDEF" for ch in source_sha):
+        raise RecoveryError("source_sha_invalid")
+    source_root = Path(__file__).resolve().parents[1]
+    module_path = source_root / "scripts" / "desktop_control_plane_watchdog.py"
+    spec = importlib.util.spec_from_file_location("reqsys_desktop_watchdog_repair", module_path)
+    if spec is None or spec.loader is None:
+        raise RecoveryError("watchdog_module_unavailable")
+    watchdog = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(watchdog)
+
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        raise RecoveryError("localappdata_missing")
+    runtime_root = Path(local) / "ReqSys" / "DesktopControlPlaneWatchdog"
+    python_executable = runtime_root / "python" / "3.12.10" / "python.exe"
+    runner_home = Path(local) / "ReqSys" / "Pc24x7GitHubRunner"
+    if not python_executable.is_file():
+        raise RecoveryError("persistent_watchdog_python_missing")
+
+    version = subprocess.run(
+        [str(python_executable), "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+        check=False,
+    )
+    observed_version = sanitize(version.stdout or version.stderr)
+    if version.returncode != 0 or observed_version != "Python 3.12.10":
+        raise RecoveryError("persistent_watchdog_python_version_mismatch")
+
+    installed = watchdog.install(
+        source_root,
+        source_sha=source_sha,
+        python_executable=python_executable,
+        runner_home=runner_home,
+        runtime_root=runtime_root,
+        watch_interval_seconds=30,
+        confirm=watchdog.CONFIRM,
+    )
+    if installed.get("headless_boot_ready") is not True:
+        raise RecoveryError("watchdog_task_repair_not_ready")
+    return {
+        "headless_boot_ready": True,
+        "registration_method": str((installed.get("task") or {}).get("registration_method") or ""),
+        "activation_pending": bool(installed.get("activation_pending")),
+    }
+
+
+def query_reports_missing_task(completed: subprocess.CompletedProcess[str]) -> bool:
+    if completed.returncode == 0:
+        return False
+    detail = sanitize(completed.stderr or completed.stdout).casefold()
+    return any(
+        marker in detail
+        for marker in (
+            "cannot find the file specified",
+            "não pode encontrar o arquivo especificado",
+            "nao pode encontrar o arquivo especificado",
+            "task does not exist",
+            "not found",
+        )
+    )
+
+
 def recover(
     *,
     confirm: str,
     evidence_file: Path,
     run_cmd: CommandRunner = default_run,
+    repair: TaskRepair | None = None,
     source_host: str | None = None,
     platform: str | None = None,
 ) -> dict[str, Any]:
@@ -126,6 +202,18 @@ def recover(
     require_desktop(source_host, platform)
 
     query, task = query_task(run_cmd)
+    initial_query_returncode = int(query.returncode)
+    repair_attempted = False
+    repair_summary: dict[str, Any] = {}
+    repair_error = ""
+    if query_reports_missing_task(query) and repair is not None:
+        repair_attempted = True
+        try:
+            repair_summary = repair()
+        except Exception as exc:
+            repair_error = sanitize(f"{type(exc).__name__}:{exc}")
+        if not repair_error:
+            query, task = query_task(run_cmd)
     payload: dict[str, Any] = {
         "schema_version": "1",
         "generated_at_utc": now_iso(),
@@ -136,13 +224,28 @@ def recover(
         "rdc_required": False,
         "task_name": TASK_NAME,
         "query_returncode": int(query.returncode),
+        "initial_query_returncode": initial_query_returncode,
         "task": task,
         "run_requested": False,
         "production_touched": False,
         "secrets_read": False,
         "credentials_supplied": False,
-        "task_created_or_modified": False,
+        "task_created_or_modified": bool(repair_attempted and not repair_error),
+        "task_repair_attempted": repair_attempted,
+        "task_repair_verified": bool(repair_attempted and not repair_error and task is not None),
+        "task_repair": repair_summary,
     }
+
+    if repair_error:
+        payload.update(
+            {
+                "ok": False,
+                "result": "DESKTOP_WATCHDOG_TASK_REPAIR_BLOCKED",
+                "repair_error": repair_error,
+            }
+        )
+        write_evidence(evidence_file, payload)
+        return payload
 
     if query.returncode != 0 or task is None:
         payload.update(
@@ -156,7 +259,8 @@ def recover(
         return payload
 
     if (
-        not task.get("trigger_at_startup")
+        task.get("enabled") is not True
+        or not task.get("trigger_at_startup")
         or str(task.get("logon_type") or "").casefold() != TASK_LOGON_S4U.casefold()
     ):
         payload.update(
@@ -195,6 +299,7 @@ def recover(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
+    parser.add_argument("--source-sha", required=True)
     parser.add_argument(
         "--evidence-file",
         type=Path,
@@ -205,6 +310,7 @@ def main() -> int:
         result = recover(
             confirm=args.confirm,
             evidence_file=args.evidence_file.resolve(),
+            repair=lambda: repair_watchdog_task(args.source_sha),
         )
     except (RecoveryError, OSError, subprocess.SubprocessError) as exc:
         blocked = {
