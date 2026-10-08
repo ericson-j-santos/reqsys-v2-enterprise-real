@@ -85,7 +85,19 @@ jobs:
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           $zip = Join-Path $root "python.zip"
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $stream = [System.IO.File]::OpenRead($zip)
+          try {
+            $sha256 = [System.Security.Cryptography.SHA256]::Create()
+            try {
+              $observedHash = ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+            }
+            finally {
+              $sha256.Dispose()
+            }
+          }
+          finally {
+            $stream.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }

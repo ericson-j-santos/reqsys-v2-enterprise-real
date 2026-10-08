@@ -71,6 +71,9 @@ def test_identity_bootstrap_uses_verified_portable_python_instead_of_stale_noter
     assert "PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in text
     assert "portable_python_sha256_mismatch" in text
     assert "portable_python_version_mismatch" in text
+    assert "Get-FileHash" not in text
+    assert "[System.Security.Cryptography.SHA256]::Create()" in text
+    assert "[System.IO.File]::OpenRead($zip)" in text
     assert '"REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV' in text
     assert "$raw = & $env:REQSYS_PYTHON $launcher @launcherArgs" in text
     assert "& $env:REQSYS_PYTHON $gateway @riskArgs" in text
