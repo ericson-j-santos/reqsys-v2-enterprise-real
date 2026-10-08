@@ -289,10 +289,11 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "public_desktop_staged" in stage
     assert "stage_failures = $stageFailures" in stage
     assert "RUNNER_PROFILE_DESKTOP_LAUNCHER_NOT_STAGED" in stage
-    assert "repair_desktop_control_plane_native.ps1" in stage
-    assert 'execution_method = "native_powershell_task_scheduler_com"' in stage
+    assert "repair_desktop_watchdog_native.ps1" in stage
+    assert "repair_desktop_control_plane_native.ps1" not in stage
+    assert 'execution_method = "native_powershell_watchdog_task_scheduler_com"' in stage
     assert "-Verb RunAs -Wait -PassThru" in stage
-    assert "DESKTOP_CONTROL_PLANE_NATIVE_REPAIRED" in stage
+    assert "DESKTOP_WATCHDOG_NATIVE_REPAIRED" in stage
     assert 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Ativar-ReqSys-Watchdog.ps1"' in stage
     assert "requires_local_uac_approval = $true" in stage
     assert "remote_uac_attempted = $false" in stage
