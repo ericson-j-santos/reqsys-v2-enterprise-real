@@ -2,7 +2,7 @@
   "feature_name": "noteri-desktop-watchdog-recovery",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-09-28",
+  "updated_at": "2026-10-08",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -25,7 +25,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
+    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup. The six portable-Python download steps calculate SHA-256 via .NET System.Security.Cryptography.SHA256 instead of depending on Get-FileHash (unavailable on the observed Noteri runner); the pinned SHA-256 check remains fail-closed before extraction. Regression tests verify the six identical hash implementations, correct PowerShell indentation, and absence of Get-FileHash."
   },
   "risk": {
     "production": false,
@@ -54,7 +54,8 @@
     "O RPC permanece limitado a Query+Run da tarefa watchdog existente; criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
     "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal.",
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
-    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
+    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas.",
+    "Os seis modos físicos calculam SHA-256 do ZIP com System.Security.Cryptography.SHA256 sem Get-FileHash, recusam hash divergente antes da extração e liberam os recursos criptográficos ao final; a indentação do script PowerShell é validada por regressão."
   ],
   "operational_rules": {
     "repository": "ericson-j-santos/chatgpt-operational-rules",
@@ -82,7 +83,9 @@
       "toolcache_required": false,
       "admin_required": false,
       "runtime_location": "RUNNER_TEMP_per_run",
-      "module_resolution": "ephemeral_python312._pth_exact_rules_scripts"
+      "module_resolution": "ephemeral_python312._pth_exact_rules_scripts",
+      "hash_implementation": "System.Security.Cryptography.SHA256 via .NET (no Get-FileHash dependency)",
+      "hash_mismatch": "fail-closed before extraction"
     }
   }
 }
