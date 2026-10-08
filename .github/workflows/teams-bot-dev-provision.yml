@@ -23,6 +23,7 @@ on:
         type: choice
         options:
           - identity-bootstrap
+          - identity-rotate
         default: identity-bootstrap
 
 concurrency:
@@ -52,7 +53,7 @@ jobs:
 
   identity-bootstrap-dev:
     name: Executar bootstrap Teams Bot DEV via Noteri Risk3
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'identity-bootstrap' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && contains(fromJSON('["identity-bootstrap","identity-rotate"]'), inputs.operation) }}
     needs: contract
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 10
@@ -63,6 +64,7 @@ jobs:
       ACTION_SCOPE: repo://ericson-j-santos/reqsys-v2-enterprise-real/environment/dev/teams-bot-identity
       EVIDENCE_REL: artifacts/teams-bot-dev-identity-bootstrap/evidence.json
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      TEAMS_BOT_DEV_ROTATE_SECRET: ${{ inputs.operation == 'identity-rotate' && 'true' || 'false' }}
 
     steps:
       - name: Checkout ReqSys source no SHA despachado

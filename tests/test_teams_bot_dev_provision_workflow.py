@@ -25,7 +25,7 @@ def test_workflow_is_identity_bootstrap_only() -> None:
     inputs = triggers["workflow_dispatch"]["inputs"]
 
     assert "schedule" not in triggers
-    assert inputs["operation"]["options"] == ["identity-bootstrap"]
+    assert inputs["operation"]["options"] == ["identity-bootstrap", "identity-rotate"]
     assert inputs["operation"]["default"] == "identity-bootstrap"
     assert "force_runtime_sync" not in inputs
     assert "activate-dev" not in workflow["jobs"]
@@ -47,7 +47,7 @@ def test_identity_bootstrap_never_runs_implicitly() -> None:
     condition = workflow["jobs"]["identity-bootstrap-dev"]["if"]
 
     assert "github.event_name == 'workflow_dispatch'" in condition
-    assert "inputs.operation == 'identity-bootstrap'" in condition
+    assert '"identity-bootstrap","identity-rotate"' in condition
 
 
 def test_identity_bootstrap_uses_noteri_and_governed_gateways() -> None:

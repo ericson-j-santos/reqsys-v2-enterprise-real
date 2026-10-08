@@ -334,6 +334,25 @@ def test_delivery_summary_classifies_transport_failure_without_exposing_details(
     assert 'private detail' not in str(summary)
 
 
+def test_delivery_summary_preserves_sanitized_conversation_reference_diagnostic():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'conversation_id': 'conv-dev-queue',
+            'teams': {
+                'modo': 'fila_gateway',
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'motivo_falha': 'conversation_reference_bot_id_mismatch',
+                },
+            },
+        },
+    })
+
+    assert summary['delivery_failure_category'] == 'conversation_reference_bot_id_mismatch'
+    assert 'bot-app-id' not in str(summary)
+
+
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
     calls = []
     patch_valid_admin(monkeypatch)

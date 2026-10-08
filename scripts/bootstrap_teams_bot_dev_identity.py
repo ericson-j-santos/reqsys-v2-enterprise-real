@@ -19,6 +19,7 @@ from typing import Any
 
 
 CONFIRMATION = "CRIAR-IDENTIDADE-TEAMS-BOT-DEV"
+ROTATION_CONFIRMATION = "ROTACIONAR-SEGREDO-TEAMS-BOT-DEV"
 DEFAULT_APP_NAME = "ReqSys Teams Bot DEV"
 DEFAULT_VAULT = "kv-reqsys-ccp"
 DEFAULT_SECRET_NAME = "reqsys-teams-bot-dev-secret"
@@ -208,7 +209,7 @@ def _revoke_credential(app_id: str, key_id: str) -> None:
     )
 
 
-def _create_and_store_secret(*, app_id: str, vault: str, secret_name: str) -> None:
+def _create_and_store_secret(*, app_id: str, vault: str, secret_name: str) -> list[str]:
     before = _credential_key_ids(app_id)
     password_result = _run(
         [
@@ -273,6 +274,7 @@ def _create_and_store_secret(*, app_id: str, vault: str, secret_name: str) -> No
         for key_id in emitted:
             _revoke_credential(app_id, key_id)
         raise
+    return emitted
 
 
 def _plan(args: argparse.Namespace, tenant_id: str) -> dict[str, Any]:
@@ -290,6 +292,8 @@ def _plan(args: argparse.Namespace, tenant_id: str) -> dict[str, Any]:
         actions.append("criar service principal da identidade dedicada")
     if metadata is None:
         actions.append(f"emitir client secret e gravá-lo em {args.vault_name}/{args.secret_name}")
+    elif args.rotate_secret:
+        actions.append(f"rotacionar client secret DEV e atualizar {args.vault_name}/{args.secret_name}")
     return {
         "schema_version": "1.1.0",
         "status": "dry_run",
@@ -311,6 +315,10 @@ def _plan(args: argparse.Namespace, tenant_id: str) -> dict[str, Any]:
 def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     if args.confirm != CONFIRMATION:
         raise BootstrapError(f"Confirmação inválida. Use --confirm {CONFIRMATION}")
+    if args.rotate_secret and args.rotation_confirm != ROTATION_CONFIRMATION:
+        raise BootstrapError(
+            f"Confirmação de rotação inválida. Use --rotation-confirm {ROTATION_CONFIRMATION}"
+        )
 
     account = _account()
     tenant_id = str(account["tenantId"])
@@ -344,6 +352,7 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
 
         metadata = _secret_metadata(args.vault_name, args.secret_name)
         secret_created = False
+        secret_rotated = False
         if metadata is not None:
             tags = metadata.get("tags") or {}
             tagged_app_id = str(tags.get("app-id") or "") if isinstance(tags, dict) else ""
@@ -353,9 +362,12 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
                 )
             if metadata.get("enabled") is False:
                 raise BootstrapError(f"O segredo {args.secret_name} existe, mas está desabilitado.")
-        else:
+        if metadata is None:
             _create_and_store_secret(app_id=app_id, vault=args.vault_name, secret_name=args.secret_name)
             secret_created = True
+        elif args.rotate_secret:
+            _create_and_store_secret(app_id=app_id, vault=args.vault_name, secret_name=args.secret_name)
+            secret_rotated = True
 
         return {
             "schema_version": "1.1.0",
@@ -369,6 +381,8 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
             "secret_store": "Azure Key Vault",
             "secret_name": args.secret_name,
             "secret_created": secret_created,
+            "secret_rotated": secret_rotated,
+            "previous_credentials_retained_for_rollback": secret_rotated,
             "secret_value_exposed": False,
             "next_action": "Executar Teams Bot DEV Provision para criar o Azure Bot, canal Teams e configurar reqsys-api-dev.",
         }
@@ -385,6 +399,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--app-display-name", default=DEFAULT_APP_NAME)
     parser.add_argument("--vault-name", default=DEFAULT_VAULT)
     parser.add_argument("--secret-name", default=DEFAULT_SECRET_NAME)
+    parser.add_argument("--rotate-secret", action="store_true", help="rotaciona somente o segredo DEV existente")
+    parser.add_argument("--rotation-confirm", default="", help="confirmação literal adicional para rotação")
     parser.add_argument(
         "--dry-run",
         action="store_true",

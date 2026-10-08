@@ -211,10 +211,16 @@ def test_fallback_da_api_preserva_destino_unico_antes_da_fila(monkeypatch):
     db = MagicMock()
     conversa = _conversation(teams_destino_id=None)
     item = SimpleNamespace(id=91)
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(
+        teams_bot_configurado=True,
+        teams_bot_app_id='bot-id',
+        teams_bot_app_tenant_id='tenant-id',
+    )
     referencia = SimpleNamespace(
         service_url='https://connector.invalid/',
         conversation_id='conversation-1',
+        bot_id='bot-id',
+        tenant_id='tenant-id',
     )
     enviados = []
 

@@ -18,6 +18,8 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 
 10. Quando o envio direto resolver de forma inequívoca a única `conversationReference`, preservar o destinatário na conversa antes da chamada ao Bot Framework; o fallback da fila deve reutilizá-lo mesmo após falha externa.
 11. Com referência ambígua ou ausente, não inventar destinatário, não efetuar envio e manter o fluxo fail-closed.
+12. Antes do transporte, a `conversationReference` deve estar vinculada ao Bot App ID e tenant atualmente configurados; campos ausentes ou divergentes bloqueiam o envio com código sanitizado.
+13. A evidência E2E pode propagar códigos `conversation_reference_*`, mas nunca os identificadores observados ou esperados.
 
 ## Critérios de aceite
 
@@ -27,3 +29,4 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 - entrega real ao Teams é a única condição que aprova o E2E final;
 - nenhum valor sensível aparece em logs ou artifacts.
 - teste regressivo confirma autoridade OAuth tenant-specific e preserva o scope `https://api.botframework.com/.default`.
+- teste regressivo confirma bloqueio pré-transporte para referência ausente ou pertencente a outra identidade Bot.

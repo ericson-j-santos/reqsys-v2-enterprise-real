@@ -274,6 +274,28 @@ def test_reexecucao_reutiliza_identidade_quando_secret_corresponde(az) -> None:
     assert fake.executed('ad', 'app', 'credential', 'reset') == []
 
 
+def test_rotacao_exige_confirmacao_adicional_e_atualiza_keyvault(az) -> None:
+    fake = az(
+        FakeAz(
+            apps=[dict(APP_EXISTENTE)],
+            service_principal_exists=True,
+            secret={'enabled': True, 'tags': {'app-id': 'app-existente'}},
+        )
+    )
+    with pytest.raises(MODULE.BootstrapError, match='Confirmação de rotação inválida'):
+        MODULE.bootstrap(_args(rotate_secret=True))
+    assert fake.executed('ad', 'app', 'credential', 'reset') == []
+
+    evidence = MODULE.bootstrap(
+        _args(rotate_secret=True, rotation_confirm=MODULE.ROTATION_CONFIRMATION)
+    )
+    assert evidence['secret_rotated'] is True
+    assert evidence['previous_credentials_retained_for_rollback'] is True
+    assert fake.executed('ad', 'app', 'credential', 'reset')
+    assert fake.executed('keyvault', 'secret', 'set')
+    assert SECRET_VALUE not in json.dumps(evidence, ensure_ascii=False)
+
+
 def test_secret_existente_com_tag_divergente_e_recusado(az) -> None:
     az(
         FakeAz(

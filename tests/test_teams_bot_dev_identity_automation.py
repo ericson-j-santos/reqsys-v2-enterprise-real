@@ -40,7 +40,9 @@ def test_workflow_uses_session_launcher_owner_risk3_and_exact_noteri():
     assert "ENABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in raw
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in raw
     assert "CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}" in raw
-    assert "inputs.operation == 'identity-bootstrap'" in raw
+    assert '"identity-bootstrap","identity-rotate"' in raw
+    assert "inputs.operation == 'identity-rotate'" in raw
+    assert "TEAMS_BOT_DEV_ROTATE_SECRET" in raw
     assert "inputs.operation == 'activate'" not in raw
     assert "reqsys-api-dev.fly.dev" not in raw
     assert "flyctl" not in raw
@@ -50,6 +52,7 @@ def test_runner_is_idempotent_and_reads_back_without_secret_output():
     raw = RUNNER.read_text(encoding="utf-8")
     assert 'EXPECTED_HOST = "NOTERI"' in raw
     assert 'CONFIRMATION = "CRIAR-IDENTIDADE-TEAMS-BOT-DEV"' in raw
+    assert 'ROTATION_CONFIRMATION = "ROTACIONAR-SEGREDO-TEAMS-BOT-DEV"' in raw
     assert "dry_run=True" in raw
     assert "dry_run=False" in raw
     assert "independent_readback_not_complete" in raw
