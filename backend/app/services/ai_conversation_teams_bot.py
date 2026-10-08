@@ -12,6 +12,7 @@ from app.models.bot_conversa_referencia import BotConversaReferencia
 from app.services.ai_conversation import construir_adaptive_card
 from app.services.teams_gateway import (
     _enviar_atividade_bot_framework,
+    diagnosticar_propriedade_conversa_referencia,
     obter_conversa_referencia_bot,
 )
 
@@ -69,6 +70,14 @@ async def enviar_cartao_conversa_bot(
         raise AITeamsBotDeliveryError(
             'O bot ainda não possui conversationReference para o usuário Teams.'
         )
+
+    ownership_failure = diagnosticar_propriedade_conversa_referencia(
+        referencia,
+        expected_bot_id=settings.teams_bot_app_id,
+        expected_tenant_id=settings.teams_bot_app_tenant_id,
+    )
+    if ownership_failure:
+        raise AITeamsBotDeliveryError(ownership_failure)
 
     # O fallback da fila usa a mesma conversa. Guarde o destinatário único
     # antes do transporte, que ainda pode falhar sem ter persistido a conversa.
