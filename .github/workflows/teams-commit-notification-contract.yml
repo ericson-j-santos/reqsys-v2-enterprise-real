@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - .github/workflows/teams-commit-notification.yml
-      - .github/workflows/pc24x7-dev-locator-watch.yml
       - .github/workflows/teams-commit-notification-contract.yml
       - tools/geradores/teams_graph_gateway_autocontido.py
       - tests/test_teams_graph_gateway_autocontido.py

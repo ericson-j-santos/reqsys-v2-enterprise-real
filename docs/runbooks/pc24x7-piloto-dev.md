@@ -73,8 +73,8 @@ DPAPI e Ed25519. O wrapper da tarefa aponta somente para esse interpretador;
 remoção ou atualização do Python usado no checkout não interrompe mais a
 renovação.
 
-O workflow `PC24x7 DEV Locator Watch` executa a cada 10 minutos em runner
-GitHub-hosted e valida assinatura, contrato e TTL mínimo de 300 segundos. A
+O job `watch-locator` do workflow `Teams Commit Notification` executa a cada 10
+minutos em runner GitHub-hosted e valida assinatura, contrato e TTL mínimo de 300 segundos. A
 primeira transição para indisponível/expirando alerta o Teams pelo webhook
 governado de contingência; repetições consecutivas não geram novo alerta. Quando
 o locator volta a ficar fresco após uma execução falha, o workflow envia uma

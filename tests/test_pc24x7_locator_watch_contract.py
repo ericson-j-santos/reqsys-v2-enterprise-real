@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "pc24x7-dev-locator-watch.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "teams-commit-notification.yml"
 RESOLVER = ROOT / "scripts" / "resolve_pc24x7_dev_locator.mjs"
 
 
@@ -17,7 +17,7 @@ class Pc24x7LocatorWatchContractTest(unittest.TestCase):
         self.assertIn('cron: "*/10 * * * *"', self.workflow)
         self.assertIn("timeout-minutes: 5", self.workflow)
         self.assertIn('MIN_REMAINING_TTL_SECONDS: "300"', self.workflow)
-        self.assertIn("pc24x7-dev-locator-watch", self.workflow)
+        self.assertIn("watch-locator", self.workflow)
         self.assertIn("steps.locator.outputs.state != 'healthy'", self.workflow)
         self.assertIn("exit 1", self.workflow)
 

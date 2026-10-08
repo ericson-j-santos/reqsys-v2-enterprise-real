@@ -25,7 +25,6 @@
     "tests": [
       ".github/workflows/teams-commit-notification-contract.yml",
       ".github/workflows/teams-service-operational-readiness.yml",
-      ".github/workflows/pc24x7-dev-locator-watch.yml",
       "tests/test_teams_commit_notification_fallback_contract.py",
       "tests/test_pc24x7_locator_watch_contract.py",
       "tests/test_pc24x7_dev_runtime_supervisor.py"
@@ -44,7 +43,7 @@
     "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pela contingência e registrar delivery_route antes de declarar a correção funcional concluída.",
     "Uma execução workflow_run com artefato deve baixar a evidência sem HTTP 401 e sem encaminhar Authorization ao host externo.",
     "O supervisor local deve usar intervalo de 6 minutos, Python persistente dedicado e manter três minutos de folga após um ciclo perdido.",
-    "PC24x7 DEV Locator Watch deve executar a cada 10 minutos, exigir TTL mínimo de 300 segundos, alertar transições e publicar evidência sanitizada."
+    "O job watch-locator de Teams Commit Notification deve executar a cada 10 minutos, exigir TTL mínimo de 300 segundos, alertar transições e publicar evidência sanitizada."
   ],
   "risk": {
     "production": false,

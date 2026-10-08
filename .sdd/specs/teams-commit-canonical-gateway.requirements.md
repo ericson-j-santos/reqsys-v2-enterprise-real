@@ -33,7 +33,7 @@ Manter o Teams Messaging Gateway PC24x7 como rota primária da notificação aut
 - O workflow não contém `continue-on-error`, falha quando as duas rotas estão indisponíveis e registra `delivery_route`.
 - O download de artefatos de `workflow_run` remove `Authorization` em redirecionamentos entre hosts e preserva o token apenas para a API GitHub.
 - O supervisor usa intervalo de 6 minutos, Python dedicado em `%LOCALAPPDATA%/ReqSys/RuntimeSupervisor/python` e continua abaixo do orçamento anônimo do ntfy.
-- O workflow `PC24x7 DEV Locator Watch` usa agenda de 10 minutos, TTL mínimo de 300 segundos, alerta de transição e artifact sanitizado.
+- O job `watch-locator` do workflow `Teams Commit Notification` usa agenda de 10 minutos, TTL mínimo de 300 segundos, alerta de transição e artifact sanitizado.
 - Após o merge, uma execução real de `Teams Commit Notification` com locator indisponível confirma a entrega pelo webhook governado e identifica a contingência no summary.
 
 ## Rollback
