@@ -53,21 +53,54 @@ jobs:
             throw "WATCHDOG_PYTHON_PATH_MISMATCH"
           }
           $launcher = Join-Path $expectedRelease "scripts\desktop_control_plane_watchdog_uac_launcher.py"
+          $nativeRepair = Join-Path $expectedRelease "scripts\repair_desktop_control_plane_native.ps1"
           $watchdog = Join-Path $expectedRelease "scripts\desktop_control_plane_watchdog.py"
-          foreach ($required in @($python, $launcher, $watchdog)) {
+          foreach ($required in @($python, $launcher, $nativeRepair, $watchdog)) {
             if (-not (Test-Path -LiteralPath $required)) { throw "WATCHDOG_ACTIVATION_FILE_MISSING" }
           }
           $version = (& $python --version 2>&1 | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") {
             throw "WATCHDOG_PYTHON_VERSION_MISMATCH:$version"
           }
+          $diagnosticFile = Join-Path $env:LOCALAPPDATA "ReqSys\DesktopControlPlaneNativeRepair\last.json"
+          $ps1Content = @'
+          $ErrorActionPreference = 'Stop'
+          $repairScript = '__REPAIR_SCRIPT__'
+          $evidenceFile = '__EVIDENCE_FILE__'
+          try {
+            if (-not (Test-Path -LiteralPath $repairScript -PathType Leaf)) {
+              throw 'REPARADOR_NATIVO_AUSENTE'
+            }
+            $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $repairScript + '"'))
+            $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Verb RunAs -Wait -PassThru
+            if (-not (Test-Path -LiteralPath $evidenceFile -PathType Leaf)) {
+              throw ('DIAGNOSTICO_NAO_GERADO; exit_code=' + $process.ExitCode)
+            }
+            $evidence = Get-Content -LiteralPath $evidenceFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            $evidence | ConvertTo-Json -Depth 8
+            if ($process.ExitCode -ne 0 -or $evidence.ok -ne $true -or $evidence.result -ne 'DESKTOP_CONTROL_PLANE_NATIVE_REPAIRED') {
+              $detail = [string]$evidence.error
+              throw ('REPARO_NATIVO_BLOQUEADO; exit_code=' + $process.ExitCode + '; detalhe=' + $detail)
+            }
+            Write-Host 'Watchdog ativado e validado com sucesso.' -ForegroundColor Green
+            exit 0
+          }
+          catch {
+            Write-Host ('Falha na ativacao: ' + $_.Exception.Message) -ForegroundColor Red
+            Write-Host ('Diagnostico: ' + $evidenceFile)
+            exit 2
+          }
+          '@
+          $ps1Content = $ps1Content.Replace('__REPAIR_SCRIPT__', $nativeRepair.Replace("'", "''"))
+          $ps1Content = $ps1Content.Replace('__EVIDENCE_FILE__', $diagnosticFile.Replace("'", "''"))
           $cmdContent = @"
           @echo off
           title Ativar ReqSys Desktop Watchdog
-          "$python" "$launcher" --metadata "$metadataPath" --confirm LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 120
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Ativar-ReqSys-Watchdog.ps1"
           set "REQSYS_EXIT=%ERRORLEVEL%"
           echo.
-          if "%REQSYS_EXIT%"=="0" (echo Watchdog ativado com sucesso.) else (echo Ativacao pendente ou bloqueada. Codigo: %REQSYS_EXIT%)
+          if "%REQSYS_EXIT%"=="0" (echo Ativacao concluida.) else (echo Ativacao bloqueada. Codigo: %REQSYS_EXIT%)
           echo Pressione qualquer tecla para fechar.
           pause ^>nul
           exit /b %REQSYS_EXIT%
@@ -85,9 +118,17 @@ jobs:
                 throw "DESKTOP_TARGET_UNAVAILABLE"
               }
               $cmd = Join-Path $directory "Ativar-ReqSys-Watchdog.cmd"
+              $ps1 = Join-Path $directory "Ativar-ReqSys-Watchdog.ps1"
+              $ps1Content | Set-Content -LiteralPath $ps1 -Encoding UTF8
               $cmdContent | Set-Content -LiteralPath $cmd -Encoding ASCII
-              if (-not (Test-Path -LiteralPath $cmd)) { throw "DESKTOP_LAUNCHER_NOT_STAGED" }
-              $staged += @{ kind = $target.kind; path = [IO.Path]::GetFullPath($cmd) }
+              if (-not (Test-Path -LiteralPath $cmd) -or -not (Test-Path -LiteralPath $ps1)) {
+                throw "DESKTOP_LAUNCHER_NOT_STAGED"
+              }
+              $staged += @{
+                kind = $target.kind
+                path = [IO.Path]::GetFullPath($cmd)
+                powershell_path = [IO.Path]::GetFullPath($ps1)
+              }
             } catch {
               $stageFailures += @{
                 kind = $target.kind
@@ -104,7 +145,10 @@ jobs:
             result = "DESKTOP_WATCHDOG_UAC_LAUNCHER_STAGED"
             source_sha = $sourceSha.ToLowerInvariant()
             launcher_name = "Ativar-ReqSys-Watchdog.cmd"
+            execution_method = "native_powershell_task_scheduler_com"
             desktop_paths = @($staged | ForEach-Object { $_.path })
+            powershell_paths = @($staged | ForEach-Object { $_.powershell_path })
+            diagnostic_file = $diagnosticFile
             public_desktop_staged = [bool](@($staged | Where-Object { $_.kind -eq "public" }).Count)
             stage_failures = $stageFailures
             activation_pending = $true

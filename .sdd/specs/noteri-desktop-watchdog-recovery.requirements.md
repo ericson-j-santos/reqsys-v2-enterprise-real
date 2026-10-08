@@ -31,7 +31,7 @@ Quando o runner GitHub do DESKTOP-PDQK954 estiver disponível, usá-lo para cons
 23. O workflow deve copiar o CPython 3.12.10 já validado para `%LOCALAPPDATA%\ReqSys\DesktopControlPlaneWatchdog\python\3.12.10` apenas quando ausente e revalidar sua versão; runtime íntegro existente não pode ser substituído.
 24. A reparação deve instalar a release imutável no SHA da execução, apontar para o runner local fixo e aceitar sucesso somente com `headless_boot_ready=true`.
 25. O modo explícito `watchdog-uac` pode chamar somente `desktop_control_plane_watchdog_uac_launcher.py`, com confirmação fixa, metadata governada e timeout limitado; a aprovação visual do Windows continua obrigatória e nenhum bypass de UAC é permitido.
-26. Se a elevação não puder ser apresentada pela sessão do runner, o modo `watchdog-uac-stage` pode criar somente `Ativar-ReqSys-Watchdog.cmd` no Desktop do perfil do runner e tentar a mesma cópia no Desktop público, vinculado ao Python persistente, à metadata governada e à release imutável já validados; o caminho criado e eventual recusa pública devem constar da evidência, e o arquivo exige execução local e aprovação UAC humana.
+26. Se a elevação não puder ser apresentada pela sessão do runner, o modo `watchdog-uac-stage` deve criar `Ativar-ReqSys-Watchdog.cmd` e seu launcher PowerShell no Desktop do perfil do runner e tentar as mesmas cópias no Desktop público; o launcher deve elevar e aguardar o reparador nativo imutável, validar seu diagnóstico local e manter a aprovação UAC humana obrigatória. Caminhos criados e eventual recusa pública devem constar da evidência.
 
 ## Critérios de aceite
 
