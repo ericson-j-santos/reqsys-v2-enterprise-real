@@ -17,6 +17,9 @@ Eliminar a divergência entre o segredo `TEAMS_FLOW_BOT_WEBHOOK_URL` protegido p
    registra e publica somente fingerprints e metadados sanitizados.
 9. Sucesso do bootstrap exige `flow_bot` disponível e uma entrega real
    confirmada pelo Gateway, sem fallback de transporte.
+10. Um JWT administrativo expirado pode ser substituído somente por uma sessão
+    efêmera do login demo quando `/v1/auth/config` comprovar ambiente DEV e o
+    usuário resolvido tiver papel `admin`; fora de DEV, a operação falha fechada.
 
 ## Critérios de aceite
 - Testes cobrem mudança, replay e ausência de segredo.
