@@ -52,3 +52,4 @@ Automatizar, com custo adicional zero e de forma governada, a execução idempot
 13. O job Noteri deve preparar Python 3.12 portátil com versão e SHA-256 fixos, validar o executável e reutilizar seu caminho explícito; shims globais quebrados e travamentos de `setup-python` não podem impedir o Session Launcher.
 14. O repositório-fonte do Session Launcher deve ser o checkout efêmero em `github.workspace`, no `github.sha`, sem caminho local hardcoded do ReqSys no Noteri.
 15. Limpeza, validação e upload executados com `always()` devem ser condicionados à existência de `steps.session.outputs.target_path`, preservando a falha original quando a sessão não for criada.
+16. A rotação do segredo DEV exige operação explícita `identity-rotate`, confirmação literal adicional, gravação direta no Key Vault e evidência sanitizada; credenciais anteriores permanecem temporariamente disponíveis para rollback até validação E2E.

@@ -17,6 +17,8 @@ EXPECTED_HOST = "NOTERI"
 TENANT_ENV = "CCP_AZURE_TENANT_ID"
 BOOTSTRAP = Path("scripts/bootstrap_teams_bot_dev_identity.py")
 CONFIRMATION = "CRIAR-IDENTIDADE-TEAMS-BOT-DEV"
+ROTATION_CONFIRMATION = "ROTACIONAR-SEGREDO-TEAMS-BOT-DEV"
+ROTATE_ENV = "TEAMS_BOT_DEV_ROTATE_SECRET"
 GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
@@ -44,7 +46,7 @@ def _read_json(path: Path, reason: str) -> dict[str, Any]:
     return payload
 
 
-def _run_bootstrap(output: Path, *, dry_run: bool) -> dict[str, Any]:
+def _run_bootstrap(output: Path, *, dry_run: bool, rotate_secret: bool = False) -> dict[str, Any]:
     tenant = str(os.environ.get(TENANT_ENV) or "").strip()
     if not GUID_RE.fullmatch(tenant):
         raise RunnerError("expected_tenant_missing_or_invalid")
@@ -65,6 +67,8 @@ def _run_bootstrap(output: Path, *, dry_run: bool) -> dict[str, Any]:
     ]
     if dry_run:
         args.append("--dry-run")
+    if rotate_secret:
+        args.extend(["--rotate-secret", "--rotation-confirm", ROTATION_CONFIRMATION])
 
     completed = subprocess.run(
         args,
@@ -102,19 +106,20 @@ def execute(output: Path) -> dict[str, Any]:
         raise RunnerError("unexpected_host")
 
     base = output.parent
-    before = _run_bootstrap(base / "preflight.json", dry_run=True)
+    rotate_secret = str(os.environ.get(ROTATE_ENV) or "").strip().lower() == "true"
+    before = _run_bootstrap(base / "preflight.json", dry_run=True, rotate_secret=rotate_secret)
     if before.get("status") != "dry_run" or before.get("environment") != "dev":
         raise RunnerError("preflight_contract_mismatch")
     if before.get("secret_value_exposed") is not False:
         raise RunnerError("preflight_secret_contract_mismatch")
 
-    applied = _run_bootstrap(base / "bootstrap.json", dry_run=False)
+    applied = _run_bootstrap(base / "bootstrap.json", dry_run=False, rotate_secret=rotate_secret)
     if applied.get("status") != "ready" or applied.get("environment") != "dev":
         raise RunnerError("bootstrap_not_ready")
     if applied.get("secret_value_exposed") is not False:
         raise RunnerError("bootstrap_secret_contract_mismatch")
 
-    after = _run_bootstrap(base / "readback.json", dry_run=True)
+    after = _run_bootstrap(base / "readback.json", dry_run=True, rotate_secret=False)
     expected_plan = ["nenhuma; identidade dedicada já está completa"]
     if after.get("status") != "dry_run" or after.get("planned_actions") != expected_plan:
         raise RunnerError("independent_readback_not_complete")
@@ -125,7 +130,7 @@ def execute(output: Path) -> dict[str, Any]:
 
     changed = any(
         bool(applied.get(name))
-        for name in ("created_app", "created_service_principal", "secret_created")
+        for name in ("created_app", "created_service_principal", "secret_created", "secret_rotated")
     )
     evidence = {
         "schema_version": "1.0.0",
@@ -139,6 +144,10 @@ def execute(output: Path) -> dict[str, Any]:
         "created_app": bool(applied.get("created_app")),
         "created_service_principal": bool(applied.get("created_service_principal")),
         "secret_created": bool(applied.get("secret_created")),
+        "secret_rotated": bool(applied.get("secret_rotated")),
+        "previous_credentials_retained_for_rollback": bool(
+            applied.get("previous_credentials_retained_for_rollback")
+        ),
         "initial_planned_actions": before.get("planned_actions") or [],
         "post_planned_actions": after.get("planned_actions") or [],
         "independent_readback": True,
