@@ -57,7 +57,12 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }
@@ -236,7 +241,12 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }
@@ -419,7 +429,12 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }
@@ -569,7 +584,12 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }
@@ -721,7 +741,12 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
             throw "portable_python_sha256_mismatch:$observedHash"
           }
@@ -868,7 +893,12 @@ jobs:
             if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
             New-Item -ItemType Directory -Force $root | Out-Null
             Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-            $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            $sha256 = [System.Security.Cryptography.SHA256]::Create()
+          try {
+            $observedHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($zip))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha256.Dispose()
+          }
             if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
               throw "portable_python_sha256_mismatch:$observedHash"
             }
