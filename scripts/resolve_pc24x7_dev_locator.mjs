@@ -261,6 +261,12 @@ async function main() {
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `base_url=${result.selected_url}\n`);
     appendFileSync(process.env.GITHUB_OUTPUT, `frontend_url=${result.selected_url}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `issued_at=${result.issued_at}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `expires_at=${result.expires_at}\n`);
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `remaining_ttl_seconds=${Math.max(0, result.expires_at - Math.floor(Date.now() / 1000))}\n`,
+    );
   }
 }
 

@@ -9,21 +9,25 @@
     "design": true,
     "tasks": true
   },
-  "description": "Mantém o Teams Messaging Gateway PC24x7 como rota primária e automatiza o webhook governado como contingência pré-envio quando o locator/runtime estiver indisponível, preservando entrega fail-closed e evidência por execução.",
+  "description": "Mantém o Teams Messaging Gateway PC24x7 como rota primária, automatiza a renovação preventiva do locator e alerta transições pelo webhook governado, preservando entrega fail-closed e evidência por execução.",
   "requirements": [
     "A rota primária deve usar o locator assinado, scripts/notificar_teams.py, TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
     "Se o locator falhar antes de qualquer POST, a contingência deve usar TEAMS_WEBHOOK_URL e TEAMS_WEBHOOK_RECIPIENT pelo gerador autocontido.",
     "O fallback deve preservar Adaptive Card, correlation ID e event type commit-notification-fallback.",
     "Falha ou ausência de confirmação nas duas rotas deve manter o workflow vermelho sem continue-on-error.",
     "A evidência deve registrar gateway, webhook_fallback ou unavailable sem expor segredos.",
-    "Downloads de artefatos de workflow_run devem remover Authorization ao seguir redirecionamentos para hosts externos de armazenamento assinado."
+    "Downloads de artefatos de workflow_run devem remover Authorization ao seguir redirecionamentos para hosts externos de armazenamento assinado.",
+    "O supervisor deve renovar o locator a cada 6 minutos usando Python persistente dedicado e no máximo 240 publicações agendadas por dia.",
+    "O monitor externo deve validar assinatura e TTL mínimo de 300 segundos a cada 10 minutos, alertar somente nas transições de falha/recuperação e permanecer fail-closed."
   ],
   "gap_reference": "OPS-GAP-37763758777",
   "sdd_gate": {
     "tests": [
       ".github/workflows/teams-commit-notification-contract.yml",
       ".github/workflows/teams-service-operational-readiness.yml",
-      "tests/test_teams_commit_notification_fallback_contract.py"
+      "tests/test_teams_commit_notification_fallback_contract.py",
+      "tests/test_pc24x7_locator_watch_contract.py",
+      "tests/test_pc24x7_dev_runtime_supervisor.py"
     ],
     "evidence_contract": "O HEAD do PR deve comprovar gateway assinado como rota primária, ausência de vars.TEAMS_GATEWAY_BASE_URL/Fly.io, fallback webhook somente antes do envio quando o locator estiver indisponível, Adaptive Card e fail-closed sem continue-on-error. A conclusão funcional exige run real pós-merge na contingência."
   },
@@ -37,7 +41,9 @@
     "Com locator indisponível antes do envio, o workflow usa o webhook governado com Adaptive Card e event type de contingência.",
     "Teams Commit Notification Contract valida as duas rotas, impede URL estática/Fly.io e mantém fail-closed sem continue-on-error.",
     "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pela contingência e registrar delivery_route antes de declarar a correção funcional concluída.",
-    "Uma execução workflow_run com artefato deve baixar a evidência sem HTTP 401 e sem encaminhar Authorization ao host externo."
+    "Uma execução workflow_run com artefato deve baixar a evidência sem HTTP 401 e sem encaminhar Authorization ao host externo.",
+    "O supervisor local deve usar intervalo de 6 minutos, Python persistente dedicado e manter três minutos de folga após um ciclo perdido.",
+    "O job watch-locator de Teams Commit Notification deve executar a cada 10 minutos, exigir TTL mínimo de 300 segundos, alertar transições e publicar evidência sanitizada."
   ],
   "risk": {
     "production": false,
