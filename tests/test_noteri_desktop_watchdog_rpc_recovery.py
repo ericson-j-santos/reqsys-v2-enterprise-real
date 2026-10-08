@@ -113,7 +113,11 @@ def test_missing_task_is_repaired_then_requeried_and_started(tmp_path: Path, mon
         calls.append(argv)
         if "/Query" in argv:
             query_count += 1
-            return completed(1, stderr="not found") if query_count == 1 else completed(0, TASK_XML)
+            return (
+                completed(1, stderr="ERRO: O sistema nÃ£o pode encontrar o arquivo especificado.")
+                if query_count == 1
+                else completed(0, TASK_XML)
+            )
         return completed(0, "SUCCESS")
 
     result = m.recover(
