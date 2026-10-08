@@ -153,6 +153,16 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("[System.Security.Cryptography.SHA256]::Create()") == 6
     assert raw.count(".ComputeHash([System.IO.File]::ReadAllBytes($zip))") == 6
     assert raw.count("$sha256.Dispose()") == 6
+    lines = raw.splitlines()
+    for index, line in enumerate(lines):
+        if "$sha256 = [System.Security.Cryptography.SHA256]::Create()" not in line:
+            continue
+        indent = len(line) - len(line.lstrip())
+        assert lines[index + 1] == " " * indent + "try {"
+        assert lines[index + 2].startswith(" " * (indent + 2) + "$observedHash =")
+        assert lines[index + 3] == " " * indent + "} finally {"
+        assert lines[index + 4] == " " * (indent + 2) + "$sha256.Dispose()"
+        assert lines[index + 5] == " " * indent + "}"
     assert raw.count("REQSYS_PYTHON=$python") == 6
     assert raw.count("python312._pth") == 6
     assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
