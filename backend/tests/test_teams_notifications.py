@@ -195,3 +195,31 @@ def test_falha_entra_na_dlq_e_reprocessa(notification_db, monkeypatch):
     assert replay.status_code == 200
     assert replay.json()['data']['status_evento'] == 'ENVIADO'
     assert replay.json()['data']['tentativas'] == 2
+
+
+def test_excecao_inesperada_da_fila_vira_codigo_sanitizado(notification_db, monkeypatch):
+    async def fake_send(*_args, **_kwargs):
+        raise RuntimeError('detalhe privado do transporte')
+
+    monkeypatch.setattr(teams_notifications, 'enviar_mensagem_gateway', fake_send)
+
+    response = client.post(
+        '/v1/teams-gateway/notificacoes/enfileirar',
+        json={
+            'origem': 'sistema',
+            'tipo_evento': 'diagnostico_transporte',
+            'ambiente': 'dev',
+            'correlation_id': 'test-notification-sanitized-exception',
+            'titulo': 'Diagnóstico',
+            'texto': 'Conteúdo público.',
+            'destino_tipo': 'chat',
+            'destino_id': 'aad-test',
+            'modo': 'bot',
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['status_evento'] == 'FALHA'
+    assert data['motivo_falha'] == 'provider_exception_runtimeerror'
+    assert 'detalhe privado' not in response.text

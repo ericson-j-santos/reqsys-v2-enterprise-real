@@ -214,13 +214,14 @@ async def executar_item_fila(
     except Exception as exc:
         logger.exception('teams_notification_send_unhandled event_id=%s', item_id)
         db.rollback()
+        failure_code = f'provider_exception_{type(exc).__name__.lower()}'
         result = {
             'entregue': False,
             'canal_usado': None,
             'status_code': None,
             'message_id': None,
-            'erro': type(exc).__name__,
-            'motivo': str(exc)[:1000],
+            'erro': failure_code,
+            'motivo': failure_code,
         }
 
     latency_ms = max(0, int((time.perf_counter() - started) * 1000))
