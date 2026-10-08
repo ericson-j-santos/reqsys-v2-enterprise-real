@@ -255,6 +255,7 @@ def create_conversation_without_teams(
             'idempotency_key': _stable_key('pc24x7-create', correlation_id, mensagem),
             'teams_destino_tipo': 'chat_1a1',
             'teams_modo': 'bot',
+            'teams_permitir_fallback': False,
             'enviar_teams': False,
         },
     )

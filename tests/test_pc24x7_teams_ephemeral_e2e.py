@@ -181,6 +181,8 @@ def _success_request_recorder(calls, secret='service-token-must-never-appear'):
             return 200, ready_payload()
         if method == 'POST' and url.endswith('/ai-conversations'):
             assert body['enviar_teams'] is False
+            assert body['teams_modo'] == 'bot'
+            assert body['teams_permitir_fallback'] is False
             return 200, creation_payload()
         if method == 'POST' and url.endswith('/conv-dev-1/reply'):
             reply_count['value'] += 1
