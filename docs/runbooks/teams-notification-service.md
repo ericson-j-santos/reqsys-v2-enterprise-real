@@ -32,6 +32,7 @@ Serviço responsável por notificar commits da `main` no Microsoft Teams, execut
 |---|---|---|---|
 | `CFG-001` | Secret ausente | `TEAMS_WEBHOOK_URL` não configurado | Cadastrar secret no repositório |
 | `LOC-001` | `SIGNED_LOCATOR_BLOCKED` | Locator PC24x7 expirado ou runtime físico indisponível | Confirmar fallback governado e recuperar o PC24x7 |
+| `FLOW-001` | `nenhum flow_bot_owner ativo` | Owner do Power Automate ausente no runtime PC24x7 | Executar `Teams Commit Notification` com `operation=reconcile-flow-bot` |
 | `AUTH-001` | HTTP 401/403 | URL exige autenticação ou credencial inválida | Substituir pela URL do Workflows/Webhook aceita pelo canal |
 | `RATE-001` | HTTP 429 | Limite temporário do endpoint | Aguardar retry automático; validar volume |
 | `ENDP-001` | HTTP 404/410 | Endpoint removido ou expirado | Gerar nova URL e atualizar secret |
@@ -54,6 +55,15 @@ Serviço responsável por notificar commits da `main` no Microsoft Teams, execut
 7. Registrar evidência na issue e fechar somente após duas execuções verdes consecutivas.
 
 O workflow prioriza o locator assinado e o Teams Messaging Gateway. Se o locator falhar antes de qualquer tentativa de envio, ele seleciona automaticamente o webhook governado de contingência, registra `delivery_route=webhook_fallback` e mantém o run verde somente após confirmação HTTP 2xx. A contingência não substitui a recuperação do PC24x7 e não é tentada após uma chamada ambígua ao gateway, evitando duplicidade.
+
+Se o locator estiver válido, mas o gateway responder que nenhum owner Flow Bot
+está ativo, execute manualmente `Teams Commit Notification` com a operação
+`reconcile-flow-bot`. O
+workflow reutiliza `TEAMS_WEBHOOK_URL`, `TEAMS_WEBHOOK_RECIPIENT` e
+`COFRE_ADMIN_JWT` já protegidos no GitHub Environment `development`, cria ou
+atualiza o owner de forma idempotente e exige uma entrega real antes de publicar
+evidência sanitizada. Valores de segredo não são passados por argumentos nem
+gravados no artifact.
 
 ### P1 — Dashboard ou métricas indisponíveis
 
@@ -92,6 +102,10 @@ As seguintes ações não podem ser automatizadas pelo código do repositório:
 - habilitar GitHub Pages com Source `GitHub Actions`;
 - confirmar visualmente a mensagem no canal do Teams;
 - conceder permissões administrativas do Microsoft Teams/Power Platform.
+
+A reconciliação de um secret já cadastrado com o owner do runtime PC24x7 é
+automatizada; criar ou substituir a credencial de origem continua sendo uma
+ação administrativa manual.
 
 ## 8. Links operacionais
 
