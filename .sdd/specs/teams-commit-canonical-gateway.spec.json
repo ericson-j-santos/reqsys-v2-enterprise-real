@@ -15,7 +15,8 @@
     "Se o locator falhar antes de qualquer POST, a contingência deve usar TEAMS_WEBHOOK_URL e TEAMS_WEBHOOK_RECIPIENT pelo gerador autocontido.",
     "O fallback deve preservar Adaptive Card, correlation ID e event type commit-notification-fallback.",
     "Falha ou ausência de confirmação nas duas rotas deve manter o workflow vermelho sem continue-on-error.",
-    "A evidência deve registrar gateway, webhook_fallback ou unavailable sem expor segredos."
+    "A evidência deve registrar gateway, webhook_fallback ou unavailable sem expor segredos.",
+    "Downloads de artefatos de workflow_run devem remover Authorization ao seguir redirecionamentos para hosts externos de armazenamento assinado."
   ],
   "gap_reference": "OPS-GAP-37763758777",
   "sdd_gate": {
@@ -35,7 +36,8 @@
     "O envio usa scripts/notificar_teams.py com TEAMS_GATEWAY_DESTINO_ID, flow_bot e --strict.",
     "Com locator indisponível antes do envio, o workflow usa o webhook governado com Adaptive Card e event type de contingência.",
     "Teams Commit Notification Contract valida as duas rotas, impede URL estática/Fly.io e mantém fail-closed sem continue-on-error.",
-    "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pela contingência e registrar delivery_route antes de declarar a correção funcional concluída."
+    "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pela contingência e registrar delivery_route antes de declarar a correção funcional concluída.",
+    "Uma execução workflow_run com artefato deve baixar a evidência sem HTTP 401 e sem encaminhar Authorization ao host externo."
   ],
   "risk": {
     "production": false,
