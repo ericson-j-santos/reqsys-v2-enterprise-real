@@ -18,7 +18,8 @@
     "Ausência de segredo ou owner ativo falha fechada.",
     "Replay com o mesmo segredo não grava novamente.",
     "Workflow manual governado inicializa ou atualiza o owner no PC24x7 DEV usando secrets protegidos e locator assinado.",
-    "Evidência externa contém somente fingerprints e metadados seguros; sucesso exige entrega Flow Bot real sem fallback."
+    "Evidência externa contém somente fingerprints e metadados seguros; sucesso exige entrega Flow Bot real sem fallback.",
+    "JWT administrativo expirado é renovado apenas por sessão efêmera quando o runtime comprova ambiente DEV, demo login habilitado e papel admin."
   ],
   "sdd_gate": {
     "tests": [

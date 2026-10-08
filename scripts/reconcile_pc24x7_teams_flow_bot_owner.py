@@ -15,6 +15,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 CONFIRMATION = "RECONCILE-PC24X7-TEAMS-FLOW-BOT-DEV"
+ALLOWED_DEV_ENVIRONMENTS = {
+    "dev",
+    "development",
+    "desenvolvimento",
+    "local",
+    "test",
+    "teste",
+}
 
 
 class ReconcileError(RuntimeError):
@@ -89,6 +97,62 @@ def _data(payload: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _resolve_admin_jwt(
+    base: str,
+    configured_jwt: str,
+    owner_email: str,
+    correlation_id: str,
+) -> tuple[str, str, bool]:
+    try:
+        session = _request_json(
+            "GET",
+            f"{base}/api/v1/auth/session",
+            correlation_id=f"{correlation_id}-admin-check",
+            admin_jwt=configured_jwt,
+        )
+        if str(_data(session).get("papel") or "").casefold() == "admin":
+            return configured_jwt, "environment_secret_valid", False
+    except ReconcileError as exc:
+        if not str(exc).startswith(("api_http_401:", "api_http_403:")):
+            raise
+
+    config = _data(
+        _request_json(
+            "GET",
+            f"{base}/api/v1/auth/config",
+            correlation_id=f"{correlation_id}-auth-config",
+        )
+    )
+    environment = str(config.get("environment") or "").strip().casefold()
+    if environment not in ALLOWED_DEV_ENVIRONMENTS:
+        raise ReconcileError("admin_auth_refused_non_dev_environment")
+    if config.get("demo_login_enabled") is not True:
+        raise ReconcileError("admin_auth_unavailable_demo_login_disabled")
+
+    login = _data(
+        _request_json(
+            "POST",
+            f"{base}/api/v1/auth/login",
+            correlation_id=f"{correlation_id}-dev-login",
+            payload={"email": owner_email},
+        )
+    )
+    user = login.get("usuario") if isinstance(login.get("usuario"), dict) else {}
+    fresh_jwt = str(login.get("access_token") or "").strip()
+    if str(user.get("papel") or "").casefold() != "admin" or not fresh_jwt:
+        raise ReconcileError("admin_auth_dev_login_not_admin")
+
+    fresh_session = _request_json(
+        "GET",
+        f"{base}/api/v1/auth/session",
+        correlation_id=f"{correlation_id}-fresh-admin-check",
+        admin_jwt=fresh_jwt,
+    )
+    if str(_data(fresh_session).get("papel") or "").casefold() != "admin":
+        raise ReconcileError("admin_auth_fresh_session_not_admin")
+    return fresh_jwt, "dev_demo_ephemeral", True
+
+
 def reconcile(
     *,
     api_base: str,
@@ -112,11 +176,18 @@ def reconcile(
     if "@" not in target:
         raise ReconcileError("recipient_invalid")
 
+    effective_admin_jwt, admin_auth_source, admin_jwt_refreshed = _resolve_admin_jwt(
+        base,
+        admin_jwt,
+        owner,
+        correlation_id,
+    )
+
     owners_payload = _request_json(
         "GET",
         f"{base}/v1/teams-gateway/flow-bot/owners",
         correlation_id=correlation_id,
-        admin_jwt=admin_jwt,
+        admin_jwt=effective_admin_jwt,
     )
     items = _data(owners_payload).get("items", [])
     if not isinstance(items, list):
@@ -142,7 +213,7 @@ def reconcile(
             "POST",
             f"{base}/v1/teams-gateway/flow-bot/owners",
             correlation_id=correlation_id,
-            admin_jwt=admin_jwt,
+            admin_jwt=effective_admin_jwt,
             payload=owner_payload,
         )
         action = "created"
@@ -154,7 +225,7 @@ def reconcile(
             "PATCH",
             f"{base}/v1/teams-gateway/flow-bot/owners/{owner_id}",
             correlation_id=correlation_id,
-            admin_jwt=admin_jwt,
+            admin_jwt=effective_admin_jwt,
             payload=owner_payload,
         )
         action = "updated"
@@ -205,6 +276,8 @@ def reconcile(
         "status": "ready",
         "environment": "dev",
         "action": action,
+        "admin_auth_source": admin_auth_source,
+        "admin_jwt_refreshed": admin_jwt_refreshed,
         "owner_id": owner_id,
         "owner_email_sha256": _fingerprint(owner.casefold()),
         "recipient_sha256": _fingerprint(target.casefold()),

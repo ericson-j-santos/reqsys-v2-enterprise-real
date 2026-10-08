@@ -65,6 +65,11 @@ atualiza o owner de forma idempotente e exige uma entrega real antes de publicar
 evidência sanitizada. Valores de segredo não são passados por argumentos nem
 gravados no artifact.
 
+Se `COFRE_ADMIN_JWT` estiver expirado, a operação valida `/v1/auth/config` e
+obtém uma sessão administrativa efêmera somente quando o próprio runtime
+comprovar ambiente DEV, login demo habilitado e papel `admin`. A recuperação é
+recusada fora de DEV e o token efêmero nunca integra logs ou artifacts.
+
 ### P1 — Dashboard ou métricas indisponíveis
 
 1. Verificar `Teams Notification Dashboard`.

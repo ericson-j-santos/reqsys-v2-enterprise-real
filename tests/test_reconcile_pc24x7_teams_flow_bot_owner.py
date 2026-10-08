@@ -18,6 +18,8 @@ def test_reconcile_creates_owner_and_returns_only_fingerprints(monkeypatch) -> N
 
     def fake_request(method, url, **kwargs):
         calls.append((method, url, kwargs.get("payload")))
+        if url.endswith("/auth/session"):
+            return {"success": True, "data": {"papel": "admin"}}
         if url.endswith("/owners") and method == "GET":
             return {"success": True, "data": {"items": []}}
         if url.endswith("/owners") and method == "POST":
@@ -71,6 +73,8 @@ def test_reconcile_updates_matching_owner(monkeypatch) -> None:
 
     def fake_request(method, url, **kwargs):
         calls.append((method, url))
+        if url.endswith("/auth/session"):
+            return {"success": True, "data": {"papel": "admin"}}
         if url.endswith("/owners") and method == "GET":
             return {
                 "success": True,
@@ -118,6 +122,92 @@ def test_reconcile_updates_matching_owner(monkeypatch) -> None:
         "PATCH",
         "https://runtime.trycloudflare.com/v1/teams-gateway/flow-bot/owners/9",
     ) in calls
+
+
+def test_reconcile_refreshes_expired_admin_jwt_only_in_dev(monkeypatch) -> None:
+    observed_tokens = []
+
+    def fake_request(method, url, **kwargs):
+        if url.endswith("/auth/session"):
+            token = kwargs.get("admin_jwt")
+            observed_tokens.append(token)
+            if token == "expired-secret":
+                raise module.ReconcileError("api_http_401:/v1/auth/session")
+            return {"success": True, "data": {"papel": "admin"}}
+        if url.endswith("/auth/config"):
+            return {
+                "success": True,
+                "data": {
+                    "environment": "desenvolvimento",
+                    "demo_login_enabled": True,
+                },
+            }
+        if url.endswith("/auth/login"):
+            return {
+                "success": True,
+                "data": {
+                    "access_token": "fresh-ephemeral-secret",
+                    "usuario": {"papel": "admin"},
+                },
+            }
+        if url.endswith("/owners") and method == "GET":
+            return {"success": True, "data": {"items": []}}
+        if url.endswith("/owners") and method == "POST":
+            return {"success": True, "data": {"id": 11}}
+        if url.endswith("/status"):
+            return {
+                "success": True,
+                "data": {
+                    "rotas": [
+                        {
+                            "canal": "flow_bot",
+                            "disponivel": True,
+                            "donos_ativos": 1,
+                        }
+                    ]
+                },
+            }
+        if url.endswith("/messages"):
+            return {"success": True, "data": {"entregue": True}}
+        raise AssertionError((method, url))
+
+    monkeypatch.setattr(module, "_request_json", fake_request)
+    result = module.reconcile(
+        api_base="https://runtime.trycloudflare.com",
+        admin_jwt="expired-secret",
+        webhook_url="https://flow.example.com/secret-trigger",
+        owner_email="owner@example.com",
+        recipient="recipient@example.com",
+        correlation_id="corr-refresh",
+    )
+
+    assert result["admin_auth_source"] == "dev_demo_ephemeral"
+    assert result["admin_jwt_refreshed"] is True
+    assert observed_tokens == ["expired-secret", "fresh-ephemeral-secret"]
+    assert "fresh-ephemeral-secret" not in str(result)
+
+
+def test_admin_jwt_refresh_fails_closed_outside_dev(monkeypatch) -> None:
+    def fake_request(method, url, **kwargs):
+        if url.endswith("/auth/session"):
+            raise module.ReconcileError("api_http_401:/v1/auth/session")
+        if url.endswith("/auth/config"):
+            return {
+                "success": True,
+                "data": {"environment": "producao", "demo_login_enabled": True},
+            }
+        raise AssertionError((method, url))
+
+    monkeypatch.setattr(module, "_request_json", fake_request)
+    with pytest.raises(module.ReconcileError, match="non_dev_environment"):
+        module.reconcile(
+            api_base="https://runtime.trycloudflare.com",
+            admin_jwt="expired-secret",
+            webhook_url="https://flow.example.com/secret-trigger",
+            owner_email="owner@example.com",
+            recipient="recipient@example.com",
+            correlation_id="corr-prod",
+        )
 
 
 @pytest.mark.parametrize(
