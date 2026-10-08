@@ -22,6 +22,14 @@ def _run(coro):
         (CircuitBreakerOpenError('private circuit detail'), 'provider_circuit_open'),
         (httpx.ConnectError('private endpoint detail'), 'provider_connect_error'),
         (httpx.ReadTimeout('private timeout detail'), 'provider_timeout'),
+        (
+            httpx.HTTPStatusError(
+                'private response detail',
+                request=httpx.Request('POST', 'https://provider.invalid'),
+                response=httpx.Response(401),
+            ),
+            'provider_http_401',
+        ),
         (KeyError('access_token'), 'provider_token_response_invalid'),
         (ValueError('private response body'), 'provider_response_invalid'),
         (RuntimeError('private provider detail'), 'provider_exception_runtimeerror'),

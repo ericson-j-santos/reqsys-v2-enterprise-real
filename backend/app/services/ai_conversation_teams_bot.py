@@ -11,6 +11,7 @@ from app.models.ai_conversation import AIConversation
 from app.models.bot_conversa_referencia import BotConversaReferencia
 from app.services.ai_conversation import construir_adaptive_card
 from app.services.teams_gateway import (
+    _bot_provider_failure_code,
     _enviar_atividade_bot_framework,
     diagnosticar_propriedade_conversa_referencia,
     obter_conversa_referencia_bot,
@@ -106,7 +107,10 @@ async def enviar_cartao_conversa_bot(
         ],
     }
 
-    provider = await _enviar_atividade_bot_framework(url, payload)
+    try:
+        provider = await _enviar_atividade_bot_framework(url, payload)
+    except Exception as exc:
+        raise AITeamsBotDeliveryError(_bot_provider_failure_code(exc)) from None
     conversa.teams_destino_tipo = 'chat_1a1'
     conversa.teams_destino_id = usuario_aad
     conversa.teams_modo = 'bot'

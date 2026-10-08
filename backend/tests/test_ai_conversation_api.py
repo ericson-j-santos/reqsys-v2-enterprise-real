@@ -198,10 +198,16 @@ def test_entrega_teams_faz_fallback_para_fila(monkeypatch, direct_error):
         )
     )
 
+    expected_category = (
+        'bot_direct_unavailable'
+        if isinstance(direct_error, AITeamsBotDeliveryError)
+        else 'provider_exception_runtimeerror'
+    )
     assert result == {
         'modo': 'fila_gateway',
         'entrega': None,
         'fila': {'id': 55},
+        'direct_failure_category': expected_category,
     }
 
 

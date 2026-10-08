@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -84,6 +85,7 @@ async def _entregar_resposta_teams(
 ):
     if not habilitado:
         return None
+    direct_failure_category = None
     try:
         direct = await enviar_cartao_conversa_bot(
             db,
@@ -99,12 +101,18 @@ async def _entregar_resposta_teams(
             direct.get('canal_usado'),
         )
     except AITeamsBotDeliveryError as exc:
+        reason = str(exc).strip().lower()
+        if re.fullmatch(r'(?:provider_|conversation_reference_)[a-z0-9_]+', reason):
+            direct_failure_category = reason
+        else:
+            direct_failure_category = 'bot_direct_unavailable'
         logger.info(
             'ai_conversation_bot_direct_unavailable conversation_id=%s reason=%s',
             conversa.id,
             exc,
         )
     except Exception as exc:
+        direct_failure_category = f'provider_exception_{type(exc).__name__.lower()}'
         logger.warning(
             'ai_conversation_bot_direct_failed conversation_id=%s error=%s',
             conversa.id,
@@ -118,7 +126,14 @@ async def _entregar_resposta_teams(
         correlation_id=correlation_id,
     )
     item = await executar_item_fila(db, item)
-    return {'modo': 'fila_gateway', 'entrega': None, 'fila': serializar_item(item)}
+    result = {
+        'modo': 'fila_gateway',
+        'entrega': None,
+        'fila': serializar_item(item),
+    }
+    if direct_failure_category:
+        result['direct_failure_category'] = direct_failure_category
+    return result
 
 
 @router.get('/status')

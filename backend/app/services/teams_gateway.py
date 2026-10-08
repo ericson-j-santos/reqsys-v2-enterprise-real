@@ -878,6 +878,8 @@ async def _enviar_atividade_bot_framework(url: str, payload: dict[str, Any]) -> 
 
 def _bot_provider_failure_code(exc: Exception) -> str:
     """Retorna diagnóstico operacional estável sem propagar texto do provedor."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f'provider_http_{exc.response.status_code}'
     if isinstance(exc, CircuitBreakerOpenError):
         return 'provider_circuit_open'
     if isinstance(exc, httpx.TimeoutException):

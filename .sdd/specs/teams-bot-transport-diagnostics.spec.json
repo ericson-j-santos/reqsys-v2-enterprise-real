@@ -28,6 +28,8 @@
     "workflow": ".github/workflows/pc24x7-teams-ephemeral-e2e.yml",
     "oauth_authority": "TEAMS_BOT_APP_TENANT_ID for Azure Bot SingleTenant",
     "conversation_reference_ownership": "Bot App ID and tenant fail-closed validation without identifier disclosure",
+    "direct_failure_diagnostics": "Sanitized direct Bot failure category propagated without provider payload",
+    "e2e_route_isolation": "Teams Bot E2E disables channel fallback to avoid masking transport failures",
     "delivery_fallback": "backend/app/services/ai_conversation_teams_bot.py",
     "delivery_fallback_integration": "backend/app/api/ai_conversation.py"
   },
