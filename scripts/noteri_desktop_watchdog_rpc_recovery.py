@@ -182,6 +182,7 @@ def query_reports_missing_task(completed: subprocess.CompletedProcess[str]) -> b
             "cannot find the file specified",
             "não pode encontrar o arquivo especificado",
             "nao pode encontrar o arquivo especificado",
+            "encontrar o arquivo especificado",
             "task does not exist",
             "not found",
         )
