@@ -55,7 +55,7 @@
     "O único destino de execução técnica é o worktree governado criado a partir do clone dedicado limpo do Desktop.",
     "A operação local permanece limitada a Query+Run da tarefa watchdog; somente após resultado inequívoco de ausência, Create local sem senha é permitido para reparar o nome exato e deve ser validado por XML independente; /S, alteração arbitrária, segredo, credencial e produção são proibidos.",
     "O modo watchdog-uac reutiliza a mesma sessão e o mesmo Command Gateway e pode chamar somente o launcher UAC governado com confirmação fixa; a aprovação visual do Windows não pode ser contornada.",
-    "Se a sessão do runner não puder apresentar elevação, watchdog-uac-stage deixa no Desktop do runner um launcher CMD, um launcher PowerShell e uma cópia do reparador nativo vinculada ao SHA imutável da execução; eleva, aguarda e valida o reparador, tenta as mesmas cópias no Desktop público e registra caminhos ou recusa de acesso. Execução e aprovação UAC permanecem locais e humanas.",
+    "Se a sessão do runner não puder apresentar elevação, watchdog-uac-stage deixa no Desktop do runner um launcher CMD, um launcher PowerShell e uma cópia do reparador nativo vinculada ao SHA imutável da execução; eleva, aguarda e valida o reparador, tenta as mesmas cópias no Desktop público e registra caminhos, recusa de acesso e o último diagnóstico nativo sanitizado. Execução e aprovação UAC permanecem locais e humanas.",
     "Pickup real no runner Desktop é pré-condição e prova do host executor.",
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."

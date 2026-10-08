@@ -154,6 +154,29 @@ jobs:
           if (-not @($staged | Where-Object { $_.kind -eq "runner_profile" }).Count) {
             throw "RUNNER_PROFILE_DESKTOP_LAUNCHER_NOT_STAGED"
           }
+          $nativeDiagnostic = $null
+          if (Test-Path -LiteralPath $diagnosticFile -PathType Leaf) {
+            try {
+              $diagnostic = Get-Content -LiteralPath $diagnosticFile -Raw -Encoding UTF8 | ConvertFrom-Json
+              $diagnosticError = ([string]$diagnostic.error -replace '[\r\n]', ' ').Trim()
+              if ($diagnosticError.Length -gt 500) { $diagnosticError = $diagnosticError.Substring(0, 500) }
+              $nativeDiagnostic = @{
+                ok = [bool]$diagnostic.ok
+                result = [string]$diagnostic.result
+                error = $diagnosticError
+                error_type = [string]$diagnostic.error_type
+                generated_at_utc = [string]$diagnostic.generated_at_utc
+              }
+            } catch {
+              $nativeDiagnostic = @{
+                ok = $false
+                result = "NATIVE_DIAGNOSTIC_INVALID"
+                error = ""
+                error_type = $_.Exception.GetType().Name
+                generated_at_utc = ""
+              }
+            }
+          }
           New-Item -ItemType Directory -Force (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
           @{
             ok = $true
@@ -166,6 +189,7 @@ jobs:
             powershell_paths = @($staged | ForEach-Object { $_.powershell_path })
             repair_paths = @($staged | ForEach-Object { $_.repair_path })
             diagnostic_file = $diagnosticFile
+            native_repair_diagnostic = $nativeDiagnostic
             public_desktop_staged = [bool](@($staged | Where-Object { $_.kind -eq "public" }).Count)
             stage_failures = $stageFailures
             activation_pending = $true
