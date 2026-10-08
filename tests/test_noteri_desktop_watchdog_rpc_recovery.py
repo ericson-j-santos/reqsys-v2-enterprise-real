@@ -279,6 +279,8 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert 'GetFolderPath("CommonDesktopDirectory")' in stage
     assert "desktop_paths = @($staged" in stage
     assert "public_desktop_staged" in stage
+    assert "stage_failures = $stageFailures" in stage
+    assert "RUNNER_PROFILE_DESKTOP_LAUNCHER_NOT_STAGED" in stage
     assert "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC" in stage
     assert "requires_local_uac_approval = $true" in stage
     assert "remote_uac_attempted = $false" in stage
