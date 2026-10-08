@@ -280,6 +280,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "desktop_paths = @($staged" in stage
     assert "powershell_paths = @($staged" in stage
     assert "repair_paths = @($staged" in stage
+    assert "native_repair_diagnostic = $nativeDiagnostic" in stage
+    assert "NATIVE_DIAGNOSTIC_INVALID" in stage
+    assert "if ($diagnosticError.Length -gt 500)" in stage
     assert "ReqSys-Watchdog-Reparador-Nativo.ps1" in stage
     assert "repair_source_sha = $env:GITHUB_SHA.ToLowerInvariant()" in stage
     assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in stage
