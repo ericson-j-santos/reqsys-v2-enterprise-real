@@ -2,6 +2,19 @@ name: Desktop RDC Recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Governed desktop operation
+        required: true
+        default: rdc-recovery
+        type: choice
+        options:
+          - rdc-recovery
+          - migration-audit
+          - migration-recipient-init
+          - migration-sqlserver-receive
+          - migration-sqlserver-image
+          - migration-sqlserver-bootstrap
 
 permissions:
   contents: read
@@ -13,6 +26,7 @@ concurrency:
 jobs:
   recover:
     name: Recover RDC on PC24x7 Desktop
+    if: inputs.operation == 'rdc-recovery'
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 10
     env:
@@ -47,3 +61,592 @@ jobs:
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  migration-audit:
+    name: Audit Desktop migration readiness
+    if: inputs.operation == 'migration-audit'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/desktop-migration-readiness/evidence.json
+    steps:
+      - name: Validate exact host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Collect sanitized read-only inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $computer = Get-CimInstance Win32_ComputerSystem
+          $processors = @(Get-CimInstance Win32_Processor | ForEach-Object {
+            [ordered]@{
+              name = $_.Name
+              cores = $_.NumberOfCores
+              logical_processors = $_.NumberOfLogicalProcessors
+            }
+          })
+          $drives = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {
+            [ordered]@{
+              device = $_.DeviceID
+              size_gib = [math]::Round($_.Size / 1GB, 2)
+              free_gib = [math]::Round($_.FreeSpace / 1GB, 2)
+            }
+          })
+          $servicePattern = 'docker|postgres|mssql|reportserver|powerbi|tailscale|ssh'
+          $services = @(Get-Service | Where-Object {
+            $_.Name -match $servicePattern -or $_.DisplayName -match $servicePattern
+          } | Sort-Object Name | ForEach-Object {
+            [ordered]@{
+              name = $_.Name
+              status = [string]$_.Status
+              start_type = [string]$_.StartType
+            }
+          })
+
+          $docker = [ordered]@{
+            command_available = [bool](Get-Command docker.exe -ErrorAction SilentlyContinue)
+            daemon_available = $false
+            containers_total = 0
+            containers_running = 0
+            volumes_total = 0
+            containers = @()
+            volumes = @()
+          }
+          if ($docker.command_available) {
+            try {
+              $docker.daemon_available = $true
+              $docker.containers_total = @(& docker.exe ps -a -q 2>$null).Count
+              $docker.containers_running = @(& docker.exe ps -q 2>$null).Count
+              $docker.volumes_total = @(& docker.exe volume ls -q 2>$null).Count
+              $docker.containers = @(& docker.exe ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>$null)
+              $docker.volumes = @(& docker.exe volume ls --format '{{.Name}}' 2>$null)
+            } catch {
+              $docker.daemon_available = $false
+            }
+          }
+
+          $wsl = [ordered]@{
+            command_available = [bool](Get-Command wsl.exe -ErrorAction SilentlyContinue)
+            distributions = @()
+          }
+          if ($wsl.command_available) {
+            try {
+              $wsl.distributions = @(& wsl.exe --list --quiet 2>$null | ForEach-Object {
+                ($_ -replace "`0", '').Trim()
+              } | Where-Object { $_ })
+            } catch {
+              $wsl.distributions = @()
+            }
+          }
+
+          $programRoots = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs'),
+            $env:ProgramFiles,
+            ${env:ProgramFiles(x86)}
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          $appMarkers = @($programRoots | ForEach-Object {
+            Get-ChildItem -LiteralPath $_ -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match 'Codex|Docker|PostgreSQL|SQL Server|Power BI' } |
+              Select-Object -ExpandProperty Name
+          } | Sort-Object -Unique)
+
+          $principal = New-Object Security.Principal.WindowsPrincipal(
+            [Security.Principal.WindowsIdentity]::GetCurrent()
+          )
+          $openSshServer = $null
+          $openSshServerState = 'Unavailable'
+          try {
+            $openSshServer = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' -ErrorAction Stop |
+              Select-Object -First 1
+            if ($openSshServer) {
+              $openSshServerState = [string]$openSshServer.State
+            }
+          } catch {
+            $openSshServerState = 'RequiresElevation'
+          }
+          $network = [ordered]@{
+            ipv4 = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.IPAddress -notlike '127.*' -and
+                $_.IPAddress -notlike '169.254.*' -and
+                $_.InterfaceAlias -notmatch 'vEthernet|Loopback'
+              } | Select-Object -ExpandProperty IPAddress -Unique)
+            ssh_port_listening = [bool](Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)
+            openssh_server_state = $openSshServerState
+            notebook_probe = $false
+          }
+          try {
+            $probe = (Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.60:8792/probe.txt' -TimeoutSec 5).Content.Trim()
+            $network.notebook_probe = $probe -eq 'NOTERI_TO_DESKTOP_TRANSFER_PROBE_V1'
+          } catch {
+            $network.notebook_probe = $false
+          }
+
+          $evidence = [ordered]@{
+            schema_version = 'desktop-migration-readiness.v1'
+            observed_at_utc = [DateTimeOffset]::UtcNow.ToString('o')
+            host = $env:COMPUTERNAME
+            os = (Get-CimInstance Win32_OperatingSystem).Caption
+            manufacturer = $computer.Manufacturer
+            model = $computer.Model
+            memory_gib = [math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
+            processors = $processors
+            drives = $drives
+            services = $services
+            docker = $docker
+            wsl = $wsl
+            application_markers = $appMarkers
+            runner_identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+            runner_is_administrator = $principal.IsInRole(
+              [Security.Principal.WindowsBuiltInRole]::Administrator
+            )
+            network = $network
+            runner_name = $env:RUNNER_NAME
+            runner_labels_expected = @('self-hosted', 'Windows', 'X64', 'pc24x7', 'reqsys-dev')
+            production_touched = $false
+            secrets_read = $false
+            read_only = $true
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
+          $evidence | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+
+      - name: Upload sanitized readiness evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-migration-readiness-${{ github.run_id }}
+          path: artifacts/desktop-migration-readiness/evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+  migration-recipient-init:
+    name: Initialize Desktop migration recipient
+    if: inputs.operation == 'migration-recipient-init'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned ephemeral crypto dependencies
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deps = Join-Path $env:RUNNER_TEMP "reqsys-migration-python-$env:GITHUB_RUN_ID"
+          python -m pip install --isolated --disable-pip-version-check --no-user `
+            --only-binary=:all: --target $deps cryptography==46.0.2 pywin32==311
+          if ($LASTEXITCODE -ne 0) { throw 'PINNED_DEPENDENCY_INSTALL_FAILED' }
+          "REQSYS_MIGRATION_DEPENDENCIES=$deps" | Add-Content $env:GITHUB_ENV
+          "PYTHONPATH=$deps" | Add-Content $env:GITHUB_ENV
+
+      - name: Provision DPAPI-bound recipient identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = & python scripts/dev_backup_transport.py recipient-init `
+            --confirm INIT-PC24X7-DEV-MIGRATION-IDENTITY
+          if ($LASTEXITCODE -ne 0) { throw 'RECIPIENT_INIT_FAILED' }
+          $result = @($raw)[-1] | ConvertFrom-Json
+          if ($result.ok -ne $true -or $result.target_host -ne 'DESKTOP-PDQK954' -or `
+              $result.private_key_exported -ne $false) {
+            throw 'RECIPIENT_EVIDENCE_INVALID'
+          }
+          $out = 'artifacts/desktop-migration-recipient'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $result.public_recipient | ConvertTo-Json -Compress | `
+            Set-Content -LiteralPath (Join-Path $out 'public-recipient.json') -Encoding UTF8
+
+      - name: Upload public recipient identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-migration-recipient-${{ github.run_id }}
+          path: artifacts/desktop-migration-recipient/public-recipient.json
+          if-no-files-found: error
+          retention-days: 1
+
+  migration-sqlserver-receive:
+    name: Receive verified SQL Server backups on Desktop
+    if: inputs.operation == 'migration-sqlserver-receive'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      SOURCE_URL: http://192.168.1.60:8792/sqlserver-backup-set.rsb
+      ENVELOPE_SHA256: 390319c92a16c7badbd43cb3e1b19ddcd9fdc36364e630245ec09c3c8867d343
+      ENVELOPE_BYTES: '75965269'
+      PLAINTEXT_SHA256: 9dde63e055421634b44b0d75838778e2d9dfd88ed97f93588d9b2b2dfc84c1d3
+      PLAINTEXT_BYTES: '75964416'
+      RECIPIENT_SHA256: 2a20f1ed62b6dcde15cab5f2fa83c9c7fba5fc80449861808dea6bb9d101275e
+    steps:
+      - name: Validate exact host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned ephemeral crypto dependencies
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deps = Join-Path $env:RUNNER_TEMP "reqsys-migration-python-$env:GITHUB_RUN_ID"
+          python -m pip install --isolated --disable-pip-version-check --no-user `
+            --only-binary=:all: --target $deps cryptography==46.0.2 pywin32==311
+          if ($LASTEXITCODE -ne 0) { throw 'PINNED_DEPENDENCY_INSTALL_FAILED' }
+          "REQSYS_MIGRATION_DEPENDENCIES=$deps" | Add-Content $env:GITHUB_ENV
+          "PYTHONPATH=$deps" | Add-Content $env:GITHUB_ENV
+
+      - name: Verify recipient and prepare private migration root
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $recipient = Join-Path $root "recipient-$env:GITHUB_RUN_ID.json"
+          $raw = & python scripts/noteri_desktop_bundle_transport.py recipient-export `
+            --confirm EXPORT-DESKTOP-MIGRATION-RECIPIENT --output $recipient
+          if ($LASTEXITCODE -ne 0) { throw 'RECIPIENT_EXPORT_FAILED' }
+          $result = @($raw)[-1] | ConvertFrom-Json
+          if ($result.ok -ne $true -or $result.recipient_sha256 -ne $env:RECIPIENT_SHA256 -or `
+              $result.private_key_exported -ne $false) {
+            throw 'RECIPIENT_BINDING_MISMATCH'
+          }
+
+      - name: Download pinned encrypted bundle from NOTERI
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $incoming = Join-Path $root "sqlserver-backup-set-$env:GITHUB_RUN_ID.rsb"
+          Invoke-WebRequest -UseBasicParsing -Uri $env:SOURCE_URL -OutFile $incoming -TimeoutSec 300
+          $file = Get-Item -LiteralPath $incoming
+          $digest = (Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($file.Length -ne [int64]$env:ENVELOPE_BYTES -or $digest -ne $env:ENVELOPE_SHA256) {
+            throw 'ENCRYPTED_BUNDLE_PIN_MISMATCH'
+          }
+          "INCOMING_BUNDLE=$incoming" | Add-Content $env:GITHUB_ENV
+
+      - name: Authenticate and decrypt SQL Server backup set
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $output = Join-Path $root 'sqlserver\noteri-20261007T071503.tar'
+          $raw = & python scripts/noteri_desktop_bundle_transport.py receive `
+            --confirm RECEIVE-NOTERI-DESKTOP-BUNDLE `
+            --input $env:INCOMING_BUNDLE `
+            --output $output `
+            --expected-envelope-sha256 $env:ENVELOPE_SHA256 `
+            --expected-plaintext-sha256 $env:PLAINTEXT_SHA256 `
+            --expected-plaintext-bytes $env:PLAINTEXT_BYTES
+          if ($LASTEXITCODE -ne 0) { throw 'BUNDLE_RECEIVE_FAILED' }
+          $result = @($raw)[-1] | ConvertFrom-Json
+          if ($result.ok -ne $true -or $result.plaintext_sha256 -ne $env:PLAINTEXT_SHA256 -or `
+              $result.plaintext_bytes -ne [int64]$env:PLAINTEXT_BYTES -or `
+              $result.recipient_sha256 -ne $env:RECIPIENT_SHA256) {
+            throw 'DECRYPTED_BUNDLE_EVIDENCE_MISMATCH'
+          }
+          "DECRYPTED_TAR=$output" | Add-Content $env:GITHUB_ENV
+
+      - name: Extract and validate every verified backup
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $destination = Join-Path $root 'sqlserver\noteri-20261007T071503'
+          if (Test-Path -LiteralPath $destination) { throw 'RESTORE_SET_ALREADY_EXISTS' }
+          $entries = @(tar.exe -tf $env:DECRYPTED_TAR)
+          if ($LASTEXITCODE -ne 0 -or -not $entries) { throw 'TAR_INVENTORY_FAILED' }
+          foreach ($entry in $entries) {
+            $normalized = $entry -replace '\\', '/'
+            if ($normalized.StartsWith('/') -or $normalized -match '(^|/)\.\.(/|$)' -or `
+                $normalized -match '^[A-Za-z]:') {
+              throw 'UNSAFE_TAR_ENTRY'
+            }
+          }
+          New-Item -ItemType Directory -Path $destination | Out-Null
+          tar.exe -xf $env:DECRYPTED_TAR -C $destination
+          if ($LASTEXITCODE -ne 0) { throw 'TAR_EXTRACTION_FAILED' }
+          $manifestPath = Join-Path $destination 'manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 'reqsys-noteri-sqlserver-backup-set-v1' -or `
+              $manifest.source_host -ne 'NOTERI' -or $manifest.database_count -ne 17 -or `
+              $manifest.restore_verifyonly -ne $true -or @($manifest.files).Count -ne 17) {
+            throw 'BACKUP_MANIFEST_INVALID'
+          }
+          foreach ($expected in $manifest.files) {
+            $path = Join-Path $destination $expected.name
+            $file = Get-Item -LiteralPath $path
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($file.Length -ne [int64]$expected.bytes -or $digest -ne $expected.sha256) {
+              throw "BACKUP_FILE_MISMATCH: $($expected.name)"
+            }
+          }
+          $evidenceDir = 'artifacts/desktop-sqlserver-migration'
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-migration-receipt.v1'
+            host = $env:COMPUTERNAME
+            source_host = 'NOTERI'
+            database_count = 17
+            backup_files_verified = 17
+            restore_verifyonly_at_source = $true
+            envelope_sha256 = $env:ENVELOPE_SHA256
+            plaintext_sha256 = $env:PLAINTEXT_SHA256
+            plaintext_bytes = [int64]$env:PLAINTEXT_BYTES
+            recipient_sha256 = $env:RECIPIENT_SHA256
+            secrets_read = $false
+            production_touched = $false
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceDir 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized migration receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-migration-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-migration/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  migration-sqlserver-image:
+    name: Prepare SQL Server 2025 validation image on Desktop
+    if: inputs.operation == 'migration-sqlserver-image'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 30
+    env:
+      SQL_IMAGE: mcr.microsoft.com/mssql/server:2025-latest
+    steps:
+      - name: Validate exact host and Docker daemon
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          docker.exe version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'DOCKER_DAEMON_UNAVAILABLE' }
+
+      - name: Pull official SQL Server 2025 image
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker.exe pull $env:SQL_IMAGE
+          if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_IMAGE_PULL_FAILED' }
+
+      - name: Record pinned local image evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = docker.exe image inspect $env:SQL_IMAGE | ConvertFrom-Json
+          if (@($raw).Count -ne 1) { throw 'SQLSERVER_IMAGE_INSPECT_INVALID' }
+          $image = @($raw)[0]
+          $digest = @($image.RepoDigests | Where-Object { $_ -like 'mcr.microsoft.com/mssql/server@sha256:*' } | Select-Object -First 1)
+          if (@($digest).Count -ne 1) { throw 'SQLSERVER_IMAGE_DIGEST_MISSING' }
+          $out = 'artifacts/desktop-sqlserver-image'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-image.v1'
+            host = $env:COMPUTERNAME
+            image = $env:SQL_IMAGE
+            image_id = [string]$image.Id
+            repo_digest = [string]$digest[0]
+            production_touched = $false
+            secrets_read = $false
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized image evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-image-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-image/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  migration-sqlserver-bootstrap:
+    name: Bootstrap isolated SQL Server 2025 on Desktop
+    if: inputs.operation == 'migration-sqlserver-bootstrap'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      SQL_IMAGE: mcr.microsoft.com/mssql/server@sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+      SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+      SQL_CONTAINER: reqsys-noteri-migration-sql2025
+      SQL_DATA_VOLUME: reqsys-noteri-sql2025-data
+    steps:
+      - name: Validate exact host, image and received backup set
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          docker.exe version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'DOCKER_DAEMON_UNAVAILABLE' }
+          $imageId = (docker.exe image inspect --format '{{.Id}}' $env:SQL_IMAGE).Trim()
+          if ($LASTEXITCODE -ne 0 -or $imageId -ne $env:SQL_IMAGE_ID) {
+            throw 'PINNED_SQLSERVER_IMAGE_MISSING'
+          }
+          $backupRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\sqlserver\noteri-20261007T071503'
+          $manifestPath = Join-Path $backupRoot 'manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 'reqsys-noteri-sqlserver-backup-set-v1' -or
+              $manifest.source_host -ne 'NOTERI' -or $manifest.database_count -ne 17 -or
+              @($manifest.files).Count -ne 17) {
+            throw 'RECEIVED_BACKUP_MANIFEST_INVALID'
+          }
+          "SQL_BACKUP_ROOT=$backupRoot" | Add-Content $env:GITHUB_ENV
+
+      - name: Create DPAPI-bound credential and isolated persistent container
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $migrationRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $secretRoot = Join-Path $migrationRoot 'secrets'
+          New-Item -ItemType Directory -Force -Path $secretRoot | Out-Null
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+          & icacls.exe $secretRoot /inheritance:r /grant:r "${identity}:(OI)(CI)F" 'SYSTEM:(OI)(CI)F' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'SECRET_ROOT_ACL_FAILED' }
+          $secretPath = Join-Path $secretRoot 'sql2025-sa.dpapi'
+
+          $existingNames = @(docker.exe ps -a --filter "name=^/$env:SQL_CONTAINER`$" --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_INVENTORY_FAILED' }
+          $containerExists = $existingNames -contains $env:SQL_CONTAINER
+
+          if (-not (Test-Path -LiteralPath $secretPath)) {
+            if ($containerExists) { throw 'CONTAINER_EXISTS_WITHOUT_DPAPI_SECRET' }
+            $randomBytes = New-Object byte[] 32
+            $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+            try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
+            $plain = 'Aa1!' + [Convert]::ToBase64String($randomBytes).Replace('+', '-').Replace('/', '_')
+            $secure = ConvertTo-SecureString $plain -AsPlainText -Force
+            $protected = ConvertFrom-SecureString $secure
+            Set-Content -LiteralPath $secretPath -Value $protected -Encoding Ascii
+            & icacls.exe $secretPath /inheritance:r /grant:r "${identity}:F" 'SYSTEM:F' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'SECRET_FILE_ACL_FAILED' }
+            $plain = $null
+          }
+
+          if (-not $containerExists) {
+            $protected = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+            $secure = $protected | ConvertTo-SecureString
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try {
+              $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+              $envFile = Join-Path $secretRoot "sql2025-$env:GITHUB_RUN_ID.env"
+              $utf8 = New-Object Text.UTF8Encoding($false)
+              [IO.File]::WriteAllLines($envFile, @(
+                'ACCEPT_EULA=Y',
+                'MSSQL_PID=Developer',
+                "MSSQL_SA_PASSWORD=$plain"
+              ), $utf8)
+              & icacls.exe $envFile /inheritance:r /grant:r "${identity}:F" 'SYSTEM:F' | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'EPHEMERAL_ENV_ACL_FAILED' }
+              docker.exe volume create $env:SQL_DATA_VOLUME | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_DATA_VOLUME_CREATE_FAILED' }
+              $arguments = @(
+                'run', '-d', '--name', $env:SQL_CONTAINER,
+                '--restart', 'unless-stopped', '--network', 'none',
+                '--mount', "type=volume,source=$env:SQL_DATA_VOLUME,target=/var/opt/mssql",
+                '--mount', "type=bind,source=$env:SQL_BACKUP_ROOT,target=/var/opt/mssql/backup,readonly",
+                '--env-file', $envFile,
+                $env:SQL_IMAGE
+              )
+              docker.exe @arguments | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_CREATE_FAILED' }
+            } finally {
+              if ($bstr -ne [IntPtr]::Zero) {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+              }
+              $plain = $null
+              if ($envFile -and (Test-Path -LiteralPath $envFile)) {
+                Remove-Item -LiteralPath $envFile -Force
+              }
+            }
+          } else {
+            docker.exe start $env:SQL_CONTAINER | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_START_FAILED' }
+          }
+
+      - name: Wait for SQL Server readiness and validate isolation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SET NOCOUNT ON; SELECT 1;"'
+          $ready = $false
+          for ($attempt = 1; $attempt -le 60; $attempt++) {
+            $ErrorActionPreference = 'SilentlyContinue'
+            docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $probe 2>$null | Out-Null
+            $probeExit = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            if ($probeExit -eq 0) { $ready = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ready) { throw 'SQLSERVER_READINESS_TIMEOUT' }
+
+          $inspected = @(docker.exe container inspect $env:SQL_CONTAINER | ConvertFrom-Json)[0]
+          if ($inspected.Image -ne $env:SQL_IMAGE_ID -or $inspected.HostConfig.NetworkMode -ne 'none') {
+            throw 'SQLSERVER_CONTAINER_ISOLATION_INVALID'
+          }
+          $backupMount = @($inspected.Mounts | Where-Object { $_.Destination -eq '/var/opt/mssql/backup' })
+          $dataMount = @($inspected.Mounts | Where-Object { $_.Destination -eq '/var/opt/mssql' })
+          if ($backupMount.Count -ne 1 -or $backupMount[0].RW -ne $false -or
+              $dataMount.Count -ne 1 -or $dataMount[0].Name -ne $env:SQL_DATA_VOLUME) {
+            throw 'SQLSERVER_CONTAINER_MOUNTS_INVALID'
+          }
+          $published = @($inspected.NetworkSettings.Ports.PSObject.Properties | Where-Object { $_.Value })
+          if ($published.Count -ne 0) { throw 'SQLSERVER_PORT_PUBLISHED_UNEXPECTEDLY' }
+
+          $versionQuery = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -Q "SET NOCOUNT ON; SELECT CONCAT(SERVERPROPERTY(''ProductVersion''), ''|'', SERVERPROPERTY(''Edition''));"'
+          $serverVersion = (docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $versionQuery).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $serverVersion.StartsWith('17.')) {
+            throw 'SQLSERVER_2025_VERSION_VALIDATION_FAILED'
+          }
+
+          $out = 'artifacts/desktop-sqlserver-bootstrap'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-bootstrap.v1'
+            host = $env:COMPUTERNAME
+            container = $env:SQL_CONTAINER
+            container_id = ([string]$inspected.Id).Substring(0, 12)
+            image = $env:SQL_IMAGE
+            image_id = $env:SQL_IMAGE_ID
+            server_version = $serverVersion
+            network_mode = 'none'
+            published_ports = 0
+            backup_mount_read_only = $true
+            persistent_volume = $env:SQL_DATA_VOLUME
+            dpapi_secret_present = $true
+            secret_uploaded = $false
+            restored_databases = 0
+            production_touched = $false
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized bootstrap evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-bootstrap-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-bootstrap/evidence.json
+          if-no-files-found: error
+          retention-days: 30
