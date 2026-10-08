@@ -45,6 +45,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
 - o workflow do probe deve usar Python 3.12.10 portátil pinado por URL e SHA-256 para o probe e para o E2E do `noteri-runtime`; o Python global do host não pode ser dependência operacional.
 - workflows de recuperação executados no Windows PowerShell legado devem validar o SHA-256 do Python portátil pela API criptográfica .NET, sem depender do cmdlet opcional `Get-FileHash`.
+- o bootstrap governado da identidade Teams Bot DEV no Noteri também deve cumprir essa validação via .NET antes de abrir a sessão ou instalar a autorização Risk3 temporária.
 - a evidência do `noteri-runtime` deve registrar `expected_sha`, `observed_sha` e `source_sha_verified=true`, falhando fechado em divergência, estado final diferente de NORMAL, ausência de replay idempotente ou controle negativo.
 - o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
 
