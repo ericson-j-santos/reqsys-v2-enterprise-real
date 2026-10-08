@@ -56,13 +56,16 @@ def test_installer_wrapper_uses_dedicated_runtime_python(monkeypatch, tmp_path):
     monkeypatch.setattr(installer, "LOG_DIR", tmp_path / "logs")
     monkeypatch.setattr(installer, "WRAPPER", tmp_path / "logs" / "run.cmd")
     monkeypatch.setattr(installer, "PERSISTENT_SUPERVISOR", tmp_path / "supervisor.py")
+    monkeypatch.setattr(installer, "RUNTIME_DIR", tmp_path / "runtime")
     runtime_python = tmp_path / "runtime-python" / "python.exe"
 
     installer.write_wrapper(runtime_python)
 
     wrapper = installer.WRAPPER.read_text(encoding="utf-8")
     assert str(runtime_python) in wrapper
-    assert str(installer.PERSISTENT_SUPERVISOR) in wrapper
+    assert f'cd /d "{installer.RUNTIME_DIR}"' in wrapper
+    assert "-m scripts.pc24x7_dev_runtime_supervisor --apply" in wrapper
+    assert str(installer.PERSISTENT_SUPERVISOR) not in wrapper
     assert str(Path(installer.sys.executable)) not in wrapper
 
 

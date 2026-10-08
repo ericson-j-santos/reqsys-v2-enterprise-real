@@ -125,7 +125,8 @@ def write_wrapper(python: Path) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     WRAPPER.write_text(
         "@echo off\r\n"
-        f'"{python}" "{PERSISTENT_SUPERVISOR}" --apply '
+        f'cd /d "{RUNTIME_DIR}"\r\n'
+        f'"{python}" -m scripts.pc24x7_dev_runtime_supervisor --apply '
         f'>> "{LOG_DIR / "dev-supervisor.log"}" 2>&1\r\n',
         encoding="utf-8",
     )
