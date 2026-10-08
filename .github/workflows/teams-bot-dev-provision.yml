@@ -80,15 +80,6 @@ jobs:
           path: _rules
           fetch-depth: 1
 
-      - name: Checkout ReqSys no SHA imutável
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: ericson-j-santos/reqsys-v2-enterprise-real
-          ref: ${{ github.sha }}
-          path: _target_source
-          fetch-depth: 0
-          persist-credentials: false
-
       - name: Preparar Python portátil verificado no runner Noteri
         shell: powershell
         env:
