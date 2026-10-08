@@ -125,46 +125,61 @@ def write_wrapper(python: Path) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     WRAPPER.write_text(
         "@echo off\r\n"
-        f'"{python}" "{PERSISTENT_SUPERVISOR}" --apply '
+        f'cd /d "{RUNTIME_DIR}"\r\n'
+        f'"{python}" -m scripts.pc24x7_dev_runtime_supervisor --apply '
         f'>> "{LOG_DIR / "dev-supervisor.log"}" 2>&1\r\n',
         encoding="utf-8",
     )
 
 
-def harden_task_settings() -> dict:
+def harden_task_settings(python: Path) -> dict:
     if os.name != "nt":
         return {"skipped": "non_windows"}
-    import win32com.client
+    helper = r'''import json
+import os
+import sys
 
-    service = win32com.client.Dispatch("Schedule.Service")
-    service.Connect()
-    folder = service.GetFolder("\\")
-    task = folder.GetTask(TASK_NAME)
-    definition = task.Definition
-    settings = definition.Settings
-    settings.DisallowStartIfOnBatteries = False
-    settings.StopIfGoingOnBatteries = False
-    settings.StartWhenAvailable = True
-    settings.ExecutionTimeLimit = "PT10M"
+import win32com.client
 
-    TASK_CREATE_OR_UPDATE = 6
-    TASK_LOGON_INTERACTIVE_TOKEN = 3
-    folder.RegisterTaskDefinition(
-        TASK_NAME,
-        definition,
-        TASK_CREATE_OR_UPDATE,
-        definition.Principal.UserId or os.environ.get("USERNAME"),
-        None,
-        TASK_LOGON_INTERACTIVE_TOKEN,
-    )
-    registered = folder.GetTask(TASK_NAME)
-    current = registered.Definition.Settings
-    return {
-        "DisallowStartIfOnBatteries": bool(current.DisallowStartIfOnBatteries),
-        "StopIfGoingOnBatteries": bool(current.StopIfGoingOnBatteries),
-        "StartWhenAvailable": bool(current.StartWhenAvailable),
-        "ExecutionTimeLimit": str(current.ExecutionTimeLimit),
-    }
+task_name = sys.argv[1]
+service = win32com.client.Dispatch("Schedule.Service")
+service.Connect()
+folder = service.GetFolder("\\")
+task = folder.GetTask(task_name)
+definition = task.Definition
+settings = definition.Settings
+settings.DisallowStartIfOnBatteries = False
+settings.StopIfGoingOnBatteries = False
+settings.StartWhenAvailable = True
+settings.ExecutionTimeLimit = "PT10M"
+
+TASK_CREATE_OR_UPDATE = 6
+TASK_LOGON_INTERACTIVE_TOKEN = 3
+folder.RegisterTaskDefinition(
+    task_name,
+    definition,
+    TASK_CREATE_OR_UPDATE,
+    definition.Principal.UserId or os.environ.get("USERNAME"),
+    None,
+    TASK_LOGON_INTERACTIVE_TOKEN,
+)
+registered = folder.GetTask(task_name)
+current = registered.Definition.Settings
+print(json.dumps({
+    "DisallowStartIfOnBatteries": bool(current.DisallowStartIfOnBatteries),
+    "StopIfGoingOnBatteries": bool(current.StopIfGoingOnBatteries),
+    "StartWhenAvailable": bool(current.StartWhenAvailable),
+    "ExecutionTimeLimit": str(current.ExecutionTimeLimit),
+}, sort_keys=True))
+'''
+    completed = run([str(python), "-c", helper, TASK_NAME])
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip()
+        raise RuntimeError(f"task_settings_hardening_failed: {detail}")
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("task_settings_hardening_invalid_output") from exc
 
 
 def install() -> int:
@@ -185,7 +200,11 @@ def install() -> int:
         print(created.stderr or created.stdout, file=sys.stderr)
         return 2
 
-    settings = harden_task_settings()
+    try:
+        settings = harden_task_settings(runtime_python)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     triggered = run(["schtasks", "/Run", "/TN", TASK_NAME])
     print(json.dumps({
         "status": "installed",
