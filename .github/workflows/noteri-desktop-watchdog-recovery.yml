@@ -77,15 +77,26 @@ jobs:
             @{ kind = "public"; directory = [Environment]::GetFolderPath("CommonDesktopDirectory") }
           )
           $staged = @()
+          $stageFailures = @()
           foreach ($target in $desktopTargets) {
             $directory = [string]$target.directory
-            if ([string]::IsNullOrWhiteSpace($directory) -or -not (Test-Path -LiteralPath $directory)) {
-              throw "DESKTOP_TARGET_UNAVAILABLE:$($target.kind)"
+            try {
+              if ([string]::IsNullOrWhiteSpace($directory) -or -not (Test-Path -LiteralPath $directory)) {
+                throw "DESKTOP_TARGET_UNAVAILABLE"
+              }
+              $cmd = Join-Path $directory "Ativar-ReqSys-Watchdog.cmd"
+              $cmdContent | Set-Content -LiteralPath $cmd -Encoding ASCII
+              if (-not (Test-Path -LiteralPath $cmd)) { throw "DESKTOP_LAUNCHER_NOT_STAGED" }
+              $staged += @{ kind = $target.kind; path = [IO.Path]::GetFullPath($cmd) }
+            } catch {
+              $stageFailures += @{
+                kind = $target.kind
+                error_type = $_.Exception.GetType().Name
+              }
             }
-            $cmd = Join-Path $directory "Ativar-ReqSys-Watchdog.cmd"
-            $cmdContent | Set-Content -LiteralPath $cmd -Encoding ASCII
-            if (-not (Test-Path -LiteralPath $cmd)) { throw "DESKTOP_LAUNCHER_NOT_STAGED:$($target.kind)" }
-            $staged += @{ kind = $target.kind; path = [IO.Path]::GetFullPath($cmd) }
+          }
+          if (-not @($staged | Where-Object { $_.kind -eq "runner_profile" }).Count) {
+            throw "RUNNER_PROFILE_DESKTOP_LAUNCHER_NOT_STAGED"
           }
           New-Item -ItemType Directory -Force (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
           @{
@@ -95,6 +106,7 @@ jobs:
             launcher_name = "Ativar-ReqSys-Watchdog.cmd"
             desktop_paths = @($staged | ForEach-Object { $_.path })
             public_desktop_staged = [bool](@($staged | Where-Object { $_.kind -eq "public" }).Count)
+            stage_failures = $stageFailures
             activation_pending = $true
             requires_local_uac_approval = $true
             remote_uac_attempted = $false
