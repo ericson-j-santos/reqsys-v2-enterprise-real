@@ -31,6 +31,7 @@ Serviço responsável por notificar commits da `main` no Microsoft Teams, execut
 | Código | Sintoma | Causa provável | Ação principal |
 |---|---|---|---|
 | `CFG-001` | Secret ausente | `TEAMS_WEBHOOK_URL` não configurado | Cadastrar secret no repositório |
+| `LOC-001` | `SIGNED_LOCATOR_BLOCKED` | Locator PC24x7 expirado ou runtime físico indisponível | Confirmar fallback governado e recuperar o PC24x7 |
 | `AUTH-001` | HTTP 401/403 | URL exige autenticação ou credencial inválida | Substituir pela URL do Workflows/Webhook aceita pelo canal |
 | `RATE-001` | HTTP 429 | Limite temporário do endpoint | Aguardar retry automático; validar volume |
 | `ENDP-001` | HTTP 404/410 | Endpoint removido ou expirado | Gerar nova URL e atualizar secret |
@@ -51,6 +52,8 @@ Serviço responsável por notificar commits da `main` no Microsoft Teams, execut
 5. Validar HTTP 2xx, `success=true` e `correlation_id`.
 6. Confirmar visualmente a mensagem no Teams.
 7. Registrar evidência na issue e fechar somente após duas execuções verdes consecutivas.
+
+O workflow prioriza o locator assinado e o Teams Messaging Gateway. Se o locator falhar antes de qualquer tentativa de envio, ele seleciona automaticamente o webhook governado de contingência, registra `delivery_route=webhook_fallback` e mantém o run verde somente após confirmação HTTP 2xx. A contingência não substitui a recuperação do PC24x7 e não é tentada após uma chamada ambígua ao gateway, evitando duplicidade.
 
 ### P1 — Dashboard ou métricas indisponíveis
 
@@ -74,6 +77,7 @@ Serviço responsável por notificar commits da `main` no Microsoft Teams, execut
 - workflow de envio verde;
 - endpoint aceitou a mensagem com HTTP 2xx;
 - `correlation_id` registrado;
+- rota selecionada registrada como `gateway` ou `webhook_fallback`;
 - dashboard HTTP 200;
 - `data.json` válido e fresco;
 - monitor com estado `healthy`;

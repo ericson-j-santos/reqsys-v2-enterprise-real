@@ -1,29 +1,33 @@
-# Teams Commit Notification — gateway canônico
+# Teams Commit Notification — gateway canônico com contingência governada
 
 ## Objetivo
 
-Migrar a notificação automática de commits do webhook Power Automate direto para o Teams Messaging Gateway canônico do ReqSys, mantendo falha fechada quando a entrega não for confirmada.
+Manter o Teams Messaging Gateway PC24x7 como rota primária da notificação automática de commits e usar o webhook Power Automate governado apenas como contingência anterior ao envio quando o locator/runtime estiver indisponível. A execução permanece fail-closed quando nenhuma rota confirma a entrega.
 
 ## Requisitos
 
-1. `.github/workflows/teams-commit-notification.yml` não deve consumir `TEAMS_WEBHOOK_URL` diretamente.
-2. O workflow deve resolver `scripts/resolve_pc24x7_dev_locator.mjs`, validar assinatura/TTL/domínio e exportar o `selected_url` somente durante a execução como `TEAMS_GATEWAY_BASE_URL`.
+1. `.github/workflows/teams-commit-notification.yml` deve manter o locator assinado e o Teams Messaging Gateway como rota primária.
+2. O workflow deve resolver `scripts/resolve_pc24x7_dev_locator.mjs`, validar assinatura/TTL/domínio e exportar o `selected_url` somente durante a execução como `TEAMS_GATEWAY_BASE_URL` quando o locator estiver vigente.
 3. O workflow não deve usar `vars.TEAMS_GATEWAY_BASE_URL`, `fly.io` ou `fly.dev`.
 4. O envio deve usar `scripts/notificar_teams.py` com `TEAMS_GATEWAY_DESTINO_ID`.
 5. O modo de entrega deve ser `flow_bot`.
 6. A execução deve usar `--strict` para que falha de entrega permaneça visível no CI.
-7. O contrato de CI deve impedir regressão para a rota de webhook direto.
-8. Actions externas alteradas neste incremento devem usar SHA imutável.
+7. Quando o locator não resolver antes de qualquer POST, o workflow pode usar `TEAMS_WEBHOOK_URL` + `TEAMS_WEBHOOK_RECIPIENT` pelo gerador autocontido, com Adaptive Card, correlation ID e event type específico de contingência.
+8. O fallback não deve ser tentado após uma tentativa ambígua de envio pelo gateway, evitando entrega duplicada.
+9. Se gateway e webhook não estiverem configurados ou não confirmarem entrega, o workflow deve permanecer vermelho, sem `continue-on-error`.
+10. A evidência do run deve registrar a rota selecionada e sinalizar quando a contingência estiver ativa.
+11. Actions externas alteradas neste incremento devem usar SHA imutável.
 
 ## Critérios de aceite
 
 - O contrato `Teams Commit Notification Contract` passa no HEAD exato do PR.
 - O `Pre-PR Readiness Gate` aceita a especificação SDD e todos os invariantes preventivos do incremento.
-- O workflow não contém variável de ambiente `TEAMS_WEBHOOK_URL`.
-- O workflow contém o resolver assinado, `steps.locator.outputs.base_url`, `TEAMS_GATEWAY_DESTINO_ID`, `scripts/notificar_teams.py`, `flow_bot` e `--strict`.
+- O workflow contém o resolver assinado, `steps.locator.outputs.base_url`, `TEAMS_GATEWAY_DESTINO_ID`, `scripts/notificar_teams.py`, `flow_bot` e `--strict` como rota primária.
+- O workflow contém fallback explícito com `TEAMS_WEBHOOK_URL`, `TEAMS_WEBHOOK_RECIPIENT`, `send-webhook`, Adaptive Card e `commit-notification-fallback`.
 - O workflow não contém `vars.TEAMS_GATEWAY_BASE_URL`, `fly.io` nem `fly.dev`.
-- Após o merge, uma execução real de `Teams Commit Notification` confirma a entrega pelo gateway canônico antes de a correção funcional ser declarada concluída.
+- O workflow não contém `continue-on-error`, falha quando as duas rotas estão indisponíveis e registra `delivery_route`.
+- Após o merge, uma execução real de `Teams Commit Notification` com locator indisponível confirma a entrega pelo webhook governado e identifica a contingência no summary.
 
 ## Rollback
 
-Reverter os commits do PR. Nenhum segredo é criado, removido ou alterado por esta mudança.
+Reverter os commits do PR para retornar ao gateway-only. Nenhum segredo é criado, removido ou alterado por esta mudança.

@@ -60,12 +60,24 @@ jobs:
         id: locator
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p artifacts/teams-commit-notification
+          set +e
           node scripts/resolve_pc24x7_dev_locator.mjs \
             --output artifacts/teams-commit-notification/signed-locator.json
+          locator_rc=$?
+          set -e
+          if [[ "$locator_rc" -eq 0 ]]; then
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
+            echo "reason=locator assinado vigente" >> "$GITHUB_OUTPUT"
+          else
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "reason=locator PC24x7 indisponível" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Locator PC24x7 indisponível::A entrega tentará o webhook governado de contingência."
+          fi
 
       - name: Exportar Teams Gateway efêmero
+        if: steps.locator.outputs.resolved == 'true'
         shell: bash
         env:
           RESOLVED_GATEWAY_BASE_URL: ${{ steps.locator.outputs.base_url }}
@@ -80,21 +92,30 @@ jobs:
       - name: Validar configuração do Teams
         id: teams-config
         shell: bash
+        env:
+          LOCATOR_RESOLVED: ${{ steps.locator.outputs.resolved }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
         run: |
-          if [[ -z "${TEAMS_GATEWAY_BASE_URL}" || "${TEAMS_GATEWAY_BASE_URL}" != https://*.trycloudflare.com ]]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Locator PC24x7 não resolveu gateway autorizado" >> "$GITHUB_OUTPUT"
-            echo "::error title=Teams gateway não configurado::Locator assinado não forneceu runtime PC24x7 autorizado."
-            exit 1
-          elif [[ -z "${TEAMS_GATEWAY_DESTINO_ID}" || "${TEAMS_GATEWAY_DESTINO_ID}" != *"@"* ]]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Secret TEAMS_GATEWAY_DESTINO_ID ausente ou inválido" >> "$GITHUB_OUTPUT"
-            echo "::error title=Teams gateway não configurado::TEAMS_GATEWAY_DESTINO_ID precisa ser e-mail/UPN."
-            exit 1
-          else
+          set -euo pipefail
+          if [[ "$LOCATOR_RESOLVED" == "true" && "${TEAMS_GATEWAY_BASE_URL:-}" == https://*.trycloudflare.com && "${TEAMS_GATEWAY_DESTINO_ID:-}" == *"@"* ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "delivery_mode=gateway" >> "$GITHUB_OUTPUT"
             echo "reason=gateway canônico disponível" >> "$GITHUB_OUTPUT"
             echo "Teams Messaging Gateway canônico configurado; notificação será enviada."
+          elif [[ "$LOCATOR_RESOLVED" != "true" && -n "${TEAMS_WEBHOOK_URL:-}" && "${TEAMS_WEBHOOK_RECIPIENT:-}" == *"@"* ]]; then
+            echo "::add-mask::$TEAMS_WEBHOOK_URL"
+            echo "::add-mask::$TEAMS_WEBHOOK_RECIPIENT"
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "delivery_mode=webhook_fallback" >> "$GITHUB_OUTPUT"
+            echo "reason=webhook governado de contingência" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Teams em modo de contingência::Gateway PC24x7 indisponível; entrega seguirá pelo webhook governado."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "delivery_mode=unavailable" >> "$GITHUB_OUTPUT"
+            echo "reason=Nenhuma rota Teams governada disponível" >> "$GITHUB_OUTPUT"
+            echo "::error title=Teams não configurado::Gateway PC24x7 e webhook de contingência estão indisponíveis."
+            exit 1
           fi
 
       - name: Enviar notificação
@@ -111,6 +132,9 @@ jobs:
           MANUAL_MESSAGE: ${{ inputs.message }}
           EVENT_PATH: ${{ github.event_path }}
           GITHUB_TOKEN: ${{ github.token }}
+          DELIVERY_MODE: ${{ steps.teams-config.outputs.delivery_mode }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
         shell: bash
         run: |
           python - <<'PY'
@@ -136,6 +160,9 @@ jobs:
           run_url = f"{server_url}/{repository}/actions/runs/{os.environ['RUN_ID']}"
           repository_url = f"{server_url}/{repository}"
           event_name = os.environ["EVENT_NAME"]
+          delivery_mode = os.environ["DELIVERY_MODE"]
+          if delivery_mode not in {"gateway", "webhook_fallback"}:
+              raise SystemExit(f"Modo de entrega Teams inválido: {delivery_mode}")
 
           def github_json(path):
               request = Request(
@@ -308,6 +335,10 @@ jobs:
               ]
               message = f"**{title}**\n\n{subtitle}\n\n[Abrir workflow]({run_url})"
 
+          if delivery_mode == "webhook_fallback":
+              facts.append({"title": "Rota de entrega", "value": "Webhook governado de contingência"})
+              message += "\n\n**Rota:** webhook governado de contingência (PC24x7 indisponível)."
+
           card = {
               "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
               "type": "AdaptiveCard",
@@ -384,8 +415,8 @@ jobs:
               card_path = card_file.name
 
           evidence_path = Path(tempfile.gettempdir()) / f"teams-commit-{os.environ['RUN_ID']}.json"
-          completed = subprocess.run(
-              [
+          if delivery_mode == "gateway":
+              command = [
                   sys.executable,
                   "scripts/notificar_teams.py",
                   "--titulo",
@@ -399,7 +430,24 @@ jobs:
                   "--strict",
                   "--output",
                   str(evidence_path),
-              ],
+              ]
+          else:
+              command = [
+                  sys.executable,
+                  "tools/geradores/teams_graph_gateway_autocontido.py",
+                  "send-webhook",
+                  "--title",
+                  title,
+                  "--message",
+                  message,
+                  "--adaptive-card-file",
+                  card_path,
+                  "--event-type",
+                  "commit-notification-fallback",
+              ]
+
+          completed = subprocess.run(
+              command,
               text=True,
               capture_output=True,
               check=False,
@@ -412,14 +460,17 @@ jobs:
           if completed.returncode != 0:
               raise SystemExit(completed.returncode)
 
-          result = json.loads(evidence_path.read_text(encoding="utf-8"))
-          evidence_path.unlink(missing_ok=True)
-          result["success"] = bool(result.get("entregue"))
-          result["status_code"] = result.get("status_code") or result.get("provider_response", {}).get("status_code")
-          result["correlation_id"] = result.get("correlation_id") or result.get("provider_response", {}).get("correlation_id")
+          if delivery_mode == "gateway":
+              result = json.loads(evidence_path.read_text(encoding="utf-8"))
+              evidence_path.unlink(missing_ok=True)
+              result["success"] = bool(result.get("entregue"))
+              result["status_code"] = result.get("status_code") or result.get("provider_response", {}).get("status_code")
+              result["correlation_id"] = result.get("correlation_id") or result.get("provider_response", {}).get("correlation_id")
+          else:
+              result = json.loads(completed.stdout)
 
           if not result.get("success"):
-              raise SystemExit(f"Teams Gateway não confirmou envio: {result}")
+              raise SystemExit(f"Teams não confirmou envio pela rota {delivery_mode}: {result}")
           status_code = result.get("status_code")
           if status_code is not None and not 200 <= int(status_code) < 300:
               raise SystemExit(f"Teams retornou HTTP inesperado: {status_code}")
@@ -427,6 +478,7 @@ jobs:
           correlation_id = result.get("correlation_id", "n/a")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("notification_skipped=false\n")
+              output.write(f"delivery_route={delivery_mode}\n")
               output.write(f"correlation_id={correlation_id}\n")
               output.write(f"status_code={status_code or 'accepted'}\n")
           PY
@@ -441,6 +493,8 @@ jobs:
             echo "- Commit: ${{ github.sha }}"
             echo "- Layout: Adaptive Card 1.5 com fallback Markdown"
             echo "- Modo: estrito"
+            echo "- Rota selecionada: ${{ steps.teams-config.outputs.delivery_mode }}"
+            echo "- Motivo da rota: ${{ steps.teams-config.outputs.reason }}"
             if [[ "${{ steps.teams-config.outputs.configured }}" != "true" ]]; then
               echo "- Status: ignorado"
               echo "- Motivo: ${{ steps.teams-config.outputs.reason }}"
@@ -452,6 +506,9 @@ jobs:
               echo "- Status: entregue/aceito"
               echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
               echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
+              if [[ "${{ steps.notify.outputs.delivery_route }}" == "webhook_fallback" ]]; then
+                echo "- Estado da rota: contingência ativa; restaurar locator/PC24x7"
+              fi
             else
               echo "- Status: degradado — entrega não confirmada"
               echo "- Resultado da etapa: ${{ steps.notify.outcome }}"

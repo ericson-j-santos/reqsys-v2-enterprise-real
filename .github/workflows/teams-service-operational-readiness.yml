@@ -72,7 +72,13 @@ jobs:
           grep -Fq 'TEAMS_GATEWAY_BASE_URL' .github/workflows/teams-commit-notification.yml
           grep -Fq 'TEAMS_GATEWAY_DESTINO_ID' .github/workflows/teams-commit-notification.yml
           grep -Fq 'scripts/notificar_teams.py' .github/workflows/teams-commit-notification.yml
-          ! grep -Fq 'TEAMS_WEBHOOK_URL:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'TEAMS_WEBHOOK_URL:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'secrets.TEAMS_WEBHOOK_URL' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'TEAMS_WEBHOOK_RECIPIENT:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'secrets.TEAMS_WEBHOOK_RECIPIENT' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'delivery_mode=webhook_fallback' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'commit-notification-fallback' .github/workflows/teams-commit-notification.yml
+          ! grep -Fq 'continue-on-error:' .github/workflows/teams-commit-notification.yml
           grep -Fq 'schedule:' .github/workflows/teams-commit-notification.yml
           grep -Fq 'upload-artifact' .github/workflows/teams-notification-observability.yml
           grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
