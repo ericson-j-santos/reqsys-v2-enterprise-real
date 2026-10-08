@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recupera a tarefa watchdog já existente do Desktop a partir do Noteri."""
+"""Consulta e inicia localmente a tarefa watchdog já existente do Desktop."""
 from __future__ import annotations
 
 import argparse
@@ -13,12 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-EXPECTED_SOURCE_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
+EXPECTED_SOURCE_HOST = TARGET_HOST
 TASK_NAME = r"\Automation\ReqSysDesktopControlPlaneWatchdog"
 CONFIRM = "RUN-EXISTING-DESKTOP-WATCHDOG"
 TASK_LOGON_S4U = "S4U"
-TCP_PORTS = (135, 445)
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 
@@ -34,7 +33,7 @@ def sanitize(value: Any, limit: int = 600) -> str:
     return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())[:limit]
 
 
-def require_noteri(host: str | None = None, platform: str | None = None) -> None:
+def require_desktop(host: str | None = None, platform: str | None = None) -> None:
     actual_host = host or socket.gethostname()
     actual_platform = platform or os.name
     if actual_host.casefold() != EXPECTED_SOURCE_HOST.casefold():
@@ -63,14 +62,6 @@ def default_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def tcp_probe(host: str, port: int, timeout: float = 1.5) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
 def parse_task_xml(xml_text: str) -> dict[str, Any]:
     try:
         root = ET.fromstring(xml_text)
@@ -93,8 +84,6 @@ def query_task(run_cmd: CommandRunner) -> tuple[subprocess.CompletedProcess[str]
         [
             str(schtasks_executable()),
             "/Query",
-            "/S",
-            TARGET_HOST,
             "/TN",
             TASK_NAME,
             "/XML",
@@ -110,8 +99,6 @@ def request_task_run(run_cmd: CommandRunner) -> subprocess.CompletedProcess[str]
         [
             str(schtasks_executable()),
             "/Run",
-            "/S",
-            TARGET_HOST,
             "/TN",
             TASK_NAME,
         ]
@@ -131,23 +118,23 @@ def recover(
     confirm: str,
     evidence_file: Path,
     run_cmd: CommandRunner = default_run,
-    probe: Callable[[str, int], bool] = tcp_probe,
     source_host: str | None = None,
     platform: str | None = None,
 ) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise RecoveryError("confirmation_invalid")
-    require_noteri(source_host, platform)
+    require_desktop(source_host, platform)
 
-    network = {f"tcp_{port}": bool(probe(TARGET_HOST, port)) for port in TCP_PORTS}
     query, task = query_task(run_cmd)
     payload: dict[str, Any] = {
         "schema_version": "1",
         "generated_at_utc": now_iso(),
         "source_host": EXPECTED_SOURCE_HOST,
         "target_host": TARGET_HOST,
+        "execution_mode": "local_pc24x7_runner",
+        "remote_access_attempted": False,
+        "rdc_required": False,
         "task_name": TASK_NAME,
-        "network": network,
         "query_returncode": int(query.returncode),
         "task": task,
         "run_requested": False,
