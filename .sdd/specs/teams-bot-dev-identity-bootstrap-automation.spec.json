@@ -2,7 +2,7 @@
   "feature_name": "teams-bot-dev-identity-bootstrap-automation",
   "project": "ReqSys Central IA/Teams",
   "created_at": "2026-09-24",
-  "updated_at": "2026-10-06",
+  "updated_at": "2026-10-08",
   "phase": "implementation",
   "increment_type": "gap_fix",
   "approvals": {
@@ -34,7 +34,9 @@
     "Nenhuma URL *.fly.dev, flyctl, FLY_API_TOKEN ou trust anchor Fly permanece no workflow de identidade.",
     "A ativação/reconciliação do runtime DEV continua no workflow pc24x7-teams-token-bootstrap.yml, com same-SHA e evidência sanitizada.",
     "TEST/HML/STG/PROD não são alterados e a autorização temporária é removida mesmo em falha.",
-    "O runner Noteri usa Python 3.12 portátil com versão e SHA-256 fixos e registra o caminho validado em REQSYS_PYTHON, sem depender de shim global obsoleto ou setup-python."
+    "O runner Noteri usa Python 3.12 portátil com versão e SHA-256 fixos e registra o caminho validado em REQSYS_PYTHON, sem depender de shim global obsoleto ou setup-python.",
+    "O workflow faz checkout do SHA despachado no workspace efêmero do Noteri, sem exigir checkout preexistente em C:\\dev, e fornece esse caminho ao Session Launcher.",
+    "Etapas always() posteriores à sessão só executam quando target_path foi produzido, evitando mascarar a causa raiz com falhas secundárias."
   ],
   "sdd_gate": {
     "tests": [

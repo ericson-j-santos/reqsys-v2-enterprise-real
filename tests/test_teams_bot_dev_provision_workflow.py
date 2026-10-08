@@ -62,6 +62,38 @@ def test_identity_bootstrap_uses_noteri_and_governed_gateways() -> None:
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in text
 
 
+def test_identity_bootstrap_materializes_dispatched_sha_inside_runner_workspace() -> None:
+    workflow = _workflow()
+    job = workflow["jobs"]["identity-bootstrap-dev"]
+    text = _text()
+
+    assert job["env"]["TARGET_REPO"] == "${{ github.workspace }}\\_target_source"
+    assert "TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real" not in text
+
+    target_checkout = next(
+        step for step in job["steps"] if step.get("name") == "Checkout ReqSys no SHA imutável"
+    )
+    assert target_checkout["with"]["repository"] == "ericson-j-santos/reqsys-v2-enterprise-real"
+    assert target_checkout["with"]["ref"] == "${{ github.sha }}"
+    assert target_checkout["with"]["path"] == "_target_source"
+    assert target_checkout["with"]["fetch-depth"] == 0
+    assert target_checkout["with"]["persist-credentials"] is False
+
+
+def test_post_session_always_steps_require_a_materialized_target_path() -> None:
+    workflow = _workflow()
+    steps = workflow["jobs"]["identity-bootstrap-dev"]["steps"]
+    guarded_names = {
+        "Remover autorização Risk3 temporária",
+        "Validar evidência sanitizada",
+        "Publicar evidência sanitizada",
+    }
+
+    for step in steps:
+        if step.get("name") in guarded_names:
+            assert step["if"] == "${{ always() && steps.session.outputs.target_path != '' }}"
+
+
 def test_identity_bootstrap_uses_verified_portable_python_instead_of_stale_noteri_shim() -> None:
     text = _text()
 

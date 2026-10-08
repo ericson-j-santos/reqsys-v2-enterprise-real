@@ -57,7 +57,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 10
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: ${{ github.workspace }}\_target_source
       CORRELATION_ID: teams-bot-dev-identity-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.teams-bot-dev-identity-bootstrap.dev
       ACTION_SCOPE: repo://ericson-j-santos/reqsys-v2-enterprise-real/environment/dev/teams-bot-identity
@@ -72,6 +72,15 @@ jobs:
           ref: main
           path: _rules
           fetch-depth: 1
+
+      - name: Checkout ReqSys no SHA imutável
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/reqsys-v2-enterprise-real
+          ref: ${{ github.sha }}
+          path: _target_source
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Preparar Python portátil verificado no runner Noteri
         shell: powershell
@@ -181,13 +190,12 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Remover autorização Risk3 temporária
-        if: always()
+        if: ${{ always() && steps.session.outputs.target_path != '' }}
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
         run: |
           $ErrorActionPreference = "Stop"
-          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
           Push-Location $env:TARGET_PATH
           try {
             $args = @("scripts/configure_teams_bot_dev_identity_risk3.py", "--disable", "--confirm", "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE")
@@ -199,13 +207,12 @@ jobs:
           }
 
       - name: Validar evidência sanitizada
-        if: always()
+        if: ${{ always() && steps.session.outputs.target_path != '' }}
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
         run: |
           $ErrorActionPreference = "Stop"
-          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
           $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
           if (-not (Test-Path $evidence)) { throw "TEAMS_BOT_IDENTITY_EVIDENCE_MISSING" }
           $data = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
@@ -218,7 +225,7 @@ jobs:
           if (-not $data.app_id) { throw "APP_ID_MISSING" }
 
       - name: Publicar evidência sanitizada
-        if: always()
+        if: ${{ always() && steps.session.outputs.target_path != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: teams-bot-dev-identity-bootstrap-${{ github.run_id }}
