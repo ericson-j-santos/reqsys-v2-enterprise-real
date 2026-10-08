@@ -276,6 +276,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     stage = raw.split("  stage-watchdog-uac:", 1)[1].split("  recover:", 1)[0]
     assert "DESKTOP_WATCHDOG_UAC_LAUNCHER_STAGED" in stage
     assert "Ativar-ReqSys-Watchdog.cmd" in stage
+    assert 'GetFolderPath("CommonDesktopDirectory")' in stage
+    assert "desktop_paths = @($staged" in stage
+    assert "public_desktop_staged" in stage
     assert "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC" in stage
     assert "requires_local_uac_approval = $true" in stage
     assert "remote_uac_attempted = $false" in stage
