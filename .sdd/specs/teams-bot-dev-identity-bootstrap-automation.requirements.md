@@ -25,7 +25,7 @@ Automatizar, com custo adicional zero e de forma governada, a execução idempot
 
 1. O Authorized Actions Gateway valida issue, ator e comando literal.
 2. O workflow despachado executa somente no Noteri allowlisted.
-3. O Session Launcher materializa sessão governada no SHA exato da `main`.
+3. O workflow faz checkout efêmero do ReqSys no `GITHUB_WORKSPACE` e no SHA despachado; o Session Launcher valida essa fonte governada sem depender de caminho persistente no host.
 4. A variável não secreta `CCP_AZURE_TENANT_ID` define o tenant esperado e o runner falha fechado se estiver ausente ou inválido.
 5. Uma autorização Owner Risk3 exata é instalada por no máximo 30 minutos.
 6. O runner executa:
@@ -50,3 +50,4 @@ Automatizar, com custo adicional zero e de forma governada, a execução idempot
 11. Ausência do runner, sessão Entra válida, tenant esperado, Key Vault ou permissão administrativa faz a execução falhar fechado.
 12. Os testes de contrato do bootstrap, do gateway e da governança self-hosted permanecem verdes no mesmo SHA.
 13. O job Noteri deve preparar Python 3.12 portátil com versão e SHA-256 fixos, validar o executável e reutilizar seu caminho explícito; shims globais quebrados e travamentos de `setup-python` não podem impedir o Session Launcher.
+14. O repositório-fonte do Session Launcher deve ser o checkout efêmero em `github.workspace`, no `github.sha`, sem caminho local hardcoded do ReqSys no Noteri.

@@ -57,7 +57,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 10
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: ${{ github.workspace }}
       CORRELATION_ID: teams-bot-dev-identity-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.teams-bot-dev-identity-bootstrap.dev
       ACTION_SCOPE: repo://ericson-j-santos/reqsys-v2-enterprise-real/environment/dev/teams-bot-identity
@@ -65,6 +65,13 @@ jobs:
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
 
     steps:
+      - name: Checkout ReqSys source no SHA despachado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout regras canônicas
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

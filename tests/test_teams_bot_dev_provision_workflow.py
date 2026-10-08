@@ -62,6 +62,21 @@ def test_identity_bootstrap_uses_noteri_and_governed_gateways() -> None:
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in text
 
 
+def test_identity_bootstrap_uses_ephemeral_dispatched_reqsys_checkout() -> None:
+    workflow = _workflow()
+    job = workflow["jobs"]["identity-bootstrap-dev"]
+    steps = job["steps"]
+
+    assert job["env"]["TARGET_REPO"] == "${{ github.workspace }}"
+    assert r"C:\dev\reqsys-v2-enterprise-real" not in _text()
+    assert steps[0]["name"] == "Checkout ReqSys source no SHA despachado"
+    assert steps[0]["with"]["ref"] == "${{ github.sha }}"
+    assert steps[0]["with"]["fetch-depth"] == 1
+    assert steps[0]["with"]["persist-credentials"] is False
+    assert steps[1]["name"] == "Checkout regras canônicas"
+    assert steps[1]["with"]["path"] == "_rules"
+
+
 def test_identity_bootstrap_uses_verified_portable_python_instead_of_stale_noteri_shim() -> None:
     text = _text()
 
