@@ -9,6 +9,7 @@ import locale
 import os
 import socket
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,15 @@ TaskRepair = Callable[[], dict[str, Any]]
 
 class RecoveryError(RuntimeError):
     pass
+
+
+def load_versioned_module(module_path: Path, name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, module_path)
+    if spec is None or spec.loader is None:
+        raise RecoveryError(f"module_unavailable:{module_path.name}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def now_iso() -> str:
@@ -126,11 +136,7 @@ def repair_watchdog_task(source_sha: str, *, allow_uac: bool = False, uac_confir
         raise RecoveryError("source_sha_invalid")
     source_root = Path(__file__).resolve().parents[1]
     module_path = source_root / "scripts" / "desktop_control_plane_watchdog.py"
-    spec = importlib.util.spec_from_file_location("reqsys_desktop_watchdog_repair", module_path)
-    if spec is None or spec.loader is None:
-        raise RecoveryError("watchdog_module_unavailable")
-    watchdog = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(watchdog)
+    watchdog = load_versioned_module(module_path, "reqsys_desktop_watchdog_repair")
 
     local = os.environ.get("LOCALAPPDATA")
     if not local:
@@ -170,14 +176,11 @@ def repair_watchdog_task(source_sha: str, *, allow_uac: bool = False, uac_confir
         if not allow_uac:
             raise RecoveryError("watchdog_task_repair_requires_uac")
         launcher_path = source_root / "scripts" / "desktop_control_plane_watchdog_uac_launcher.py"
-        launcher_spec = importlib.util.spec_from_file_location(
-            "reqsys_desktop_watchdog_uac_activation",
+        sys.modules["desktop_control_plane_watchdog"] = watchdog
+        launcher = load_versioned_module(
             launcher_path,
+            "reqsys_desktop_watchdog_uac_activation",
         )
-        if launcher_spec is None or launcher_spec.loader is None:
-            raise RecoveryError("watchdog_uac_launcher_unavailable")
-        launcher = importlib.util.module_from_spec(launcher_spec)
-        launcher_spec.loader.exec_module(launcher)
         activated = launcher.launch(
             runtime_root / "metadata.json",
             confirm=uac_confirm,
