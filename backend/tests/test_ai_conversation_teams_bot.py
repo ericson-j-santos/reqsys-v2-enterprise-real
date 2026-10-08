@@ -53,7 +53,7 @@ def test_resolver_destino_bot_recusa_ambiguidade(monkeypatch):
 
 def test_enviar_cartao_exige_bot_configurado():
     db = MagicMock()
-    settings = SimpleNamespace(teams_bot_configurado=False, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=False, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
 
     with patch('app.services.ai_conversation_teams_bot.settings', settings):
         with pytest.raises(AITeamsBotDeliveryError, match='não configurado'):
@@ -69,7 +69,7 @@ def test_enviar_cartao_exige_bot_configurado():
 
 def test_enviar_cartao_exige_destinatario_inequivoco():
     db = MagicMock()
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
 
     with (
         patch('app.services.ai_conversation_teams_bot.settings', settings),
@@ -91,7 +91,7 @@ def test_enviar_cartao_exige_destinatario_inequivoco():
 
 def test_enviar_cartao_exige_conversation_reference():
     db = MagicMock()
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
 
     with (
         patch('app.services.ai_conversation_teams_bot.settings', settings),
@@ -118,10 +118,12 @@ def test_enviar_cartao_exige_conversation_reference():
 def test_enviar_cartao_conserva_destinatario_resolvido_apos_erro_do_conector():
     db = MagicMock()
     conversa = _conversa(None)
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
     referencia = SimpleNamespace(
         service_url='https://connector.invalid/',
         conversation_id='conversation-1',
+        bot_id='bot-id',
+        tenant_id='tenant-id',
     )
     provider = AsyncMock(side_effect=RuntimeError('falha simulada do transporte'))
 
@@ -152,7 +154,7 @@ def test_enviar_cartao_conserva_destinatario_resolvido_apos_erro_do_conector():
 def test_enviar_cartao_bloqueia_destinatario_ambiguo_antes_do_conector():
     db = MagicMock()
     conversa = _conversa(None)
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
     provider = AsyncMock()
 
     with (
@@ -175,10 +177,12 @@ def test_enviar_cartao_bloqueia_destinatario_ambiguo_antes_do_conector():
 def test_enviar_cartao_bot_entrega_adaptive_card_e_vincula_conversa():
     db = MagicMock()
     conversa = _conversa()
-    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id', teams_bot_app_tenant_id='tenant-id')
     referencia = SimpleNamespace(
         service_url='https://smba.trafficmanager.net/br/',
         conversation_id='a:teams-conv-1',
+        bot_id='bot-id',
+        tenant_id='tenant-id',
     )
     provider = AsyncMock(return_value={'id': 'teams-message-1'})
 
@@ -223,3 +227,36 @@ def test_enviar_cartao_bot_entrega_adaptive_card_e_vincula_conversa():
     assert conversa.teams_modo == 'bot'
     db.commit.assert_called_once()
     db.refresh.assert_called_once_with(conversa)
+
+
+def test_enviar_cartao_bloqueia_referencia_de_outro_tenant_antes_do_conector():
+    db = MagicMock()
+    conversa = _conversa()
+    settings = SimpleNamespace(
+        teams_bot_configurado=True,
+        teams_bot_app_id='bot-id',
+        teams_bot_app_tenant_id='tenant-id',
+    )
+    referencia = SimpleNamespace(
+        service_url='https://connector.invalid/',
+        conversation_id='conversation-1',
+        bot_id='bot-id',
+        tenant_id='outro-tenant-sensivel',
+    )
+    provider = AsyncMock()
+
+    with (
+        patch('app.services.ai_conversation_teams_bot.settings', settings),
+        patch('app.services.ai_conversation_teams_bot.resolver_destino_bot', return_value='aad-user-1'),
+        patch('app.services.ai_conversation_teams_bot.obter_conversa_referencia_bot', return_value=referencia),
+        patch('app.services.ai_conversation_teams_bot._enviar_atividade_bot_framework', provider),
+    ):
+        with pytest.raises(AITeamsBotDeliveryError, match='conversation_reference_tenant_id_mismatch'):
+            asyncio.run(
+                enviar_cartao_conversa_bot(
+                    db, conversa=conversa, resposta='Resposta', correlation_id='corr-owner'
+                )
+            )
+
+    provider.assert_not_awaited()
+    db.commit.assert_not_called()

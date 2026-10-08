@@ -765,6 +765,31 @@ def obter_conversa_referencia_bot(db: Session, usuario_aad_object_id: str) -> Bo
     ).scalar_one_or_none()
 
 
+def diagnosticar_propriedade_conversa_referencia(
+    referencia: BotConversaReferencia,
+    *,
+    expected_bot_id: str | None = None,
+    expected_tenant_id: str | None = None,
+) -> str | None:
+    """Valida o vínculo da referência sem expor identificadores na resposta."""
+    bot_id = (referencia.bot_id or '').strip().casefold()
+    tenant_id = (referencia.tenant_id or '').strip().casefold()
+    expected_bot_id = (expected_bot_id or settings.teams_bot_app_id).strip().casefold()
+    expected_tenant_id = (
+        expected_tenant_id or settings.teams_bot_app_tenant_id
+    ).strip().casefold()
+
+    if not bot_id:
+        return 'conversation_reference_bot_id_missing'
+    if bot_id != expected_bot_id:
+        return 'conversation_reference_bot_id_mismatch'
+    if not tenant_id:
+        return 'conversation_reference_tenant_id_missing'
+    if tenant_id != expected_tenant_id:
+        return 'conversation_reference_tenant_id_mismatch'
+    return None
+
+
 def salvar_conversa_referencia_bot(
     db: Session,
     usuario_aad_object_id: str,
@@ -908,6 +933,17 @@ async def _enviar_bot(
                 'nao ha conversationReference salva para enviar proativamente.'
             ),
             motivo='conversa_bot_nao_instalada',
+        )
+
+    ownership_failure = diagnosticar_propriedade_conversa_referencia(referencia)
+    if ownership_failure:
+        return _resultado(
+            request,
+            correlation_id,
+            entregue=False,
+            canal_usado='bot',
+            erro=ownership_failure,
+            motivo=ownership_failure,
         )
 
     text_format = 'xml' if request.content_type == 'html' else 'plain'

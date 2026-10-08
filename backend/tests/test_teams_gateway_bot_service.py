@@ -108,7 +108,10 @@ def test_enviar_gateway_bot_sem_conversa_referencia_bloqueia_com_mensagem_clara(
 @patch('app.services.teams_gateway.obter_conversa_referencia_bot')
 def test_enviar_gateway_bot_sucesso(mock_obter_referencia, mock_enviar_atividade, monkeypatch):
     _configurar_bot(monkeypatch, configurado=True)
-    referencia = MagicMock(service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1')
+    referencia = MagicMock(
+        service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1',
+        bot_id='bot-app-id', tenant_id='bot-tenant-id',
+    )
     mock_obter_referencia.return_value = referencia
     mock_enviar_atividade.return_value = {'id': 'activity-1'}
     fake_db = MagicMock()
@@ -133,7 +136,8 @@ def test_enviar_gateway_bot_http_failure_preserva_status_sem_corpo(
 ):
     _configurar_bot(monkeypatch, configurado=True)
     mock_obter_referencia.return_value = MagicMock(
-        service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1'
+        service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1',
+        bot_id='bot-app-id', tenant_id='bot-tenant-id',
     )
     request = httpx.Request('POST', 'https://smba.trafficmanager.net/br/v3/conversations/conv-1/activities')
     response = httpx.Response(401, request=request, text='sensitive-provider-body')
@@ -153,6 +157,32 @@ def test_enviar_gateway_bot_http_failure_preserva_status_sem_corpo(
     assert resultado['status_code'] == 401
     assert resultado['erro'] == 'HTTP 401'
     assert 'sensitive-provider-body' not in str(resultado)
+
+
+@patch('app.services.teams_gateway._enviar_atividade_bot_framework', new_callable=AsyncMock)
+@patch('app.services.teams_gateway.obter_conversa_referencia_bot')
+def test_enviar_gateway_bot_bloqueia_referencia_de_outro_bot_sem_expor_ids(
+    mock_obter_referencia, mock_enviar_atividade, monkeypatch
+):
+    _configurar_bot(monkeypatch, configurado=True)
+    mock_obter_referencia.return_value = MagicMock(
+        service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1',
+        bot_id='outro-bot-sensivel', tenant_id='bot-tenant-id',
+    )
+    payload = TeamsGatewayMessageRequest(
+        destino_tipo='chat', destino_id='aad-1', texto='Ola via bot', modo='bot'
+    )
+
+    resultado = _run(
+        svc.enviar_mensagem_gateway(payload, db=MagicMock(), correlation_id='corr-owner')
+    )
+
+    assert resultado['entregue'] is False
+    assert resultado['erro'] == 'conversation_reference_bot_id_mismatch'
+    assert resultado['motivo'] == 'conversation_reference_bot_id_mismatch'
+    assert 'outro-bot-sensivel' not in str(resultado)
+    assert 'bot-app-id' not in str(resultado)
+    mock_enviar_atividade.assert_not_awaited()
 
 
 @patch('app.services.teams_gateway._enviar_webhook', new_callable=AsyncMock)
