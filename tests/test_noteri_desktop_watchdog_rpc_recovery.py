@@ -27,7 +27,7 @@ def completed(code: int, stdout: str = "", stderr: str = "") -> subprocess.Compl
     return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
 
 
-def test_recovery_only_queries_and_runs_exact_existing_task(tmp_path: Path, monkeypatch) -> None:
+def test_recovery_only_queries_and_runs_exact_existing_task_locally(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
 
@@ -43,17 +43,19 @@ def test_recovery_only_queries_and_runs_exact_existing_task(tmp_path: Path, monk
         confirm=m.CONFIRM,
         evidence_file=tmp_path / "evidence.json",
         run_cmd=fake_run,
-        probe=lambda host, port: True,
-        source_host="Noteri",
+        source_host="DESKTOP-PDQK954",
         platform="nt",
     )
     assert result["ok"] is True
     assert result["run_requested"] is True
     assert result["task_created_or_modified"] is False
+    assert result["execution_mode"] == "local_pc24x7_runner"
+    assert result["remote_access_attempted"] is False
+    assert result["rdc_required"] is False
     flattened = " ".join(" ".join(call) for call in calls)
     assert "/Query" in flattened and "/Run" in flattened
     assert "/Create" not in flattened and "/Change" not in flattened and "/Delete" not in flattened
-    assert all(m.TARGET_HOST in call for call in calls)
+    assert all("/S" not in call for call in calls)
     assert all(m.TASK_NAME in call for call in calls)
 
 
@@ -69,8 +71,7 @@ def test_query_failure_fails_closed_without_run(tmp_path: Path, monkeypatch) -> 
         confirm=m.CONFIRM,
         evidence_file=tmp_path / "evidence.json",
         run_cmd=fake_run,
-        probe=lambda host, port: False,
-        source_host="Noteri",
+        source_host="DESKTOP-PDQK954",
         platform="nt",
     )
     assert result["ok"] is False
@@ -92,8 +93,7 @@ def test_invalid_task_configuration_is_not_started(tmp_path: Path, monkeypatch) 
         confirm=m.CONFIRM,
         evidence_file=tmp_path / "evidence.json",
         run_cmd=fake_run,
-        probe=lambda host, port: True,
-        source_host="Noteri",
+        source_host="DESKTOP-PDQK954",
         platform="nt",
     )
     assert result["result"] == "DESKTOP_WATCHDOG_CONFIGURATION_NOT_READY"
@@ -105,7 +105,7 @@ def test_wrong_source_host_is_rejected(tmp_path: Path) -> None:
         m.recover(
             confirm=m.CONFIRM,
             evidence_file=tmp_path / "evidence.json",
-            source_host="DESKTOP-PDQK954",
+            source_host="Noteri",
             platform="nt",
         )
 
@@ -137,7 +137,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert '"--expected-head", $env:ANCHOR_SHA' in raw
     assert "TARGET_REPO: ${{ github.workspace }}" in raw
     assert "path: _target" not in raw
-    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
+    assert raw.count("C:\\dev\\reqsys-v2-enterprise-real") == 1
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
@@ -156,12 +156,18 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("--require-runner-version-preflight") == 5
     assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 6
 
-    # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
+    # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
     assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw
     assert "RUN-EXISTING-DESKTOP-WATCHDOG" in raw
     assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
     assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
+    recover = raw.split("  recover:", 1)[1].split("  reboot-once:", 1)[0]
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in recover
+    assert "TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real" in recover
+    assert 'if ($e.source_host -ne "DESKTOP-PDQK954")' in recover
+    assert 'if ($e.execution_mode -ne "local_pc24x7_runner")' in recover
+    assert 'if ($e.remote_access_attempted)' in recover
 
     # Reboot one-shot usa a exceção canônica separada e consumível, somente no Noteri.
     assert "reboot-once:" in raw

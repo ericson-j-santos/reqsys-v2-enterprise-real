@@ -1,4 +1,4 @@
-name: Noteri → Desktop Watchdog Recovery
+name: Desktop Watchdog Recovery
 
 on:
   workflow_dispatch:
@@ -26,11 +26,11 @@ concurrency:
 jobs:
   recover:
     if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}
-    name: Run existing Desktop watchdog through governed Windows RPC
-    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    name: Run existing watchdog locally on governed Desktop runner
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 8
     env:
-      TARGET_REPO: ${{ github.workspace }}
+      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
       RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
@@ -115,7 +115,7 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Query and run exact existing Desktop watchdog through Command Gateway
+      - name: Query and run exact existing Desktop watchdog locally through Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -156,8 +156,11 @@ jobs:
           if (-not $e.ok -or $e.result -ne "EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED") {
             throw "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED"
           }
-          if ($e.source_host -ne "Noteri") { throw "SOURCE_HOST_MISMATCH" }
+          if ($e.source_host -ne "DESKTOP-PDQK954") { throw "SOURCE_HOST_MISMATCH" }
           if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
+          if ($e.execution_mode -ne "local_pc24x7_runner") { throw "EXECUTION_MODE_MISMATCH" }
+          if ($e.remote_access_attempted) { throw "REMOTE_ACCESS_WAS_ATTEMPTED" }
+          if ($e.rdc_required) { throw "RDC_WAS_REQUIRED" }
           if (-not $e.run_requested) { throw "WATCHDOG_RUN_NOT_REQUESTED" }
           if ($e.task_created_or_modified) { throw "TASK_MUTATION_REPORTED" }
           if ($e.production_touched) { throw "PRODUCTION_TOUCHED" }
@@ -178,7 +181,7 @@ jobs:
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
         run: |
-          "## Noteri → Desktop Watchdog Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "## Desktop Watchdog Local Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
           if ($env:TARGET_PATH) {
             $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
             if (Test-Path -LiteralPath $evidence) {
@@ -188,6 +191,7 @@ jobs:
               "- Task criada/alterada: $($e.task_created_or_modified)" | Add-Content $env:GITHUB_STEP_SUMMARY
             }
           }
+          "- Execução: local no runner PC24x7 governado" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Session Launcher: obrigatório" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Command Gateway risco: 2" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
