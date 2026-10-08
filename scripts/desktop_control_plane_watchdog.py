@@ -582,7 +582,7 @@ def current_user_id() -> str:
     return f"{socket.gethostname()}\\{getpass.getuser()}"
 
 
-def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
+def _register_boot_task_com(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
     require_windows_desktop()
     try:
         import win32com.client  # type: ignore
@@ -656,7 +656,92 @@ def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, 
         "password_used": False,
         "run_level": "limited",
         "restart_policy_supported": restart_policy_supported,
+        "registration_method": "com_s4u",
     }
+
+
+def _register_boot_task_native(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
+    command = subprocess.list2cmdline([str(python_executable), str(launcher)])
+    completed = subprocess.run(
+        [
+            str(_schtasks()),
+            "/Create",
+            "/TN",
+            TASK_NAME,
+            "/TR",
+            command,
+            "/RU",
+            current_user_id(),
+            "/SC",
+            "ONSTART",
+            "/RL",
+            "LIMITED",
+            "/NP",
+            "/F",
+            "/HRESULT",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        encoding=locale.getpreferredencoding(False) or "utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = f"{completed.stdout} {completed.stderr}".casefold()
+        if completed.returncode in {5, -2147024891, 2147942405} or any(
+            marker in detail
+            for marker in ("access is denied", "acesso negado", "0x80070005")
+        ):
+            raise WatchdogError("task_scheduler_access_denied")
+        raise WatchdogError(f"task_scheduler_native_registration_failed:{completed.returncode}")
+    task = task_status()
+    if not (
+        task.get("exists") is True
+        and task.get("enabled") is True
+        and task.get("trigger_at_startup") is True
+        and str(task.get("logon_type") or "").casefold() == "s4u"
+    ):
+        subprocess.run(
+            [str(_schtasks()), "/Delete", "/TN", TASK_NAME, "/F"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+        )
+        raise WatchdogError("task_scheduler_native_contract_mismatch")
+    return {
+        "ok": True,
+        "task_name": TASK_NAME,
+        "trigger": "AtStartup",
+        "logon_type": "S4U",
+        "password_used": False,
+        "run_level": "limited",
+        "restart_policy_supported": False,
+        "registration_method": "schtasks_np",
+    }
+
+
+def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
+    try:
+        return _register_boot_task_com(
+            python_executable=python_executable,
+            launcher=launcher,
+        )
+    except (ImportError, WatchdogError) as exc:
+        message = str(exc).casefold()
+        if not (
+            isinstance(exc, ImportError)
+            or "pywin32 indisponível" in message
+            or "access_denied" in message
+        ):
+            raise
+    return _register_boot_task_native(
+        python_executable=python_executable,
+        launcher=launcher,
+    )
 
 
 def _schtasks() -> Path:
@@ -684,7 +769,7 @@ def run_watchdog_task() -> dict[str, Any]:
 
 def task_status() -> dict[str, Any]:
     if os.name != "nt":
-        return {"exists": False, "trigger_at_startup": False}
+        return {"exists": False, "enabled": False, "trigger_at_startup": False}
     completed = subprocess.run(
         [str(_schtasks()), "/Query", "/TN", TASK_NAME, "/XML"],
         capture_output=True,
@@ -695,21 +780,24 @@ def task_status() -> dict[str, Any]:
         check=False,
     )
     if completed.returncode != 0:
-        return {"exists": False, "trigger_at_startup": False}
+        return {"exists": False, "enabled": False, "trigger_at_startup": False}
     try:
         import xml.etree.ElementTree as ET
         root = ET.fromstring(completed.stdout)
         ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
         boot = root.find(".//t:BootTrigger", ns) is not None
         logon_type = root.findtext(".//t:Principal/t:LogonType", default="", namespaces=ns)
+        enabled = root.findtext(".//t:Settings/t:Enabled", default="true", namespaces=ns)
     except Exception as exc:
         return {
             "exists": True,
+            "enabled": False,
             "trigger_at_startup": False,
             "parse_error": type(exc).__name__,
         }
     return {
         "exists": True,
+        "enabled": str(enabled or "true").strip().casefold() == "true",
         "trigger_at_startup": boot,
         "task_name": TASK_NAME,
         "logon_type": logon_type,

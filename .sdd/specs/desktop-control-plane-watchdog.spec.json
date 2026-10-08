@@ -19,7 +19,7 @@
     "reboot_required": false,
     "secrets_read": false,
     "production_touched": false,
-    "uac_activation": "Governed one-time launcher restricted to immutable release register-task-com metadata"
+    "uac_activation": "Last-resort governed launcher after a fixed local passwordless schtasks /NP registration attempt; restricted to immutable release register-task-com metadata"
   },
   "sdd_gate": {
     "tests": [
@@ -27,7 +27,7 @@
       "tests/test_desktop_control_plane_watchdog_uac_launcher.py",
       "tests/test_pc24x7_rdc_recovery.py"
     ],
-    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If Task Scheduler registration is denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task and independent status proves AtStartup+S4U."
+    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If COM registration is unavailable or denied, one fixed local passwordless schtasks /NP registration is allowed for the exact task; independent XML must prove enabled+AtStartup+S4U. If native registration is also denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
