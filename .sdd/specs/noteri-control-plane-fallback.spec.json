@@ -52,6 +52,9 @@
     "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE",
     "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state",
     "premerge_branch_sha_required": true,
+    "runner_identity": "absolute Runner.Listener.exe path must belong to governed runner_home",
+    "unresolved_process_identity": "fail_closed",
+    "portable_python_hash_runtime": "System.Security.Cryptography.SHA256 via .NET",
     "premerge_trigger": "canonical_owner_push_paths",
     "premerge_trigger_paths": [
       ".github/workflows/noteri-control-plane-probe.yml",
@@ -68,7 +71,8 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py",
-      "tests/test_noteri_runtime_auto_watch_workflow.py"
+      "tests/test_noteri_runtime_auto_watch_workflow.py",
+      "tests/test_noteri_desktop_watchdog_rpc_recovery.py"
     ],
     "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O workflow do probe deve preparar Python 3.12.10 portátil com URL e SHA-256 fixos e executar tanto o probe quanto o E2E do noteri-runtime por REQSYS_PYTHON; o Python global do host não é uma dependência operacional."
   },
@@ -231,5 +235,5 @@
       "secrets_read": false
     }
   },
-  "updated_at": "2026-10-02"
+  "updated_at": "2026-10-08"
 }

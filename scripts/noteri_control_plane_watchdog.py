@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ctypes
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+from ctypes import wintypes
 from datetime import datetime, timezone
 
 try:
@@ -96,7 +98,7 @@ def tasklist_path() -> Path:
     return target
 
 
-def runner_running() -> bool:
+def _runner_process_ids() -> list[int]:
     result = subprocess.run(
         [str(tasklist_path()), "/FI", "IMAGENAME eq Runner.Listener.exe", "/FO", "CSV", "/NH"],
         capture_output=True,
@@ -106,7 +108,81 @@ def runner_running() -> bool:
         timeout=20,
         check=False,
     )
-    return result.returncode == 0 and "runner.listener.exe" in result.stdout.casefold()
+    if result.returncode != 0:
+        raise WatchdogError(f"tasklist do runner falhou: exit={result.returncode}")
+    pids: list[int] = []
+    for row in csv.reader(result.stdout.splitlines()):
+        if len(row) < 2 or row[0].strip().casefold() != "runner.listener.exe":
+            continue
+        try:
+            pids.append(int(row[1].strip().replace(",", "")))
+        except ValueError as exc:
+            raise WatchdogError("PID inválido ao inspecionar runner") from exc
+    return pids
+
+
+def _process_executable_path(pid: int) -> Path | None:
+    if os.name != "nt":
+        return None
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    open_process.restype = wintypes.HANDLE
+    query_path = kernel32.QueryFullProcessImageNameW
+    query_path.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    query_path.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+
+    process_query_limited_information = 0x1000
+    handle = open_process(process_query_limited_information, False, pid)
+    if not handle:
+        return None
+    try:
+        size = wintypes.DWORD(32768)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if not query_path(handle, 0, buffer, ctypes.byref(size)):
+            return None
+        return Path(buffer.value).resolve()
+    finally:
+        close_handle(handle)
+
+
+def runner_process_snapshot(runner_home: Path) -> dict[str, Any]:
+    root = validate_runner_home(runner_home)
+    expected = (root / "bin" / "Runner.Listener.exe").resolve()
+    matching: list[int] = []
+    unresolved: list[int] = []
+    observed: list[dict[str, Any]] = []
+    for pid in _runner_process_ids():
+        executable = _process_executable_path(pid)
+        if executable is None:
+            unresolved.append(pid)
+            continue
+        observed.append({"pid": pid, "path": str(executable)})
+        if os.path.normcase(str(executable)) == os.path.normcase(str(expected)):
+            matching.append(pid)
+
+    if len(matching) > 1:
+        raise WatchdogError("mais de um listener pertence ao runner governado")
+    if not matching and unresolved:
+        raise WatchdogError("identidade do Runner.Listener.exe não pôde ser verificada")
+    return {
+        "expected_executable": str(expected),
+        "matching_pids": matching,
+        "unresolved_pids": unresolved,
+        "observed": observed,
+    }
+
+
+def runner_running(runner_home: Path) -> bool:
+    return bool(runner_process_snapshot(runner_home)["matching_pids"])
 
 
 def start_runner(runner_home: Path, timeout_seconds: float = 15.0) -> bool:
@@ -125,10 +201,10 @@ def start_runner(runner_home: Path, timeout_seconds: float = 15.0) -> bool:
     )
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        if runner_running():
+        if runner_running(root):
             return True
         time.sleep(0.5)
-    return runner_running()
+    return runner_running(root)
 
 
 def atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -141,11 +217,11 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
 def cycle(runner_home: Path) -> dict[str, Any]:
     host = require_noteri()
     root = validate_runner_home(runner_home)
-    before = runner_running()
+    before = runner_running(root)
     started = False
     if not before:
         started = start_runner(root)
-    after = runner_running()
+    after = runner_running(root)
     payload = {
         "ok": bool(after),
         "service": SERVICE_NAME,

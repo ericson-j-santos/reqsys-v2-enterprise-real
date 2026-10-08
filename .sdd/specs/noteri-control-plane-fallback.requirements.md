@@ -13,6 +13,9 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 1. O GitHub Authorized Actions Gateway continua como origem externa governada.
 2. O Noteri recebe um GitHub Actions runner self-hosted dedicado com labels fixos `[self-hosted, Windows, X64, noteri, reqsys-dev]`.
 3. O watchdog local `noteri_control_plane_watchdog.py` mantém um runner previamente configurado ativo e persiste no boot por tarefa `AtStartup + S4U`.
+   A prova de processo deve comparar o caminho executável de `Runner.Listener.exe`
+   com o `runner_home` governado; listeners de outras instalações não podem
+   produzir um falso positivo de saúde.
 4. O workflow `noteri-control-plane-probe.yml` prova pickup real, host exato e `Runner.Listener.exe` sem depender de RDC.
 5. O Gateway aceita somente os comandos exatos `/reqsys run noteri-control-plane-probe` e `/reqsys run noteri-headless-control-plane-activation`.
 6. O Gateway aguarda pickup e falha fechado com `SELF_HOSTED_RUNNER_UNAVAILABLE` se o runner não adquirir o job.
@@ -27,6 +30,8 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - executar somente no host exato `Noteri`;
 - local/DEV somente;
 - não ler conteúdo de `.runner`;
+- distinguir o listener do runner governado pelo caminho absoluto do executável;
+- falhar fechado quando a identidade de um processo candidato não puder ser verificada;
 - token de registro efêmero pode ser consumido somente em memória no bootstrap; é proibido imprimir, persistir, versionar ou incluir esse valor na evidência;
 - não executar reboot/shutdown;
 - não expor comando arbitrário;
@@ -39,6 +44,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
 - o workflow do probe deve usar Python 3.12.10 portátil pinado por URL e SHA-256 para o probe e para o E2E do `noteri-runtime`; o Python global do host não pode ser dependência operacional.
+- workflows de recuperação executados no Windows PowerShell legado devem validar o SHA-256 do Python portátil pela API criptográfica .NET, sem depender do cmdlet opcional `Get-FileHash`.
 - a evidência do `noteri-runtime` deve registrar `expected_sha`, `observed_sha` e `source_sha_verified=true`, falhando fechado em divergência, estado final diferente de NORMAL, ausência de replay idempotente ou controle negativo.
 - o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
 

@@ -57,7 +57,7 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
           Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $observedHash = ([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($zip)))).Replace('-', '').ToLowerInvariant()
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
           Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
           $python = Join-Path $root "python.exe"

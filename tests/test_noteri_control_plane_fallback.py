@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PROBE_PATH = ROOT / "scripts" / "noteri_control_plane_probe.py"
 WATCHDOG_PATH = ROOT / "scripts" / "noteri_control_plane_watchdog.py"
@@ -146,6 +145,31 @@ def test_watchdog_runner_contract_never_reads_runner_contents(tmp_path: Path) ->
     assert watchdog.validate_runner_home(root) == root.resolve()
 
 
+def test_watchdog_matches_listener_to_governed_runner_home(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "actions-runner"
+    other = tmp_path / "other-runner"
+    for candidate in (root, other):
+        (candidate / "bin").mkdir(parents=True)
+        (candidate / ".runner").write_text("opaque", encoding="utf-8")
+        (candidate / "run.cmd").write_text("@echo off\n", encoding="utf-8")
+        (candidate / "bin" / "Runner.Listener.exe").write_bytes(b"stub")
+
+    monkeypatch.setattr(watchdog, "_runner_process_ids", lambda: [101])
+    monkeypatch.setattr(
+        watchdog,
+        "_process_executable_path",
+        lambda pid: (other / "bin" / "Runner.Listener.exe").resolve(),
+    )
+    assert watchdog.runner_running(root) is False
+
+    monkeypatch.setattr(
+        watchdog,
+        "_process_executable_path",
+        lambda pid: (root / "bin" / "Runner.Listener.exe").resolve(),
+    )
+    assert watchdog.runner_running(root) is True
+
+
 def test_watchdog_cycle_starts_runner_when_listener_missing(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "actions-runner"
     (root / "bin").mkdir(parents=True)
@@ -154,7 +178,7 @@ def test_watchdog_cycle_starts_runner_when_listener_missing(monkeypatch, tmp_pat
     (root / "bin" / "Runner.Listener.exe").write_bytes(b"stub")
     observed = iter([False, True])
     monkeypatch.setattr(watchdog, "require_noteri", lambda: "Noteri")
-    monkeypatch.setattr(watchdog, "runner_running", lambda: next(observed))
+    monkeypatch.setattr(watchdog, "runner_running", lambda path: next(observed))
     monkeypatch.setattr(watchdog, "start_runner", lambda path: True)
     monkeypatch.setattr(watchdog, "runtime_root", lambda: tmp_path / "runtime")
     monkeypatch.setattr(watchdog, "atomic_json", lambda path, payload: None)
@@ -201,6 +225,8 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "persist-credentials: false" in workflow
     assert 'PORTABLE_PYTHON_VERSION: "3.12.10"' in workflow
     assert "PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in workflow
+    assert "[Security.Cryptography.SHA256]::Create()" in workflow
+    assert "Get-FileHash -LiteralPath $zip -Algorithm SHA256" not in workflow
     assert '"REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV' in workflow
     assert "& $env:REQSYS_PYTHON scripts/noteri_control_plane_probe.py" in workflow
     assert '& $env:REQSYS_PYTHON "$env:GITHUB_WORKSPACE\\noteri-runtime-source\\scripts\\noteri_runtime_isolated_e2e.py"' in workflow

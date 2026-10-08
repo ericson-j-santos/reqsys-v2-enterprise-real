@@ -16,6 +16,14 @@ on:
     - cron: "0 12 * * 1"
   workflow_dispatch:
     inputs:
+      operation:
+        description: Operação manual governada
+        required: true
+        default: notify
+        type: choice
+        options:
+          - notify
+          - reconcile-flow-bot
       message:
         description: Mensagem opcional para validar o canal do Teams
         required: false
@@ -26,8 +34,81 @@ permissions:
   contents: read
 
 jobs:
+  reconcile-flow-bot:
+    name: Reconciliar owner e comprovar entrega Flow Bot
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-flow-bot'
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 8
+    env:
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      TEAMS_FLOW_BOT_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_FLOW_BOT_OWNER_EMAIL: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+      TEAMS_FLOW_BOT_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+      CORRELATION_ID: pc24x7-teams-flow-bot-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Configurar Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Configurar Node para locator assinado
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Validar contrato e secrets sem expor valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/reconcile_pc24x7_teams_flow_bot_owner.py
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          for name in COFRE_ADMIN_JWT TEAMS_FLOW_BOT_WEBHOOK_URL TEAMS_FLOW_BOT_OWNER_EMAIL TEAMS_FLOW_BOT_RECIPIENT; do
+            test -n "${!name:-}" || { echo "::error::$name ausente"; exit 2; }
+          done
+          echo "::add-mask::$COFRE_ADMIN_JWT"
+          echo "::add-mask::$TEAMS_FLOW_BOT_WEBHOOK_URL"
+          echo "::add-mask::$TEAMS_FLOW_BOT_OWNER_EMAIL"
+          echo "::add-mask::$TEAMS_FLOW_BOT_RECIPIENT"
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: reconcile-locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-teams-flow-bot-reconcile
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output artifacts/pc24x7-teams-flow-bot-reconcile/signed-locator.json
+
+      - name: Reconciliar owner e executar entrega real
+        shell: bash
+        env:
+          REQSYS_API_BASE_URL: ${{ steps.reconcile-locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          python scripts/reconcile_pc24x7_teams_flow_bot_owner.py \
+            --confirm RECONCILE-PC24X7-TEAMS-FLOW-BOT-DEV \
+            --evidence-file artifacts/pc24x7-teams-flow-bot-reconcile/evidence.json
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.4.3
+        with:
+          name: pc24x7-teams-flow-bot-reconcile-${{ github.run_id }}
+          path: |
+            artifacts/pc24x7-teams-flow-bot-reconcile/evidence.json
+            artifacts/pc24x7-teams-flow-bot-reconcile/signed-locator.json
+          if-no-files-found: error
+          retention-days: 30
+
   notify-teams:
     name: Enviar commit ao Teams
+    if: github.event_name != 'workflow_dispatch' || inputs.operation != 'reconcile-flow-bot'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
