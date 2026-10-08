@@ -44,3 +44,16 @@ O workflow deve usar o SHA canônico atual
 `562fc4274aff24f7058cb135f27a509aa69031c1` em todos os modos
 `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary`.
 Pin histórico de regras é bloqueio de execução física.
+
+## Correção de compatibilidade — 08/10/2026
+
+O runner Noteri reportou `Get-FileHash` indisponível antes do bootstrap da sessão (run ReqSys `37821885437`). Todos os seis modos físicos continuam obrigados a verificar o ZIP oficial de CPython 3.12.10 contra o SHA-256 fixado, antes de qualquer extração.
+
+A implementação deve calcular o hash com `[System.Security.Cryptography.SHA256]::Create()` e `ComputeHash` da biblioteca .NET já presente no PowerShell, normalizar em hexadecimal minúsculo, liberar o objeto criptográfico em `finally` e **falhar fechado** se o hash divergir. Não usar `Get-FileHash` como dependência do host, desabilitar verificação ou aceitar ZIP não verificado.
+
+### Critérios de aceite da correção
+
+- Os seis trechos PowerShell preservam sintaxe, indentação e hash obrigatório, sem a chamada ao cmdlet ausente.
+- Testes de regressão detectam ausência da verificação, divergência na implementação de algum modo e indentação inválida.
+- O Pre-PR Readiness Gate aprova o SHA atual da mudança, incluindo este manifesto SDD; teste físico subsequente comprova que o Noteri ultrapassa a etapa de preparação e que a recuperação segue o Gateway governado.
+- Nenhuma recuperação do Desktop, instalação, autenticação, reboot ou declaração de E2E é inferida de um CI de contrato verde.
