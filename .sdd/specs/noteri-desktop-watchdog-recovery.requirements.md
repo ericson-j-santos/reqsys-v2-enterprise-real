@@ -23,7 +23,7 @@ Quando o runner GitHub do DESKTOP-PDQK954 estiver disponível, usá-lo para cons
 15. O script executa exclusivamente por `command_gateway.py`, risco 2, dentro do `target_path` isolado e com `expected-head` igual ao SHA da execução.
 16. As regras operacionais usadas no E2E são fixadas por SHA imutável e o checkout não persiste credenciais.
 17. Antes do upload, a evidência deve comprovar origem/destino DESKTOP-PDQK954, modo local, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem acesso remoto, criação/alteração de tarefa, segredo, credencial ou produção.
-18. No Desktop, o clone governado `C:\dev\reqsys-v2-enterprise-real` é a fonte do Session Launcher; a execução é materializada sob `C:\dev\chatgpt-workers`. O checkout do runner em `%LOCALAPPDATA%` não pode ser `target_repo`.
+18. No Desktop, o clone dedicado limpo `C:\dev\chatgpt-workers\reqsys-watchdog-session-source` é a fonte do Session Launcher; ele é criado do checkout imutável, vinculado ao remoto canônico e validado contra `origin/main` no SHA exato antes da sessão. O checkout do runner em `%LOCALAPPDATA%` e o clone operacional divergente não podem ser `target_repo`.
 19. O script de recuperação é resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
 20. Cada modo físico prepara CPython 3.12.10 embeddable x64 oficial em `RUNNER_TEMP`, validado pelo SHA-256 `4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3`, sem instalador, registro, toolcache, UAC ou dependência do PATH. `actions/setup-python` permanece proibido.
 21. Os modos `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary` usam `session_launcher.py --require-runner-version-preflight` antes do Command Gateway.
@@ -33,7 +33,7 @@ Quando o runner GitHub do DESKTOP-PDQK954 estiver disponível, usá-lo para cons
 
 - Python 3.12.10 embeddable oficial validado por SHA-256, sem instalar runtime no host;
 - execução no Desktop após sessão válida, por Command Gateway risco 2;
-- clone canônico do Desktop usado somente como fonte do bootstrap, com execução no worktree governado;
+- clone dedicado limpo do Desktop usado somente como fonte do bootstrap, com execução no worktree governado;
 - consulta local encontra a tarefa exata e comprova AtStartup + S4U;
 - `/Run` local retorna sucesso sem tentar RPC remoto;
 - o job comprova pickup no runner Desktop exato.
