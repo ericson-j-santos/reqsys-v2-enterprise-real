@@ -115,6 +115,63 @@ def test_enviar_cartao_exige_conversation_reference():
             )
 
 
+def test_enviar_cartao_conserva_destinatario_resolvido_apos_erro_do_conector():
+    db = MagicMock()
+    conversa = _conversa(None)
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    referencia = SimpleNamespace(
+        service_url='https://connector.invalid/',
+        conversation_id='conversation-1',
+    )
+    provider = AsyncMock(side_effect=RuntimeError('falha simulada do transporte'))
+
+    with (
+        patch('app.services.ai_conversation_teams_bot.settings', settings),
+        patch(
+            'app.services.ai_conversation_teams_bot.resolver_destino_bot',
+            return_value='aad-unico',
+        ),
+        patch(
+            'app.services.ai_conversation_teams_bot.obter_conversa_referencia_bot',
+            return_value=referencia,
+        ),
+        patch('app.services.ai_conversation_teams_bot._enviar_atividade_bot_framework', provider),
+    ):
+        with pytest.raises(RuntimeError, match='falha simulada'):
+            asyncio.run(
+                enviar_cartao_conversa_bot(
+                    db, conversa=conversa, resposta='Resposta', correlation_id='corr-fallback'
+                )
+            )
+
+    assert conversa.teams_destino_id == 'aad-unico'
+    provider.assert_awaited_once()
+    db.commit.assert_not_called()
+
+
+def test_enviar_cartao_bloqueia_destinatario_ambiguo_antes_do_conector():
+    db = MagicMock()
+    conversa = _conversa(None)
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    provider = AsyncMock()
+
+    with (
+        patch('app.services.ai_conversation_teams_bot.settings', settings),
+        patch('app.services.ai_conversation_teams_bot.resolver_destino_bot', return_value=None),
+        patch('app.services.ai_conversation_teams_bot._enviar_atividade_bot_framework', provider),
+    ):
+        with pytest.raises(AITeamsBotDeliveryError, match='inequívoca'):
+            asyncio.run(
+                enviar_cartao_conversa_bot(
+                    db, conversa=conversa, resposta='Resposta', correlation_id='corr-ambiguo'
+                )
+            )
+
+    assert conversa.teams_destino_id is None
+    provider.assert_not_awaited()
+    db.commit.assert_not_called()
+
+
 def test_enviar_cartao_bot_entrega_adaptive_card_e_vincula_conversa():
     db = MagicMock()
     conversa = _conversa()

@@ -205,6 +205,49 @@ def test_entrega_teams_faz_fallback_para_fila(monkeypatch, direct_error):
     }
 
 
+def test_fallback_da_api_preserva_destino_unico_antes_da_fila(monkeypatch):
+    from app.services import ai_conversation_teams_bot as bot_service
+
+    db = MagicMock()
+    conversa = _conversation(teams_destino_id=None)
+    item = SimpleNamespace(id=91)
+    settings = SimpleNamespace(teams_bot_configurado=True, teams_bot_app_id='bot-id')
+    referencia = SimpleNamespace(
+        service_url='https://connector.invalid/',
+        conversation_id='conversation-1',
+    )
+    enviados = []
+
+    def enqueue(_db, *, conversa, **_kwargs):
+        enviados.append(conversa.teams_destino_id)
+        return item
+
+    monkeypatch.setattr(bot_service, 'settings', settings)
+    monkeypatch.setattr(bot_service, 'resolver_destino_bot', lambda *_: 'aad-unico')
+    monkeypatch.setattr(
+        bot_service, 'obter_conversa_referencia_bot', lambda *_: referencia
+    )
+    monkeypatch.setattr(
+        bot_service,
+        '_enviar_atividade_bot_framework',
+        AsyncMock(side_effect=RuntimeError('falha de transporte simulada')),
+    )
+    monkeypatch.setattr(api, '_enfileirar_teams', enqueue)
+    monkeypatch.setattr(api, 'executar_item_fila', AsyncMock(return_value=item))
+    monkeypatch.setattr(api, 'serializar_item', lambda value: {'id': value.id})
+
+    result = asyncio.run(
+        api._entregar_resposta_teams(
+            db, conversa=conversa, resposta='Resposta', correlation_id='corr-integration',
+            habilitado=True,
+        )
+    )
+
+    assert result['modo'] == 'fila_gateway'
+    assert enviados == ['aad-unico']
+    assert conversa.teams_destino_id == 'aad-unico'
+
+
 def test_status_expoe_contrato_sem_segredos(api_overrides, monkeypatch):
     monkeypatch.setattr(
         api,
