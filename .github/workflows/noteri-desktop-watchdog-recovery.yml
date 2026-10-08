@@ -10,6 +10,7 @@ on:
         default: watchdog
         options:
           - watchdog
+          - watchdog-uac
           - runner-recover
           - runner-bootstrap
           - runner-canary
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
   recover:
-    if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}
+    if: ${{ inputs.mode == 'watchdog' || inputs.mode == 'watchdog-uac' || inputs.mode == '' }}
     name: Run existing watchdog locally on governed Desktop runner
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 8
@@ -185,6 +186,20 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $recoveryScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_watchdog_rpc_recovery.py"
+          $gatewayTimeout = "90"
+          $recoveryArgs = @(
+            $recoveryScript,
+            "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
+            "--source-sha", $env:ANCHOR_SHA,
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          if ("${{ inputs.mode }}" -eq "watchdog-uac") {
+            $gatewayTimeout = "180"
+            $recoveryArgs += @(
+              "--allow-uac",
+              "--uac-confirm", "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC"
+            )
+          }
           $gatewayArgs = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
@@ -192,14 +207,10 @@ jobs:
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
             "--risk", "2",
-            "--timeout", "90",
+            "--timeout", $gatewayTimeout,
             "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "python", $recoveryScript,
-            "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
-            "--source-sha", $env:ANCHOR_SHA,
-            "--evidence-file", $env:EVIDENCE_REL
-          )
+            "--", "python"
+          ) + $recoveryArgs
           & "$env:REQSYS_PYTHON" $gateway @gatewayArgs
           exit $LASTEXITCODE
 

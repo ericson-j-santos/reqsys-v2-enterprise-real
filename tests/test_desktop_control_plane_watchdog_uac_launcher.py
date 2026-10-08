@@ -39,14 +39,18 @@ def test_launcher_preconditions_are_fail_closed() -> None:
 
 def test_task_headless_ready_requires_boot_and_s4u() -> None:
     assert m.task_headless_ready(
-        {"exists": True, "trigger_at_startup": True, "logon_type": "S4U"}
+        {"exists": True, "enabled": True, "trigger_at_startup": True, "logon_type": "S4U"}
     )
     assert not m.task_headless_ready(
-        {"exists": True, "trigger_at_startup": False, "logon_type": "S4U"}
+        {"exists": True, "enabled": True, "trigger_at_startup": False, "logon_type": "S4U"}
+    )
+    assert not m.task_headless_ready(
+        {"exists": True, "enabled": False, "trigger_at_startup": True, "logon_type": "S4U"}
     )
     assert not m.task_headless_ready(
         {
             "exists": True,
+            "enabled": True,
             "trigger_at_startup": True,
             "logon_type": "InteractiveToken",
         }
@@ -94,6 +98,7 @@ def test_finalize_requires_verified_task_before_start(
         "task_status",
         lambda: {
             "exists": True,
+            "enabled": True,
             "trigger_at_startup": True,
             "logon_type": "S4U",
         },
@@ -129,6 +134,7 @@ def test_finalize_fails_closed_without_s4u(
         "task_status",
         lambda: {
             "exists": True,
+            "enabled": True,
             "trigger_at_startup": True,
             "logon_type": "InteractiveToken",
         },

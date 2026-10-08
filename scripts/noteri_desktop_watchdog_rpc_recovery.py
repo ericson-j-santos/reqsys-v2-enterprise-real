@@ -121,7 +121,7 @@ def write_evidence(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def repair_watchdog_task(source_sha: str) -> dict[str, Any]:
+def repair_watchdog_task(source_sha: str, *, allow_uac: bool = False, uac_confirm: str = "") -> dict[str, Any]:
     if len(source_sha) != 40 or any(ch not in "0123456789abcdefABCDEF" for ch in source_sha):
         raise RecoveryError("source_sha_invalid")
     source_root = Path(__file__).resolve().parents[1]
@@ -163,12 +163,39 @@ def repair_watchdog_task(source_sha: str) -> dict[str, Any]:
         watch_interval_seconds=30,
         confirm=watchdog.CONFIRM,
     )
+    activation_mode = ""
+    if installed.get("headless_boot_ready") is not True and installed.get(
+        "requires_uac_activation"
+    ):
+        if not allow_uac:
+            raise RecoveryError("watchdog_task_repair_requires_uac")
+        launcher_path = source_root / "scripts" / "desktop_control_plane_watchdog_uac_launcher.py"
+        launcher_spec = importlib.util.spec_from_file_location(
+            "reqsys_desktop_watchdog_uac_activation",
+            launcher_path,
+        )
+        if launcher_spec is None or launcher_spec.loader is None:
+            raise RecoveryError("watchdog_uac_launcher_unavailable")
+        launcher = importlib.util.module_from_spec(launcher_spec)
+        launcher_spec.loader.exec_module(launcher)
+        activated = launcher.launch(
+            runtime_root / "metadata.json",
+            confirm=uac_confirm,
+            timeout_seconds=120,
+        )
+        if activated.get("ok") is not True:
+            raise RecoveryError("watchdog_uac_approval_or_provisioning_pending")
+        installed["headless_boot_ready"] = True
+        installed["activation_pending"] = False
+        activation_mode = str(activated.get("mode") or "uac")
     if installed.get("headless_boot_ready") is not True:
         raise RecoveryError("watchdog_task_repair_not_ready")
     return {
         "headless_boot_ready": True,
-        "registration_method": str((installed.get("task") or {}).get("registration_method") or ""),
+        "registration_method": activation_mode
+        or str((installed.get("task") or {}).get("registration_method") or ""),
         "activation_pending": bool(installed.get("activation_pending")),
+        "uac_activation_mode": activation_mode,
     }
 
 
@@ -301,6 +328,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--allow-uac", action="store_true")
+    parser.add_argument("--uac-confirm", default="")
     parser.add_argument(
         "--evidence-file",
         type=Path,
@@ -311,7 +340,11 @@ def main() -> int:
         result = recover(
             confirm=args.confirm,
             evidence_file=args.evidence_file.resolve(),
-            repair=lambda: repair_watchdog_task(args.source_sha),
+            repair=lambda: repair_watchdog_task(
+                args.source_sha,
+                allow_uac=args.allow_uac,
+                uac_confirm=args.uac_confirm,
+            ),
         )
     except (RecoveryError, OSError, subprocess.SubprocessError) as exc:
         blocked = {
