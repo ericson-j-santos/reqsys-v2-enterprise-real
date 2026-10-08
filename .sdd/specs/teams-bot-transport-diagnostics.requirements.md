@@ -14,6 +14,7 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 6. O workflow pode diagnosticar a `main` a partir de uma ref de correção somente quando solicitado explicitamente e após resolver e validar o SHA remoto vigente de `main`.
 7. O runtime DEV observado deve reportar exatamente esse SHA antes de qualquer mutação E2E.
 8. Nenhum segredo, endpoint privado ou corpo de resposta pode aparecer na evidência publicada.
+9. Para o Azure Bot `SingleTenant`, o token do Connector deve ser solicitado no tenant configurado em `TEAMS_BOT_APP_TENANT_ID`; o tenant legado `botframework.com` não pode ser usado como autoridade OAuth.
 
 ## Critérios de aceite
 
@@ -22,3 +23,4 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 - diagnóstico físico identifica uma categoria estruturada após integração e reconciliação;
 - entrega real ao Teams é a única condição que aprova o E2E final;
 - nenhum valor sensível aparece em logs ou artifacts.
+- teste regressivo confirma autoridade OAuth tenant-specific e preserva o scope `https://api.botframework.com/.default`.
