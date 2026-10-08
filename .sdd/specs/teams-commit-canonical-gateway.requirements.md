@@ -17,6 +17,7 @@ Manter o Teams Messaging Gateway PC24x7 como rota primária da notificação aut
 9. Se gateway e webhook não estiverem configurados ou não confirmarem entrega, o workflow deve permanecer vermelho, sem `continue-on-error`.
 10. A evidência do run deve registrar a rota selecionada e sinalizar quando a contingência estiver ativa.
 11. Actions externas alteradas neste incremento devem usar SHA imutável.
+12. Ao baixar evidência de um workflow de origem, o cliente deve manter a autenticação somente no host da API GitHub e removê-la de redirecionamentos para outro host com URL assinada, evitando falha 401 e vazamento de credencial.
 
 ## Critérios de aceite
 
@@ -26,6 +27,7 @@ Manter o Teams Messaging Gateway PC24x7 como rota primária da notificação aut
 - O workflow contém fallback explícito com `TEAMS_WEBHOOK_URL`, `TEAMS_WEBHOOK_RECIPIENT`, `send-webhook`, Adaptive Card e `commit-notification-fallback`.
 - O workflow não contém `vars.TEAMS_GATEWAY_BASE_URL`, `fly.io` nem `fly.dev`.
 - O workflow não contém `continue-on-error`, falha quando as duas rotas estão indisponíveis e registra `delivery_route`.
+- O download de artefatos de `workflow_run` remove `Authorization` em redirecionamentos entre hosts e preserva o token apenas para a API GitHub.
 - Após o merge, uma execução real de `Teams Commit Notification` com locator indisponível confirma a entrega pelo webhook governado e identifica a contingência no summary.
 
 ## Rollback

@@ -44,6 +44,13 @@ class TeamsCommitNotificationFallbackContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error:", self.text)
         self.assertNotIn("concurrency:", self.text)
 
+    def test_download_de_artefato_remove_auth_em_redirect_externo(self) -> None:
+        self.assertIn("class StripAuthorizationOnCrossHostRedirect", self.text)
+        self.assertIn("urlsplit(req.full_url).netloc.casefold()", self.text)
+        self.assertIn('redirected.remove_header("Authorization")', self.text)
+        self.assertIn("artifact_opener = build_opener", self.text)
+        self.assertIn("artifact_opener.open(request, timeout=30)", self.text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

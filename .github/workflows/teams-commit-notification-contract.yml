@@ -49,6 +49,9 @@ jobs:
           grep -Fq 'commit-notification-fallback' .github/workflows/teams-commit-notification.yml
           grep -Fq 'webhook governado de contingência' .github/workflows/teams-commit-notification.yml
           grep -Fq "Action.OpenUrl" .github/workflows/teams-commit-notification.yml
+          grep -Fq "StripAuthorizationOnCrossHostRedirect" .github/workflows/teams-commit-notification.yml
+          grep -Fq 'redirected.remove_header("Authorization")' .github/workflows/teams-commit-notification.yml
+          grep -Fq "artifact_opener.open" .github/workflows/teams-commit-notification.yml
           ! grep -Fq "concurrency:" .github/workflows/teams-commit-notification.yml
           ! grep -Fq "continue-on-error:" .github/workflows/teams-commit-notification.yml
           grep -Fq "renderMode" tools/geradores/teams_graph_gateway_autocontido.py
