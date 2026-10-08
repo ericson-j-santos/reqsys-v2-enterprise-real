@@ -1,5 +1,7 @@
 import importlib.util
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,6 +64,29 @@ def test_installer_wrapper_uses_dedicated_runtime_python(monkeypatch, tmp_path):
     assert str(runtime_python) in wrapper
     assert str(installer.PERSISTENT_SUPERVISOR) in wrapper
     assert str(Path(installer.sys.executable)) not in wrapper
+
+
+def test_task_hardening_uses_dedicated_runtime_python(monkeypatch, tmp_path):
+    calls = []
+    expected = {
+        "DisallowStartIfOnBatteries": False,
+        "StopIfGoingOnBatteries": False,
+        "StartWhenAvailable": True,
+        "ExecutionTimeLimit": "PT10M",
+    }
+
+    def fake_run(args):
+        calls.append(args)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(expected), stderr="")
+
+    monkeypatch.setattr(installer.os, "name", "nt")
+    monkeypatch.setattr(installer, "run", fake_run)
+    runtime_python = tmp_path / "runtime-python" / "python.exe"
+
+    assert installer.harden_task_settings(runtime_python) == expected
+    assert calls[0][0] == str(runtime_python)
+    assert "import win32com.client" in calls[0][2]
+    assert calls[0][-1] == installer.TASK_NAME
 
 
 def test_installer_keeps_scheduled_publication_under_ntfy_anonymous_daily_budget():
