@@ -61,10 +61,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") {
             throw "WATCHDOG_PYTHON_VERSION_MISMATCH:$version"
           }
-          $desktop = [Environment]::GetFolderPath("Desktop")
-          if ([string]::IsNullOrWhiteSpace($desktop)) { throw "DESKTOP_PATH_UNAVAILABLE" }
-          $cmd = Join-Path $desktop "Ativar-ReqSys-Watchdog.cmd"
-          @"
+          $cmdContent = @"
           @echo off
           title Ativar ReqSys Desktop Watchdog
           "$python" "$launcher" --metadata "$metadataPath" --confirm LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 120
@@ -74,13 +71,30 @@ jobs:
           echo Pressione qualquer tecla para fechar.
           pause ^>nul
           exit /b %REQSYS_EXIT%
-          "@ | Set-Content -LiteralPath $cmd -Encoding ASCII
+          "@
+          $desktopTargets = @(
+            @{ kind = "runner_profile"; directory = [Environment]::GetFolderPath("Desktop") },
+            @{ kind = "public"; directory = [Environment]::GetFolderPath("CommonDesktopDirectory") }
+          )
+          $staged = @()
+          foreach ($target in $desktopTargets) {
+            $directory = [string]$target.directory
+            if ([string]::IsNullOrWhiteSpace($directory) -or -not (Test-Path -LiteralPath $directory)) {
+              throw "DESKTOP_TARGET_UNAVAILABLE:$($target.kind)"
+            }
+            $cmd = Join-Path $directory "Ativar-ReqSys-Watchdog.cmd"
+            $cmdContent | Set-Content -LiteralPath $cmd -Encoding ASCII
+            if (-not (Test-Path -LiteralPath $cmd)) { throw "DESKTOP_LAUNCHER_NOT_STAGED:$($target.kind)" }
+            $staged += @{ kind = $target.kind; path = [IO.Path]::GetFullPath($cmd) }
+          }
           New-Item -ItemType Directory -Force (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
           @{
             ok = $true
             result = "DESKTOP_WATCHDOG_UAC_LAUNCHER_STAGED"
             source_sha = $sourceSha.ToLowerInvariant()
             launcher_name = "Ativar-ReqSys-Watchdog.cmd"
+            desktop_paths = @($staged | ForEach-Object { $_.path })
+            public_desktop_staged = [bool](@($staged | Where-Object { $_.kind -eq "public" }).Count)
             activation_pending = $true
             requires_local_uac_approval = $true
             remote_uac_attempted = $false
