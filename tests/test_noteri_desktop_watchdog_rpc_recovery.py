@@ -137,7 +137,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert '"--expected-head", $env:ANCHOR_SHA' in raw
     assert "TARGET_REPO: ${{ github.workspace }}" in raw
     assert "path: _target" not in raw
-    assert raw.count("C:\\dev\\reqsys-v2-enterprise-real") == 1
+    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
@@ -164,7 +164,10 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
     recover = raw.split("  recover:", 1)[1].split("  reboot-once:", 1)[0]
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in recover
-    assert "TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real" in recover
+    assert "TARGET_REPO: C:\\dev\\chatgpt-workers\\reqsys-watchdog-session-source" in recover
+    assert "Prepare dedicated clean session source" in recover
+    assert "SESSION_SOURCE_REMOTE_HEAD_MISMATCH" in recover
+    assert "git clone --no-checkout --local $env:GITHUB_WORKSPACE $source" in recover
     assert 'if ($e.source_host -ne "DESKTOP-PDQK954")' in recover
     assert 'if ($e.execution_mode -ne "local_pc24x7_runner")' in recover
     assert 'if ($e.remote_access_attempted)' in recover

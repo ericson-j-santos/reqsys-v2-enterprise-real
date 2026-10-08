@@ -30,7 +30,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 8
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: C:\dev\chatgpt-workers\reqsys-watchdog-session-source
       RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
@@ -78,6 +78,41 @@ jobs:
           path: _rules
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Prepare dedicated clean session source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $source = [IO.Path]::GetFullPath($env:TARGET_REPO)
+          $allowedRoot = [IO.Path]::GetFullPath("C:\dev\chatgpt-workers")
+          if (-not $source.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "SESSION_SOURCE_OUTSIDE_GOVERNED_ROOT"
+          }
+          if (Test-Path -LiteralPath $source) {
+            if (-not (Test-Path -LiteralPath (Join-Path $source ".git"))) {
+              throw "SESSION_SOURCE_NOT_GIT_REPOSITORY"
+            }
+            $dirty = & git -C $source status --porcelain=v1
+            if ($LASTEXITCODE -ne 0 -or $dirty) { throw "SESSION_SOURCE_NOT_CLEAN" }
+          } else {
+            New-Item -ItemType Directory -Force (Split-Path -Parent $source) | Out-Null
+            & git clone --no-checkout --local $env:GITHUB_WORKSPACE $source
+            if ($LASTEXITCODE -ne 0) { throw "SESSION_SOURCE_CLONE_FAILED" }
+          }
+          & git -C $source remote set-url origin https://github.com/ericson-j-santos/reqsys-v2-enterprise-real.git
+          if ($LASTEXITCODE -ne 0) { throw "SESSION_SOURCE_REMOTE_FAILED" }
+          & git -C $source fetch --prune --no-tags origin main
+          if ($LASTEXITCODE -ne 0) { throw "SESSION_SOURCE_FETCH_FAILED" }
+          $remoteHead = (& git -C $source rev-parse --verify refs/remotes/origin/main).Trim().ToLowerInvariant()
+          $anchorSha = "${{ github.sha }}".ToLowerInvariant()
+          if ($remoteHead -ne $anchorSha) { throw "SESSION_SOURCE_REMOTE_HEAD_MISMATCH" }
+          & git -C $source checkout --detach $anchorSha
+          if ($LASTEXITCODE -ne 0) { throw "SESSION_SOURCE_CHECKOUT_FAILED" }
+          $finalHead = (& git -C $source rev-parse HEAD).Trim().ToLowerInvariant()
+          $finalDirty = & git -C $source status --porcelain=v1
+          if ($LASTEXITCODE -ne 0 -or $finalHead -ne $anchorSha -or $finalDirty) {
+            throw "SESSION_SOURCE_FINAL_STATE_INVALID"
+          }
 
       - name: Bootstrap mandatory governed session
         id: session
