@@ -11,6 +11,7 @@ on:
         options:
           - watchdog
           - watchdog-uac
+          - watchdog-uac-stage
           - runner-recover
           - runner-bootstrap
           - runner-canary
@@ -25,6 +26,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  stage-watchdog-uac:
+    if: ${{ inputs.mode == 'watchdog-uac-stage' }}
+    name: Stage immutable one-click watchdog UAC activation
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 3
+    env:
+      EVIDENCE_FILE: artifacts\noteri-desktop-watchdog-recovery\uac-stage.json
+    steps:
+      - name: Validate installed release and stage exact Desktop launcher
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ine "DESKTOP-PDQK954") { throw "DESKTOP_HOST_REQUIRED" }
+          $runtimeRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "ReqSys\DesktopControlPlaneWatchdog"))
+          $metadataPath = Join-Path $runtimeRoot "metadata.json"
+          if (-not (Test-Path -LiteralPath $metadataPath)) { throw "WATCHDOG_METADATA_MISSING" }
+          $metadata = Get-Content -Raw -Encoding UTF8 $metadataPath | ConvertFrom-Json
+          $sourceSha = [string]$metadata.source_sha
+          if ($sourceSha -notmatch '^[0-9a-fA-F]{40}$') { throw "WATCHDOG_SOURCE_SHA_INVALID" }
+          $expectedRelease = [IO.Path]::GetFullPath((Join-Path $runtimeRoot ("releases\" + $sourceSha.ToLowerInvariant())))
+          $actualRelease = [IO.Path]::GetFullPath([string]$metadata.release_root)
+          if ($actualRelease -ine $expectedRelease) { throw "WATCHDOG_RELEASE_ROOT_MISMATCH" }
+          $python = [IO.Path]::GetFullPath((Join-Path $runtimeRoot "python\3.12.10\python.exe"))
+          if ([IO.Path]::GetFullPath([string]$metadata.python_executable) -ine $python) {
+            throw "WATCHDOG_PYTHON_PATH_MISMATCH"
+          }
+          $launcher = Join-Path $expectedRelease "scripts\desktop_control_plane_watchdog_uac_launcher.py"
+          $watchdog = Join-Path $expectedRelease "scripts\desktop_control_plane_watchdog.py"
+          foreach ($required in @($python, $launcher, $watchdog)) {
+            if (-not (Test-Path -LiteralPath $required)) { throw "WATCHDOG_ACTIVATION_FILE_MISSING" }
+          }
+          $version = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") {
+            throw "WATCHDOG_PYTHON_VERSION_MISMATCH:$version"
+          }
+          $desktop = [Environment]::GetFolderPath("Desktop")
+          if ([string]::IsNullOrWhiteSpace($desktop)) { throw "DESKTOP_PATH_UNAVAILABLE" }
+          $cmd = Join-Path $desktop "Ativar-ReqSys-Watchdog.cmd"
+          @"
+          @echo off
+          title Ativar ReqSys Desktop Watchdog
+          "$python" "$launcher" --metadata "$metadataPath" --confirm LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 120
+          set "REQSYS_EXIT=%ERRORLEVEL%"
+          echo.
+          if "%REQSYS_EXIT%"=="0" (echo Watchdog ativado com sucesso.) else (echo Ativacao pendente ou bloqueada. Codigo: %REQSYS_EXIT%)
+          echo Pressione qualquer tecla para fechar.
+          pause ^>nul
+          exit /b %REQSYS_EXIT%
+          "@ | Set-Content -LiteralPath $cmd -Encoding ASCII
+          New-Item -ItemType Directory -Force (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
+          @{
+            ok = $true
+            result = "DESKTOP_WATCHDOG_UAC_LAUNCHER_STAGED"
+            source_sha = $sourceSha.ToLowerInvariant()
+            launcher_name = "Ativar-ReqSys-Watchdog.cmd"
+            activation_pending = $true
+            requires_local_uac_approval = $true
+            remote_uac_attempted = $false
+            production_touched = $false
+            secrets_read = $false
+            reboot_performed = $false
+          } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+
+      - name: Upload sanitized UAC staging evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-watchdog-uac-stage-${{ github.run_id }}
+          path: artifacts\noteri-desktop-watchdog-recovery\uac-stage.json
+          if-no-files-found: error
+          retention-days: 30
+
   recover:
     if: ${{ inputs.mode == 'watchdog' || inputs.mode == 'watchdog-uac' || inputs.mode == '' }}
     name: Run existing watchdog locally on governed Desktop runner

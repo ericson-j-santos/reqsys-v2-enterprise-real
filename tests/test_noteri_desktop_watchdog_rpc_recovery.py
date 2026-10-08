@@ -215,7 +215,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "watchdog-uac", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
+    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -251,7 +251,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
     assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 6
     assert raw.count("--require-runner-version-preflight") == 5
-    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 6
+    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 7
 
     # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
     assert "inputs.mode == 'watchdog-uac'" in raw
@@ -273,6 +273,13 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert '"--allow-uac"' in recover
     assert '"--uac-confirm", "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC"' in recover
     assert "UNVERIFIED_TASK_MUTATION_REPORTED" in recover
+    stage = raw.split("  stage-watchdog-uac:", 1)[1].split("  recover:", 1)[0]
+    assert "DESKTOP_WATCHDOG_UAC_LAUNCHER_STAGED" in stage
+    assert "Ativar-ReqSys-Watchdog.cmd" in stage
+    assert "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC" in stage
+    assert "requires_local_uac_approval = $true" in stage
+    assert "remote_uac_attempted = $false" in stage
+    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in stage
 
     # Reboot one-shot usa a exceção canônica separada e consumível, somente no Noteri.
     assert "reboot-once:" in raw

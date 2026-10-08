@@ -42,7 +42,8 @@
     "command_gateway_risk": 2,
     "rules_sha": "562fc4274aff24f7058cb135f27a509aa69031c1",
     "runner_version_preflight_required": true,
-    "explicit_uac_mode": "watchdog-uac"
+    "explicit_uac_mode": "watchdog-uac",
+    "local_uac_staging_mode": "watchdog-uac-stage"
   },
   "acceptance_criteria": [
     "O modo watchdog executa somente no runner Desktop allowlisted e host DESKTOP-PDQK954.",
@@ -54,6 +55,7 @@
     "O único destino de execução técnica é o worktree governado criado a partir do clone dedicado limpo do Desktop.",
     "A operação local permanece limitada a Query+Run da tarefa watchdog; somente após resultado inequívoco de ausência, Create local sem senha é permitido para reparar o nome exato e deve ser validado por XML independente; /S, alteração arbitrária, segredo, credencial e produção são proibidos.",
     "O modo watchdog-uac reutiliza a mesma sessão e o mesmo Command Gateway e pode chamar somente o launcher UAC governado com confirmação fixa; a aprovação visual do Windows não pode ser contornada.",
+    "Se a sessão do runner não puder apresentar elevação, watchdog-uac-stage deixa um único launcher imutável de um clique no Desktop; execução e aprovação UAC permanecem locais e humanas.",
     "Pickup real no runner Desktop é pré-condição e prova do host executor.",
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
