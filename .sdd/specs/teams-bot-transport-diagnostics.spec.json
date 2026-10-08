@@ -17,7 +17,8 @@
       "tests/test_pc24x7_teams_ephemeral_e2e.py",
       "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py",
       "backend/tests/test_ai_conversation_teams_bot.py",
-      "backend/tests/test_ai_conversation_api.py"
+      "backend/tests/test_ai_conversation_api.py",
+      "backend/tests/test_teams_notifications.py"
     ]
   },
   "traceability": {

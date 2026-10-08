@@ -20,6 +20,7 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 11. Com referência ambígua ou ausente, não inventar destinatário, não efetuar envio e manter o fluxo fail-closed.
 12. Antes do transporte, a `conversationReference` deve estar vinculada ao Bot App ID e tenant atualmente configurados; campos ausentes ou divergentes bloqueiam o envio com código sanitizado.
 13. A evidência E2E pode propagar códigos `conversation_reference_*`, mas nunca os identificadores observados ou esperados.
+14. Exceções inesperadas entre fila e gateway devem persistir somente `provider_exception_<classe>`, sem `str(exc)`.
 
 ## Critérios de aceite
 
