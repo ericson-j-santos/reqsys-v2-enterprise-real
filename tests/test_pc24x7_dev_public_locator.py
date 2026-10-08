@@ -46,6 +46,13 @@ def test_locator_requires_valid_signed_fresh_cloudflare_state():
     assert "PRIVATE" not in raw.upper()
 
 
+def test_ci_resolver_exports_locator_freshness_metadata():
+    raw = RESOLVER.read_text(encoding="utf-8")
+    assert "issued_at=${result.issued_at}" in raw
+    assert "expires_at=${result.expires_at}" in raw
+    assert "remaining_ttl_seconds=" in raw
+
+
 def test_locator_preserves_only_relative_target_route():
     raw = HTML.read_text(encoding="utf-8")
     assert 'requestedTarget=params.get("target")||"/task-console"' in raw
