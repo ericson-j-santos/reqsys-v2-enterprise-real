@@ -46,7 +46,6 @@ _WEBHOOK_BACKOFF_SECONDS = 0.5
 _bot_circuit = CircuitBreaker(name='teams_gateway_bot', failure_threshold=3, cooldown_seconds=60)
 _BOT_MAX_RETRIES = 3
 _BOT_BACKOFF_SECONDS = 0.5
-_BOT_FRAMEWORK_TOKEN_URL = 'https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token'
 _BOT_FRAMEWORK_JWKS_URL = 'https://login.botframework.com/v1/.well-known/keys'
 _BOT_FRAMEWORK_ISSUER = 'https://api.botframework.com'
 
@@ -819,9 +818,11 @@ def validar_jwt_bot_framework(token: str) -> dict[str, Any]:
 
 
 async def _token_bot_framework() -> str:
+    tenant_id = settings.teams_bot_app_tenant_id.strip()
+    token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
-            _BOT_FRAMEWORK_TOKEN_URL,
+            token_url,
             data={
                 'grant_type': 'client_credentials',
                 'client_id': settings.teams_bot_app_id,

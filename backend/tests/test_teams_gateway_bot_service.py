@@ -49,6 +49,27 @@ def test_deve_usar_bot_auto_sem_token_e_com_bot_configurado(monkeypatch):
     assert svc._deve_usar_bot(payload) is True
 
 
+def test_token_bot_framework_usa_tenant_da_identidade_single_tenant(monkeypatch):
+    _configurar_bot(monkeypatch, configurado=True)
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {'access_token': 'token-nao-exposto'}
+    client = AsyncMock()
+    client.post.return_value = response
+    context = AsyncMock()
+    context.__aenter__.return_value = client
+
+    with patch('app.services.teams_gateway.httpx.AsyncClient', return_value=context):
+        token = _run(svc._token_bot_framework())
+
+    assert token == 'token-nao-exposto'
+    client.post.assert_awaited_once()
+    url = client.post.await_args.args[0]
+    assert url == 'https://login.microsoftonline.com/bot-tenant-id/oauth2/v2.0/token'
+    assert 'botframework.com/oauth2' not in url
+    assert client.post.await_args.kwargs['data']['scope'] == 'https://api.botframework.com/.default'
+
+
 def test_selecionar_rota_prefere_bot_quando_configurado_e_sem_token(monkeypatch):
     _configurar_bot(monkeypatch, configurado=True)
     payload = TeamsGatewayMessageRequest(destino_tipo='chat', destino_id='aad-1', texto='Ola')
