@@ -139,7 +139,7 @@ def test_enviar_cartao_conserva_destinatario_resolvido_apos_erro_do_conector():
         ),
         patch('app.services.ai_conversation_teams_bot._enviar_atividade_bot_framework', provider),
     ):
-        with pytest.raises(RuntimeError, match='falha simulada'):
+        with pytest.raises(AITeamsBotDeliveryError, match='provider_exception_runtimeerror'):
             asyncio.run(
                 enviar_cartao_conversa_bot(
                     db, conversa=conversa, resposta='Resposta', correlation_id='corr-fallback'

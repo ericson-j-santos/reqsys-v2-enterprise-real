@@ -301,6 +301,24 @@ def test_delivery_summary_prefers_sanitized_provider_http_status():
     assert 'provider rejected request' not in str(summary)
 
 
+def test_delivery_summary_prefers_sanitized_direct_bot_failure():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'teams': {
+                'modo': 'fila_gateway',
+                'direct_failure_category': 'provider_http_401',
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'motivo_falha': 'Entrega nao confirmada.',
+                },
+            },
+        },
+    })
+
+    assert summary['delivery_failure_category'] == 'provider_http_401'
+
+
 @pytest.mark.parametrize(
     ('failure_text', 'expected_category'),
     [

@@ -276,11 +276,17 @@ def _delivery_summary(status: int, payload: dict) -> dict:
     queue = teams.get('fila') if isinstance(teams.get('fila'), dict) else {}
     queue_delivered = queue.get('status_evento') == 'ENVIADO'
     failure_text = str(queue.get('motivo_falha') or delivery.get('erro') or '')
+    direct_failure_category = teams.get('direct_failure_category')
     provider_http_status = queue.get('status_http') or delivery.get('status_code')
     if not isinstance(provider_http_status, int) or not 100 <= provider_http_status <= 599:
         provider_http_status = None
     failure_category = None
-    if provider_http_status is not None and provider_http_status >= 400:
+    if isinstance(direct_failure_category, str) and re.fullmatch(
+        r'(?:provider_|conversation_reference_|bot_direct_)[a-z0-9_]+',
+        direct_failure_category.lower(),
+    ):
+        failure_category = direct_failure_category.lower()
+    elif provider_http_status is not None and provider_http_status >= 400:
         failure_category = f'provider_http_{provider_http_status}'
     elif failure_text:
         http_match = re.search(r'HTTP\s+(\d{3})', failure_text, flags=re.IGNORECASE)
