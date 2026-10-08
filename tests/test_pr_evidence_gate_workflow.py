@@ -123,7 +123,8 @@ def test_pr_evidence_gate_requires_language_only_for_relevant_frontend_paths():
     text = read_workflow()
 
     assert 'CONDITIONAL_LANGUAGE_WORKFLOW_NAME: Linguagem simples PT-BR' in text
-    assert 'github.rest.pulls.listFiles' in text
+    assert 'github.rest.repos.compareCommitsWithBasehead' in text
+    assert 'basehead: `${pr.base.ref}...${pr.head.sha}`' in text
     assert "path.startsWith('frontend/src/')" in text
     assert "'frontend/scripts/validate-user-facing-language.mjs'" in text
     assert "'frontend/scripts/fix-user-facing-language.mjs'" in text

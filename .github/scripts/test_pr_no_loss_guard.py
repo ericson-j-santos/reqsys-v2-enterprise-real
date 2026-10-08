@@ -45,6 +45,42 @@ class EvaluateTests(unittest.TestCase):
         self.assertTrue(allowed)
         self.assertIn(EXEMPT_LABEL, reason)
 
+    def test_substituta_aberta_nao_autoriza_fechamento(self):
+        from unittest.mock import patch
+
+        payload = {'state': 'open', 'merged_at': None}
+        event = {
+            'number': 12,
+            'pull_request': {
+                'number': 12,
+                'merged': False,
+                'labels': [],
+                'body': 'Substituído por: #2407',
+            },
+        }
+        with patch('pr_no_loss_guard._gh_json', return_value=payload):
+            allowed, reason = evaluate(event, 'owner/repo')
+        self.assertFalse(allowed)
+        self.assertIn('não autoriza fechar', reason)
+
+    def test_substituta_integrada_permite_encerramento_rastreado(self):
+        from unittest.mock import patch
+
+        payload = {'state': 'closed', 'merged_at': '2026-10-07T14:00:00Z'}
+        event = {
+            'number': 12,
+            'pull_request': {
+                'number': 12,
+                'merged': False,
+                'labels': [],
+                'body': 'Substituído por: #2407',
+            },
+        }
+        with patch('pr_no_loss_guard._gh_json', return_value=payload):
+            allowed, reason = evaluate(event, 'owner/repo')
+        self.assertTrue(allowed)
+        self.assertIn('já integrada', reason)
+
     def test_fechada_sem_evidencia_e_bloqueada(self):
         allowed, reason = evaluate(
             {

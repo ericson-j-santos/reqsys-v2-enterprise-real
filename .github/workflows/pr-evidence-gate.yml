@@ -189,12 +189,17 @@ jobs:
               return error?.status === 403 && /rate limit/i.test(message);
             }
 
-            async function listPullRequestFiles(prNumber) {
-              const files = await github.paginate(
-                github.rest.pulls.listFiles,
-                { owner, repo, pull_number: Number(prNumber), per_page: 100 },
-              );
-              return files.map((file) => String(file.filename || ''));
+            async function listPullRequestFiles(pr) {
+              // Use the net diff against the current base branch. pulls.listFiles can
+              // include files inherited through synchronization merge commits and
+              // incorrectly activate path-conditional governed workflows.
+              const comparison = await github.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: `${pr.base.ref}...${pr.head.sha}`,
+                per_page: 100,
+              });
+              return (comparison.data.files || []).map((file) => String(file.filename || ''));
             }
 
             function requiresLanguageGate(paths) {
@@ -421,7 +426,7 @@ jobs:
               pr = await getPullRequest();
               headSha = pr.head.sha;
               const strictWorkflowNames = parseList(process.env.STRICT_WORKFLOW_NAMES);
-              const changedFiles = await listPullRequestFiles(pr.number);
+              const changedFiles = await listPullRequestFiles(pr);
               const languageWorkflowName = String(process.env.CONDITIONAL_LANGUAGE_WORKFLOW_NAME || '').trim();
               const conditionalGovernedWorkflowNames = (
                 languageWorkflowName && requiresLanguageGate(changedFiles)

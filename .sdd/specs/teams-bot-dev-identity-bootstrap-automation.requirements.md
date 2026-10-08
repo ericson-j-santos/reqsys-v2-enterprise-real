@@ -49,3 +49,4 @@ Automatizar, com custo adicional zero e de forma governada, a execução idempot
 10. TEST/HML/STG/PROD permanecem intocados.
 11. Ausência do runner, sessão Entra válida, tenant esperado, Key Vault ou permissão administrativa faz a execução falhar fechado.
 12. Os testes de contrato do bootstrap, do gateway e da governança self-hosted permanecem verdes no mesmo SHA.
+13. O job Noteri deve preparar Python 3.12 portátil com versão e SHA-256 fixos, validar o executável e reutilizar seu caminho explícito; shims globais quebrados e travamentos de `setup-python` não podem impedir o Session Launcher.
