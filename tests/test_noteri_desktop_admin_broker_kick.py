@@ -25,18 +25,20 @@ def test_contract_is_fixed_and_has_no_credentials(tmp_path, monkeypatch) -> None
         confirm=m.CONFIRM,
         evidence_file=evidence,
         run_cmd=run,
-        source_host="Noteri",
+        source_host="DESKTOP-PDQK954",
         platform="nt",
     )
     assert result["ok"] is True
     assert seen["argv"] == [
-        str(fake), "/Run", "/S", "DESKTOP-PDQK954", "/TN",
+        str(fake), "/Run", "/TN",
         r"\Automation\ReqSysDesktopAdminBroker",
     ]
     assert "/U" not in seen["argv"]
     assert "/P" not in seen["argv"]
     assert result["task_created_or_modified"] is False
     assert result["credentials_supplied"] is False
+    assert result["execution_mode"] == "local_pc24x7_runner"
+    assert result["remote_access_attempted"] is False
 
 
 def test_failure_is_sanitized_and_fail_closed(tmp_path, monkeypatch) -> None:
@@ -51,7 +53,7 @@ def test_failure_is_sanitized_and_fail_closed(tmp_path, monkeypatch) -> None:
         confirm=m.CONFIRM,
         evidence_file=tmp_path / "evidence.json",
         run_cmd=run,
-        source_host="Noteri",
+        source_host="DESKTOP-PDQK954",
         platform="nt",
     )
     assert result["ok"] is False
@@ -70,7 +72,7 @@ def test_workflow_is_explicitly_allowlisted() -> None:
     assert "Desktop Admin Broker" in policy["rationale"]
 
 
-def test_workflow_remote_kick_is_manual_only() -> None:
+def test_workflow_local_kick_is_manual_only() -> None:
     raw = (
         ROOT / ".github" / "workflows" / "noteri-desktop-admin-broker-kick.yml"
     ).read_text(encoding="utf-8")
@@ -80,3 +82,7 @@ def test_workflow_remote_kick_is_manual_only() -> None:
     assert "\n  push:" not in raw
     assert "github.event_name == 'workflow_dispatch'" in raw
     assert "secrets." not in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "Prepare pinned portable Python 3.12" in raw
+    assert "Get-FileHash" not in raw
+    assert '"$env:REQSYS_PYTHON"' in raw
