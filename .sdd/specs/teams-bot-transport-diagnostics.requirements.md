@@ -16,6 +16,9 @@ O E2E físico DEV alcança o Teams Gateway, mas uma exceção sem status HTTP é
 8. Nenhum segredo, endpoint privado ou corpo de resposta pode aparecer na evidência publicada.
 9. Para o Azure Bot `SingleTenant`, o token do Connector deve ser solicitado no tenant configurado em `TEAMS_BOT_APP_TENANT_ID`; o tenant legado `botframework.com` não pode ser usado como autoridade OAuth.
 
+10. Quando o envio direto resolver de forma inequívoca a única `conversationReference`, preservar o destinatário na conversa antes da chamada ao Bot Framework; o fallback da fila deve reutilizá-lo mesmo após falha externa.
+11. Com referência ambígua ou ausente, não inventar destinatário, não efetuar envio e manter o fluxo fail-closed.
+
 ## Critérios de aceite
 
 - testes focados do gateway e do E2E aprovados;

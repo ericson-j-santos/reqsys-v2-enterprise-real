@@ -15,7 +15,9 @@
       "backend/tests/test_teams_gateway_service.py",
       "backend/tests/test_teams_gateway_bot_service.py",
       "tests/test_pc24x7_teams_ephemeral_e2e.py",
-      "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py"
+      "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py",
+      "backend/tests/test_ai_conversation_teams_bot.py",
+      "backend/tests/test_ai_conversation_api.py"
     ]
   },
   "traceability": {
@@ -23,7 +25,9 @@
     "implementation": "backend/app/services/teams_gateway.py",
     "e2e": "scripts/pc24x7_teams_ephemeral_e2e.py",
     "workflow": ".github/workflows/pc24x7-teams-ephemeral-e2e.yml",
-    "oauth_authority": "TEAMS_BOT_APP_TENANT_ID for Azure Bot SingleTenant"
+    "oauth_authority": "TEAMS_BOT_APP_TENANT_ID for Azure Bot SingleTenant",
+    "delivery_fallback": "backend/app/services/ai_conversation_teams_bot.py",
+    "delivery_fallback_integration": "backend/app/api/ai_conversation.py"
   },
   "risk": {
     "production": false,

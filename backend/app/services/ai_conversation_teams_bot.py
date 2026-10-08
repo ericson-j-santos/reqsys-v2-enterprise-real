@@ -70,6 +70,11 @@ async def enviar_cartao_conversa_bot(
             'O bot ainda não possui conversationReference para o usuário Teams.'
         )
 
+    # O fallback da fila usa a mesma conversa. Guarde o destinatário único
+    # antes do transporte, que ainda pode falhar sem ter persistido a conversa.
+    if not (conversa.teams_destino_id or '').strip():
+        conversa.teams_destino_id = usuario_aad
+
     card = construir_adaptive_card(
         conversa,
         resposta,
