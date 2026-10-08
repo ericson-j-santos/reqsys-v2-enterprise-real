@@ -27,6 +27,19 @@ def completed(code: int, stdout: str = "", stderr: str = "") -> subprocess.Compl
     return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
 
 
+def test_isolated_uac_launcher_loads_with_explicit_watchdog_alias(monkeypatch) -> None:
+    watchdog = m.load_versioned_module(
+        ROOT / "scripts" / "desktop_control_plane_watchdog.py",
+        "reqsys_test_desktop_watchdog",
+    )
+    monkeypatch.setitem(m.sys.modules, "desktop_control_plane_watchdog", watchdog)
+    launcher = m.load_versioned_module(
+        ROOT / "scripts" / "desktop_control_plane_watchdog_uac_launcher.py",
+        "reqsys_test_desktop_watchdog_uac_launcher",
+    )
+    assert launcher.watchdog is watchdog
+
+
 def test_recovery_only_queries_and_runs_exact_existing_task_locally(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
