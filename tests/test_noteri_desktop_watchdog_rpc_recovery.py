@@ -238,7 +238,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 12
+    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 13
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
     assert raw.count("Prepare pinned portable Python 3.12") == 6
@@ -279,6 +279,10 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert 'GetFolderPath("CommonDesktopDirectory")' in stage
     assert "desktop_paths = @($staged" in stage
     assert "powershell_paths = @($staged" in stage
+    assert "repair_paths = @($staged" in stage
+    assert "ReqSys-Watchdog-Reparador-Nativo.ps1" in stage
+    assert "repair_source_sha = $env:GITHUB_SHA.ToLowerInvariant()" in stage
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in stage
     assert "public_desktop_staged" in stage
     assert "stage_failures = $stageFailures" in stage
     assert "RUNNER_PROFILE_DESKTOP_LAUNCHER_NOT_STAGED" in stage
