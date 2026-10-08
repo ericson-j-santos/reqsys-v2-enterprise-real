@@ -43,6 +43,7 @@ def default_metadata_path() -> Path:
 def task_headless_ready(task: dict[str, Any]) -> bool:
     return (
         task.get("exists") is True
+        and task.get("enabled") is True
         and task.get("trigger_at_startup") is True
         and str(task.get("logon_type") or "").casefold() == "s4u"
     )

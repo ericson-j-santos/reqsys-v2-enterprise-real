@@ -35,8 +35,7 @@
     "A ativação/reconciliação do runtime DEV continua no workflow pc24x7-teams-token-bootstrap.yml, com same-SHA e evidência sanitizada.",
     "TEST/HML/STG/PROD não são alterados e a autorização temporária é removida mesmo em falha.",
     "O runner Noteri usa Python 3.12 portátil com versão e SHA-256 fixos e registra o caminho validado em REQSYS_PYTHON, sem depender de shim global obsoleto ou setup-python.",
-    "O workflow faz checkout do SHA despachado no workspace efêmero do Noteri, sem exigir checkout preexistente em C:\\dev, e fornece esse caminho ao Session Launcher.",
-    "Etapas always() posteriores à sessão só executam quando target_path foi produzido, evitando mascarar a causa raiz com falhas secundárias."
+    "O Session Launcher recebe o checkout efêmero do ReqSys em github.workspace, fixado em github.sha, sem depender de caminho local persistente no Noteri."
   ],
   "sdd_gate": {
     "tests": [
@@ -52,6 +51,7 @@
     "scripts/configure_teams_bot_dev_identity_risk3.py",
     "scripts/run_teams_bot_dev_identity_bootstrap_local.py",
     "tests/test_teams_bot_dev_identity_automation.py",
+    "tests/test_teams_bot_dev_provision_workflow.py",
     ".github/self-hosted-runner-policy.json"
   ],
   "traceability": {

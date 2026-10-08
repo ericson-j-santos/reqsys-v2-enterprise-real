@@ -27,6 +27,19 @@ def completed(code: int, stdout: str = "", stderr: str = "") -> subprocess.Compl
     return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
 
 
+def test_isolated_uac_launcher_loads_with_explicit_watchdog_alias(monkeypatch) -> None:
+    watchdog = m.load_versioned_module(
+        ROOT / "scripts" / "desktop_control_plane_watchdog.py",
+        "reqsys_test_desktop_watchdog",
+    )
+    monkeypatch.setitem(m.sys.modules, "desktop_control_plane_watchdog", watchdog)
+    launcher = m.load_versioned_module(
+        ROOT / "scripts" / "desktop_control_plane_watchdog_uac_launcher.py",
+        "reqsys_test_desktop_watchdog_uac_launcher",
+    )
+    assert launcher.watchdog is watchdog
+
+
 def test_recovery_only_queries_and_runs_exact_existing_task_locally(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
@@ -202,7 +215,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
+    for mode in ("watchdog", "watchdog-uac", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -241,7 +254,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 6
 
     # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
-    assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw
+    assert "inputs.mode == 'watchdog-uac'" in raw
     assert "RUN-EXISTING-DESKTOP-WATCHDOG" in raw
     assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
@@ -257,6 +270,8 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert 'if ($e.remote_access_attempted)' in recover
     assert "Materialize verified persistent watchdog Python" in recover
     assert '"--source-sha", $env:ANCHOR_SHA' in recover
+    assert '"--allow-uac"' in recover
+    assert '"--uac-confirm", "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC"' in recover
     assert "UNVERIFIED_TASK_MUTATION_REPORTED" in recover
 
     # Reboot one-shot usa a exceção canônica separada e consumível, somente no Noteri.
