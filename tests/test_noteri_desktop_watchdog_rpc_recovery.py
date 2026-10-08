@@ -80,6 +80,63 @@ def test_query_failure_fails_closed_without_run(tmp_path: Path, monkeypatch) -> 
     assert "/Query" in calls[0]
 
 
+def test_access_denied_query_does_not_attempt_task_repair(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+    repairs: list[bool] = []
+    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
+
+    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        return completed(1, stderr="ERROR: Access is denied.")
+
+    result = m.recover(
+        confirm=m.CONFIRM,
+        evidence_file=tmp_path / "evidence.json",
+        run_cmd=fake_run,
+        repair=lambda: repairs.append(True) or {},
+        source_host="DESKTOP-PDQK954",
+        platform="nt",
+    )
+    assert result["result"] == "DESKTOP_WATCHDOG_QUERY_BLOCKED"
+    assert result["task_repair_attempted"] is False
+    assert repairs == []
+    assert len(calls) == 1
+
+
+def test_missing_task_is_repaired_then_requeried_and_started(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+    query_count = 0
+    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
+
+    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal query_count
+        calls.append(argv)
+        if "/Query" in argv:
+            query_count += 1
+            return completed(1, stderr="not found") if query_count == 1 else completed(0, TASK_XML)
+        return completed(0, "SUCCESS")
+
+    result = m.recover(
+        confirm=m.CONFIRM,
+        evidence_file=tmp_path / "evidence.json",
+        run_cmd=fake_run,
+        repair=lambda: {
+            "headless_boot_ready": True,
+            "registration_method": "schtasks_np",
+            "activation_pending": False,
+        },
+        source_host="DESKTOP-PDQK954",
+        platform="nt",
+    )
+    assert result["ok"] is True
+    assert result["initial_query_returncode"] == 1
+    assert result["task_repair_attempted"] is True
+    assert result["task_repair_verified"] is True
+    assert result["task_created_or_modified"] is True
+    assert query_count == 2
+    assert any("/Run" in call for call in calls)
+
+
 def test_invalid_task_configuration_is_not_started(tmp_path: Path, monkeypatch) -> None:
     bad_xml = TASK_XML.replace("<LogonType>S4U</LogonType>", "<LogonType>InteractiveToken</LogonType>")
     calls: list[list[str]] = []
@@ -88,6 +145,29 @@ def test_invalid_task_configuration_is_not_started(tmp_path: Path, monkeypatch) 
     def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
         calls.append(argv)
         return completed(0, bad_xml)
+
+    result = m.recover(
+        confirm=m.CONFIRM,
+        evidence_file=tmp_path / "evidence.json",
+        run_cmd=fake_run,
+        source_host="DESKTOP-PDQK954",
+        platform="nt",
+    )
+    assert result["result"] == "DESKTOP_WATCHDOG_CONFIGURATION_NOT_READY"
+    assert len(calls) == 1
+
+
+def test_disabled_task_is_not_started(tmp_path: Path, monkeypatch) -> None:
+    disabled_xml = TASK_XML.replace(
+        "</Principals>",
+        "</Principals><Settings><Enabled>false</Enabled></Settings>",
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
+
+    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        return completed(0, disabled_xml)
 
     result = m.recover(
         confirm=m.CONFIRM,
@@ -171,6 +251,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert 'if ($e.source_host -ne "DESKTOP-PDQK954")' in recover
     assert 'if ($e.execution_mode -ne "local_pc24x7_runner")' in recover
     assert 'if ($e.remote_access_attempted)' in recover
+    assert "Materialize verified persistent watchdog Python" in recover
+    assert '"--source-sha", $env:ANCHOR_SHA' in recover
+    assert "UNVERIFIED_TASK_MUTATION_REPORTED" in recover
 
     # Reboot one-shot usa a exceção canônica separada e consumível, somente no Noteri.
     assert "reboot-once:" in raw

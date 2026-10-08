@@ -354,6 +354,59 @@ def test_install_stages_release_when_uac_activation_is_required(monkeypatch, tmp
     assert (runtime / "releases" / ("b" * 40) / "scripts" / m.UAC_LAUNCHER_SCRIPT).is_file()
 
 
+def test_native_registration_is_passwordless_fixed_and_verified(monkeypatch, tmp_path: Path) -> None:
+    schtasks = tmp_path / "schtasks.exe"
+    schtasks.write_bytes(b"")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "SUCCESS", "")
+
+    monkeypatch.setattr(m, "_schtasks", lambda: schtasks)
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        m,
+        "task_status",
+        lambda: {
+            "exists": True,
+            "enabled": True,
+            "trigger_at_startup": True,
+            "logon_type": "S4U",
+        },
+    )
+    result = m._register_boot_task_native(
+        python_executable=tmp_path / "python.exe",
+        launcher=tmp_path / "run.py",
+    )
+    argv = calls[0]
+    assert result["registration_method"] == "schtasks_np"
+    assert argv[:4] == [str(schtasks), "/Create", "/TN", m.TASK_NAME]
+    assert "/SC" in argv and "ONSTART" in argv
+    assert "/RL" in argv and "LIMITED" in argv
+    assert "/RU" in argv
+    assert "/NP" in argv and "/F" in argv
+    assert "/RP" not in argv and "/S" not in argv
+
+
+def test_registration_falls_back_to_native_on_local_access_denied(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        m,
+        "_register_boot_task_com",
+        lambda **kwargs: (_ for _ in ()).throw(m.WatchdogError("task_scheduler_access_denied")),
+    )
+    monkeypatch.setattr(
+        m,
+        "_register_boot_task_native",
+        lambda **kwargs: {"ok": True, "registration_method": "schtasks_np"},
+    )
+    result = m.register_boot_task(
+        python_executable=tmp_path / "python.exe",
+        launcher=tmp_path / "run.py",
+    )
+    assert result["registration_method"] == "schtasks_np"
+
+
 def test_source_contract_is_independent_of_rdc_and_github_runner(tmp_path: Path) -> None:
     text = MODULE.read_text(encoding="utf-8")
     assert 'TASK_LEAF = "ReqSysDesktopControlPlaneWatchdog"' in text

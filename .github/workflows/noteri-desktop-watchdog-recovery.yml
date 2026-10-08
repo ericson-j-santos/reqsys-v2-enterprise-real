@@ -150,6 +150,30 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
 
+      - name: Materialize verified persistent watchdog Python
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $runtimeRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "ReqSys\DesktopControlPlaneWatchdog"))
+          $persistentRoot = [IO.Path]::GetFullPath((Join-Path $runtimeRoot "python\3.12.10"))
+          if (-not $persistentRoot.StartsWith($runtimeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "WATCHDOG_PYTHON_OUTSIDE_RUNTIME_ROOT"
+          }
+          $persistentPython = Join-Path $persistentRoot "python.exe"
+          if (-not (Test-Path -LiteralPath $persistentPython)) {
+            if (Test-Path -LiteralPath $persistentRoot) {
+              Remove-Item -LiteralPath $persistentRoot -Recurse -Force
+            }
+            New-Item -ItemType Directory -Force $persistentRoot | Out-Null
+            $portableRoot = Split-Path -Parent $env:REQSYS_PYTHON
+            Copy-Item -Path (Join-Path $portableRoot "*") -Destination $persistentRoot -Recurse -Force
+          }
+          if (-not (Test-Path -LiteralPath $persistentPython)) { throw "WATCHDOG_PYTHON_MISSING_AFTER_COPY" }
+          $version = (& $persistentPython --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") {
+            throw "WATCHDOG_PYTHON_VERSION_MISMATCH:$version"
+          }
+
       - name: Query and run exact existing Desktop watchdog locally through Command Gateway
         shell: powershell
         env:
@@ -173,6 +197,7 @@ jobs:
             "--",
             "python", $recoveryScript,
             "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
+            "--source-sha", $env:ANCHOR_SHA,
             "--evidence-file", $env:EVIDENCE_REL
           )
           & "$env:REQSYS_PYTHON" $gateway @gatewayArgs
@@ -197,7 +222,9 @@ jobs:
           if ($e.remote_access_attempted) { throw "REMOTE_ACCESS_WAS_ATTEMPTED" }
           if ($e.rdc_required) { throw "RDC_WAS_REQUIRED" }
           if (-not $e.run_requested) { throw "WATCHDOG_RUN_NOT_REQUESTED" }
-          if ($e.task_created_or_modified) { throw "TASK_MUTATION_REPORTED" }
+          if ($e.task_created_or_modified -and (-not $e.task_repair_attempted -or -not $e.task_repair_verified)) {
+            throw "UNVERIFIED_TASK_MUTATION_REPORTED"
+          }
           if ($e.production_touched) { throw "PRODUCTION_TOUCHED" }
           if ($e.secrets_read -or $e.credentials_supplied) { throw "SECRET_OR_CREDENTIAL_USE_REPORTED" }
 
