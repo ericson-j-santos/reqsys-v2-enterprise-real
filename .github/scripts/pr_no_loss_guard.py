@@ -48,7 +48,10 @@ def replacement_is_valid(repo: str, current_number: int, replacement_number: int
     if replacement.get("merged_at"):
         return True, f"conteúdo rastreado por PR substituta #{replacement_number}, já integrada"
     if replacement.get("state") == "open":
-        return True, f"conteúdo rastreado por PR substituta #{replacement_number}, ainda aberta"
+        return False, (
+            f"PR substituta #{replacement_number} ainda aberta: "
+            "a continuidade não autoriza fechar a PR original sem merge."
+        )
     return False, f"PR substituta #{replacement_number} também está fechada sem integração."
 
 
@@ -79,8 +82,8 @@ def reopen_pr(repo: str, number: int, reason: str) -> None:
     body = (
         "Fechamento revertido automaticamente para evitar perda de implementação.\n\n"
         f"Motivo: {reason}\n\n"
-        "Para fechar sem merge, registre no corpo da PR uma evidência válida em uma destas formas:\n"
-        "- `Substituído por: #1234` — a PR substituta precisa estar aberta ou integrada; ou\n"
+        "Para fechar sem merge, registre no corpo da PR uma evidência de integração comprovada:\n"
+        "- `Substituído por: #1234` — a PR substituta precisa estar integrada; ou\n"
         "- `Absorvido por commit: <sha>` — o commit precisa estar contido em `main`.\n\n"
         f"Alternativamente, use o rótulo `{EXEMPT_LABEL}` somente após validação humana documentada."
     )
