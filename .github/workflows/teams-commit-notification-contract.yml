@@ -7,6 +7,9 @@ on:
       - .github/workflows/teams-commit-notification-contract.yml
       - tools/geradores/teams_graph_gateway_autocontido.py
       - tests/test_teams_graph_gateway_autocontido.py
+      - tests/test_teams_commit_notification_fallback_contract.py
+      - .sdd/specs/teams-commit-canonical-gateway.requirements.md
+      - .sdd/specs/teams-commit-canonical-gateway.spec.json
   workflow_dispatch:
 
 permissions:
@@ -26,6 +29,7 @@ jobs:
           python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
           python tests/test_teams_graph_gateway_autocontido.py
+          python tests/test_teams_commit_notification_fallback_contract.py
           grep -Fq "scripts/notificar_teams.py" .github/workflows/teams-commit-notification.yml
           grep -Fq -- "--modo" .github/workflows/teams-commit-notification.yml
           grep -Fq '"flow_bot"' .github/workflows/teams-commit-notification.yml
@@ -37,7 +41,13 @@ jobs:
           grep -Fq "TEAMS_GATEWAY_DESTINO_ID" .github/workflows/teams-commit-notification.yml
           ! grep -Fq 'vars.TEAMS_GATEWAY_BASE_URL' .github/workflows/teams-commit-notification.yml
           ! grep -Eq 'fly\\.io|fly\\.dev' .github/workflows/teams-commit-notification.yml
-          ! grep -Fq "TEAMS_WEBHOOK_URL:" .github/workflows/teams-commit-notification.yml
+          grep -Fq 'TEAMS_WEBHOOK_URL:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'secrets.TEAMS_WEBHOOK_URL' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'TEAMS_WEBHOOK_RECIPIENT:' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'secrets.TEAMS_WEBHOOK_RECIPIENT' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'delivery_mode=webhook_fallback' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'commit-notification-fallback' .github/workflows/teams-commit-notification.yml
+          grep -Fq 'webhook governado de contingência' .github/workflows/teams-commit-notification.yml
           grep -Fq "Action.OpenUrl" .github/workflows/teams-commit-notification.yml
           ! grep -Fq "concurrency:" .github/workflows/teams-commit-notification.yml
           ! grep -Fq "continue-on-error:" .github/workflows/teams-commit-notification.yml

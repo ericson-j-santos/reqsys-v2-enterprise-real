@@ -2,37 +2,40 @@
   "feature_name": "teams-commit-canonical-gateway",
   "project": "ReqSys v2 Enterprise — GitHub Actions / Teams notifications",
   "created_at": "2026-10-04",
-  "updated_at": "2026-10-04",
+  "updated_at": "2026-10-08",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Migra a notificação de commits do webhook Power Automate direto para o Teams Messaging Gateway canônico do ReqSys após falha HTTP 401 no endpoint legado, preservando entrega fail-closed e evidência por execução.",
+  "description": "Mantém o Teams Messaging Gateway PC24x7 como rota primária e automatiza o webhook governado como contingência pré-envio quando o locator/runtime estiver indisponível, preservando entrega fail-closed e evidência por execução.",
   "requirements": [
-    "O workflow Teams Commit Notification não deve consumir TEAMS_WEBHOOK_URL diretamente.",
-    "A entrega deve usar scripts/notificar_teams.py com TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
-    "Falha ou ausência de confirmação de entrega deve manter o workflow vermelho.",
-    "O contrato de CI deve impedir regressão para o webhook direto."
+    "A rota primária deve usar o locator assinado, scripts/notificar_teams.py, TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
+    "Se o locator falhar antes de qualquer POST, a contingência deve usar TEAMS_WEBHOOK_URL e TEAMS_WEBHOOK_RECIPIENT pelo gerador autocontido.",
+    "O fallback deve preservar Adaptive Card, correlation ID e event type commit-notification-fallback.",
+    "Falha ou ausência de confirmação nas duas rotas deve manter o workflow vermelho sem continue-on-error.",
+    "A evidência deve registrar gateway, webhook_fallback ou unavailable sem expor segredos."
   ],
+  "gap_reference": "OPS-GAP-37763758777",
   "sdd_gate": {
     "tests": [
       ".github/workflows/teams-commit-notification-contract.yml",
-      ".github/workflows/teams-service-operational-readiness.yml"
+      ".github/workflows/teams-service-operational-readiness.yml",
+      "tests/test_teams_commit_notification_fallback_contract.py"
     ],
-    "evidence_contract": "O HEAD do PR deve comprovar resolução fail-closed do locator Ed25519 vigente, selected_url HTTPS sob *.trycloudflare.com, ausência de vars.TEAMS_GATEWAY_BASE_URL/Fly.io/webhook direto e envio por scripts/notificar_teams.py com flow_bot + --strict. A conclusão funcional exige E2E real pós-merge."
+    "evidence_contract": "O HEAD do PR deve comprovar gateway assinado como rota primária, ausência de vars.TEAMS_GATEWAY_BASE_URL/Fly.io, fallback webhook somente antes do envio quando o locator estiver indisponível, Adaptive Card e fail-closed sem continue-on-error. A conclusão funcional exige run real pós-merge na contingência."
   },
   "schema_version": "1.0",
-  "increment_type": "fix",
+  "increment_type": "gap_fix",
   "status": "implementation",
   "acceptance_criteria": [
-    "Teams Commit Notification não referencia TEAMS_WEBHOOK_URL diretamente.",
-    "O workflow resolve o runtime DEV vigente por scripts/resolve_pc24x7_dev_locator.mjs e usa apenas selected_url assinado sob *.trycloudflare.com.",
+    "O workflow resolve o runtime DEV vigente por scripts/resolve_pc24x7_dev_locator.mjs e prioriza selected_url assinado sob *.trycloudflare.com.",
     "O workflow não usa vars.TEAMS_GATEWAY_BASE_URL nem qualquer endpoint fly.io/fly.dev.",
     "O envio usa scripts/notificar_teams.py com TEAMS_GATEWAY_DESTINO_ID, flow_bot e --strict.",
-    "Teams Commit Notification Contract valida a resolução assinada e impede regressão para URL estática, Fly.io ou webhook direto.",
-    "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pelo gateway canônico antes de declarar a correção funcional concluída."
+    "Com locator indisponível antes do envio, o workflow usa o webhook governado com Adaptive Card e event type de contingência.",
+    "Teams Commit Notification Contract valida as duas rotas, impede URL estática/Fly.io e mantém fail-closed sem continue-on-error.",
+    "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pela contingência e registrar delivery_route antes de declarar a correção funcional concluída."
   ],
   "risk": {
     "production": false,
