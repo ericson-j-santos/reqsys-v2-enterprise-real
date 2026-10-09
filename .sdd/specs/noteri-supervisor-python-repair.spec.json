@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Reparo reversivel do Python do supervisor Noteri",
+  "status": "dev_validation_pending",
+  "approvals": {"requirements": true},
+  "scope": {"host": "Noteri", "environment": "DEV", "process_start": false, "reboot": false, "privilege_change": false},
+  "sdd_gate": {
+    "tests": ["tests/test_noteri_supervisor_python_repair.py"],
+    "evidence_contract": "SHA de fonte e runtime exatos; referencia antiga identificada por SHA256 e falha No Python at/103 confirmada. CPython oficial 3.12.10 pinado por SHA256, diretorio permanente dentro do runtime existente, validacao de integridade e importacao antes de editar somente a referencia do Startup. Backup byte a byte, rollback com lease, replay idempotente, configuracoes preservadas. Nao inicia supervisor/worker nem altera perfil, seguranca ou privilegios. E2E de referencia nao equivale a E2E do modo ESTUDO."
+  },
+  "traceability": {"issue": "ericson-j-santos/reqsys-engineering-orchestrator#16", "requirements": ".sdd/specs/noteri-supervisor-python-repair.requirements.md"}
+}
