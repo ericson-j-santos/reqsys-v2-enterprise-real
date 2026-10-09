@@ -67,6 +67,7 @@ def gerar_e_enviar_relatorio(payload: ReportBuilderEmailRequest) -> dict:
         )
         status = 'planned'
         external_write_performed = False
+        provider_accepted = False
     else:
         sender, remetente, provider = criar_sender_email_movimento(settings)
         message = _montar_mensagem(
@@ -77,8 +78,11 @@ def gerar_e_enviar_relatorio(payload: ReportBuilderEmailRequest) -> dict:
             rdl_xml=report['rdl_xml'],
         )
         sender.enviar(message)
-        status = 'sent'
+        # SMTP/Graph apenas aceitam a mensagem para processamento.
+        # A entrega final exige evidência independente do destinatário.
+        status = 'accepted_by_provider'
         external_write_performed = True
+        provider_accepted = True
 
     return {
         'schema_version': '1.0.0',
@@ -97,5 +101,8 @@ def gerar_e_enviar_relatorio(payload: ReportBuilderEmailRequest) -> dict:
             'sender': remetente,
             'recipients': [str(item) for item in payload.recipients],
             'external_write_performed': external_write_performed,
+            'provider_accepted': provider_accepted,
+            'recipient_delivery_confirmed': False,
+            'recipient_delivery_evidence': 'not_observed',
         },
     }
