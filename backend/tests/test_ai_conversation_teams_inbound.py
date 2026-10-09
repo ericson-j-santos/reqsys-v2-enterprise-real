@@ -55,6 +55,15 @@ def test_identificador_de_contexto_e_estavel_e_isolado_por_chat():
     assert chat_1 != chat_2
 
 
+def test_fingerprint_da_activity_e_estavel_e_nao_expoe_identificador():
+    fingerprint = inbound._activity_id_sha256('activity-1')
+
+    assert fingerprint == inbound._activity_id_sha256(' activity-1 ')
+    assert fingerprint == 'c1ffeee4d0eed82b7a24ac012710ea9dcdce15c71931cdf168ac3aca88505d1a'
+    assert 'activity-1' not in fingerprint
+    assert inbound._activity_id_sha256('') is None
+
+
 def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     db = MagicMock()
     conversa = _conversation()
@@ -84,9 +93,11 @@ def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     assert enviar.await_args.kwargs['resposta'] == 'Resposta do ReqSys'
     audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
     assert audit_payload == {
+        'activity_id_sha256': inbound._activity_id_sha256('activity-1'),
         'channel': 'teams_bot',
         'duplicate': False,
         'latency_ms': audit_payload['latency_ms'],
+        'provider_invoked': True,
         'response_sent': True,
         'status': 'completed',
     }
@@ -107,12 +118,17 @@ def test_processar_retry_idempotente_nao_reenvia_resposta():
             return_value={'mensagem_assistente': resposta, 'duplicado': True},
         ),
         patch.object(inbound, '_responder_no_chat', enviar),
-        patch.object(inbound, 'registrar_evento'),
+        patch.object(inbound, 'registrar_evento') as registrar,
     ):
         result = asyncio.run(inbound.processar_activity_teams_bot(db, _activity()))
 
     assert result['duplicado'] is True
     enviar.assert_not_awaited()
+    audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
+    assert audit_payload['activity_id_sha256'] == inbound._activity_id_sha256('activity-1')
+    assert audit_payload['duplicate'] is True
+    assert audit_payload['provider_invoked'] is False
+    assert audit_payload['response_sent'] is False
 
 
 def test_mensagem_em_chat_sem_contexto_cria_conversa_isolada():
@@ -177,6 +193,7 @@ def test_background_notifica_falha_sem_expor_excecao():
     assert 'segredo-que-nao-pode-vazar' not in notificar.await_args.kwargs['resposta']
     audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
     assert audit_payload['status'] == 'failed'
+    assert audit_payload['activity_id_sha256'] == inbound._activity_id_sha256('activity-1')
     assert audit_payload['channel'] == 'teams_bot'
     assert audit_payload['error_category'] == 'RuntimeError'
     assert audit_payload['latency_ms'] >= 0
