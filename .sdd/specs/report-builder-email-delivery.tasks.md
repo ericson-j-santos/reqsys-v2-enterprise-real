@@ -5,7 +5,8 @@
 - [x] Implementar serviço de geração + MIME + anexo RDL.
 - [x] Expor endpoint autenticado na aplicação.
 - [x] Adicionar testes positivo, negativo e rota FastAPI.
-- [ ] Validar CI/Pre-PR no HEAD exato.
+- [x] Validar CI/Pre-PR no HEAD exato.
 - [ ] Executar o endpoint em runtime DEV com `dry_run=true`.
 - [ ] Executar envio real para `ericson.takay@gmail.com`.
 - [ ] Confirmar entrega por leitura independente do destino e registrar correlation_id/SHA-256.
+- [x] Incorporar execução governada DEV com destinatário fixo, token escopado e evidência sanitizada, sem declarar entrega antes do readback.

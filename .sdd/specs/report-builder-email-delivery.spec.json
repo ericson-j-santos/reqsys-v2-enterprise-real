@@ -19,6 +19,10 @@
     "backend/app/api/report_builder_delivery.py",
     "backend/app/main.py",
     "backend/tests/test_report_builder_delivery.py",
+    "scripts/report_builder_email_dev_e2e.py",
+    "tests/test_report_builder_email_dev_e2e.py",
+    ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
     ".sdd/specs/report-builder-email-delivery.requirements.md",
     ".sdd/specs/report-builder-email-delivery.design.md",
     ".sdd/specs/report-builder-email-delivery.tasks.md",
@@ -26,7 +30,8 @@
   ],
   "sdd_gate": {
     "tests": [
-      "backend/tests/test_report_builder_delivery.py"
+      "backend/tests/test_report_builder_delivery.py",
+      "tests/test_report_builder_email_dev_e2e.py"
     ],
     "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa, aceitação controlada pelo provedor com RDL/correlation_id/SHA-256, sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
   },

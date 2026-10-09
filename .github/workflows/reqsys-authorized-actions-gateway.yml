@@ -58,6 +58,7 @@ jobs:
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
         github.event.comment.body == '/reqsys run cofre-runtime-service-token-bootstrap' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
+        github.event.comment.body == '/reqsys run report-builder-email-e2e-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
@@ -218,6 +219,10 @@ jobs:
               target='pc24x7-teams-token-bootstrap.yml'
               mode='teams'
               ;;
+            '/reqsys run report-builder-email-e2e-dev')
+              target='pc24x7-teams-token-bootstrap.yml'
+              mode='report-builder'
+              ;;
             '/reqsys run pc24x7-teams-e2e-dev')
               target='pc24x7-teams-ephemeral-e2e.yml'
               ;;
@@ -368,7 +373,7 @@ jobs:
               -f build_only=true)"
           elif [ "$TARGET_WORKFLOW" = "pc24x7-teams-token-bootstrap.yml" ]; then
             case "$TARGET_MODE" in
-              teams|cofre-runtime) ;;
+              teams|cofre-runtime|report-builder) ;;
               *) echo 'pc24x7_token_bootstrap_mode_not_allowlisted' >&2; exit 3 ;;
             esac
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
