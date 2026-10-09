@@ -25,6 +25,9 @@ def test_recovered_ready_is_two_phase_and_sha_guarded() -> None:
 
 def test_post_merge_checkpoint_advances_queue() -> None:
     dispatcher = read('.github/workflows/actions-dispatcher.yml')
+    permissions = dispatcher.split('permissions:', 1)[1].split('concurrency:', 1)[0]
+    assert 'issues: write' in permissions
+    assert 'pull-requests: write' in permissions
     assert '<!-- reqsys-recovered-queue-checkpoint -->' in dispatcher
     assert 'github.rest.actions.createWorkflowDispatch' in dispatcher
     assert 'repository-governance-agent.yml' in dispatcher
