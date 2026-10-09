@@ -34,6 +34,13 @@ logger = logging.getLogger('reqsys.ai_conversation_teams_inbound')
 _PROVIDER_PRIORITY = ('ollama_gateway', 'gemini', 'groq', 'openai', 'claude', 'ollama')
 
 
+def _activity_id_sha256(activity_id: str) -> str | None:
+    normalized = str(activity_id or '').strip()
+    if not normalized:
+        return None
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+
 def _teams_chat_area_id(teams_conversation_id: str) -> str:
     digest = hashlib.sha256(teams_conversation_id.encode('utf-8')).hexdigest()[:32]
     return f'teams-inbound:{digest}'
@@ -227,9 +234,11 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
         conversa.id,
         payload_minimo=json.dumps(
             {
+                'activity_id_sha256': _activity_id_sha256(activity_id),
                 'channel': 'teams_bot',
                 'duplicate': bool(result['duplicado']),
                 'latency_ms': max(0, int((time.perf_counter() - started) * 1000)),
+                'provider_invoked': not result['duplicado'],
                 'response_sent': not result['duplicado'],
                 'status': 'completed',
             },
@@ -282,6 +291,9 @@ def _registrar_falha_sanitizada(
             'background',
             payload_minimo=json.dumps(
                 {
+                    'activity_id_sha256': _activity_id_sha256(
+                        str(activity.get('id') or '').strip()
+                    ),
                     'channel': 'teams_bot',
                     'error_category': type(exc).__name__,
                     'latency_ms': max(0, int((time.perf_counter() - started) * 1000)),
