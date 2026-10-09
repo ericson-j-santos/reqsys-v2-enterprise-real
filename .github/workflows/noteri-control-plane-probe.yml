@@ -159,3 +159,78 @@ jobs:
           "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- noteri-runtime SHA: ${{ steps.noteri_runtime.outputs.sha }}" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      # Executar apenas no ramo diagnóstico, sem tocar o perfil nem o runtime instalado.
+      - name: Buscar regras canônicas para preflight governado
+        if: github.ref == 'refs/heads/fix/noteri-heartbeat-route-20261009'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ae1c2e1a6d2aed0f2be5a3742ad120910ab25696
+          path: _rules
+          persist-credentials: false
+
+      - name: Criar sessão governada no Noteri
+        if: github.ref == 'refs/heads/fix/noteri-heartbeat-route-20261009'
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ine 'Noteri') { throw 'noteri_host_required' }
+          $scriptDir = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts'
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) 'python312._pth'
+          if (-not (Test-Path -LiteralPath $pth)) { throw 'portable_python_pth_missing' }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $scriptDir) {
+            Add-Content -LiteralPath $pth -Value $scriptDir
+          }
+          $args = @(
+            '--policy', (Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'),
+            '--repo', $env:GITHUB_WORKSPACE,
+            '--session-prefix', 'noteri-heartbeat',
+            '--correlation-id', "noteri-heartbeat-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT",
+            '--expected-head', $env:GITHUB_SHA,
+            '--sync-ref', 'origin/fix/noteri-heartbeat-route-20261009',
+            '--require-runner-version-preflight'
+          )
+          $lines = & $env:REQSYS_PYTHON (Join-Path $scriptDir 'session_launcher.py') @args
+          if ($LASTEXITCODE -ne 0) { throw 'SESSION_LAUNCH_BLOCKED' }
+          $receipt = @($lines)[-1] | ConvertFrom-Json
+          if ($receipt.result -ne 'SESSION_LAUNCH_OK' -or $receipt.state_validated -ne $true -or $receipt.head -ne $env:GITHUB_SHA) {
+            throw 'SESSION_PRECONDITION_NOT_PROVED'
+          }
+          "target=$($receipt.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "id=$($receipt.session_id)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Ler heartbeat persistente pelo Command Gateway
+        if: github.ref == 'refs/heads/fix/noteri-heartbeat-route-20261009'
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target }}
+          SESSION_ID: ${{ steps.session.outputs.id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'governed_session_missing' }
+          $args = @(
+            '--policy', (Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'),
+            '--correlation-id', "noteri-heartbeat-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT",
+            'run',
+            '--cwd', $env:TARGET_PATH,
+            '--session-id', $env:SESSION_ID,
+            '--risk', '1',
+            '--timeout', '90',
+            '--expected-head', $env:GITHUB_SHA,
+            '--', $env:REQSYS_PYTHON, (Join-Path $env:TARGET_PATH 'scripts\noteri_worker_heartbeat_probe.py'),
+            '--expected-sha', $env:GITHUB_SHA,
+            '--correlation-id', "noteri-heartbeat-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          )
+          $lines = & $env:REQSYS_PYTHON (Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py') @args
+          if ($LASTEXITCODE -ne 0) { throw 'HEARTBEAT_NOT_PROVED' }
+          $receipt = @($lines)[-1] | ConvertFrom-Json
+          if ($receipt.result -ne 'ok' -or $receipt.command_exit_code -ne 0 -or $receipt.state_changed -eq $true) {
+            throw 'GATEWAY_RESULT_INVALID'
+          }
+          $proof = ([string]$receipt.stdout).Trim() | ConvertFrom-Json
+          if ($proof.ok -ne $true -or $proof.heartbeat_advanced -ne $true -or
+              $proof.expected_sha -ne $env:GITHUB_SHA -or $proof.observed_sha -ne $env:GITHUB_SHA -or
+              $proof.worker_id -ne 'noteri') { throw 'HEARTBEAT_READBACK_INVALID' }
+          Write-Host ('NOTERI_HEARTBEAT_PROOF=' + ($proof | ConvertTo-Json -Compress))
