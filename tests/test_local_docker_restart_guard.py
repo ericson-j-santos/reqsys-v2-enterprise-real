@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ANSI_ESCAPE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 PRODUCTION_REQUIRED_ENV = {
     "JWT_SECRET": "production-contract-secret-at-least-32-characters",
     "JWT_ISSUER": "reqsys-production",
@@ -354,7 +356,7 @@ def test_preflight_blocks_missing_frontend_manifest_before_docker() -> None:
             text=True,
         )
 
-    output = " ".join((result.stdout + result.stderr).split())
+    output = " ".join(ANSI_ESCAPE.sub("", result.stdout + result.stderr).split())
     assert result.returncode != 0
     assert "frontend" in output
     assert "package.json" in output
