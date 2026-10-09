@@ -2,14 +2,14 @@
   "feature_name": "selfhosted-runner-pickup-watchdog-300s",
   "project": "ReqSys v2 Enterprise — Authorized Actions Gateway",
   "created_at": "2026-09-23",
-  "updated_at": "2026-09-27",
+  "updated_at": "2026-10-09",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Contrato histórico de 300s preservado para rastreabilidade. O contrato ativo usa 60s e evidencia pickup por job self-hosted iniciado, evitando falso negativo causado por atraso do status agregado do run.",
+  "description": "Contrato histórico de 300s preservado para rastreabilidade. O contrato ativo usa 60s e evidencia pickup por job self-hosted iniciado, evitando falso negativo causado por atraso do status agregado do run. A mitigação de 09/10 adiciona readback live imediatamente antes do cancelamento para preservar runner com pickup tardio, mantendo 60s.",
   "scope": "authorized-actions-gateway-selfhosted-pickup",
   "files": [
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
@@ -19,7 +19,7 @@
     "tests": [
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Preservar o histórico de 300s sem tratá-lo como regra ativa; o contrato vigente deve provar 60s, polling de 5s, detecção por started_at + label self-hosted e cleanup fail-closed apenas quando não houver pickup material."
+    "evidence_contract": "Preservar o histórico de 300s sem tratá-lo como regra ativa; o contrato vigente deve provar 60s, polling de 5s, detecção por started_at + label self-hosted e cleanup fail-closed apenas quando não houver pickup material. Testar replay com runner iniciado após limite, ausência real de pickup e indisponibilidade da consulta de jobs; cancelamento deve ser fail-closed."
   },
   "risk": {
     "production": false,
@@ -33,6 +33,8 @@
     "O contrato ativo preserva timeout de pickup de 60 segundos e polling de 5 segundos.",
     "Pickup é comprovado por job com started_at preenchido e label self-hosted, mesmo quando o status agregado do run ainda estiver atrasado.",
     "Somente ausência de evidência material de pickup até o limite produz SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY e cleanup fail-closed.",
-    "O teste tests/test_reqsys_authorized_actions_gateway.py cobre o detector por job iniciado e a evidência runner_pickup_source."
+    "O teste tests/test_reqsys_authorized_actions_gateway.py cobre o detector por job iniciado e a evidência runner_pickup_source.",
+    "Um job self-hosted iniciado após os 60s não pode ser cancelado quando uma nova leitura no cleanup comprovar pickup, ainda que o gateway continue indicando timeout.",
+    "Sem pickup material e com status pending/queued, o cancelamento e a evidência seguem obrigatórios; consulta de jobs falha fecha o caminho sem cancelamento destrutivo."
   ]
 }
