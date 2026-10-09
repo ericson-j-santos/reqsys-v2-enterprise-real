@@ -8,13 +8,27 @@ Ativar o runtime Teams Bot em DEV no PC24x7 reutilizando a credencial existente 
 
 1. A execução é limitada ao ambiente DEV e exige confirmação explícita.
 2. O runtime alvo deve corresponder exatamente ao SHA informado.
-3. A credencial existente deve ser lida do Key Vault somente no processo local autorizado e nunca aparecer em log ou evidência.
-4. A credencial deve ser removida do ambiente filho antes do E2E.
+3. O token S2S `reqsys-pc24x7-teams-service-token` deve ser lido do Key Vault por OIDC
+   somente depois da validação same-SHA e nunca aparecer em log ou evidência.
+4. O token S2S deve ser removido do ambiente do job imediatamente após o E2E, inclusive
+   quando a prova terminar em falha.
 5. O override deve configurar o Bot e preservar o endpoint Ollama local do PC24x7.
-6. O E2E deve exigir readiness `ready=true`, token efêmero revogado, replay idempotente e entrega via canal `bot`.
-7. Evidência final deve registrar `secret_value_exposed=false` e `production_touched=false`.
-8. TEST/HML/STG/PROD permanecem fora do escopo.
-9. Em falha de entrega, a evidência deve priorizar o status HTTP sanitizado já persistido pela fila para classificar o provedor, sem copiar corpo ou mensagem remota.
+6. O E2E deve separar dois modos de autenticação: `scoped-service-token`, padrão para a
+   prova conversacional, e `ephemeral-admin`, preservado para a prova administrativa de
+   emissão e revogação.
+7. No modo S2S, o E2E deve exigir readiness `ready=true`, replay idempotente e entrega via
+   canal `bot`, sem chamar as rotas administrativas de emissão/revogação e sem declarar
+   que um token efêmero foi criado ou revogado.
+8. No modo administrativo, o sucesso continua exigindo emissão e revogação confirmadas do
+   token efêmero.
+9. Evidência final deve registrar `auth_mode`, `token_lifecycle_applicable`,
+   `secret_value_exposed=false` e `production_touched=false`.
+10. Token S2S ausente, inválido, expirado ou sem o escopo requerido deve falhar fechado antes
+    da criação da conversa, sem expor o valor.
+11. `COFRE_ADMIN_JWT` deve ser injetado somente quando o modo `ephemeral-admin` for escolhido.
+12. TEST/HML/STG/PROD permanecem fora do escopo.
+13. Em falha de entrega, a evidência deve priorizar o status HTTP sanitizado já persistido
+    pela fila para classificar o provedor, sem copiar corpo ou mensagem remota.
 
 ## Rastreabilidade
 

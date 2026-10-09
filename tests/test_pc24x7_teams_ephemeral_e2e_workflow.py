@@ -1,20 +1,32 @@
 from pathlib import Path
 
-
 WORKFLOW = Path('.github/workflows/pc24x7-teams-ephemeral-e2e.yml')
 
 
-def test_workflow_uses_development_environment_without_azure_oidc() -> None:
+def test_workflow_uses_development_environment_and_oidc_for_scoped_s2s_token() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
     assert 'environment: development' in text
-    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' in text
+    assert "COFRE_ADMIN_JWT: ${{ inputs.auth_mode == 'ephemeral-admin'" in text
+    assert "secrets.COFRE_ADMIN_JWT || '' }}" in text
     assert 'Validar credencial administrativa disponível' not in text
-    assert 'autenticação administrativa efêmera' in text
-    assert 'id-token: write' not in text
-    assert 'azure/login' not in text
-    assert 'CCP_AZURE_CLIENT_ID' not in text
+    assert 'default: scoped-service-token' in text
+    assert 'id-token: write' in text
+    assert 'azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906' in text
+    assert 'CCP_AZURE_CLIENT_ID' in text
     assert 'VAULT_API_TOKEN' not in text
-    assert 'REQSYS_KEY_VAULT_NAME' not in text
+    assert 'REQSYS_KEY_VAULT_NAME' in text
+    assert '--name reqsys-pc24x7-teams-service-token' in text
+    assert 'echo "::add-mask::$token"' in text
+    assert (
+        "printf 'REQSYS_TEAMS_SERVICE_TOKEN=%s\\n' \"$token\" >> \"$GITHUB_ENV\""
+        in text
+    )
+    assert "printf 'REQSYS_TEAMS_SERVICE_TOKEN=\\n' >> \"$GITHUB_ENV\"" in text
+    assert 'unset REQSYS_TEAMS_SERVICE_TOKEN' in text
+    assert "if: inputs.auth_mode == 'scoped-service-token'" in text
+    assert text.index('pc24x7_runtime_sha_mismatch') < text.index(
+        'Login Azure por OIDC para leitura do token S2S DEV'
+    )
 
 
 def test_workflow_is_dev_only_and_does_not_execute_e2e_in_pr() -> None:
@@ -39,5 +51,6 @@ def test_workflow_runs_focused_tests_and_publishes_only_sanitized_artifact() -> 
     assert 'tests/test_pc24x7_teams_ephemeral_e2e.py' in text
     assert 'tests/test_pc24x7_teams_queue.py' in text
     assert 'scripts/pc24x7_teams_ephemeral_e2e.py' in text
+    assert '--auth-mode "$PC24X7_TEAMS_E2E_AUTH_MODE"' in text
     assert 'artifacts/pc24x7-teams-ephemeral-e2e/evidence.json' in text
     assert 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' in text

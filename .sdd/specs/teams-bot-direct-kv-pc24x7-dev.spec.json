@@ -1,19 +1,23 @@
 {
   "schema_version": "1.0",
   "feature_name": "Teams Bot direct Key Vault activation on PC24x7 DEV",
-  "status": "ready_for_validation",
+  "status": "implementation",
+  "updated_at": "2026-10-09",
   "approvals": {
     "requirements": true
   },
   "sdd_gate": {
     "tests": [
       "tests/test_provision_pc24x7_teams_bot_runtime.py",
-      "tests/test_pc24x7_teams_ephemeral_e2e.py"
+      "tests/test_pc24x7_teams_ephemeral_e2e.py",
+      "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py"
     ]
   },
   "traceability": {
     "requirements": ".sdd/specs/teams-bot-direct-kv-pc24x7-dev.requirements.md",
     "provisioning": "scripts/provision_pc24x7_teams_bot_runtime.py",
+    "conversation_e2e": "scripts/pc24x7_teams_ephemeral_e2e.py",
+    "conversation_e2e_workflow": ".github/workflows/pc24x7-teams-ephemeral-e2e.yml",
     "runtime_override": "config/pc24x7-teams-bot-runtime.override.yml",
     "issues": [
       1532,
@@ -23,12 +27,21 @@
   "implementation_constraints": {
     "teams_bot_credentials_transport": "compose_environment_pass_through",
     "inline_secret_literal_forbidden": true,
+    "conversation_auth_default": "scoped-service-token",
+    "conversation_auth_modes": [
+      "scoped-service-token",
+      "ephemeral-admin"
+    ],
+    "scoped_service_token_secret": "reqsys-pc24x7-teams-service-token",
+    "scoped_service_token_scope": "teams_gateway:ai_conversations",
+    "scoped_mode_mint_or_revoke_claim": false,
     "fail_closed_owner": "scripts/provision_pc24x7_teams_bot_runtime.py",
     "ollama_runtime_url": "http://host.docker.internal:11434"
   },
   "validation": {
     "enterprise_runtime_governance": "required",
     "compose_pass_through_test": "tests/test_provision_pc24x7_teams_bot_runtime.py::test_compose_passes_teams_credentials_without_inline_secret_literal",
-    "provider_failure_diagnostic": "Priorizar status HTTP sanitizado persistido pela fila, sem copiar corpo ou mensagem do provedor."
+    "provider_failure_diagnostic": "Priorizar status HTTP sanitizado persistido pela fila, sem copiar corpo ou mensagem do provedor.",
+    "evidence_contract": "O modo S2S registra token_lifecycle_applicable=false, token_created=false e token_revoked=false; o modo administrativo exige revogação confirmada. Nenhum valor sensível é publicado."
   }
 }

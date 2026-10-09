@@ -20,7 +20,10 @@ Após integração desta mudança, a sequência autorizada para a issue #1532 é
 1. disparar `pc24x7-teams-token-bootstrap-dev`;
 2. exigir estado READY do token S2S com escopo `teams_gateway:ai_conversations`;
 3. disparar `pc24x7-teams-e2e-dev`;
-4. exigir readiness DEV, Teams real, mesmo `conversation_id`, idempotência por `activity.id`, correlação, SHA-256, auditoria e revogação do token efêmero;
+4. executar por padrão a prova conversacional com o token S2S escopado do Key Vault e exigir
+   readiness DEV, Teams real, mesmo `conversation_id`, idempotência por `activity.id`,
+   correlação, SHA-256 e auditoria; a evidência deve declarar que emissão/revogação efêmera
+   não se aplica a esse modo;
 5. manter TEST/HML/PROD intocados.
 
 ## Critérios de aceite
