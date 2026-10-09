@@ -68,6 +68,9 @@ def test_dry_run_gera_relatorio_sem_chamar_provedor_externo(monkeypatch):
 
     assert result['status'] == 'planned'
     assert result['delivery']['external_write_performed'] is False
+    assert result['delivery']['provider_accepted'] is False
+    assert result['delivery']['recipient_delivery_confirmed'] is False
+    assert result['delivery']['recipient_delivery_evidence'] == 'not_observed'
     assert result['delivery']['recipients'] == ['ericson.takay@gmail.com']
     assert result['report']['attachment_name'] == 'ReportBuilderSmoke.rdl'
     assert len(result['report']['definition_sha256']) == 64
@@ -84,8 +87,11 @@ def test_envio_real_anexa_rdl_e_correlation_id(monkeypatch):
 
     result = service.gerar_e_enviar_relatorio(_payload(dry_run=False))
 
-    assert result['status'] == 'sent'
+    assert result['status'] == 'accepted_by_provider'
     assert result['delivery']['external_write_performed'] is True
+    assert result['delivery']['provider_accepted'] is True
+    assert result['delivery']['recipient_delivery_confirmed'] is False
+    assert result['delivery']['recipient_delivery_evidence'] == 'not_observed'
     assert len(fake_sender.messages) == 1
 
     message = fake_sender.messages[0]
@@ -118,6 +124,8 @@ def test_endpoint_dry_run_exercita_fluxo_da_aplicacao(monkeypatch, auth_override
     assert data['status'] == 'planned'
     assert data['report']['attachment_name'] == 'ReportBuilderSmoke.rdl'
     assert data['delivery']['external_write_performed'] is False
+    assert data['delivery']['provider_accepted'] is False
+    assert data['delivery']['recipient_delivery_confirmed'] is False
 
 
 def test_endpoint_rejeita_destinatario_invalido(auth_override):
@@ -170,3 +178,40 @@ def test_endpoint_mascara_detalhe_de_falha_do_provedor(monkeypatch, auth_overrid
     assert response.status_code == 502
     assert response.json()['detail'] == 'Falha ao enviar relatório por e-mail.'
     assert 'nao-expor' not in response.text
+
+
+def test_endpoint_envio_aceito_nao_confirma_entrega(monkeypatch, auth_override):
+    fake_sender = _FakeSender()
+    monkeypatch.setattr(service, 'resolver_provedor_envio', lambda: 'graph')
+    monkeypatch.setattr(
+        service, 'criar_sender_email_movimento',
+        lambda _settings: (fake_sender, 'reports@example.com', 'graph'),
+    )
+    client = TestClient(app)
+    response = client.post(
+        '/v1/report-builder/reports/generate-and-email',
+        json=_payload(dry_run=False).model_dump(mode='json'),
+    )
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['status'] == 'accepted_by_provider'
+    assert data['delivery']['external_write_performed'] is True
+    assert data['delivery']['provider_accepted'] is True
+    assert data['delivery']['recipient_delivery_confirmed'] is False
+    assert data['delivery']['recipient_delivery_evidence'] == 'not_observed'
+    assert len(fake_sender.messages) == 1
+    assert fake_sender.messages[0]['X-Correlation-ID'] == data['correlation_id']
+
+
+def test_endpoint_rejeita_assunto_com_crlf_sem_enviar(monkeypatch, auth_override):
+    fake_sender = _FakeSender()
+    monkeypatch.setattr(
+        service, 'criar_sender_email_movimento',
+        lambda _settings: (fake_sender, 'reports@example.com', 'smtp'),
+    )
+    payload = _payload(dry_run=False).model_dump(mode='json')
+    payload['subject'] = 'Relatorio\\r\\nBcc:atacante@example.invalid'
+    client = TestClient(app)
+    response = client.post('/v1/report-builder/reports/generate-and-email', json=payload)
+    assert response.status_code == 422
+    assert fake_sender.messages == []
