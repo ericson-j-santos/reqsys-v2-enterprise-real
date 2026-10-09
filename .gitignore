@@ -22,6 +22,7 @@ env/
 pip-log.txt
 pip-delete-this-directory.txt
 .pytest_cache/
+.pytest-*/
 .mypy_cache/
 .ruff_cache/
 htmlcov/

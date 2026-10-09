@@ -100,7 +100,28 @@ npm run dev
 — sempre combine com um dos overlays de ambiente abaixo:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p reqsys-dev -f docker-compose.yml -f docker-compose.dev.yml up --build --wait
+```
+
+Antes de subir a stack no Windows, valide os arquivos obrigatorios sem iniciar
+containers:
+
+```powershell
+.\scripts\testar-preflight-docker.ps1 -Ambiente dev
+```
+
+O arquivo base e os overlays dev/test usam `restart: "no"`: falhas de startup
+ficam visiveis e nao entram em loop. `docker-compose.prod.yml` usa
+`restart: "on-failure:5"`, recuperando falhas transitorias sem criar uma
+tempestade de reinicios consecutivos quando o startup falha.
+
+Para inventariar loops, health degradado, binds/Compose ausentes e politicas
+persistentes sem registrar variaveis de ambiente nem logs brutos:
+
+```powershell
+.\scripts\auditar-runtime-docker-local.ps1
+# Em automacao, retorna exit code 1 quando houver achado critico:
+.\scripts\auditar-runtime-docker-local.ps1 -FailOnCritical
 ```
 
 Esta stack local (`http://localhost:8083`) é independente do app `reqsys-api-dev`/`reqsys-app-dev` no Fly.io — não depende de rede pública nem de secrets do Fly, e cobre os mesmos `required_secret_names` do ambiente `dev` em `infra/fly-environments.json` (`JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, já com defaults de dev no `docker-compose.yml`). Use-a para todo o dia a dia de desenvolvimento; o Fly dev só entra em jogo se algo precisar ser validado num ambiente público de fato.
@@ -111,7 +132,6 @@ Status atual no repositório:
 
 - Ambiente de desenvolvimento: criado (`docker-compose.yml` + `docker-compose.dev.yml`)
 - Ambiente de produção: criado (`docker-compose.yml` + `docker-compose.prod.yml`)
-- Ambiente de testes dedicado: não há arquivo `docker-compose.test.yml` neste momento
 - Ambiente de testes dedicado: criado (`docker-compose.yml` + `docker-compose.test.yml`)
 
 Use as URLs abaixo por ambiente:
@@ -131,38 +151,47 @@ Comandos sugeridos por ambiente:
 
 ```bash
 # Desenvolvimento
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+docker compose -p reqsys-dev -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 # Testes
-docker compose -f docker-compose.yml -f docker-compose.test.yml up --build -d
+docker compose -p reqsys-test -f docker-compose.yml -f docker-compose.test.yml up --build -d --wait
 
-# Produção local
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+# Homologacao e producao (preflight semantico obrigatorio)
+./scripts/publicar_ambiente.sh hml
+./scripts/publicar_ambiente.sh prod
 ```
+
+Antes de publicar HML/producao, exporte `JWT_SECRET` (minimo de 32 caracteres),
+`JWT_ISSUER`, `JWT_AUDIENCE`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`,
+`CORS_ORIGINS` e `POSTGRES_PASSWORD`. Os IDs Azure devem ser UUIDs e
+`CORS_ORIGINS` nao pode conter `*`. O script valida esses valores e executa o
+gate da propria aplicacao em um container descartavel antes de iniciar a stack.
+Use `docker compose -f docker-compose.yml -f docker-compose.prod.yml config`
+apenas para diagnostico; a subida suportada passa por `publicar_ambiente.sh`.
 
 ### Subida automatica do Docker no Windows (Task Scheduler)
 
-O projeto possui script para registrar a subida automatica da stack, reutilizando a logica de evitar colisao de porta do gateway.
+O projeto possui script para registrar a subida automatica da stack, reutilizando a logica de evitar colisao de porta do gateway. O agendamento e bloqueado por padrao e exige `-HabilitarAgendamento`; o trigger recomendado e `AtLogon`, no contexto do usuario do Docker Desktop.
 
 Registrar para subir no boot da maquina:
 
 ```powershell
 cd scripts
-powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -TriggerType AtStartup -GatewayPort 8083
+powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -HabilitarAgendamento -TriggerType AtStartup -GatewayPort 8083
 ```
 
 Registrar para subir no login do usuario:
 
 ```powershell
 cd scripts
-powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -TriggerType AtLogon -GatewayPort 8083
+powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -HabilitarAgendamento -TriggerType AtLogon -GatewayPort 8083
 ```
 
 Registrar execucao diaria (exemplo 08:00):
 
 ```powershell
 cd scripts
-powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -TriggerType Daily -Hora 8 -Minuto 0 -GatewayPort 8083
+powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -HabilitarAgendamento -TriggerType Daily -Hora 8 -Minuto 0 -GatewayPort 8083
 ```
 
 Remover o agendamento:

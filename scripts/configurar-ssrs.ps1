@@ -174,7 +174,27 @@ Write-Host "Arquivo atualizado: $envPath"
 
 if ($RestartStack) {
     Write-Host "Reiniciando stack Docker..."
-    docker compose up -d --build
+    $preflightScript = Join-Path $PSScriptRoot 'testar-preflight-docker.ps1'
+    $preflight = & $preflightScript -ProjetoDir $projectRoot -Ambiente dev -Quiet
+    $projectRoot = $preflight.ProjetoDir
+
+    $composeArgs = @(
+        'compose',
+        '--project-directory', $projectRoot,
+        '--project-name', 'reqsys-dev',
+        '-f', (Join-Path $projectRoot 'docker-compose.yml'),
+        '-f', (Join-Path $projectRoot 'docker-compose.dev.yml')
+    )
+
+    & docker @composeArgs config --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "Configuracao Docker Compose dev invalida."
+    }
+
+    & docker @composeArgs up -d --build --wait --wait-timeout 120
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao reiniciar a stack dev ou aguardar servicos saudaveis."
+    }
 
     Write-Host "Validando endpoint da integracao SSRS..."
     try {
