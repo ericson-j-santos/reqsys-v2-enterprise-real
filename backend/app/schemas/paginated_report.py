@@ -88,7 +88,7 @@ class PaginatedReportGenerateRequest(BaseModel):
         if not re.match(r'(?is)^(select|with)\b', normalized):
             raise ValueError('A consulta do relatório deve ser somente leitura (SELECT/CTE).')
         forbidden = re.compile(
-            r'(?is)\b(insert|update|delete|merge|drop|alter|truncate|create|grant|revoke|exec(?:ute)?)\b'
+            r'(?is)\b(insert|update|delete|merge|drop|alter|truncate|create|grant|revoke|exec(?:ute)?|into)\b'
         )
         if forbidden.search(normalized):
             raise ValueError('A consulta contém comando não permitido para relatório.')

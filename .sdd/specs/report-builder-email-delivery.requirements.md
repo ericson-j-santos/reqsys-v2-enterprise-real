@@ -11,7 +11,7 @@ Permitir que a própria aplicação ReqSys gere um relatório paginado e envie o
 
 1. Expor `POST /v1/report-builder/reports/generate-and-email`.
 2. Exigir autorização `report_builder:send`.
-3. Reutilizar o gerador paginado existente da aplicação e manter todos os guardrails de SQL somente leitura e segredo inline.
+3. Reutilizar o gerador paginado existente da aplicação e manter todos os guardrails de SQL somente leitura e segredo inline. Bloquear também `SELECT ... INTO` (inclusive após CTE), porque pode criar tabelas no SQL Server.
 4. Aceitar de 1 a 20 destinatários válidos, removendo duplicatas sem alterar a ordem.
 5. Rejeitar assunto com CR/LF para impedir injeção de cabeçalho.
 6. Em `dry_run=true`, gerar RDL/MIME e metadados sem criar sender nem executar escrita externa.

@@ -179,6 +179,23 @@ def test_endpoint_rejeita_sql_destrutivo(auth_override):
     assert response.status_code == 422
 
 
+def test_endpoint_rejeita_select_into_sem_invocar_sender(monkeypatch, auth_override):
+    fake_sender = _FakeSender()
+    monkeypatch.setattr(
+        service,
+        'criar_sender_email_movimento',
+        lambda _settings: (fake_sender, 'reports@example.com', 'smtp'),
+    )
+    payload = _payload(dry_run=False).model_dump(mode='json')
+    payload['report']['query'] = 'SELECT Status INTO tbDemandasBackup FROM tbDemandas'
+    client = TestClient(app)
+
+    response = client.post('/v1/report-builder/reports/generate-and-email', json=payload)
+
+    assert response.status_code == 422
+    assert fake_sender.messages == []
+
+
 def test_endpoint_mascara_detalhe_de_configuracao(monkeypatch, auth_override):
     def _falhar(_payload):
         raise ConfiguracaoEnvioError('AZURE_CLIENT_SECRET=nao-expor')

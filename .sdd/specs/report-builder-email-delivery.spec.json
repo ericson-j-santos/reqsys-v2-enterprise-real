@@ -21,6 +21,8 @@
     "backend/app/core/dev_service_token_bootstrap.py",
     "backend/app/main.py",
     "backend/tests/test_dev_service_token_bootstrap.py",
+    "backend/app/schemas/paginated_report.py",
+    "backend/tests/test_paginated_report_factory.py",
     "backend/tests/test_report_builder_delivery.py",
     "scripts/report_builder_email_dev_e2e.py",
     "tests/test_report_builder_email_dev_e2e.py",
@@ -35,9 +37,10 @@
     "tests": [
       "backend/tests/test_report_builder_delivery.py",
       "backend/tests/test_dev_service_token_bootstrap.py",
-      "tests/test_report_builder_email_dev_e2e.py"
+      "tests/test_report_builder_email_dev_e2e.py",
+      "backend/tests/test_paginated_report_factory.py"
     ],
-    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa e prontidão explícita de transporte externo antes do envio. Coletores locais como MailHog, Mailpit e localhost bloqueiam o E2E. A aceitação controlada pelo provedor registra RDL/correlation_id/SHA-256 sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
+    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa e prontidão explícita de transporte externo antes do envio. Coletores locais como MailHog, Mailpit e localhost bloqueiam o E2E. A aceitação controlada pelo provedor registra RDL/correlation_id/SHA-256 sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo, inclusive SELECT INTO e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
   },
   "risk": {
     "production": false,
