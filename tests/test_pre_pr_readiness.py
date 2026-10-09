@@ -82,6 +82,29 @@ def test_valid_workflow_yaml_is_accepted(tmp_path: Path) -> None:
     assert results[0].status == "passed"
 
 
+def test_docker_compose_override_tag_is_accepted(tmp_path: Path) -> None:
+    compose = tmp_path / "docker-compose.prod.yml"
+    compose.write_text(
+        "services:\n  api:\n    depends_on: !override\n      db:\n        condition: service_healthy\n",
+        encoding="utf-8",
+    )
+
+    results = MODULE.validate_structured_files(["docker-compose.prod.yml"], tmp_path)
+
+    assert len(results) == 1
+    assert results[0].status == "passed"
+
+
+def test_unknown_yaml_tag_remains_blocked(tmp_path: Path) -> None:
+    document = tmp_path / "settings.yml"
+    document.write_text("value: !unexpected blocked\n", encoding="utf-8")
+
+    results = MODULE.validate_structured_files(["settings.yml"], tmp_path)
+
+    assert len(results) == 1
+    assert results[0].status == "failed"
+
+
 def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
     common_install = "python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5' 'cryptography==50.0.0'"

@@ -367,7 +367,26 @@ def validate_structured_files(files: list[str], root: Path) -> list[CheckResult]
             try:
                 import yaml  # type: ignore
 
-                payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+                loader = yaml.SafeLoader
+                is_compose_file = path.name in {"compose.yml", "compose.yaml"} or path.name.startswith(
+                    "docker-compose"
+                )
+                if is_compose_file:
+                    class ComposeLoader(yaml.SafeLoader):
+                        pass
+
+                    def construct_compose_tag(loader: object, node: object) -> object:
+                        if isinstance(node, yaml.MappingNode):
+                            return loader.construct_mapping(node, deep=True)  # type: ignore[attr-defined]
+                        if isinstance(node, yaml.SequenceNode):
+                            return loader.construct_sequence(node, deep=True)  # type: ignore[attr-defined]
+                        return loader.construct_scalar(node)  # type: ignore[attr-defined]
+
+                    for tag in ("!override", "!reset"):
+                        ComposeLoader.add_constructor(tag, construct_compose_tag)
+                    loader = ComposeLoader
+
+                payload = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)
                 if rel.startswith(".github/workflows/"):
                     if not isinstance(payload, dict) or "jobs" not in payload:
                         raise ValueError("workflow sem objeto jobs")

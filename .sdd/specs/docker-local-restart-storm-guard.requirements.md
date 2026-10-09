@@ -16,6 +16,8 @@ reduzir silenciosamente as proteções necessárias a produção.
 5. O agendamento automático DEVE ser opt-in e não exigir privilégio elevado por padrão.
 6. Testes regressivos DEVEM provar as políticas, os preflights e os guardrails destrutivos.
 7. Nenhum teste DEVE remover containers, volumes ou executar deploy/promoção de ambiente.
+8. O gate de prontidão DEVE validar os tags oficiais `!override` e `!reset` do Docker
+   Compose sem aceitar tags YAML desconhecidos fora desse contrato.
 
 ## Rollback
 
