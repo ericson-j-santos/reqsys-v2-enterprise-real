@@ -16,11 +16,11 @@ class E2EError(RuntimeError):
     pass
 
 
-def request_json(url: str, token: str, payload: dict) -> tuple[int, dict]:
+def request_json(url: str, token: str, payload: dict | None = None) -> tuple[int, dict]:
     request = Request(
         url,
-        data=json.dumps(payload).encode('utf-8'),
-        method='POST',
+        data=json.dumps(payload).encode('utf-8') if payload is not None else None,
+        method='POST' if payload is not None else 'GET',
         headers={'Content-Type': 'application/json', 'X-Service-Token': token},
     )
     try:
@@ -40,6 +40,10 @@ def endpoint(api_base: str) -> str:
     return root + '/api/v1/report-builder/reports/generate-and-email'
 
 
+def readiness_endpoint(api_base: str) -> str:
+    return endpoint(api_base).removesuffix('/reports/generate-and-email') + '/readiness'
+
+
 def execute(*, api_base: str, token: str, recipient: str, confirm: str) -> dict:
     if recipient.casefold() != RECIPIENT.casefold():
         raise E2EError('recipient_not_allowlisted')
@@ -47,6 +51,14 @@ def execute(*, api_base: str, token: str, recipient: str, confirm: str) -> dict:
         raise E2EError('explicit_confirmation_missing')
     if not token.strip():
         raise E2EError('service_token_missing')
+
+    readiness_status, readiness_response = request_json(readiness_endpoint(api_base), token)
+    readiness = readiness_response.get('data') or {}
+    if readiness_status != 200:
+        raise E2EError(f'readiness_failed:http_{readiness_status}')
+    if readiness.get('external_delivery_capable') is not True:
+        reason = readiness.get('reason') or 'unknown'
+        raise E2EError(f'external_delivery_not_ready:{reason}')
 
     base_payload = {
         'report': {
@@ -86,6 +98,7 @@ def execute(*, api_base: str, token: str, recipient: str, confirm: str) -> dict:
         'recipient': RECIPIENT,
         'dry_run_verified': True,
         'provider': delivery.get('provider'),
+        'external_delivery_capable': True,
         'provider_accepted': True,
         'recipient_delivery_confirmed': False,
         'recipient_delivery_evidence': delivery.get('recipient_delivery_evidence'),

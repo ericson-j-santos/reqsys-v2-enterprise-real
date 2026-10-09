@@ -128,13 +128,35 @@ def test_endpoint_dry_run_exercita_fluxo_da_aplicacao(monkeypatch, auth_override
     assert data['delivery']['recipient_delivery_confirmed'] is False
 
 
-def test_readiness_valida_escopo_sem_efeito_externo(auth_override):
+def test_readiness_bloqueia_coletor_local_sem_efeito_externo(monkeypatch, auth_override):
+    monkeypatch.setattr(api_module.settings, 'movimento_email_smtp_host', 'mailhog')
+    monkeypatch.setattr(api_module.settings, 'movimento_email_smtp_from', 'ReqSys <noreply@localhost>')
     client = TestClient(app)
 
     response = client.get('/v1/report-builder/readiness')
 
     assert response.status_code == 200
-    assert response.json()['data'] == {'ready': True, 'scope': 'report_builder:send'}
+    assert response.json()['data'] == {
+        'ready': False,
+        'scope': 'report_builder:send',
+        'provider': 'smtp',
+        'external_delivery_capable': False,
+        'reason': 'local_sink_configured',
+    }
+
+
+def test_readiness_aceita_smtp_externo_configurado(monkeypatch, auth_override):
+    monkeypatch.setattr(api_module.settings, 'movimento_email_smtp_host', 'smtp.example.com')
+    monkeypatch.setattr(api_module.settings, 'movimento_email_smtp_from', 'reports@example.com')
+    client = TestClient(app)
+
+    response = client.get('/v1/report-builder/readiness')
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['ready'] is True
+    assert data['external_delivery_capable'] is True
+    assert data['reason'] == 'ready'
 
 
 def test_endpoint_rejeita_destinatario_invalido(auth_override):
