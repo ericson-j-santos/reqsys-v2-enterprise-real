@@ -35,6 +35,10 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 12. O processamento assíncrono de mensagens Teams DEVE registrar sucesso ou falha com latência,
     estado de entrega e categoria técnica sanitizada, sem persistir texto da mensagem, resposta do
     modelo, identidade do usuário, token ou detalhe da exceção.
+13. A auditoria do inbound Teams DEVE registrar apenas o SHA-256 do `activity.id` e, em conclusão,
+    os indicadores `duplicate`, `provider_invoked` e `response_sent`. Um replay do mesmo
+    `activity.id` DEVE produzir o mesmo fingerprint com `duplicate=true`,
+    `provider_invoked=false` e `response_sent=false`, sem persistir o identificador original.
 
 ## Rollback
 
