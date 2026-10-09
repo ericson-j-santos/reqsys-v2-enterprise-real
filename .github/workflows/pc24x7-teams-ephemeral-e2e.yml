@@ -3,6 +3,14 @@ name: PC24x7 Teams Ephemeral E2E — DEV
 on:
   workflow_dispatch:
     inputs:
+      auth_mode:
+        description: Autenticação da prova conversacional DEV.
+        required: true
+        default: scoped-service-token
+        type: choice
+        options:
+          - scoped-service-token
+          - ephemeral-admin
       diagnose_main_runtime:
         description: Executa o script da ref selecionada contra o SHA vigente da main.
         required: false
@@ -52,8 +60,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: development
+    permissions:
+      contents: read
+      id-token: write
     env:
-      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      COFRE_ADMIN_JWT: ${{ inputs.auth_mode == 'ephemeral-admin' && secrets.COFRE_ADMIN_JWT || '' }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      PC24X7_TEAMS_E2E_AUTH_MODE: ${{ inputs.auth_mode || 'scoped-service-token' }}
       PC24X7_TEAMS_E2E_CORRELATION_ID: pc24x7-ephemeral-${{ github.run_id }}-${{ github.run_attempt }}
       # Gemini é o provedor primário configurado no ReqSys. Groq permanece visível
       # no readiness e sua degradação HTTP 502 é tratada separadamente, sem bloquear
@@ -131,10 +147,57 @@ jobs:
           test -n "$RESOLVED_API_BASE"
           printf 'REQSYS_API_BASE_URL=%s\n' "$RESOLVED_API_BASE" >> "$GITHUB_ENV"
 
-      - name: Executar E2E DEV com autenticação administrativa efêmera
+      - name: Validar configuração OIDC para token S2S
+        if: inputs.auth_mode == 'scoped-service-token'
+        shell: bash
         run: |
+          set -euo pipefail
+          for name in REQSYS_KEY_VAULT_NAME CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            [[ -n "${!name:-}" ]] || {
+              echo "::error::${name} não configurado; prova S2S permanece fail-closed."
+              exit 2
+            }
+          done
+
+      - name: Login Azure por OIDC para leitura do token S2S DEV
+        if: inputs.auth_mode == 'scoped-service-token'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Carregar token S2S escopado sem expor valor
+        if: inputs.auth_mode == 'scoped-service-token'
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az keyvault secret show \
+            --vault-name "$REQSYS_KEY_VAULT_NAME" \
+            --name reqsys-pc24x7-teams-service-token \
+            --query value \
+            --output tsv \
+            --only-show-errors)"
+          [[ -n "$token" ]] || {
+            echo "::error::Token S2S DEV ausente; prova permanece fail-closed."
+            exit 3
+          }
+          echo "::add-mask::$token"
+          printf 'REQSYS_TEAMS_SERVICE_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          token=''
+
+      - name: Executar E2E DEV com autenticação governada
+        shell: bash
+        run: |
+          set +e
           python scripts/pc24x7_teams_ephemeral_e2e.py \
+            --auth-mode "$PC24X7_TEAMS_E2E_AUTH_MODE" \
             --evidence-path artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
+          exit_code=$?
+          set -e
+          printf 'REQSYS_TEAMS_SERVICE_TOKEN=\n' >> "$GITHUB_ENV"
+          unset REQSYS_TEAMS_SERVICE_TOKEN
+          exit "$exit_code"
 
       - name: Publicar somente evidência sanitizada
         if: always()

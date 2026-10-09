@@ -15,6 +15,9 @@ API_DEFAULT = ''
 ADMIN_EMAIL_DEFAULT = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
 SCOPE = 'teams_gateway:ai_conversations'
 TOKEN_TTL_DAYS = 1
+AUTH_MODE_EPHEMERAL_ADMIN = 'ephemeral-admin'
+AUTH_MODE_SCOPED_SERVICE_TOKEN = 'scoped-service-token'
+AUTH_MODES = (AUTH_MODE_EPHEMERAL_ADMIN, AUTH_MODE_SCOPED_SERVICE_TOKEN)
 PRODUCTION_ENVIRONMENTS = {'prod', 'production', 'producao', 'produção'}
 PROVIDER_DEFAULT_MODELS = {
     'gemini': 'gemini-2.5-flash',
@@ -376,14 +379,20 @@ def execute_e2e(
     correlation_id: str,
     provider: str,
     model: str,
+    service_token: str = '',
+    auth_mode: str = AUTH_MODE_EPHEMERAL_ADMIN,
     admin_email: str = ADMIN_EMAIL_DEFAULT,
 ) -> dict:
+    normalized_auth_mode = str(auth_mode or '').strip().lower()
     evidence: dict = {
-        'schema_version': '1.3.0',
+        'schema_version': '1.4.0',
         'status': 'blocked',
         'environment': 'dev',
         'correlation_id': correlation_id,
         'scope': SCOPE,
+        'auth_mode': normalized_auth_mode or None,
+        'token_source': None,
+        'token_lifecycle_applicable': normalized_auth_mode == AUTH_MODE_EPHEMERAL_ADMIN,
         'admin_auth_source': None,
         'admin_auth_recovered': False,
         'requested_provider': provider,
@@ -407,20 +416,41 @@ def execute_e2e(
     token = ''
     effective_admin_jwt = ''
     try:
-        effective_admin_jwt, auth_source, recovered = resolve_admin_jwt(
-            api_base,
-            admin_jwt,
-            correlation_id,
-            admin_email,
-        )
-        evidence['admin_auth_source'] = auth_source
-        evidence['admin_auth_recovered'] = recovered
+        if normalized_auth_mode not in AUTH_MODES:
+            raise EphemeralE2EError('auth_mode_invalid')
 
-        token_id, token = mint_ephemeral_token(api_base, effective_admin_jwt, correlation_id)
-        evidence['token_created'] = True
+        if normalized_auth_mode == AUTH_MODE_SCOPED_SERVICE_TOKEN:
+            token = service_token.strip()
+            if not token:
+                raise EphemeralE2EError('scoped_service_token_missing')
+            evidence['token_source'] = 'key_vault_scoped_service_token'
+        else:
+            effective_admin_jwt, auth_source, recovered = resolve_admin_jwt(
+                api_base,
+                admin_jwt,
+                correlation_id,
+                admin_email,
+            )
+            evidence['admin_auth_source'] = auth_source
+            evidence['admin_auth_recovered'] = recovered
+            evidence['token_source'] = 'ephemeral_admin_mint'
+
+            token_id, token = mint_ephemeral_token(
+                api_base,
+                effective_admin_jwt,
+                correlation_id,
+            )
+            evidence['token_created'] = True
 
         readiness_status, readiness = check_readiness(api_base, token, correlation_id)
         evidence['readiness'] = readiness
+        if (
+            normalized_auth_mode == AUTH_MODE_SCOPED_SERVICE_TOKEN
+            and readiness_status != 200
+        ):
+            raise EphemeralE2EError(
+                f'scoped_service_token_rejected:http_{readiness_status}'
+            )
         if readiness_status != 200 or readiness.get('ready') is not True:
             raise EphemeralE2EError('readiness_not_ready')
 
@@ -496,6 +526,7 @@ def execute_e2e(
         evidence['error'] = f'unexpected:{type(exc).__name__}'
     finally:
         token = ''
+        service_token = ''
         if token_id is not None:
             try:
                 evidence['token_revoked'] = revoke_ephemeral_token(
@@ -516,6 +547,11 @@ def execute_e2e(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='PC24x7 Teams DEV ephemeral E2E')
     parser.add_argument('--api-base', default=os.getenv('REQSYS_API_BASE_URL', API_DEFAULT))
+    parser.add_argument(
+        '--auth-mode',
+        choices=AUTH_MODES,
+        default=os.getenv('PC24X7_TEAMS_E2E_AUTH_MODE', AUTH_MODE_EPHEMERAL_ADMIN),
+    )
     parser.add_argument('--provider', default=os.getenv('PC24X7_TEAMS_E2E_PROVIDER', 'gemini'))
     parser.add_argument('--model', default=os.getenv('PC24X7_TEAMS_E2E_MODEL', 'gemini-2.5-flash'))
     parser.add_argument('--admin-email', default=os.getenv('PC24X7_TEAMS_E2E_ADMIN_EMAIL', ADMIN_EMAIL_DEFAULT))
@@ -530,10 +566,12 @@ def main() -> int:
     api_base = str(args.api_base or '').strip()
     if not api_base:
         evidence = {
-            'schema_version': '1.3.0',
+            'schema_version': '1.4.0',
             'status': 'blocked',
             'environment': 'dev',
             'correlation_id': correlation_id,
+            'auth_mode': args.auth_mode,
+            'token_lifecycle_applicable': args.auth_mode == AUTH_MODE_EPHEMERAL_ADMIN,
             'error': 'REQSYS_API_BASE_URL_missing',
             'secret_value_exposed': False,
             'production_touched': False,
@@ -552,13 +590,19 @@ def main() -> int:
         correlation_id=correlation_id,
         provider=args.provider,
         model=args.model,
+        service_token=os.getenv('REQSYS_TEAMS_SERVICE_TOKEN', ''),
+        auth_mode=args.auth_mode,
         admin_email=args.admin_email,
     )
     output = Path(args.evidence_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
-    return 0 if evidence['status'] == 'done' and evidence['token_revoked'] is True else 4
+    lifecycle_ok = (
+        evidence.get('token_lifecycle_applicable') is False
+        or evidence.get('token_revoked') is True
+    )
+    return 0 if evidence['status'] == 'done' and lifecycle_ok else 4
 
 
 if __name__ == '__main__':

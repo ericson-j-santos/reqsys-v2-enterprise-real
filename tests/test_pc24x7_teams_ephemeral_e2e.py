@@ -1,8 +1,8 @@
 import importlib.util
 import json
 import sys
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -26,6 +26,7 @@ def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, tmp_path, 
             api_base='',
             provider='gemini',
             model='gemini-2.5-flash',
+            auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
             admin_email=module.ADMIN_EMAIL_DEFAULT,
             correlation_id='corr-no-runtime',
             evidence_path=str(evidence_path),
@@ -42,6 +43,50 @@ def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, tmp_path, 
     assert evidence['production_touched'] is False
     assert 'fly.dev' not in json.dumps(evidence)
     assert 'REQSYS_API_BASE_URL_missing' in capsys.readouterr().out
+
+
+def test_main_accepts_scoped_service_token_success_without_revoke(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    evidence_path = tmp_path / 'evidence.json'
+    secret = 'scoped-token-never-log'
+    captured = {}
+    monkeypatch.setenv('REQSYS_TEAMS_SERVICE_TOKEN', secret)
+    monkeypatch.setattr(
+        module,
+        'parse_args',
+        lambda: SimpleNamespace(
+            api_base='https://reqsys-api-dev.invalid',
+            provider='gemini',
+            model='gemini-2.5-flash',
+            auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+            admin_email=module.ADMIN_EMAIL_DEFAULT,
+            correlation_id='corr-main-s2s',
+            evidence_path=str(evidence_path),
+        ),
+    )
+
+    def fake_execute(**kwargs):
+        captured.update(kwargs)
+        return {
+            'schema_version': '1.4.0',
+            'status': 'done',
+            'auth_mode': module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+            'token_lifecycle_applicable': False,
+            'token_created': False,
+            'token_revoked': False,
+            'secret_value_exposed': False,
+        }
+
+    monkeypatch.setattr(module, 'execute_e2e', fake_execute)
+
+    assert module.main() == 0
+    assert captured['service_token'] == secret
+    assert captured['auth_mode'] == module.AUTH_MODE_SCOPED_SERVICE_TOKEN
+    assert secret not in evidence_path.read_text(encoding='utf-8')
+    assert secret not in capsys.readouterr().out
 
 
 def test_runtime_api_url_uses_public_gateway_prefix_exactly_once():
@@ -233,6 +278,116 @@ def test_success_separates_creation_delivery_proves_idempotency_and_revokes(monk
     assert replies[1][2]['enviar_teams'] is False
     assert replies[0][3]['X-Tenant-ID'] == 'reqsys-dev'
     assert replies[0][3]['X-Area-ID'] == 'teams-gateway'
+
+
+def test_scoped_service_token_proves_conversation_without_admin_mint_or_revoke(
+    monkeypatch,
+):
+    secret = 'scoped-service-token-must-never-appear'
+    calls = []
+    reply_count = {'value': 0}
+
+    def fake_request(method, url, *, headers, body=None):
+        calls.append((method, url, body, headers))
+        assert '/v1/admin/' not in url
+        assert '/v1/auth/' not in url
+        assert headers['X-Service-Token'] == secret
+        if method == 'GET' and url.endswith('/readiness'):
+            return 200, ready_payload()
+        if method == 'POST' and url.endswith('/ai-conversations'):
+            return 200, creation_payload('conv-s2s')
+        if method == 'POST' and url.endswith('/conv-s2s/reply'):
+            reply_count['value'] += 1
+            if reply_count['value'] == 1:
+                return 200, reply_payload(
+                    conversation_id='conv-s2s',
+                    duplicate=False,
+                    delivered=True,
+                )
+            return 200, reply_payload(
+                conversation_id='conv-s2s',
+                duplicate=True,
+                delivered=False,
+            )
+        raise AssertionError((method, url, body))
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='',
+        service_token=secret,
+        auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+        correlation_id='corr-s2s-success',
+        provider='gemini',
+        model='gemini-2.5-flash',
+    )
+
+    assert evidence['status'] == 'done'
+    assert evidence['auth_mode'] == module.AUTH_MODE_SCOPED_SERVICE_TOKEN
+    assert evidence['token_source'] == 'key_vault_scoped_service_token'
+    assert evidence['token_lifecycle_applicable'] is False
+    assert evidence['token_created'] is False
+    assert evidence['token_revoked'] is False
+    assert evidence['admin_auth_source'] is None
+    assert evidence['conversation']['conversation_id'] == 'conv-s2s'
+    assert evidence['turn_idempotency_proven'] is True
+    assert secret not in json.dumps(evidence)
+    assert all('/v1/admin/' not in call[1] for call in calls)
+
+
+def test_scoped_service_token_missing_fails_before_any_request(monkeypatch):
+    monkeypatch.setattr(
+        module,
+        'request_json',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError('request must not run without scoped token')
+        ),
+    )
+
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='',
+        service_token='',
+        auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+        correlation_id='corr-s2s-missing',
+        provider='gemini',
+        model='gemini-2.5-flash',
+    )
+
+    assert evidence['status'] == 'blocked'
+    assert evidence['error'] == 'scoped_service_token_missing'
+    assert evidence['token_lifecycle_applicable'] is False
+    assert evidence['token_created'] is False
+    assert evidence['token_revoked'] is False
+
+
+def test_scoped_service_token_wrong_scope_is_rejected_without_secret_exposure(
+    monkeypatch,
+):
+    secret = 'wrong-scope-token-must-never-appear'
+
+    def fake_request(method, url, *, headers, body=None):
+        assert method == 'GET'
+        assert url.endswith('/readiness')
+        assert headers['X-Service-Token'] == secret
+        return 403, {}
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='',
+        service_token=secret,
+        auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+        correlation_id='corr-s2s-wrong-scope',
+        provider='gemini',
+        model='gemini-2.5-flash',
+    )
+
+    assert evidence['status'] == 'blocked'
+    assert evidence['error'] == 'scoped_service_token_rejected:http_403'
+    assert evidence['token_created'] is False
+    assert evidence['token_revoked'] is False
+    assert secret not in json.dumps(evidence)
 
 
 def test_delivery_summary_accepts_successful_gateway_queue():
