@@ -416,6 +416,40 @@ def test_reply_continua_mesma_conversa(api_overrides, monkeypatch):
     assert registrar.call_count == 1
 
 
+def test_reply_duplicado_nao_reenvia_teams_nem_enfileira(api_overrides, monkeypatch):
+    conversa = _conversation()
+    bot = AsyncMock()
+    enfileirar = MagicMock()
+    executar_fila = AsyncMock()
+    monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
+    monkeypatch.setattr(
+        api,
+        'executar_turno',
+        MagicMock(return_value=_turn_result(content='resposta existente', duplicate=True)),
+    )
+    monkeypatch.setattr(api, 'registrar_evento', MagicMock())
+    monkeypatch.setattr(api, 'enviar_cartao_conversa_bot', bot)
+    monkeypatch.setattr(api, '_enfileirar_teams', enfileirar)
+    monkeypatch.setattr(api, 'executar_item_fila', executar_fila)
+
+    response = client.post(
+        '/v1/teams-gateway/ai-conversations/conv-1/reply',
+        json={
+            'mensagem': 'Continue',
+            'idempotency_key': 'turn-replay',
+            'origem': 'api',
+            'enviar_teams': True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['duplicate'] is True
+    assert response.json()['data']['teams'] is None
+    bot.assert_not_awaited()
+    enfileirar.assert_not_called()
+    executar_fila.assert_not_awaited()
+
+
 def test_reply_traduz_conflito_para_409(api_overrides, monkeypatch):
     conversa = _conversation()
     monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
@@ -693,3 +727,49 @@ def test_bot_submit_valido_continua_turno_idempotente(api_overrides, monkeypatch
     assert conversa.teams_modo == 'bot'
     db.commit.assert_called()
     registrar.assert_called_once()
+
+
+def test_bot_submit_duplicado_nao_reenvia_cartao_nem_enfileira(api_overrides, monkeypatch):
+    conversa = _conversation(teams_destino_id='aad-user-1')
+    bot = AsyncMock()
+    enfileirar = MagicMock()
+    executar_fila = AsyncMock()
+    monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
+    monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', MagicMock())
+    monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
+    monkeypatch.setattr(
+        api,
+        'executar_turno',
+        MagicMock(return_value=_turn_result(content='resposta existente', duplicate=True)),
+    )
+    monkeypatch.setattr(api, 'registrar_evento', MagicMock())
+    monkeypatch.setattr(api, 'enviar_cartao_conversa_bot', bot)
+    monkeypatch.setattr(api, '_enfileirar_teams', enfileirar)
+    monkeypatch.setattr(api, 'executar_item_fila', executar_fila)
+
+    response = client.post(
+        '/v1/teams-gateway/ai-conversations/bot/messages',
+        headers={'Authorization': 'Bearer token-valido'},
+        json={
+            'id': 'activity-replay-123',
+            'type': 'message',
+            'serviceUrl': 'https://smba.trafficmanager.net/br/',
+            'from': {'id': '29:user', 'aadObjectId': 'aad-user-1'},
+            'recipient': {'id': '28:bot'},
+            'conversation': {'id': 'a:teams-1'},
+            'channelData': {'tenant': {'id': 'tenant-1'}},
+            'value': {
+                'reqsys_action': 'ai_conversation_reply',
+                'conversation_id': 'conv-1',
+                'mensagem': 'continue',
+                'correlation_id': 'corr-replay',
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['duplicate'] is True
+    assert response.json()['data']['teams'] is None
+    bot.assert_not_awaited()
+    enfileirar.assert_not_called()
+    executar_fila.assert_not_awaited()
