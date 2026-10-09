@@ -1,0 +1,14 @@
+{
+  "feature_name": "noteri-profile-auth-inspection",
+  "phase": "validation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Inspecionar sem login nem mutação o contrato da API DEV que bloqueia o E2E NORMAL/ESTUDO solicitado pelo proprietário.",
+  "acceptance_criteria": [
+    "Somente GET para cinco paths fixos no gateway DEV existente, executado no Noteri com SHA exato e sessão governada.",
+    "Não seguir redirects, usar cookies, credenciais, tokens, login demo, POST ou modificar configurações.",
+    "Distinguir campo ausente, false e true; não inferir disponibilidade de autenticação de HTTP 200.",
+    "Saída allowlisted sem corpo bruto ou identificadores pessoais; testar ausência, controles negativos e replay.",
+    "A inspeção não comprova E2E de perfil nem recuperação automática."
+  ],
+  "sdd_gate": {"tests": ["tests/test_noteri_profile_auth_inspection.py"]}
+}
