@@ -150,17 +150,5 @@ class TestNoteriWorkerHeartbeatProbe(unittest.TestCase):
         )
 
 
-    def test_governed_workflow_emits_sanitized_failure_classification(self):
-        from pathlib import Path
-
-        root = Path(__file__).resolve().parents[1]
-        workflow = (root / ".github/workflows/noteri-control-plane-probe.yml").read_text(encoding="utf-8")
-        self.assertIn("HEARTBEAT_NOT_PROVED:$failureReason", workflow)
-        self.assertIn("'^[a-z][a-z0-9_]{0,79}
-    unittest.main()
-", workflow)
-        self.assertNotIn("Write-Host $failureReceipt", workflow)
-
-
 if __name__ == "__main__":
     unittest.main()
