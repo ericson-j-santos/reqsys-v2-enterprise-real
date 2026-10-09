@@ -13,15 +13,30 @@ from app.services import ai_conversation_readiness as readiness
 client = TestClient(app)
 
 
-def _db_com_referencias(*usuarios: str):
+def _db_com_referencias(
+    *usuarios: str,
+    bot_id: str = 'bot-app-id',
+    tenant_id: str = 'bot-tenant-id',
+):
     db = MagicMock()
-    refs = [SimpleNamespace(usuario_aad_object_id=user) for user in usuarios]
+    refs = [
+        SimpleNamespace(
+            usuario_aad_object_id=user,
+            bot_id=bot_id,
+            tenant_id=tenant_id,
+        )
+        for user in usuarios
+    ]
     db.execute.return_value.scalars.return_value.all.return_value = refs
     return db
 
 
 def _settings(bot_configurado: bool):
-    return SimpleNamespace(teams_bot_configurado=bot_configurado)
+    return SimpleNamespace(
+        teams_bot_configurado=bot_configurado,
+        teams_bot_app_id='bot-app-id',
+        teams_bot_app_tenant_id='bot-tenant-id',
+    )
 
 
 def test_readiness_ready_com_bot_provider_e_unica_referencia(monkeypatch):
@@ -44,6 +59,7 @@ def test_readiness_ready_com_bot_provider_e_unica_referencia(monkeypatch):
         'conversation_reference_disponivel': True,
         'destinatario_inequivoco': True,
         'destinatario_possui_conversation_reference': True,
+        'conversation_reference_propriedade_valida': True,
     }
     assert result['destinatario']['origem'] == 'unica_conversation_reference'
     assert result['destinatario']['aad_object_id_masked'].startswith('***')
@@ -117,6 +133,26 @@ def test_readiness_destino_explicito_com_reference_fica_ready(monkeypatch):
     assert result['ready'] is True
     assert result['providers_configurados'] == ['claude']
     assert result['destinatario']['origem'] == 'configuracao_ambiente'
+
+
+def test_readiness_bloqueia_reference_de_outro_bot(monkeypatch):
+    db = _db_com_referencias('aad-owner', bot_id='stale-bot-id')
+    monkeypatch.setattr(readiness, 'settings', _settings(True))
+
+    result = readiness.avaliar_prontidao_ai_teams(
+        db,
+        env={'AI_CONVERSATION_OPENAI_API_KEY': 'fake-key'},
+    )
+
+    assert result['ready'] is False
+    assert result['checks']['conversation_reference_propriedade_valida'] is False
+    assert result['bloqueios'] == [
+        {
+            'codigo': 'CONVERSATION_REFERENCE_PROPRIEDADE_INVALIDA',
+            'acao': 'Iniciar o bot vigente no Teams para renovar a conversationReference.',
+            'detalhe': 'conversation_reference_bot_id_mismatch',
+        }
+    ]
 
 
 @pytest.mark.parametrize(

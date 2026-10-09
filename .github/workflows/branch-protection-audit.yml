@@ -538,10 +538,10 @@ jobs:
             "Required Fast Gate",
             "CI Router Result",
             "Sumario CI Enterprise Fast",
-            "Validar artefatos de governança",
+            ("Validar artefatos de governan{0}a" -f [char]0x00E7),
             "governance-validation",
             "Security Baseline",
-            "Auditar proteção enterprise da branch",
+            ("Auditar prote{0}{1}o enterprise da branch" -f [char]0x00E7, [char]0x00E3),
             "Gate de merge governado"
           )
           if ($requiredChecks.Count -ne $expectedChecks.Count) { throw "REQUIRED_CHECKS_COUNT_MISMATCH" }
@@ -704,10 +704,10 @@ jobs:
             "Required Fast Gate",
             "CI Router Result",
             "Sumario CI Enterprise Fast",
-            "Validar artefatos de governança",
+            ("Validar artefatos de governan{0}a" -f [char]0x00E7),
             "governance-validation",
             "Security Baseline",
-            "Auditar proteção enterprise da branch",
+            ("Auditar prote{0}{1}o enterprise da branch" -f [char]0x00E7, [char]0x00E3),
             "Gate de merge governado"
           )
           if ($requiredChecks.Count -ne $expectedChecks.Count) { throw "REQUIRED_CHECKS_COUNT_MISMATCH" }
