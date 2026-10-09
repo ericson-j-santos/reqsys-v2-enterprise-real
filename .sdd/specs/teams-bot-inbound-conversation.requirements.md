@@ -15,9 +15,10 @@ usuário não recebia resposta ao conversar normalmente com o bot.
    processamento conversacional.
 2. O webhook DEVE responder ao Bot Framework antes da execução do provedor de IA,
    usando uma sessão de banco própria no processamento em segundo plano.
-3. Uma mensagem livre DEVE reutilizar a conversa aberta mais recente do mesmo
-   usuário AAD e tenant; na ausência dela, DEVE criar uma nova conversa vinculada
-   ao remetente.
+3. Uma mensagem livre DEVE reutilizar somente a conversa aberta do mesmo chat
+   físico do Teams, usuário AAD e tenant. Conversas proativas ou de E2E não podem
+   contaminar esse contexto; na ausência dele, DEVE criar uma nova conversa
+   vinculada ao chat e ao remetente.
 4. Somente um provedor configurado e permitido pela política corporativa PODE ser
    selecionado. O provedor local configurado DEVE permanecer disponível como
    fallback governado.
@@ -47,6 +48,8 @@ usuário não recebia resposta ao conversar normalmente com o bot.
    visível no mesmo chat do Teams.
 5. A repetição da mesma Activity não gera um segundo turno.
 6. Nenhum segredo é exposto e produção permanece intocada.
+7. Uma mensagem humana enviada depois de um E2E proativo não herda as instruções
+   da conversa de teste anterior.
 
 ## Rollback
 

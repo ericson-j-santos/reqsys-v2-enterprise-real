@@ -44,6 +44,15 @@ def test_selecionar_provedor_teams_faz_fallback_para_ollama(monkeypatch):
     assert inbound.selecionar_provedor_teams() == ('ollama', 'qwen-test')
 
 
+def test_identificador_de_contexto_e_estavel_e_isolado_por_chat():
+    chat_1 = inbound._teams_chat_area_id('teams-conversation-1')
+    chat_2 = inbound._teams_chat_area_id('teams-conversation-2')
+
+    assert chat_1 == inbound._teams_chat_area_id('teams-conversation-1')
+    assert chat_1.startswith('teams-inbound:')
+    assert chat_1 != chat_2
+
+
 def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     db = MagicMock()
     conversa = _conversation()
@@ -51,7 +60,7 @@ def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     enviar = AsyncMock()
 
     with (
-        patch.object(inbound, '_conversa_recente', return_value=conversa),
+        patch.object(inbound, '_conversa_recente', return_value=conversa) as recente,
         patch.object(
             inbound,
             'executar_turno',
@@ -66,6 +75,9 @@ def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     assert result['conversation_id'] == 'conversation-1'
     assert result['duplicado'] is False
     assert executar.call_args.kwargs['idempotency_key'] == 'teams-activity:activity-1'
+    assert recente.call_args.kwargs['teams_chat_area_id'] == (
+        inbound._teams_chat_area_id('teams-conversation-1')
+    )
     enviar.assert_awaited_once()
     assert enviar.await_args.kwargs['resposta'] == 'Resposta do ReqSys'
 
@@ -90,6 +102,29 @@ def test_processar_retry_idempotente_nao_reenvia_resposta():
 
     assert result['duplicado'] is True
     enviar.assert_not_awaited()
+
+
+def test_mensagem_em_chat_sem_contexto_cria_conversa_isolada():
+    db = MagicMock()
+    conversa = _conversation()
+    resposta = SimpleNamespace(content='Contexto novo')
+
+    with (
+        patch.object(inbound, '_conversa_recente', return_value=None),
+        patch.object(inbound, '_criar_conversa_teams', return_value=conversa) as criar,
+        patch.object(
+            inbound,
+            'executar_turno',
+            return_value={'mensagem_assistente': resposta, 'duplicado': False},
+        ),
+        patch.object(inbound, '_responder_no_chat', AsyncMock()),
+        patch.object(inbound, 'registrar_evento'),
+    ):
+        asyncio.run(inbound.processar_activity_teams_bot(db, _activity(text='Novo assunto')))
+
+    assert criar.call_args.kwargs['teams_chat_area_id'] == inbound._teams_chat_area_id(
+        'teams-conversation-1'
+    )
 
 
 def test_submit_de_cartao_bloqueia_remetente_diferente():
