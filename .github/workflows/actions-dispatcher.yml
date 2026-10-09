@@ -31,7 +31,9 @@ on:
 permissions:
   actions: write
   contents: write
-  pull-requests: read
+  # O checkpoint pós-merge grava um comentário na PR já integrada. O endpoint
+  # de issue comments exige Pull requests: write quando o alvo é uma PR.
+  pull-requests: write
   issues: write
 
 concurrency:
