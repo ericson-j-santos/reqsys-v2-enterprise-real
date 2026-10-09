@@ -3,7 +3,15 @@ from __future__ import annotations
 import logging
 import re
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from sqlalchemy.orm import Session
 
 from app.core.correlation import resolver_correlation_id
