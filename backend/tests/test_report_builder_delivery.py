@@ -210,7 +210,7 @@ def test_endpoint_rejeita_assunto_com_crlf_sem_enviar(monkeypatch, auth_override
         lambda _settings: (fake_sender, 'reports@example.com', 'smtp'),
     )
     payload = _payload(dry_run=False).model_dump(mode='json')
-    payload['subject'] = 'Relatorio\\r\\nBcc:atacante@example.invalid'
+    payload['subject'] = 'Relatorio\r\nBcc:atacante@example.invalid'
     client = TestClient(app)
     response = client.post('/v1/report-builder/reports/generate-and-email', json=payload)
     assert response.status_code == 422
