@@ -7,7 +7,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Sonda read-only no runner existente do ReqSys para medir heartbeats distintos do worker Noteri no Engineering Orchestrator antes de qualquer recovery.",
+  "description": "Sonda somente leitura do heartbeat e da instalação do supervisor Noteri pelo runner existente e Command Gateway.",
   "scope": {
     "environment": "DEV",
     "host": "Noteri",
@@ -18,8 +18,9 @@
   },
   "sdd_gate": {
     "tests": [
-      "tests/test_noteri_worker_heartbeat_probe.py"
+      "tests/test_noteri_worker_heartbeat_probe.py",
+      "tests/test_noteri_supervisor_inspection.py"
     ],
-    "evidence_contract": "O workflow legado só executa a sonda na branch diagnóstica; acesso via Session Launcher e Command Gateway risk 1, expected_sha exato; comprova dois last_heartbeat crescentes, fresh/controller_online/auth_valid=true, host noteri e host.profile.set.v1. Falha fechada para estado stale, duplicidade, host/SHA ou capability inválidos; nunca altera perfil, runtime, credenciais ou produção. Sem pickup/E2E real não declarar ESTUDO homologado."
+    "evidence_contract": "Session Launcher e Command Gateway risk=1 no SHA exato. Inspecionar arquivos fixos do supervisor, configuração sanitizada, Startup/Python e perfil sem mutação, rejeitando links/arquivos excessivos e omitindo segredos. Inspeção concluída não significa worker operacional; o gate de heartbeat permanece bloqueante. E2E real NORMAL/ESTUDO continua obrigatório para homologação."
   }
 }

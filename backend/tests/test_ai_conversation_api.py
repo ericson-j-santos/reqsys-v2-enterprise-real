@@ -681,98 +681,49 @@ def test_bot_submit_traduz_conversa_inexistente_para_404(api_overrides, monkeypa
     assert response.status_code == 404
 
 
-def test_bot_submit_valido_continua_turno_idempotente(api_overrides, monkeypatch):
+def test_bot_submit_valido_confirma_imediatamente_e_agenda_background(
+    api_overrides,
+    monkeypatch,
+):
     db = api_overrides
     conversa = _conversation(teams_destino_id='aad-user-1')
     obter = MagicMock(return_value=conversa)
-    executar = MagicMock(return_value=_turn_result(content='resposta teams'))
+    processar = AsyncMock()
     registrar = MagicMock()
     monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
     monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', MagicMock())
     monkeypatch.setattr(api, 'obter_conversa', obter)
-    monkeypatch.setattr(api, 'executar_turno', executar)
+    monkeypatch.setattr(api, 'processar_activity_teams_bot_background', processar)
     monkeypatch.setattr(api, 'registrar_evento', registrar)
-    monkeypatch.setattr(
-        api,
-        '_entregar_resposta_teams',
-        AsyncMock(return_value={'modo': 'bot_adaptive_card'}),
-    )
 
+    activity = {
+        'id': 'activity-123',
+        'type': 'message',
+        'serviceUrl': 'https://smba.trafficmanager.net/br/',
+        'from': {'id': '29:user', 'aadObjectId': 'aad-user-1'},
+        'recipient': {'id': '28:bot'},
+        'conversation': {'id': 'a:teams-1'},
+        'channelData': {'tenant': {'id': 'tenant-1'}},
+        'value': {
+            'reqsys_action': 'ai_conversation_reply',
+            'conversation_id': 'conv-1',
+            'mensagem': 'continue',
+            'correlation_id': 'corr-bot',
+        },
+    }
     response = client.post(
         '/v1/teams-gateway/ai-conversations/bot/messages',
         headers={'Authorization': 'Bearer token-valido'},
-        json={
-            'id': 'activity-123',
-            'type': 'message',
-            'serviceUrl': 'https://smba.trafficmanager.net/br/',
-            'from': {'id': '29:user', 'aadObjectId': 'aad-user-1'},
-            'recipient': {'id': '28:bot'},
-            'conversation': {'id': 'a:teams-1'},
-            'channelData': {'tenant': {'id': 'tenant-1'}},
-            'value': {
-                'reqsys_action': 'ai_conversation_reply',
-                'conversation_id': 'conv-1',
-                'mensagem': 'continue',
-                'correlation_id': 'corr-bot',
-            },
-        },
+        json=activity,
     )
 
     assert response.status_code == 200
-    data = response.json()['data']
-    assert data['acao_ia'] is True
-    assert data['conversation_id'] == 'conv-1'
+    assert response.content == b''
     obter.assert_called_once_with(db, 'conv-1')
-    assert executar.call_args.kwargs['idempotency_key'] == 'teams-activity:activity-123'
+    processar.assert_awaited_once_with(activity)
     assert conversa.teams_modo == 'bot'
     db.commit.assert_called()
-    registrar.assert_called_once()
-
-
-def test_bot_submit_duplicado_nao_reenvia_cartao_nem_enfileira(api_overrides, monkeypatch):
-    conversa = _conversation(teams_destino_id='aad-user-1')
-    bot = AsyncMock()
-    enfileirar = MagicMock()
-    executar_fila = AsyncMock()
-    monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
-    monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', MagicMock())
-    monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
-    monkeypatch.setattr(
-        api,
-        'executar_turno',
-        MagicMock(return_value=_turn_result(content='resposta existente', duplicate=True)),
-    )
-    monkeypatch.setattr(api, 'registrar_evento', MagicMock())
-    monkeypatch.setattr(api, 'enviar_cartao_conversa_bot', bot)
-    monkeypatch.setattr(api, '_enfileirar_teams', enfileirar)
-    monkeypatch.setattr(api, 'executar_item_fila', executar_fila)
-
-    response = client.post(
-        '/v1/teams-gateway/ai-conversations/bot/messages',
-        headers={'Authorization': 'Bearer token-valido'},
-        json={
-            'id': 'activity-replay-123',
-            'type': 'message',
-            'serviceUrl': 'https://smba.trafficmanager.net/br/',
-            'from': {'id': '29:user', 'aadObjectId': 'aad-user-1'},
-            'recipient': {'id': '28:bot'},
-            'conversation': {'id': 'a:teams-1'},
-            'channelData': {'tenant': {'id': 'tenant-1'}},
-            'value': {
-                'reqsys_action': 'ai_conversation_reply',
-                'conversation_id': 'conv-1',
-                'mensagem': 'continue',
-                'correlation_id': 'corr-replay',
-            },
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()['data']['duplicate'] is True
-    assert response.json()['data']['teams'] is None
-    bot.assert_not_awaited()
-    enfileirar.assert_not_called()
-    executar_fila.assert_not_awaited()
+    assert registrar.call_args.args[3] == 'AI_CONVERSATION_TEAMS_REPLY_ACCEPTED'
 
 
 def test_observability_retorna_snapshot_sanitizado(api_overrides, monkeypatch):

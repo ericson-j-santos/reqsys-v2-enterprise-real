@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Fecha o caminho mensagem humana no Teams para processamento de IA e resposta no mesmo chat, preservando autenticação Bot Framework, idempotência, isolamento por chat, usuário e tenant e diagnóstico sanitizado.",
+  "description": "Fecha o caminho de mensagem humana e Action.Submit no Teams para processamento assíncrono de IA e resposta no mesmo chat, preservando ACK imediato, autenticação Bot Framework, idempotência, isolamento por chat, usuário e tenant e diagnóstico sanitizado.",
   "traceability": {
     "pull_request": 2517,
     "production_touched": false
@@ -22,6 +22,6 @@
       "backend/tests/test_teams_gateway_bot_service.py",
       "backend/tests/test_ai_conversation_teams_bot.py"
     ],
-    "evidence_contract": "A implementação e os testes locais não comprovam entrega humana. Após merge, o runtime PC24x7 deve servir o mesmo SHA e uma mensagem enviada por uma pessoa no Teams deve produzir uma resposta visível no mesmo chat, sem segredo em log ou artifact."
+    "evidence_contract": "A implementação e os testes locais não comprovam entrega humana. Após merge, o runtime PC24x7 deve servir o mesmo SHA; uma mensagem enviada por uma pessoa e um Action.Submit válido no Teams devem produzir resposta visível no mesmo chat sem erro visual, duplicidade, segredo em log ou artifact."
   }
 }

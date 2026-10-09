@@ -69,12 +69,14 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Prove exact host and active runner
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         shell: powershell
         run: |
           & $env:REQSYS_PYTHON scripts/noteri_control_plane_probe.py --confirm PROBE-NOTERI-CONTROL-PLANE --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
           exit $LASTEXITCODE
 
       - name: Resolve immutable noteri-runtime main SHA
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         id: noteri_runtime
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
@@ -91,6 +93,7 @@ jobs:
             core.setOutput('sha', sha);
 
       - name: Checkout immutable noteri-runtime source
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: ericson-j-santos/noteri-runtime
@@ -100,6 +103,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify immutable noteri-runtime checkout
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -107,6 +111,7 @@ jobs:
           if ($observed -ne '${{ steps.noteri_runtime.outputs.sha }}') { throw "noteri_runtime_checkout_sha_mismatch:$observed" }
 
       - name: Execute isolated physical E2E from noteri-runtime
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -114,6 +119,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Validate independent noteri-runtime evidence
+        if: github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -131,7 +137,7 @@ jobs:
           if (-not $e.independent_readback.negative_control) { throw 'noteri_runtime_negative_control_missing' }
 
       - name: Upload sanitized fallback evidence
-        if: always()
+        if: always() && github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-control-plane-${{ github.run_id }}
@@ -140,7 +146,7 @@ jobs:
           retention-days: 30
 
       - name: Upload sanitized noteri-runtime E2E evidence
-        if: always()
+        if: always() && github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-runtime-physical-e2e-${{ github.run_id }}
@@ -149,7 +155,7 @@ jobs:
           retention-days: 30
 
       - name: Summary
-        if: always()
+        if: always() && github.ref != 'refs/heads/fix/noteri-heartbeat-route-20261009'
         shell: powershell
         run: |
           "## Noteri Control Plane Fallback" | Add-Content $env:GITHUB_STEP_SUMMARY
@@ -166,7 +172,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
-          ref: 881fa97058cb45c8a30958079f7550519a83c35d
+          ref: 6cd74b32a24810cae7213744b697564e00be8b25
           path: _rules
           persist-credentials: false
 
@@ -198,8 +204,40 @@ jobs:
           if ($receipt.result -ne 'SESSION_LAUNCH_OK' -or $receipt.state_validated -ne $true -or $receipt.head -ne $env:GITHUB_SHA) {
             throw 'SESSION_PRECONDITION_NOT_PROVED'
           }
+          Write-Host ('SESSION_LAUNCH_OK source=' + $receipt.head)
           "target=$($receipt.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "id=$($receipt.session_id)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Inspecionar supervisor instalado via Gateway
+        if: github.ref == 'refs/heads/fix/noteri-heartbeat-route-20261009'
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target }}
+          SESSION_ID: ${{ steps.session.outputs.id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'governed_session_missing' }
+          $arguments = @(
+            '--policy', (Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'),
+            '--correlation-id', "noteri-inspection-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT",
+            'run', '--cwd', $env:TARGET_PATH, '--session-id', $env:SESSION_ID,
+            '--risk', '1', '--timeout', '60', '--expected-head', $env:GITHUB_SHA,
+            '--', $env:REQSYS_PYTHON, (Join-Path $env:TARGET_PATH 'scripts\noteri_supervisor_inspection.py'),
+            '--expected-sha', $env:GITHUB_SHA,
+            '--correlation-id', "noteri-inspection-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          )
+          $lines = & $env:REQSYS_PYTHON (Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py') @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'SUPERVISOR_INSPECTION_GATEWAY_FAILED' }
+          $receipt = @($lines)[-1] | ConvertFrom-Json
+          if ($receipt.result -ne 'ok' -or $receipt.command_exit_code -ne 0 -or $receipt.state_changed -ne $false) {
+            throw 'SUPERVISOR_INSPECTION_NOT_READ_ONLY'
+          }
+          $report = ([string]$receipt.stdout).Trim() | ConvertFrom-Json
+          if ($report.inspection_ok -ne $true -or $report.read_only -ne $true -or
+              $report.host -ne 'Noteri' -or $report.source_sha -ne $env:GITHUB_SHA) {
+            throw 'SUPERVISOR_INSPECTION_RECEIPT_INVALID'
+          }
+          Write-Host ('NOTERI_SUPERVISOR_INSPECTION=' + ($report | ConvertTo-Json -Depth 8 -Compress))
 
       - name: Ler heartbeat persistente pelo Command Gateway
         if: github.ref == 'refs/heads/fix/noteri-heartbeat-route-20261009'

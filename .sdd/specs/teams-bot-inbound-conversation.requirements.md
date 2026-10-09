@@ -26,8 +26,10 @@ usuário não recebia resposta ao conversar normalmente com o bot.
    Activity não pode executar novamente o turno nem duplicar a resposta.
 6. A resposta DEVE ser enviada ao mesmo chat pelo Bot Framework e vinculada à
    Activity de entrada quando houver `activity.id`.
-7. O fluxo existente de `Action.Submit` dos Adaptive Cards DEVE continuar exigindo
-   que o usuário AAD esteja associado à conversa informada.
+7. O fluxo de `Action.Submit` dos Adaptive Cards DEVE continuar exigindo que o
+   usuário AAD esteja associado à conversa informada e DEVE confirmar a Activity
+   com HTTP 200 vazio antes de executar o provedor de IA. O turno continua em
+   segundo plano e, quando concluído, entrega um novo Adaptive Card no mesmo chat.
 8. Falhas internas ou do provedor NÃO DEVEM expor exceções, tokens ou segredos. O
    usuário deve receber apenas uma mensagem de falha sanitizada.
 
@@ -50,6 +52,9 @@ usuário não recebia resposta ao conversar normalmente com o bot.
 6. Nenhum segredo é exposto e produção permanece intocada.
 7. Uma mensagem humana enviada depois de um E2E proativo não herda as instruções
    da conversa de teste anterior.
+8. Um `Action.Submit` válido recebe ACK imediato e vazio; seu processamento em
+   segundo plano entrega um novo cartão, e o replay do mesmo `activity.id` não
+   executa o provedor nem envia uma segunda resposta.
 
 ## Rollback
 
