@@ -873,6 +873,10 @@ async def _enviar_atividade_bot_framework(url: str, payload: dict[str, Any]) -> 
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(url, json=payload, headers={'Authorization': f'Bearer {token}'})
             resp.raise_for_status()
+            # O Bot Connector permite HTTP 204 sem corpo. Nao solicitar JSON nesse caso:
+            # o envio ja foi aceito e um fallback poderia duplicar a mensagem no Teams.
+            if resp.status_code == 204:
+                return {}
             return resp.json()
 
     return await call_with_retry_async(
