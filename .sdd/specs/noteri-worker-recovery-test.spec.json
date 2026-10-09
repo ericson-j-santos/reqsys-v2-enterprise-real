@@ -1,0 +1,14 @@
+{
+  "feature_name": "noteri-worker-recovery-test",
+  "phase": "validation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Validar reinício supervisionado do worker na manutenção Noteri DEV autorizada, sem desligar o supervisor nem mudar o perfil ESTUDO.",
+  "acceptance_criteria": [
+    "Validar host, SHA, executáveis/configurações, vínculo pai-filho e perfil ESTUDO antes de enviar exatamente uma solicitação local de restart-worker pelo mecanismo existente.",
+    "Não usar PID antigo, force kill, shell arbitrário, reboot, credenciais nem alteração de configuração.",
+    "Comprovar consumo da solicitação, novo worker filho do mesmo supervisor e dois heartbeats crescentes, mantendo arquivos de configuração/perfil intactos.",
+    "Persistir recibo por correlation_id antes da mutação; replay concluído não repete restart e operação incompleta exige reconciliação.",
+    "Teste prova reinício controlado, não queda inesperada do supervisor, reboot ou E2E autenticado do Task Console."
+  ],
+  "sdd_gate": {"tests": ["tests/test_noteri_worker_recovery_test.py"]}
+}
