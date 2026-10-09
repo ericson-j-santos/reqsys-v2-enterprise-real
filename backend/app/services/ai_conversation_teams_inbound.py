@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import time
 from typing import Any
 
 from sqlalchemy import desc, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -141,6 +144,7 @@ async def _responder_no_chat(
 
 
 async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) -> dict[str, Any]:
+    started = time.perf_counter()
     if str(activity.get('type') or '').strip().lower() != 'message':
         return {'processado': False, 'motivo': 'activity_type_ignored'}
 
@@ -221,6 +225,17 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
         'AI_CONVERSATION_TEAMS_MESSAGE_COMPLETED',
         'ai_conversation',
         conversa.id,
+        payload_minimo=json.dumps(
+            {
+                'channel': 'teams_bot',
+                'duplicate': bool(result['duplicado']),
+                'latency_ms': max(0, int((time.perf_counter() - started) * 1000)),
+                'response_sent': not result['duplicado'],
+                'status': 'completed',
+            },
+            separators=(',', ':'),
+            sort_keys=True,
+        ),
     )
     return {
         'processado': True,
@@ -232,16 +247,56 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
 
 async def processar_activity_teams_bot_background(activity: dict[str, Any]) -> None:
     db = SessionLocal()
+    started = time.perf_counter()
     try:
         await processar_activity_teams_bot(db, activity)
     except AIConversationError as exc:
         logger.warning('teams_inbound_ai_failed category=%s', type(exc).__name__)
+        _registrar_falha_sanitizada(db, activity, exc, started=started)
         await _notificar_falha_sanitizada(db, activity)
     except Exception as exc:
         logger.warning('teams_inbound_failed category=%s', type(exc).__name__)
+        _registrar_falha_sanitizada(db, activity, exc, started=started)
         await _notificar_falha_sanitizada(db, activity)
     finally:
         db.close()
+
+
+def _registrar_falha_sanitizada(
+    db: Session,
+    activity: dict[str, Any],
+    exc: Exception,
+    *,
+    started: float,
+) -> None:
+    value = activity.get('value') or {}
+    supplied_correlation_id = value.get('correlation_id') if isinstance(value, dict) else None
+    correlation_id = resolver_correlation_id(str(supplied_correlation_id or '').strip() or None, None)
+    try:
+        registrar_evento(
+            db,
+            correlation_id,
+            'teams-bot-runtime',
+            'AI_CONVERSATION_TEAMS_MESSAGE_FAILED',
+            'ai_conversation',
+            'background',
+            payload_minimo=json.dumps(
+                {
+                    'channel': 'teams_bot',
+                    'error_category': type(exc).__name__,
+                    'latency_ms': max(0, int((time.perf_counter() - started) * 1000)),
+                    'status': 'failed',
+                },
+                separators=(',', ':'),
+                sort_keys=True,
+            ),
+        )
+    except SQLAlchemyError as audit_exc:
+        db.rollback()
+        logger.warning(
+            'teams_inbound_failure_audit_failed category=%s',
+            type(audit_exc).__name__,
+        )
 
 
 async def _notificar_falha_sanitizada(db: Session, activity: dict[str, Any]) -> None:
