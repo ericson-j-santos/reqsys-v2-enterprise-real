@@ -115,13 +115,22 @@ jobs:
       - name: Resumo
         if: always()
         shell: powershell
+        env:
+          SUMMARY_ISSUE_NUMBER: ${{ inputs.issue_number }}
+          SUMMARY_BASE_SHA: ${{ inputs.base_sha }}
+          SUMMARY_REQUEST_ID: ${{ inputs.request_id }}
         run: |
-          "## Codex Worker Pool Handoff" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Issue: #${{ inputs.issue_number }}" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Base SHA: `${{ inputs.base_sha }}`" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Request ID: `${{ inputs.request_id }}`" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Merge/deploy: não" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Token exposto: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          @(
+            '## Codex Worker Pool Handoff'
+            ('- Issue: #{0}' -f $env:SUMMARY_ISSUE_NUMBER)
+            ('- Base SHA: {0}' -f $env:SUMMARY_BASE_SHA)
+            ('- Request ID: {0}' -f $env:SUMMARY_REQUEST_ID)
+            '- Executor: codex_worker_pool'
+            '- Modo: branch-first'
+            '- PR automática: não'
+            '- Merge/deploy: não'
+            '- Token exposto: não'
+          ) | Add-Content $env:GITHUB_STEP_SUMMARY
 
   portable-contract-e2e:
     name: Validar ReqSys contra Engineering Worker Pool v1

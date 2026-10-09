@@ -39,6 +39,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 28. A evidência deve vincular SHA do ReqSys, SHA do Engineering Worker Pool, SHA canônico das regras e `correlation_id`, declarar `physical_runtime_validated=false`; o E2E portátil não substitui o smoke/E2E PC24x7.
 29. O E2E portátil deve reutilizar `codex-worker-pool-handoff.yml`, executar somente em `push` dos arquivos do contrato com `contents: read`, timeout finito, sem deploy, produção ou mutação de segredo; o `workflow_dispatch` permanece reservado ao job físico.
 30. A evidência portátil só é válida quando `reqsys_sha` corresponde ao HEAD final já sincronizado com a `main` corrente (`behind_by=0`); qualquer novo commit ou avanço da base exige nova execução no novo SHA.
+31. O resumo PowerShell do handoff deve transportar issue, base SHA e request ID por variáveis de ambiente, sem interpolar expressões do Actions dentro de strings PowerShell com crases; deve registrar executor, modo branch-first e ausência de PR automática, merge, deploy e exposição de token.
 
 ## Critérios de aceite
 
