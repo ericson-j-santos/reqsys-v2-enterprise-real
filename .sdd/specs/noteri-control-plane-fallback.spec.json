@@ -228,13 +228,25 @@
         "runner_unavailable",
         "runner_online_headless_not_ready",
         "runtime_active",
-        "probe_failed"
+        "probe_failed",
+        "existing_probe_active"
       ],
       "reboot": false,
       "rdc_required": false,
       "production_touched": false,
-      "secrets_read": false
+      "secrets_read": false,
+      "single_flight": true,
+      "active_run_states": [
+        "queued",
+        "pending",
+        "waiting",
+        "requested",
+        "in_progress"
+      ],
+      "existing_active_run": "reuse_oldest_run_id_sha_url_and_skip_dispatch",
+      "fail_closed_on_github_api_error": true,
+      "still_requires_physical_pickup": true
     }
   },
-  "updated_at": "2026-10-08"
+  "updated_at": "2026-10-09"
 }

@@ -44,3 +44,28 @@ def test_noteri_runtime_auto_watch_is_fail_closed_on_identity() -> None:
     assert 'run.get("event") != "workflow_dispatch"' in raw
     assert "runner_unavailable" in raw
     assert "runner_online_headless_not_ready" in raw
+
+def test_noteri_auto_watch_prevents_duplicate_dispatch() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "github.rest.actions.listWorkflowRuns" in raw
+    assert "workflow_id: process.env.TARGET_WORKFLOW" in raw
+    assert "const existing = active[0];" in raw
+    assert "core.setOutput('blocked', 'true')" in raw
+    assert "core.setOutput('blocked', 'false')" in raw
+    for state in ("queued", "pending", "waiting", "requested", "in_progress"):
+        assert f"'{state}'" in raw
+    for step in (
+        "Dispatch fixed Noteri probe",
+        "Validate dispatched run identity",
+        "Wait for self-hosted pickup",
+    ):
+        assert f"- name: {step}\n        if: steps.preflight.outputs.blocked != 'true'" in raw
+
+def test_noteri_auto_watch_existing_probe_state_is_not_reported_as_success() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "existing_probe_active" in raw
+    assert "steps.dispatch.outputs.run_id || steps.preflight.outputs.run_id" in raw
+    assert "steps.dispatch.outputs.run_url || steps.preflight.outputs.run_url" in raw
+    assert "steps.preflight.outputs.head_sha || steps.main.outputs.sha" in raw
+    assert "state = \"runtime_active\" if all((ok, host_ok, listener, headless, no_rdc))" in raw
+    assert "core.info(`Existing active Noteri probe ${existing.id}; dispatch suppressed`)" in raw
