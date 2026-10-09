@@ -22,6 +22,7 @@ from app.services.ai_conversation import (
     obter_conversa,
     status_provedores,
 )
+from app.services.ai_conversation_teams_bot import enviar_cartao_conversa_bot
 from app.services.auditoria import registrar_evento
 from app.services.teams_gateway import (
     _enviar_atividade_bot_framework,
@@ -179,11 +180,14 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
     supplied_correlation_id = value.get('correlation_id') if isinstance(value, dict) else None
     correlation_id = resolver_correlation_id(str(supplied_correlation_id or '').strip() or None, None)
 
-    if action == 'ai_conversation_reply':
+    is_card_reply = action == 'ai_conversation_reply'
+    if is_card_reply:
         conversation_id = str(value.get('conversation_id') or '').strip()
         if not conversation_id:
             raise RuntimeError('teams_inbound_conversation_id_missing')
-        conversa = obter_conversa(db, conversation_id, tenant_id=tenant_id or None)
+        # O tenant da Activity pertence ao Entra; a conversa usa o tenant lógico
+        # do ReqSys. A associação ao usuário AAD é a fronteira de autorização.
+        conversa = obter_conversa(db, conversation_id)
         if (conversa.teams_destino_id or '').strip() != usuario_aad_object_id:
             registrar_evento(
                 db,
@@ -194,6 +198,9 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
                 conversation_id,
             )
             raise RuntimeError('teams_inbound_sender_mismatch')
+        conversa.teams_destino_tipo = 'chat_1a1'
+        conversa.teams_modo = 'bot'
+        db.commit()
     else:
         conversa = _conversa_recente(
             db,
@@ -219,17 +226,29 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
         enviar_teams=False,
     )
     if not result['duplicado']:
-        await _responder_no_chat(
-            db,
-            usuario_aad_object_id=usuario_aad_object_id,
-            resposta=result['mensagem_assistente'].content,
-            activity_id=activity_id,
-        )
+        if is_card_reply:
+            await enviar_cartao_conversa_bot(
+                db,
+                conversa=conversa,
+                resposta=result['mensagem_assistente'].content,
+                correlation_id=correlation_id,
+            )
+        else:
+            await _responder_no_chat(
+                db,
+                usuario_aad_object_id=usuario_aad_object_id,
+                resposta=result['mensagem_assistente'].content,
+                activity_id=activity_id,
+            )
     registrar_evento(
         db,
         correlation_id,
         'teams-bot-user',
-        'AI_CONVERSATION_TEAMS_MESSAGE_COMPLETED',
+        (
+            'AI_CONVERSATION_TEAMS_REPLY_COMPLETED'
+            if is_card_reply
+            else 'AI_CONVERSATION_TEAMS_MESSAGE_COMPLETED'
+        ),
         'ai_conversation',
         conversa.id,
         payload_minimo=json.dumps(

@@ -11,6 +11,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
 )
 from sqlalchemy.orm import Session
 
@@ -466,7 +467,6 @@ async def ai_conversations_bot_messages(
         if not usuario_aad_object_id:
             raise HTTPException(status_code=403, detail='Identidade AAD do remetente Teams ausente.')
 
-        activity_id = str(activity.get('id') or '').strip()
         try:
             # `tenant_id` da Activity e o tenant Entra do Teams. A conversa usa o
             # tenant logico do ReqSys (por exemplo, `reqsys-dev`), portanto aplicar
@@ -494,44 +494,21 @@ async def ai_conversations_bot_messages(
             conversa.teams_destino_tipo = 'chat_1a1'
             conversa.teams_modo = 'bot'
             db.commit()
-            result = executar_turno(
-                db,
-                conversa=conversa,
-                mensagem=mensagem,
-                correlation_id=correlation_id,
-                idempotency_key=f'teams-activity:{activity_id}' if activity_id else None,
-                origem='teams',
-                enviar_teams=False,
-            )
         except AIConversationError as exc:
             raise _http_error(exc) from None
 
-        teams = await _entregar_resposta_teams(
-            db,
-            conversa=conversa,
-            resposta=result['mensagem_assistente'].content,
-            correlation_id=correlation_id,
-            habilitado=not result['duplicado'],
-        )
         registrar_evento(
             db,
             correlation_id,
             'teams-bot-user',
-            'AI_CONVERSATION_TEAMS_REPLY_COMPLETED',
+            'AI_CONVERSATION_TEAMS_REPLY_ACCEPTED',
             'ai_conversation',
             conversation_id,
         )
-        return ok(
-            {
-                'type': 'message',
-                'recebido': True,
-                'acao_ia': True,
-                'conversation_id': conversation_id,
-                'duplicate': result['duplicado'],
-                'teams': teams,
-            },
-            correlation_id,
-        )
+        background_tasks.add_task(processar_activity_teams_bot_background, activity)
+        # O Bot Framework precisa receber o ACK antes do turno potencialmente longo.
+        # A resposta ao usuário é enviada depois pelo Connector no mesmo chat.
+        return Response(status_code=200)
 
     mensagem = str(
         (value.get('mensagem') if isinstance(value, dict) else '')
