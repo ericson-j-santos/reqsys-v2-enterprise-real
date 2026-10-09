@@ -34,6 +34,7 @@ on:
         options:
           - teams
           - cofre-runtime
+          - report-builder
 
 permissions:
   contents: read
@@ -126,10 +127,10 @@ jobs:
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
-      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
-      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
-      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
+      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'report-builder' && 'reqsys-report-builder-send-service-token' || (inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token') }}
+      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'report-builder' && 'report_builder:send' || (inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations') }}
+      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'report-builder' && 'report-builder-email-dev' || (inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev') }}
+      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'report-builder' && '/v1/report-builder/readiness' || (inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness') }}
       PC24X7_TEAMS_ALLOW_PROVISION: 'true'
       PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1
     steps:
@@ -194,6 +195,28 @@ jobs:
             pc24x7-teams-token-bootstrap.json
             artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json
           if-no-files-found: warn
+          retention-days: 30
+
+      - name: Executar prova governada Report Builder DEV
+        if: inputs.mode == 'report-builder'
+        shell: powershell
+        env:
+          REQSYS_API_BASE_URL: ${{ steps.locator_bootstrap.outputs.base_url }}
+        run: |
+          $token = az keyvault secret show --vault-name "$env:REQSYS_KEY_VAULT_NAME" --name reqsys-report-builder-send-service-token --query value --output tsv --only-show-errors
+          if ([string]::IsNullOrWhiteSpace($token)) { throw 'REPORT_BUILDER_SERVICE_TOKEN_MISSING' }
+          Write-Host "::add-mask::$token"
+          $env:REQSYS_REPORT_BUILDER_SERVICE_TOKEN = $token
+          python scripts/report_builder_email_dev_e2e.py --api-base "$env:REQSYS_API_BASE_URL" --recipient "ericson.takay@gmail.com" --confirm "SEND-REPORT-BUILDER-EMAIL-DEV" --output artifacts/report-builder-email-dev/evidence.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar evidência Report Builder DEV
+        if: always() && inputs.mode == 'report-builder'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
+        with:
+          name: report-builder-email-dev-${{ github.run_id }}
+          path: artifacts/report-builder-email-dev/evidence.json
+          if-no-files-found: error
           retention-days: 30
 
 

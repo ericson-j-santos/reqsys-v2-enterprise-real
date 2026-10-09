@@ -53,6 +53,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
     assert "github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev'" in content
+    assert "github.event.comment.body == '/reqsys run report-builder-email-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev'" in content
 
 
@@ -83,6 +84,9 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "mode='alm-runner-bootstrap'" in content
     assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
+    assert "'/reqsys run report-builder-email-e2e-dev')" in content
+    assert "mode='report-builder'" in content
+    assert "teams|cofre-runtime|report-builder" in content
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
