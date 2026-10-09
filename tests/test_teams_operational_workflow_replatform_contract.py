@@ -26,6 +26,7 @@ def test_control_center_schedules_only_dev_and_uses_signed_locator() -> None:
     assert "matrix.environment == 'dev'" in text
     assert 'resolve_pc24x7_dev_locator.mjs --self-test' in text
     assert 'steps.locator.outputs.base_url' in text
+    assert 'args+=(--core-api-prefix /api)' in text
     assert 'REQSYS_API_BASE_URL_DEV' not in text
 
 

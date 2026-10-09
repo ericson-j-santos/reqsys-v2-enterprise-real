@@ -103,10 +103,11 @@ def _validate_authenticated_payload(path: str, result: HttpResult) -> tuple[bool
 def _resolve_token(
     api_url: str,
     *,
+    core_api_prefix: str,
     timeout: float,
     request_fn: RequestFn,
 ) -> tuple[str | None, str, dict[str, Any]]:
-    config = request_fn(f"{api_url}/v1/auth/config", timeout=timeout)
+    config = request_fn(f"{api_url}{core_api_prefix}/v1/auth/config", timeout=timeout)
     config_check = _check("auth_config", config, expected=(200,))
     demo_enabled = bool(
         isinstance(config.body, dict)
@@ -116,7 +117,7 @@ def _resolve_token(
 
     if demo_enabled:
         login = request_fn(
-            f"{api_url}/v1/auth/login",
+            f"{api_url}{core_api_prefix}/v1/auth/login",
             method="POST",
             payload={"email": DEMO_EMAIL},
             timeout=timeout,
@@ -161,10 +162,16 @@ def validate_environment(
         str(cfg.get("api_url") or ""),
         label=f"{environment}.api_url",
     )
+    raw_core_api_prefix = str(cfg.get("core_api_prefix") or "").strip()
+    core_api_prefix = (
+        f"/{raw_core_api_prefix.strip('/')}" if raw_core_api_prefix else ""
+    )
+    if core_api_prefix not in {"", "/api"}:
+        raise ValueError("core_api_prefix deve ser vazio ou /api")
     checks: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    health = request_fn(f"{api_url}/health", timeout=timeout)
+    health = request_fn(f"{api_url}{core_api_prefix}/health", timeout=timeout)
     checks.append(_check("health", health, expected=(200,)))
 
     for path in PROTECTED_ENDPOINTS:
@@ -172,7 +179,12 @@ def validate_environment(
         result = request_fn(f"{api_url}{path}", timeout=timeout)
         checks.append(_check(f"protected:{clean_path}", result, expected=(401, 403)))
 
-    token, auth_source, auth_evidence = _resolve_token(api_url, timeout=timeout, request_fn=request_fn)
+    token, auth_source, auth_evidence = _resolve_token(
+        api_url,
+        core_api_prefix=core_api_prefix,
+        timeout=timeout,
+        request_fn=request_fn,
+    )
     checks.append(auth_evidence["config"])
     authenticated_checks: list[dict[str, Any]] = []
 
@@ -262,6 +274,7 @@ def validate_environment(
         "contract": "teams-notification-control-center-runtime-smoke",
         "environment": environment,
         "api_url": api_url,
+        "core_api_prefix": core_api_prefix,
         "generated_at_epoch": int(time.time()),
         "status": status,
         "ok": ok,
@@ -282,6 +295,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Valida o runtime do Control Center Teams")
     parser.add_argument("--environment", required=True, choices=["dev", "hml", "prod"])
     parser.add_argument("--api-url", required=True)
+    parser.add_argument("--core-api-prefix", default="")
     parser.add_argument("--timeout", type=float, default=25.0)
     parser.add_argument("--output")
     parser.add_argument("--require-authenticated", action="store_true")
@@ -290,7 +304,7 @@ def main() -> int:
 
     result = validate_environment(
         args.environment,
-        {"api_url": args.api_url},
+        {"api_url": args.api_url, "core_api_prefix": args.core_api_prefix},
         timeout=args.timeout,
         require_authenticated=args.require_authenticated,
         send_canary=args.send_canary,
