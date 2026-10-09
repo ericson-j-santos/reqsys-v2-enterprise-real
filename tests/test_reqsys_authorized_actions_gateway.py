@@ -1,3 +1,6 @@
+import os
+import subprocess
+import textwrap
 from pathlib import Path
 
 
@@ -594,10 +597,6 @@ def test_gateway_post_merge_runtime_controls_are_fixed_and_nonprod() -> None:
     assert "-f head_sha=$" not in content
     assert "'production_touched': False" in content
 
-
-import os
-import subprocess
-import textwrap
 
 
 def _simulate_pickup_cleanup(tmp_path: Path, *, status: str, jobs: str, api_failure: bool = False):
