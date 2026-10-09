@@ -110,7 +110,7 @@ def test_enviar_gateway_bot_sucesso(mock_obter_referencia, mock_enviar_atividade
     _configurar_bot(monkeypatch, configurado=True)
     referencia = MagicMock(
         service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1',
-        bot_id='bot-app-id', tenant_id='bot-tenant-id',
+        bot_id='28:bot-app-id', tenant_id='bot-tenant-id',
     )
     mock_obter_referencia.return_value = referencia
     mock_enviar_atividade.return_value = {'id': 'activity-1'}

@@ -66,6 +66,20 @@ def test_readiness_ready_com_bot_provider_e_unica_referencia(monkeypatch):
     assert 'aad-user-123456789' not in str(result)
 
 
+def test_readiness_aceita_prefixo_oficial_do_channel_account_do_teams(monkeypatch):
+    db = _db_com_referencias('aad-user-123456789', bot_id='28:bot-app-id')
+    monkeypatch.setattr(readiness, 'settings', _settings(True))
+
+    result = readiness.avaliar_prontidao_ai_teams(
+        db,
+        env={'AI_CONVERSATION_OPENAI_API_KEY': 'fake-key'},
+    )
+
+    assert result['ready'] is True
+    assert result['checks']['conversation_reference_propriedade_valida'] is True
+    assert result['bloqueios'] == []
+
+
 def test_readiness_bloqueia_bot_provider_e_reference_ausentes(monkeypatch):
     db = _db_com_referencias()
     monkeypatch.setattr(readiness, 'settings', _settings(False))
