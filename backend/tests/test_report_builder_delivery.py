@@ -128,6 +128,15 @@ def test_endpoint_dry_run_exercita_fluxo_da_aplicacao(monkeypatch, auth_override
     assert data['delivery']['recipient_delivery_confirmed'] is False
 
 
+def test_readiness_valida_escopo_sem_efeito_externo(auth_override):
+    client = TestClient(app)
+
+    response = client.get('/v1/report-builder/readiness')
+
+    assert response.status_code == 200
+    assert response.json()['data'] == {'ready': True, 'scope': 'report_builder:send'}
+
+
 def test_endpoint_rejeita_destinatario_invalido(auth_override):
     client = TestClient(app)
     payload = _payload(dry_run=True).model_dump(mode='json')

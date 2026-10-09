@@ -116,3 +116,18 @@ def test_reconcile_publica_evidencia_antes_do_bootstrap_fail_closed() -> None:
     assert 'needs: [contract, reconcile-runtime-dev]' in token_job
     assert 'VAULT_API_TOKEN_missing_on_pc24x7' not in token_job
 
+
+def test_report_builder_dev_usa_escopo_minimo_e_evidencia_sanitizada() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    assert "- report-builder" in text
+    assert "'reqsys-report-builder-send-service-token'" in text
+    assert "'report_builder:send'" in text
+    assert "'/v1/report-builder/readiness'" in text
+    assert "if: inputs.mode == 'report-builder'" in text
+    assert '--recipient "ericson.takay@gmail.com"' in text
+    assert '--confirm "SEND-REPORT-BUILDER-EMAIL-DEV"' in text
+    assert '::add-mask::$token' in text
+    assert 'report-builder-email-dev-${{ github.run_id }}' in text
+    assert 'environment: development' in text
+    assert 'production' not in text.split('Executar prova governada Report Builder DEV', 1)[1]
+

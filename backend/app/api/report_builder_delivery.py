@@ -15,6 +15,12 @@ router = APIRouter(prefix='/v1/report-builder', tags=['Report Builder'])
 require_report_builder_send_auth = require_admin_or_service_token('report_builder:send')
 
 
+@router.get('/readiness', dependencies=[Depends(require_report_builder_send_auth)])
+def report_builder_readiness():
+    """Confirma somente autenticação/escopo, sem gerar relatório ou enviar e-mail."""
+    return ok({'ready': True, 'scope': 'report_builder:send'})
+
+
 @router.post('/reports/generate-and-email', dependencies=[Depends(require_report_builder_send_auth)])
 def report_builder_generate_and_email(payload: ReportBuilderEmailRequest):
     """Gera o RDL na aplicação e envia o artefato via provedor de e-mail configurado."""
