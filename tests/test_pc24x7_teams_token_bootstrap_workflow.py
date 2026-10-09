@@ -128,6 +128,7 @@ def test_report_builder_dev_usa_escopo_minimo_e_evidencia_sanitizada() -> None:
     assert '--confirm "SEND-REPORT-BUILDER-EMAIL-DEV"' in text
     assert '::add-mask::$token' in text
     assert 'report-builder-email-dev-${{ github.run_id }}' in text
+    assert "inputs.mode == 'report-builder' && steps.bootstrap.outputs.ready == 'true'" in text
     assert 'environment: development' in text
     assert 'production' not in text.split('Executar prova governada Report Builder DEV', 1)[1]
 

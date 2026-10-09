@@ -211,7 +211,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publicar evidência Report Builder DEV
-        if: always() && inputs.mode == 'report-builder'
+        if: always() && inputs.mode == 'report-builder' && steps.bootstrap.outputs.ready == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         with:
           name: report-builder-email-dev-${{ github.run_id }}

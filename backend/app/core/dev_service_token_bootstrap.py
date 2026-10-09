@@ -25,6 +25,7 @@ from app.models.service_token import ServiceToken
 ALLOWED_IDENTITIES = {
     ('pc24x7-teams-dev', 'teams_gateway:ai_conversations'),
     ('cofre-runtime-evidence-dev', 'cofre:runtime_evidence'),
+    ('report-builder-email-dev', 'report_builder:send'),
 }
 ACTOR = 'machine:pc24x7-dev-supervisor'
 CORRELATION_ID = 'pc24x7-token-bootstrap-local'
