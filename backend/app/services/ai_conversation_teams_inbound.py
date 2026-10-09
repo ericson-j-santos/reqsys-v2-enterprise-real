@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -30,6 +31,11 @@ logger = logging.getLogger('reqsys.ai_conversation_teams_inbound')
 _PROVIDER_PRIORITY = ('ollama_gateway', 'gemini', 'groq', 'openai', 'claude', 'ollama')
 
 
+def _teams_chat_area_id(teams_conversation_id: str) -> str:
+    digest = hashlib.sha256(teams_conversation_id.encode('utf-8')).hexdigest()[:32]
+    return f'teams-inbound:{digest}'
+
+
 def _modelo_provider(provider: str) -> str:
     models = {
         'ollama_gateway': settings.codex_ollama_gateway_model or settings.codex_ollama_model,
@@ -57,12 +63,14 @@ def _conversa_recente(
     *,
     usuario_aad_object_id: str,
     tenant_id: str,
+    teams_chat_area_id: str,
 ) -> AIConversation | None:
     stmt = (
         select(AIConversation)
         .where(
             AIConversation.teams_destino_id == usuario_aad_object_id,
             AIConversation.teams_modo == 'bot',
+            AIConversation.area_id == teams_chat_area_id,
             AIConversation.status != 'encerrada',
         )
         .order_by(desc(AIConversation.ultima_mensagem_em), desc(AIConversation.criado_em))
@@ -79,6 +87,7 @@ def _criar_conversa_teams(
     mensagem: str,
     usuario_aad_object_id: str,
     tenant_id: str,
+    teams_chat_area_id: str,
     correlation_id: str,
 ) -> AIConversation:
     provider, model = selecionar_provedor_teams()
@@ -88,7 +97,7 @@ def _criar_conversa_teams(
         mensagem=mensagem,
         data_classification='internal',
         tenant_id=tenant_id or 'teams-dev',
-        area_id='teams-gateway',
+        area_id=teams_chat_area_id,
         requester_id=usuario_aad_object_id,
         cost_center='teams-bot',
         titulo='Conversa pelo Microsoft Teams',
@@ -151,6 +160,10 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
         return {'processado': False, 'motivo': 'message_empty'}
 
     activity_id = str(activity.get('id') or '').strip()
+    teams_conversation_id = str((activity.get('conversation') or {}).get('id') or '').strip()
+    if not teams_conversation_id:
+        return {'processado': False, 'motivo': 'teams_conversation_id_missing'}
+    teams_chat_area_id = _teams_chat_area_id(teams_conversation_id)
     tenant_id = str(((activity.get('channelData') or {}).get('tenant') or {}).get('id') or '').strip()
     supplied_correlation_id = value.get('correlation_id') if isinstance(value, dict) else None
     correlation_id = resolver_correlation_id(str(supplied_correlation_id or '').strip() or None, None)
@@ -175,11 +188,13 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
             db,
             usuario_aad_object_id=usuario_aad_object_id,
             tenant_id=tenant_id,
+            teams_chat_area_id=teams_chat_area_id,
         ) or _criar_conversa_teams(
             db,
             mensagem=mensagem,
             usuario_aad_object_id=usuario_aad_object_id,
             tenant_id=tenant_id,
+            teams_chat_area_id=teams_chat_area_id,
             correlation_id=correlation_id,
         )
 

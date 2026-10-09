@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Fecha o caminho mensagem humana no Teams para processamento de IA e resposta no mesmo chat, preservando autenticação Bot Framework, idempotência, isolamento por usuário e tenant e diagnóstico sanitizado.",
+  "description": "Fecha o caminho mensagem humana no Teams para processamento de IA e resposta no mesmo chat, preservando autenticação Bot Framework, idempotência, isolamento por chat, usuário e tenant e diagnóstico sanitizado.",
   "traceability": {
     "pull_request": 2517,
     "production_touched": false
