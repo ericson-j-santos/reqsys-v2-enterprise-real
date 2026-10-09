@@ -80,3 +80,35 @@ def test_teams_gateway_bot_messages_sem_aad_object_id_nao_persiste(mock_validar,
 
     assert response.status_code == 200
     mock_salvar.assert_not_called()
+
+
+@patch('app.api.teams_gateway.processar_activity_teams_bot_background')
+@patch('app.api.teams_gateway.salvar_conversa_referencia_bot')
+@patch('app.api.teams_gateway.validar_jwt_bot_framework')
+def test_teams_gateway_bot_mensagem_comum_agenda_resposta_ia(
+    mock_validar,
+    mock_salvar,
+    mock_processar,
+):
+    mock_validar.return_value = {'aud': 'bot-app-id'}
+    activity = {
+        'id': 'activity-plain-1',
+        'type': 'message',
+        'text': 'Responda exatamente TESTE REQSYS OK',
+        'serviceUrl': 'https://smba.trafficmanager.net/br/',
+        'from': {'aadObjectId': 'aad-user-1'},
+        'recipient': {'id': '28:bot-id'},
+        'conversation': {'id': 'a:conv-1'},
+        'channelData': {'tenant': {'id': 'tenant-1'}},
+    }
+
+    response = client.post(
+        '/v1/teams-gateway/bot/messages',
+        headers={'Authorization': 'Bearer token-valido'},
+        json=activity,
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['acao_ia'] is True
+    assert response.json()['data']['agendada'] is True
+    mock_processar.assert_called_once_with(activity)

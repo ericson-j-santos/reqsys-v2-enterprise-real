@@ -1,7 +1,7 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,9 @@ from app.schemas.teams_recipient_policy import (
     TeamsNotificationRecipientCreate,
     TeamsNotificationRecipientUpdate,
     TeamsRecipientPolicyMessageRequest,
+)
+from app.services.ai_conversation_teams_inbound import (
+    processar_activity_teams_bot_background,
 )
 from app.services.auditoria import registrar_evento
 from app.services.teams_flow_bot_provisioning import (
@@ -227,7 +230,11 @@ async def teams_gateway_messages_webhook(
 
 
 @router.post('/bot/messages')
-async def teams_gateway_bot_messages(request: Request, db: Session = Depends(get_db)):
+async def teams_gateway_bot_messages(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """Webhook de entrada do Bot Framework (Teams)."""
     auth_header = request.headers.get('authorization', '')
     token = auth_header[7:].strip() if auth_header.lower().startswith('bearer ') else ''
@@ -258,7 +265,16 @@ async def teams_gateway_bot_messages(request: Request, db: Session = Depends(get
             tenant_id=tenant_id,
         )
 
-    return ok({'type': 'message', 'recebido': True})
+    acao_ia = str(activity.get('type') or '').strip().lower() == 'message' and bool(
+        str(activity.get('text') or '').strip()
+        or (
+            isinstance(activity.get('value'), dict)
+            and str((activity.get('value') or {}).get('mensagem') or '').strip()
+        )
+    )
+    if acao_ia:
+        background_tasks.add_task(processar_activity_teams_bot_background, activity)
+    return ok({'type': 'message', 'recebido': True, 'acao_ia': acao_ia, 'agendada': acao_ia})
 
 
 @router.get('/flow-bot/owners', dependencies=[Depends(require_admin)])
