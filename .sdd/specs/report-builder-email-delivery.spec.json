@@ -2,7 +2,7 @@
   "feature_name": "report-builder-email-delivery",
   "project": "ReqSys v2 Enterprise — Report Builder",
   "created_at": "2026-09-23",
-  "updated_at": "2026-10-08",
+  "updated_at": "2026-10-09",
   "phase": "application-generate-and-email",
   "issue": 2027,
   "increment_type": "gap_fix",
@@ -16,6 +16,7 @@
   "files": [
     "backend/app/schemas/report_builder_delivery.py",
     "backend/app/services/report_builder_delivery.py",
+    "backend/app/services/movimento_email/sender_factory.py",
     "backend/app/api/report_builder_delivery.py",
     "backend/app/core/dev_service_token_bootstrap.py",
     "backend/app/main.py",
@@ -36,7 +37,7 @@
       "backend/tests/test_dev_service_token_bootstrap.py",
       "tests/test_report_builder_email_dev_e2e.py"
     ],
-    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa, aceitação controlada pelo provedor com RDL/correlation_id/SHA-256, sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
+    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa e prontidão explícita de transporte externo antes do envio. Coletores locais como MailHog, Mailpit e localhost bloqueiam o E2E. A aceitação controlada pelo provedor registra RDL/correlation_id/SHA-256 sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
   },
   "risk": {
     "production": false,

@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.config import settings
 from app.core.envelope import ok
 from app.core.service_tokens import require_admin_or_service_token
 from app.schemas.report_builder_delivery import ReportBuilderEmailRequest
-from app.services.movimento_email.sender_factory import ConfiguracaoEnvioError
+from app.services.movimento_email.sender_factory import (
+    ConfiguracaoEnvioError,
+    avaliar_prontidao_entrega_externa,
+)
 from app.services.movimento_email.smtp_sender import EnvioEmailError
 from app.services.report_builder_delivery import gerar_e_enviar_relatorio
 
@@ -17,8 +21,15 @@ require_report_builder_send_auth = require_admin_or_service_token('report_builde
 
 @router.get('/readiness', dependencies=[Depends(require_report_builder_send_auth)])
 def report_builder_readiness():
-    """Confirma somente autenticação/escopo, sem gerar relatório ou enviar e-mail."""
-    return ok({'ready': True, 'scope': 'report_builder:send'})
+    """Confirma autenticação e prontidão do transporte, sem enviar e-mail."""
+    transporte = avaliar_prontidao_entrega_externa(settings)
+    return ok(
+        {
+            'ready': transporte['external_delivery_capable'],
+            'scope': 'report_builder:send',
+            **transporte,
+        }
+    )
 
 
 @router.post('/reports/generate-and-email', dependencies=[Depends(require_report_builder_send_auth)])

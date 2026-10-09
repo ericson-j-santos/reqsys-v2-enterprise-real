@@ -13,7 +13,9 @@ spec.loader.exec_module(module)
 def test_dry_run_precede_envio_e_nao_inventa_readback(monkeypatch):
     calls = []
 
-    def fake_request(_url, _token, payload):
+    def fake_request(_url, _token, payload=None):
+        if payload is None:
+            return 200, {'data': {'external_delivery_capable': True, 'reason': 'ready'}}
         calls.append(payload['dry_run'])
         if payload['dry_run']:
             return 200, {'data': {'status': 'planned'}}
@@ -25,6 +27,22 @@ def test_dry_run_precede_envio_e_nao_inventa_readback(monkeypatch):
     assert result['status'] == 'accepted_pending_recipient_readback'
     assert result['recipient_delivery_confirmed'] is False
     assert result['secret_value_exposed'] is False
+
+
+def test_bloqueia_coletor_local_antes_do_dry_run(monkeypatch):
+    calls = []
+
+    def fake_request(_url, _token, payload=None):
+        calls.append(payload)
+        return 200, {'data': {'external_delivery_capable': False, 'reason': 'local_sink_configured'}}
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    try:
+        module.execute(api_base='https://dev.invalid', token='secret', recipient=module.RECIPIENT, confirm=module.CONFIRM)
+        assert False
+    except module.E2EError as exc:
+        assert str(exc) == 'external_delivery_not_ready:local_sink_configured'
+    assert calls == [None]
 
 
 def test_bloqueia_destinatario_nao_allowlisted():

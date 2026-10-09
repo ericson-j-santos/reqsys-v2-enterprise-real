@@ -22,10 +22,45 @@ from app.services.movimento_email.smtp_sender import (
 PROVEDOR_SMTP = 'smtp'
 PROVEDOR_GRAPH = 'graph'
 _PROVEDORES = {PROVEDOR_SMTP, PROVEDOR_GRAPH}
+_SMTP_LOCAL_SINK_HOSTS = {'localhost', '127.0.0.1', '::1', 'mailhog', 'mailpit'}
 
 
 class ConfiguracaoEnvioError(EnvioEmailError):
     """Configuração ausente ou inválida antes de tentar o envio."""
+
+
+def avaliar_prontidao_entrega_externa(settings: Any) -> dict[str, Any]:
+    """Avalia se o transporte configurado pode sair do ambiente local.
+
+    Coletores como MailHog são provedores SMTP válidos para desenvolvimento,
+    mas não constituem transporte externo nem evidência de entrega.
+    """
+    provedor = resolver_provedor_envio()
+    if provedor == PROVEDOR_GRAPH:
+        configurado = all(
+            str(valor or '').strip()
+            for valor in (
+                settings.azure_tenant_id,
+                settings.azure_client_id,
+                settings.azure_client_secret,
+                get_secret('MOVIMENTO_EMAIL_GRAPH_SENDER', ''),
+            )
+        )
+        return {
+            'provider': provedor,
+            'external_delivery_capable': configurado,
+            'reason': 'ready' if configurado else 'graph_configuration_incomplete',
+        }
+
+    host = str(settings.movimento_email_smtp_host or '').strip().lower().rstrip('.')
+    remetente = str(settings.movimento_email_smtp_from or settings.movimento_email_smtp_user or '').lower()
+    coletor_local = host in _SMTP_LOCAL_SINK_HOSTS or remetente.endswith(('@localhost>', '@localhost'))
+    configurado = bool(host) and not coletor_local
+    return {
+        'provider': provedor,
+        'external_delivery_capable': configurado,
+        'reason': 'ready' if configurado else ('local_sink_configured' if coletor_local else 'smtp_configuration_incomplete'),
+    }
 
 
 def resolver_provedor_envio() -> str:
