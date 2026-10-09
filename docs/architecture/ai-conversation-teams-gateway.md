@@ -268,3 +268,19 @@ Depois de Azure Bot + runtime DEV verdes:
 3. definir `AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID` quando houver mais de um usuário cadastrado;
 4. configurar ao menos um provedor de IA;
 5. executar os oito critérios de aceite acima antes de qualquer promoção para TEST/PROD.
+
+### Mensagens livres no chat pessoal
+
+Os dois endpoints aceitos para o messaging endpoint do Azure Bot
+(`/v1/teams-gateway/bot/messages` e
+`/v1/teams-gateway/ai-conversations/bot/messages`) encaminham mensagens de texto
+livre para a Central de Conversas de IA. O webhook confirma o recebimento ao Bot
+Framework antes do processamento, que ocorre em segundo plano com sessão de banco
+própria. A conversa aberta mais recente do mesmo usuário e tenant é reutilizada;
+quando não existe, uma nova conversa é criada com o primeiro provedor configurado
+permitido pela política. O `activity.id` é a chave de idempotência e impede que
+retries do Bot Framework executem novamente o mesmo turno.
+
+Falhas internas ou de provedor nunca expõem a exceção ao Teams. O usuário recebe
+uma resposta genérica para tentar novamente, enquanto o diagnóstico sanitizado é
+registrado no runtime.

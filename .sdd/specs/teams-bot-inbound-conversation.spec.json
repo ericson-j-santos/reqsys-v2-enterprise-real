@@ -1,0 +1,27 @@
+{
+  "feature_name": "teams-bot-inbound-conversation",
+  "project": "ReqSys v2 Enterprise — Teams Bot bidirecional DEV",
+  "created_at": "2026-10-09",
+  "updated_at": "2026-10-09",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fecha o caminho mensagem humana no Teams para processamento de IA e resposta no mesmo chat, preservando autenticação Bot Framework, idempotência, isolamento por usuário e tenant e diagnóstico sanitizado.",
+  "traceability": {
+    "pull_request": 2517,
+    "production_touched": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_ai_conversation_teams_inbound.py",
+      "backend/tests/test_ai_conversation_api.py",
+      "backend/tests/test_teams_gateway_bot_api.py",
+      "backend/tests/test_teams_gateway_bot_service.py",
+      "backend/tests/test_ai_conversation_teams_bot.py"
+    ],
+    "evidence_contract": "A implementação e os testes locais não comprovam entrega humana. Após merge, o runtime PC24x7 deve servir o mesmo SHA e uma mensagem enviada por uma pessoa no Teams deve produzir uma resposta visível no mesmo chat, sem segredo em log ou artifact."
+  }
+}

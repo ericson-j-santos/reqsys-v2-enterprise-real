@@ -482,6 +482,35 @@ def test_bot_evento_comum_persiste_referencia_sem_chamar_ia(api_overrides, monke
     salvar.assert_called_once()
 
 
+def test_bot_mensagem_texto_agenda_fluxo_ia_bidirecional(api_overrides, monkeypatch):
+    salvar = MagicMock()
+    processar = MagicMock()
+    monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
+    monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', salvar)
+    monkeypatch.setattr(api, 'processar_activity_teams_bot_background', processar)
+    activity = {
+        'id': 'activity-text-1',
+        'type': 'message',
+        'text': 'Responda exatamente TESTE REQSYS OK',
+        'serviceUrl': 'https://smba.trafficmanager.net/br/',
+        'from': {'aadObjectId': 'aad-user-1'},
+        'recipient': {'id': '28:bot'},
+        'conversation': {'id': 'a:teams-1'},
+        'channelData': {'tenant': {'id': 'tenant-1'}},
+    }
+
+    response = client.post(
+        '/v1/teams-gateway/ai-conversations/bot/messages',
+        headers={'Authorization': 'Bearer token-valido'},
+        json=activity,
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data']['acao_ia'] is True
+    assert response.json()['data']['agendada'] is True
+    processar.assert_called_once_with(activity)
+
+
 def test_bot_submit_exige_conversa(api_overrides, monkeypatch):
     monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
 
