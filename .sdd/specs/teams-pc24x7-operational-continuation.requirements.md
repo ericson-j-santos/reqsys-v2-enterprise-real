@@ -1,0 +1,25 @@
+# Requisitos — continuidade operacional Teams no PC24x7
+
+## Objetivo
+
+Remover dependências executáveis do Fly.io retirado e fazer os controles operacionais de
+DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
+
+## Critérios de aceite
+
+1. O probe de políticas de destinatários DEVE resolver o runtime DEV pelo locator assinado,
+   validar o contrato do locator em modo fail-closed e não usar fallback para Fly.io.
+2. O smoke agendado do Control Center DEVE executar somente contra DEV/PC24x7. HML e PROD
+   permanecem disponíveis apenas por dispatch explícito e por URL provider-neutral configurada.
+3. O workflow desativado de homologação do Merge Console no Fly DEV DEVE ser removido.
+4. O readiness do bot DEVE considerar `blocked` uma `conversationReference` cujo `bot_id` ou
+   `tenant_id` não pertença ao bot configurado, sem expor esses identificadores na resposta.
+5. Uma referência válida e pertencente ao bot vigente DEVE preservar o resultado `ready`.
+6. Nenhuma mensagem real, promoção ou alteração de produção pode ocorrer durante os testes.
+7. A validação posterior do ruleset DEVE comparar os nomes acentuados dos checks sem depender
+   da codificação do arquivo temporário criado pelo Windows PowerShell.
+
+## Rollback
+
+Reverter o commit restaura os workflows anteriores e remove o novo bloqueio de propriedade.
+Esse rollback não recria infraestrutura Fly.io nem altera dados do runtime.

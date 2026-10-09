@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "scripts/probe_teams_recipient_policy_runtime.py"
+      - "scripts/resolve_pc24x7_dev_locator.mjs"
       - "tests/scripts/test_probe_teams_recipient_policy_runtime.py"
       - "tests/test_teams_recipient_policy_issue_reconciliation_contract.py"
       - ".github/workflows/teams-recipient-policy-runtime-readiness.yml"
@@ -47,21 +48,31 @@ jobs:
           tests/test_teams_recipient_policy_issue_reconciliation_contract.py
 
   probe-runtime:
-    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
-    if: >-
-      ${{ false && (
-        github.event_name != 'pull_request'
-      ) }}
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 6
-    env:
-      TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL || 'https://reqsys-api.fly.dev' }}
+    environment: development
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5.6.0
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4.4.0
+        with:
+          node-version: "20"
+      - name: Validar locator PC24x7 fail-closed
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/teams
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output artifacts/teams/signed-locator.json
       - name: Probe recipient-policy endpoints with dry-run payloads
+        env:
+          TEAMS_GATEWAY_BASE_URL: ${{ steps.locator.outputs.base_url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -118,6 +129,8 @@ jobs:
         if: always()
         with:
           name: teams-recipient-policy-runtime-readiness
-          path: artifacts/teams/recipient-policy-runtime-readiness.json
+          path: |
+            artifacts/teams/recipient-policy-runtime-readiness.json
+            artifacts/teams/signed-locator.json
           if-no-files-found: error
           retention-days: 365

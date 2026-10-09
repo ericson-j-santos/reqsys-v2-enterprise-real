@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.bot_conversa_referencia import BotConversaReferencia
 from app.services.ai_conversation import _env_value, status_provedores
+from app.services.teams_gateway import diagnosticar_propriedade_conversa_referencia
 
 
 def _mascarar_identificador(value: str | None) -> str | None:
@@ -53,15 +54,28 @@ def avaliar_prontidao_ai_teams(
     destino_resolvido: str | None = None
     origem_destino: str | None = None
     destino_tem_referencia = False
+    referencia_destino: BotConversaReferencia | None = None
 
     if destino_explicito:
         destino_resolvido = destino_explicito
         origem_destino = 'configuracao_ambiente'
         destino_tem_referencia = destino_explicito in referencias_por_usuario
+        referencia_destino = referencias_por_usuario.get(destino_explicito)
     elif len(referencias_por_usuario) == 1:
         destino_resolvido = next(iter(referencias_por_usuario))
         origem_destino = 'unica_conversation_reference'
         destino_tem_referencia = True
+        referencia_destino = referencias_por_usuario[destino_resolvido]
+
+    falha_propriedade = (
+        diagnosticar_propriedade_conversa_referencia(
+            referencia_destino,
+            expected_bot_id=settings.teams_bot_app_id,
+            expected_tenant_id=settings.teams_bot_app_tenant_id,
+        )
+        if referencia_destino is not None
+        else None
+    )
 
     bloqueios: list[dict[str, str]] = []
     if not settings.teams_bot_configurado:
@@ -99,6 +113,14 @@ def avaliar_prontidao_ai_teams(
                 'acao': 'Definir AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID para selecionar o destinatário.',
             }
         )
+    if falha_propriedade:
+        bloqueios.append(
+            {
+                'codigo': 'CONVERSATION_REFERENCE_PROPRIEDADE_INVALIDA',
+                'acao': 'Iniciar o bot vigente no Teams para renovar a conversationReference.',
+                'detalhe': falha_propriedade,
+            }
+        )
 
     return {
         'schema_version': '1.0.0',
@@ -110,6 +132,9 @@ def avaliar_prontidao_ai_teams(
             'conversation_reference_disponivel': bool(referencias_por_usuario),
             'destinatario_inequivoco': destino_resolvido is not None,
             'destinatario_possui_conversation_reference': destino_tem_referencia,
+            'conversation_reference_propriedade_valida': bool(
+                referencia_destino is not None and falha_propriedade is None
+            ),
         },
         'providers_configurados': providers_configurados,
         'conversation_references': len(referencias_por_usuario),

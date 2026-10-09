@@ -529,7 +529,6 @@ Não considerar um PR pronto para merge quando o E2E responsivo estiver ausente,
 | `ReqSys Backup Provider Readiness` | PR, agendado, `workflow_dispatch` | Prontidão de provedores R2/Restic |
 | `ReqSys Backup Rollout Readiness` | PR, `workflow_run`, `workflow_dispatch` | Decisão de rollout DEV→STG por evidência (BACEN-04) |
 | `Fly Automatic Environment Promotion` | `workflow_run`, agendado, `workflow_dispatch` | Promoção automática de ambiente com gate pós-deploy (usa `fly-environment-promotion-stage.yml` reutilizável) |
-| `DEV Merge Console Homologation` | Push (branch específica), `workflow_dispatch` | Homologação do console de merge no Fly DEV (preflight de acesso e secrets) |
 | `Merge assíncrono governado de pilha` | `workflow_dispatch` | Merge assíncrono governado de PRs em pilha (stacked) |
 | `Configurar GitHub Token Fly DEV` | `workflow_dispatch` | Configura e valida token GitHub no `reqsys-api-dev` |
 | `Security Specialized Scanners` | PR/push main, `workflow_dispatch` | Scanners de segurança especializados (strict mode opcional) |
