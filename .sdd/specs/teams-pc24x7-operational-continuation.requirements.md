@@ -28,6 +28,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 10. O replay de uma mesma chave idempotente na rota `/reply` ou do mesmo `activity.id` no submit
     do Bot Framework DEVE retornar `duplicate=true` sem nova entrega direta, novo Adaptive Card ou
     novo item de fila Teams.
+11. O Bot Connector DEVE aceitar HTTP 204 sem corpo como resposta HTTP bem-sucedida,
+    sem tentar interpretar JSON e sem acionar fallback por erro de parsing. Respostas
+    200/201/202 com corpo malformado e respostas HTTP de erro continuam bloqueadas.
 
 ## Rollback
 

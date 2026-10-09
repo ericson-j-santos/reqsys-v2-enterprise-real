@@ -17,6 +17,53 @@ def _run(coro):
 
 
 @pytest.mark.parametrize(
+    ('status_code', 'body', 'expected', 'error_type'),
+    [
+        (201, b'{"id": "atividade-1"}', {'id': 'atividade-1'}, None),
+        (204, b'', {}, None),
+        (200, b'invalid-json', None, ValueError),
+        (401, b'{"error": "unauthorized"}', None, httpx.HTTPStatusError),
+    ],
+)
+def test_bot_connector_trata_http_204_sem_duplicar_por_erro_de_json(
+    monkeypatch, status_code, body, expected, error_type,
+):
+    requests = []
+    real_client = httpx.AsyncClient
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(status_code, content=body, request=request)
+
+    def client_factory(**kwargs):
+        return real_client(transport=httpx.MockTransport(handle), **kwargs)
+
+    async def run_once(action, **_kwargs):
+        return await action()
+
+    monkeypatch.setattr(svc, '_token_bot_framework', AsyncMock(return_value='test-only-token'))
+    monkeypatch.setattr(svc.httpx, 'AsyncClient', client_factory)
+    monkeypatch.setattr(svc, 'call_with_retry_async', run_once)
+
+    def attempt():
+        return _run(
+            svc._enviar_atividade_bot_framework(
+                'https://provider.invalid/v3/conversations/test/activities',
+                {'type': 'message', 'text': 'controle'},
+            )
+        )
+
+    if error_type is not None:
+        with pytest.raises(error_type):
+            attempt()
+    else:
+        assert attempt() == expected
+
+    assert len(requests) == 1
+    assert requests[0].headers['Authorization'] == 'Bearer test-only-token'
+
+
+@pytest.mark.parametrize(
     ('exc', 'expected'),
     [
         (CircuitBreakerOpenError('private circuit detail'), 'provider_circuit_open'),
