@@ -39,6 +39,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
     os indicadores `duplicate`, `provider_invoked` e `response_sent`. Um replay do mesmo
     `activity.id` DEVE produzir o mesmo fingerprint com `duplicate=true`,
     `provider_invoked=false` e `response_sent=false`, sem persistir o identificador original.
+14. A superfície autenticada de conversas DEVE expor um snapshot operacional agregado do inbound
+    Teams com volume, falhas, duplicidade, envio e latência, além de estado e códigos de alerta
+    determinísticos, sem retornar conteúdo de mensagem, identidade ou resposta do provedor.
 
 ## Rollback
 

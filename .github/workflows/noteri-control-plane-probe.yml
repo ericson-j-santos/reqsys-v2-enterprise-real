@@ -166,7 +166,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
-          ref: ae1c2e1a6d2aed0f2be5a3742ad120910ab25696
+          ref: 881fa97058cb45c8a30958079f7550519a83c35d
           path: _rules
           persist-credentials: false
 
