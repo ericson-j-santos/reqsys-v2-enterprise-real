@@ -650,11 +650,12 @@ def test_bot_submit_traduz_conversa_inexistente_para_404(api_overrides, monkeypa
 def test_bot_submit_valido_continua_turno_idempotente(api_overrides, monkeypatch):
     db = api_overrides
     conversa = _conversation(teams_destino_id='aad-user-1')
+    obter = MagicMock(return_value=conversa)
     executar = MagicMock(return_value=_turn_result(content='resposta teams'))
     registrar = MagicMock()
     monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
     monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', MagicMock())
-    monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
+    monkeypatch.setattr(api, 'obter_conversa', obter)
     monkeypatch.setattr(api, 'executar_turno', executar)
     monkeypatch.setattr(api, 'registrar_evento', registrar)
     monkeypatch.setattr(
@@ -687,6 +688,7 @@ def test_bot_submit_valido_continua_turno_idempotente(api_overrides, monkeypatch
     data = response.json()['data']
     assert data['acao_ia'] is True
     assert data['conversation_id'] == 'conv-1'
+    obter.assert_called_once_with(db, 'conv-1')
     assert executar.call_args.kwargs['idempotency_key'] == 'teams-activity:activity-123'
     assert conversa.teams_modo == 'bot'
     db.commit.assert_called()

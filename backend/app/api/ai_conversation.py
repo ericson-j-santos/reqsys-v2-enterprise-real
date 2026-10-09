@@ -448,10 +448,14 @@ async def ai_conversations_bot_messages(
 
         activity_id = str(activity.get('id') or '').strip()
         try:
+            # `tenant_id` da Activity e o tenant Entra do Teams. A conversa usa o
+            # tenant logico do ReqSys (por exemplo, `reqsys-dev`), portanto aplicar
+            # o identificador Entra como escopo da conversa rejeitaria submits
+            # validos. A autorizacao do canal continua vinculada ao JWT do Bot e ao
+            # AAD object ID associado a conversa logo abaixo.
             conversa = obter_conversa(
                 db,
                 conversation_id,
-                tenant_id=tenant_id or None,
             )
             destino_associado = (conversa.teams_destino_id or '').strip()
             if not destino_associado or destino_associado != usuario_aad_object_id:
