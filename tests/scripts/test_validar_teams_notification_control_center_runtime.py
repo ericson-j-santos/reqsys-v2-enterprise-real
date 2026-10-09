@@ -64,6 +64,36 @@ def test_smoke_degraded_without_token_is_non_blocking():
     assert payload['authenticated_checks'] == []
 
 
+def test_pc24x7_public_gateway_uses_api_prefix_for_core_routes():
+    requested = []
+
+    def fake(url, *, method='GET', payload=None, token=None, timeout=25):
+        requested.append(url)
+        if url.endswith('/api/health'):
+            return result(200, {'status': 'healthy'})
+        if url.endswith('/api/v1/auth/config'):
+            return result(200, {'success': True, 'data': {'demo_login_enabled': False}})
+        if '/v1/teams-gateway/notificacoes/' in url:
+            return result(401, {})
+        raise AssertionError(url)
+
+    payload = module.validate_environment(
+        'dev',
+        {'api_url': 'https://runtime.example.test', 'core_api_prefix': '/api'},
+        timeout=1,
+        require_authenticated=False,
+        send_canary=False,
+        request_fn=fake,
+    )
+
+    assert payload['ok'] is True
+    assert payload['status'] == 'degraded'
+    assert payload['core_api_prefix'] == '/api'
+    assert 'https://runtime.example.test/api/health' in requested
+    assert 'https://runtime.example.test/api/v1/auth/config' in requested
+    assert all('/api/v1/teams-gateway/' not in url for url in requested)
+
+
 def test_missing_protected_route_fails():
     def fake(url, *, method='GET', payload=None, token=None, timeout=25):
         if url.endswith('/health'):
@@ -116,6 +146,27 @@ def test_flyio_runtime_is_rejected_before_network():
         module.validate_environment(
             'dev', {'api_url': 'https://reqsys-api-dev.fly.dev'}, timeout=1,
             require_authenticated=False, send_canary=False, request_fn=fake,
+        )
+
+    assert called is False
+
+
+def test_core_api_prefix_rejects_arbitrary_paths_before_network():
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError('network must not be called')
+
+    with pytest.raises(ValueError, match='core_api_prefix'):
+        module.validate_environment(
+            'dev',
+            {'api_url': 'https://example.test', 'core_api_prefix': '/unsafe'},
+            timeout=1,
+            require_authenticated=False,
+            send_canary=False,
+            request_fn=fake,
         )
 
     assert called is False

@@ -18,6 +18,8 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 6. Nenhuma mensagem real, promoção ou alteração de produção pode ocorrer durante os testes.
 7. A validação posterior do ruleset DEVE comparar os nomes acentuados dos checks sem depender
    da codificação do arquivo temporário criado pelo Windows PowerShell.
+8. No gateway público PC24x7, health e autenticação DEV DEVEM usar o prefixo `/api`, enquanto
+   as rotas públicas protegidas do Teams permanecem em `/v1/teams-gateway/`.
 
 ## Rollback
 

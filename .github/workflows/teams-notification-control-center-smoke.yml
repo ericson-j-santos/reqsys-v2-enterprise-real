@@ -102,6 +102,9 @@ jobs:
             --timeout 25
             --output "teams-control-center-smoke-${ENVIRONMENT}.json"
           )
+          if [ "$ENVIRONMENT" = "dev" ]; then
+            args+=(--core-api-prefix /api)
+          fi
           if [ "$REQUIRE_AUTHENTICATED" = "true" ]; then
             args+=(--require-authenticated)
           fi
