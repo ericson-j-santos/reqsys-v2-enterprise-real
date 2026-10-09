@@ -63,12 +63,14 @@ MOVIMENTO_EMAIL_GRAPH_SENDER=reqsys@empresa.com
 O Graph reutiliza:
 
 ```text
-AZURE_TENANT_ID
-AZURE_CLIENT_ID
-AZURE_CLIENT_SECRET
+MOVIMENTO_EMAIL_GRAPH_TENANT_ID
+MOVIMENTO_EMAIL_GRAPH_CLIENT_ID
+MOVIMENTO_EMAIL_GRAPH_CLIENT_SECRET
 ```
 
-Nenhuma senha SMTP é necessária.
+Essas chaves identificam uma aplicação de envio segregada. O fallback legado
+para `AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` permanece apenas
+para compatibilidade. Nenhuma senha SMTP é necessária.
 
 ### Permissão administrativa
 
