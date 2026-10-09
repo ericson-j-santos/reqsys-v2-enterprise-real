@@ -604,24 +604,46 @@ jobs:
           set -euo pipefail
           cleanup_status='cancel_failed'
           cleanup_error=''
-          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
-            cleanup_status='cancel_requested'
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
-              if [ -n "$state" ]; then
-                IFS=$'\t' read -r status conclusion <<< "$state"
-                if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
-                  cleanup_status='cancelled'
-                  break
+          # Final independent readback guards against the runner starting just
+          # after the 60-second pickup window and before destructive cancellation.
+          recheck_status=''
+          recheck_jobs=''
+          if ! recheck_status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status' 2>/dev/null)"; then
+            cleanup_status='recheck_blocked'
+            cleanup_error='RUN_PICKUP_RECHECK_FAILED'
+          elif ! recheck_jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+              --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' 2>/dev/null)"; then
+            cleanup_status='recheck_blocked'
+            cleanup_error='RUN_PICKUP_RECHECK_FAILED'
+          elif ! [[ "$recheck_jobs" =~ ^[0-9]+$ ]]; then
+            cleanup_status='recheck_blocked'
+            cleanup_error='RUN_PICKUP_RECHECK_INVALID'
+          elif [ "$recheck_jobs" -gt 0 ] || [ "$recheck_status" = 'in_progress' ] || [ "$recheck_status" = 'completed' ]; then
+            cleanup_status='late_pickup_preserved'
+            cleanup_error='LATE_RUNNER_PICKUP_AFTER_TIMEOUT'
+          elif [[ "$recheck_status" =~ ^(pending|queued|requested|waiting)$ ]]; then
+            if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+              cleanup_status='cancel_requested'
+              for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
+                if [ -n "$state" ]; then
+                  IFS=$'\t' read -r status conclusion <<< "$state"
+                  if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                    cleanup_status='cancelled'
+                    break
+                  fi
                 fi
+                sleep 5
+              done
+              if [ "$cleanup_status" != 'cancelled' ]; then
+                cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
               fi
-              sleep 5
-            done
-            if [ "$cleanup_status" != 'cancelled' ]; then
-              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+            else
+              cleanup_error='RUN_CANCEL_REQUEST_FAILED'
             fi
           else
-            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+            cleanup_status='recheck_blocked'
+            cleanup_error='RUN_PICKUP_RECHECK_UNKNOWN_STATE'
           fi
           printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
           printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"

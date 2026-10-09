@@ -593,3 +593,70 @@ def test_gateway_post_merge_runtime_controls_are_fixed_and_nonprod() -> None:
     assert "-f pr_number=$" not in content
     assert "-f head_sha=$" not in content
     assert "'production_touched': False" in content
+
+
+import os
+import subprocess
+import textwrap
+
+
+def _simulate_pickup_cleanup(tmp_path: Path, *, status: str, jobs: str, api_failure: bool = False):
+    section = _workflow().split("      - name: Cancel self-hosted run without pickup\n", 1)[1]
+    section = section.split("      - name: Write sanitized dispatch evidence\n", 1)[0]
+    script = textwrap.dedent(section.split("        run: |\n", 1)[1])
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'if [[ "$1" == "run" && "$2" == "view" ]]; then\n'
+        '  if [[ "$*" == *"status,conclusion"* ]]; then printf "completed\\tcancelled\\n"; else printf "%s\\n" "$FAKE_RUN_STATUS"; fi\n'
+        'elif [[ "$1" == "api" ]]; then\n'
+        '  if [[ "$FAKE_API_FAILURE" == "1" ]]; then exit 11; fi\n'
+        '  printf "%s\\n" "$FAKE_STARTED_JOBS"\n'
+        'elif [[ "$1" == "run" && "$2" == "cancel" ]]; then\n'
+        '  touch "$FAKE_CANCEL_MARKER"\n'
+        'else exit 7; fi\n',
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+    output, marker = tmp_path / "output.txt", tmp_path / "cancelled.marker"
+    env = {
+        **os.environ,
+        "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"],
+        "FAKE_RUN_STATUS": status,
+        "FAKE_STARTED_JOBS": jobs,
+        "FAKE_API_FAILURE": "1" if api_failure else "0",
+        "FAKE_CANCEL_MARKER": str(marker),
+        "TARGET_RUN_ID": "999",
+        "GITHUB_REPOSITORY": "example/reqsys",
+        "GITHUB_OUTPUT": str(output),
+    }
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", script],
+        env=env, capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return output.read_text(encoding="utf-8"), marker.exists()
+
+
+def test_gateway_preserva_runner_que_iniciou_apos_timeout(tmp_path: Path) -> None:
+    evidence, canceled = _simulate_pickup_cleanup(tmp_path, status="queued", jobs="1")
+    assert "status=late_pickup_preserved" in evidence
+    assert "error=LATE_RUNNER_PICKUP_AFTER_TIMEOUT" in evidence
+    assert canceled is False
+
+
+def test_gateway_cancela_efetivamente_queued_sem_pickup(tmp_path: Path) -> None:
+    evidence, canceled = _simulate_pickup_cleanup(tmp_path, status="queued", jobs="0")
+    assert "status=cancelled" in evidence
+    assert evidence.splitlines()[-1] == "error="
+    assert canceled is True
+
+
+def test_gateway_nao_cancela_sem_readback_de_jobs(tmp_path: Path) -> None:
+    evidence, canceled = _simulate_pickup_cleanup(
+        tmp_path, status="queued", jobs="0", api_failure=True,
+    )
+    assert "status=recheck_blocked" in evidence
+    assert "error=RUN_PICKUP_RECHECK_FAILED" in evidence
+    assert canceled is False

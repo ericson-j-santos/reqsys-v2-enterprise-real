@@ -35,3 +35,7 @@ A execução real `36346013726` em 2026-09-27 demonstrou um caso diferente: o ru
 - teste exige consulta ao endpoint de jobs e prova por `started_at` + label `self-hosted`;
 - run com job iniciado não pode ser cancelado apenas porque o status agregado ainda aparece como `queued`;
 - run sem qualquer pickup continua sendo cancelado após o limite.
+
+## Prevenção adicional — corrida após o limite de pickup (09/10/2026)
+
+A reconciliação DEV #37929953813 começou no Desktop aproximadamente um segundo após a janela de 60 segundos e foi cancelada pelo gateway #37929942766. Preservar a janela de pickup e adicionar leitura fresca imediatamente antes do cancelamento: verificar status e job self-hosted iniciado; com pickup tardio, preservar o alvo e registrar falha de timeout sem cancelá-lo. Se o readback falhar, bloquear o cancelamento (fail-closed). Sem pickup comprovado e status ainda queued/pending, continuar cancelando. Casos positivos, negativos e falha da API são exercitados por testes que executam o trecho shell com GitHub CLI simulado, sem acesso externo.
