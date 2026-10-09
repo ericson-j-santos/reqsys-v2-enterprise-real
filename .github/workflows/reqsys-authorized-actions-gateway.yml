@@ -295,6 +295,33 @@ jobs:
           test -n "$sha"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout immutable Teams E2E admission code
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.main.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Admit one Teams E2E command per short comment window
+        id: teams_admission
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          comments_file="$RUNNER_TEMP/teams-e2e-comments-$GITHUB_RUN_ID.jsonl"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/1705/comments?per_page=100" \
+            --jq '.[] | select(.body == "/reqsys run pc24x7-teams-e2e-dev") | {id: .id, created_at: .created_at}' \
+            > "$comments_file"
+          python scripts/authorized_teams_e2e_admission.py \
+            --event-file "$GITHUB_EVENT_PATH" \
+            --comments-file "$comments_file" \
+            --expected-sha "$EXPECTED_SHA" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Resolve exact PR #2144 workload SHA
         id: change_impact_target
         if: steps.route.outputs.mode == 'change-impact-pr2144'
@@ -327,6 +354,7 @@ jobs:
 
       - name: Dispatch fixed workflow on main
         id: dispatch
+        if: steps.teams_admission.outputs.admitted != 'false'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -506,6 +534,7 @@ jobs:
 
       - name: Validate exact dispatched run evidence
         id: evidence
+        if: steps.teams_admission.outputs.admitted != 'false'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -643,12 +672,15 @@ jobs:
           RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
           TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
           TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
+          TEAMS_ADMITTED: ${{ steps.teams_admission.outputs.admitted }}
+          CANONICAL_COMMENT_ID: ${{ steps.teams_admission.outputs.canonical_comment_id }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, os
           evidence = {
-              'status': 'dispatched',
+              'status': ('duplicate_suppressed' if os.environ.get('TEAMS_ADMITTED') == 'false' else 'dispatched'),
+              'canonical_comment_id': int(os.environ['CANONICAL_COMMENT_ID']) if os.environ.get('CANONICAL_COMMENT_ID') else None,
               'authorization': 'exact_issue_actor_command_allowlist',
               'issue_number': 1705,
               'actor': os.environ['GITHUB_ACTOR'],
@@ -658,7 +690,7 @@ jobs:
               'target_ref': 'main',
               'target_sha': os.environ['EXPECTED_SHA'],
               'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None,
-              'target_run_id': int(os.environ['TARGET_RUN_ID']),
+              'target_run_id': int(os.environ['TARGET_RUN_ID']) if os.environ.get('TARGET_RUN_ID') else None,
               'target_run_url': os.environ['TARGET_RUN_URL'],
               'target_run_status': os.environ['TARGET_RUN_STATUS'],
               'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
