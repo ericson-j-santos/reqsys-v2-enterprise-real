@@ -1,0 +1,8 @@
+{
+  "feature_name": "noteri-supervisor-resume",
+  "project": "ReqSys Runtime diagnosis",
+  "phase": "validation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Retomada limitada e reversivel da instancia Noteri apos inspecao por identidade real; sem encerramento de PIDs antigos.",
+  "sdd_gate": {"tests": ["tests/test_noteri_supervisor_resume.py"], "evidence_contract": "Windows Noteri DEV, Gateway risco 2, SHA exato, wheel verificado, ausencia ou unica instancia validada, status novo e replay sem processo duplicado; heartbeat e E2E real exigem readback independente."}
+}
