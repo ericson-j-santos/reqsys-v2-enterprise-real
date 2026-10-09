@@ -13,7 +13,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
    permanecem disponíveis apenas por dispatch explícito e por URL provider-neutral configurada.
 3. O workflow desativado de homologação do Merge Console no Fly DEV DEVE ser removido.
 4. O readiness do bot DEVE considerar `blocked` uma `conversationReference` cujo `bot_id` ou
-   `tenant_id` não pertença ao bot configurado, sem expor esses identificadores na resposta.
+   `tenant_id` não pertença ao bot configurado, sem expor esses identificadores na resposta. O
+   prefixo de channel account `28:` definido pelo Teams DEVE ser normalizado antes da comparação
+   exata com o Microsoft App ID; qualquer outro identificador continua bloqueado.
 5. Uma referência válida e pertencente ao bot vigente DEVE preservar o resultado `ready`.
 6. Nenhuma mensagem real, promoção ou alteração de produção pode ocorrer durante os testes.
 7. A validação posterior do ruleset DEVE comparar os nomes acentuados dos checks sem depender

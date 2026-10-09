@@ -765,6 +765,14 @@ def obter_conversa_referencia_bot(db: Session, usuario_aad_object_id: str) -> Bo
     ).scalar_one_or_none()
 
 
+def _normalizar_bot_app_id(value: str | None) -> str:
+    """Converte o channel account do Teams para o Microsoft App ID comparável."""
+    normalized = (value or '').strip().casefold()
+    if normalized.startswith('28:'):
+        return normalized[3:]
+    return normalized
+
+
 def diagnosticar_propriedade_conversa_referencia(
     referencia: BotConversaReferencia,
     *,
@@ -772,9 +780,9 @@ def diagnosticar_propriedade_conversa_referencia(
     expected_tenant_id: str | None = None,
 ) -> str | None:
     """Valida o vínculo da referência sem expor identificadores na resposta."""
-    bot_id = (referencia.bot_id or '').strip().casefold()
+    bot_id = _normalizar_bot_app_id(referencia.bot_id)
     tenant_id = (referencia.tenant_id or '').strip().casefold()
-    expected_bot_id = (expected_bot_id or settings.teams_bot_app_id).strip().casefold()
+    expected_bot_id = _normalizar_bot_app_id(expected_bot_id or settings.teams_bot_app_id)
     expected_tenant_id = (
         expected_tenant_id or settings.teams_bot_app_tenant_id
     ).strip().casefold()
