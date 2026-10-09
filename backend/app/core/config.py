@@ -267,6 +267,9 @@ class Settings(BaseSettings):
     movimento_email_smtp_password: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_PASSWORD', '') or '')
     movimento_email_smtp_use_tls: bool = Field(default_factory=lambda: _bool_secret('MOVIMENTO_EMAIL_SMTP_USE_TLS', 'true'))
     movimento_email_smtp_from: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_SMTP_FROM', '') or '')
+    movimento_email_graph_tenant_id: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_GRAPH_TENANT_ID', '') or '')
+    movimento_email_graph_client_id: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_GRAPH_CLIENT_ID', '') or '')
+    movimento_email_graph_client_secret: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_GRAPH_CLIENT_SECRET', '') or '')
     movimento_email_recipients: str = Field(default_factory=lambda: get_secret('MOVIMENTO_EMAIL_RECIPIENTS', '') or '')
     movimento_email_lote_max: int = Field(default_factory=lambda: int(get_secret('MOVIMENTO_EMAIL_LOTE_MAX', '20') or '20'))
     movimento_email_reserva_timeout_minutos: int = Field(

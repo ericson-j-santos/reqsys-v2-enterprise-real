@@ -37,12 +37,13 @@ def avaliar_prontidao_entrega_externa(settings: Any) -> dict[str, Any]:
     """
     provedor = resolver_provedor_envio()
     if provedor == PROVEDOR_GRAPH:
+        tenant_id, client_id, client_secret = _credenciais_graph(settings)
         configurado = all(
             str(valor or '').strip()
             for valor in (
-                settings.azure_tenant_id,
-                settings.azure_client_id,
-                settings.azure_client_secret,
+                tenant_id,
+                client_id,
+                client_secret,
                 get_secret('MOVIMENTO_EMAIL_GRAPH_SENDER', ''),
             )
         )
@@ -61,6 +62,20 @@ def avaliar_prontidao_entrega_externa(settings: Any) -> dict[str, Any]:
         'external_delivery_capable': configurado,
         'reason': 'ready' if configurado else ('local_sink_configured' if coletor_local else 'smtp_configuration_incomplete'),
     }
+
+
+def _credenciais_graph(settings: Any) -> tuple[str, str, str]:
+    """Prefere a identidade segregada de e-mail e preserva compatibilidade."""
+    tenant_id = str(getattr(settings, 'movimento_email_graph_tenant_id', '') or '').strip()
+    client_id = str(getattr(settings, 'movimento_email_graph_client_id', '') or '').strip()
+    client_secret = str(getattr(settings, 'movimento_email_graph_client_secret', '') or '')
+    if tenant_id or client_id or client_secret:
+        return tenant_id, client_id, client_secret
+    return (
+        str(settings.azure_tenant_id or '').strip(),
+        str(settings.azure_client_id or '').strip(),
+        str(settings.azure_client_secret or ''),
+    )
 
 
 def resolver_provedor_envio() -> str:
@@ -102,12 +117,13 @@ def criar_sender_email_movimento(settings: Any) -> tuple[EmailSender, str, str]:
     provedor = resolver_provedor_envio()
 
     if provedor == PROVEDOR_GRAPH:
+        tenant_id, client_id, client_secret = _credenciais_graph(settings)
         faltantes = [
             nome
             for nome, valor in (
-                ('AZURE_TENANT_ID', settings.azure_tenant_id),
-                ('AZURE_CLIENT_ID', settings.azure_client_id),
-                ('AZURE_CLIENT_SECRET', settings.azure_client_secret),
+                ('MOVIMENTO_EMAIL_GRAPH_TENANT_ID', tenant_id),
+                ('MOVIMENTO_EMAIL_GRAPH_CLIENT_ID', client_id),
+                ('MOVIMENTO_EMAIL_GRAPH_CLIENT_SECRET', client_secret),
             )
             if not str(valor or '').strip()
         ]
@@ -115,9 +131,9 @@ def criar_sender_email_movimento(settings: Any) -> tuple[EmailSender, str, str]:
             raise ConfiguracaoEnvioError('Microsoft Graph não configurado: ' + ', '.join(faltantes))
         endereco = _endereco_graph()
         sender = GraphEmailSender(
-            tenant_id=settings.azure_tenant_id,
-            client_id=settings.azure_client_id,
-            client_secret=settings.azure_client_secret,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
             sender_user=endereco,
         )
         return sender, EmailIdentity(endereco).as_header(), provedor

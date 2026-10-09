@@ -18,14 +18,17 @@
     "backend/app/services/report_builder_delivery.py",
     "backend/app/services/movimento_email/sender_factory.py",
     "backend/app/api/report_builder_delivery.py",
+    "backend/app/core/config.py",
     "backend/app/core/dev_service_token_bootstrap.py",
     "backend/app/main.py",
     "backend/tests/test_dev_service_token_bootstrap.py",
+    "backend/tests/test_movimento_email_sender_factory.py",
     "backend/tests/test_report_builder_delivery.py",
     "scripts/report_builder_email_dev_e2e.py",
     "tests/test_report_builder_email_dev_e2e.py",
     ".github/workflows/pc24x7-teams-token-bootstrap.yml",
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "docs/runbooks/movimento-email-descoberta-sql-graph.md",
     ".sdd/specs/report-builder-email-delivery.requirements.md",
     ".sdd/specs/report-builder-email-delivery.design.md",
     ".sdd/specs/report-builder-email-delivery.tasks.md",
@@ -35,9 +38,10 @@
     "tests": [
       "backend/tests/test_report_builder_delivery.py",
       "backend/tests/test_dev_service_token_bootstrap.py",
+      "backend/tests/test_movimento_email_sender_factory.py",
       "tests/test_report_builder_email_dev_e2e.py"
     ],
-    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa e prontidão explícita de transporte externo antes do envio. Coletores locais como MailHog, Mailpit e localhost bloqueiam o E2E. A aceitação controlada pelo provedor registra RDL/correlation_id/SHA-256 sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
+    "evidence_contract": "Provar geração pela rota FastAPI, dry-run sem escrita externa, identidade Graph segregada e prontidão explícita de transporte externo antes do envio. Coletores locais como MailHog, Mailpit e localhost bloqueiam o E2E. A aceitação controlada pelo provedor registra RDL/correlation_id/SHA-256 sem declarar entrega ao destinatário até readback independente; controles negativos rejeitam destinatário inválido, SQL destrutivo e CRLF no assunto antes do sender. Envio real só fecha após evidência independente de entrega."
   },
   "risk": {
     "production": false,
