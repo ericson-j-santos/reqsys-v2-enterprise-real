@@ -1,0 +1,25 @@
+{
+  "feature_name": "noteri-worker-heartbeat-diagnostic",
+  "project": "ReqSys - runtime diagnosis consumer",
+  "phase": "validation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Sonda read-only no runner existente do ReqSys para medir heartbeats distintos do worker Noteri no Engineering Orchestrator antes de qualquer recovery.",
+  "scope": {
+    "environment": "DEV",
+    "host": "Noteri",
+    "runner_repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "original_probe": "ericson-j-santos/reqsys-engineering-orchestrator#55",
+    "no_new_workflow": true,
+    "no_runtime_mutation": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_worker_heartbeat_probe.py"
+    ],
+    "evidence_contract": "O workflow legado só executa a sonda na branch diagnóstica; acesso via Session Launcher e Command Gateway risk 1, expected_sha exato; comprova dois last_heartbeat crescentes, fresh/controller_online/auth_valid=true, host noteri e host.profile.set.v1. Falha fechada para estado stale, duplicidade, host/SHA ou capability inválidos; nunca altera perfil, runtime, credenciais ou produção. Sem pickup/E2E real não declarar ESTUDO homologado."
+  }
+}
