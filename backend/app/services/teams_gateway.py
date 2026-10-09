@@ -873,11 +873,14 @@ async def _enviar_atividade_bot_framework(url: str, payload: dict[str, Any]) -> 
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(url, json=payload, headers={'Authorization': f'Bearer {token}'})
             resp.raise_for_status()
-            # O Bot Connector permite HTTP 204 sem corpo. Nao solicitar JSON nesse caso:
-            # o envio ja foi aceito e um fallback poderia duplicar a mensagem no Teams.
-            if resp.status_code == 204:
-                return {}
-            return resp.json()
+            # O Bot Connector pode aceitar a atividade com qualquer resposta 2xx sem corpo.
+            # Nao solicitar JSON nesse caso: um fallback poderia duplicar a mensagem no Teams.
+            if not resp.content.strip():
+                return {'status_code': resp.status_code}
+            provider = resp.json()
+            if not isinstance(provider, dict):
+                raise TypeError('Bot Connector response must be a JSON object')
+            return {**provider, 'status_code': resp.status_code}
 
     return await call_with_retry_async(
         _postar,
@@ -977,7 +980,11 @@ async def _enviar_bot(
             correlation_id,
             entregue=True,
             canal_usado='bot',
-            provider_response={'message_id': provider.get('id'), 'chat_id': referencia.conversation_id},
+            provider_response={
+                'message_id': provider.get('id'),
+                'chat_id': referencia.conversation_id,
+                'status_code': provider.get('status_code'),
+            },
         )
     except CircuitBreakerOpenError as exc:
         return _resultado(

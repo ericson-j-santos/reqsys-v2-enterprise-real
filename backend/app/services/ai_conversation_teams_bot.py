@@ -121,5 +121,6 @@ async def enviar_cartao_conversa_bot(
         'canal_usado': 'bot',
         'message_id': provider.get('id'),
         'chat_id': referencia.conversation_id,
+        'status_code': provider.get('status_code'),
         'usuario_aad_object_id': usuario_aad,
     }
