@@ -173,6 +173,78 @@ def test_submit_de_cartao_bloqueia_remetente_diferente():
         asyncio.run(inbound.processar_activity_teams_bot(db, activity))
 
 
+def test_submit_de_cartao_processa_turno_e_entrega_novo_cartao():
+    db = MagicMock()
+    conversa = _conversation()
+    resposta = SimpleNamespace(content='Resposta do cartão')
+    bot = AsyncMock()
+    texto = AsyncMock()
+    activity = _activity(activity_id='activity-card-1')
+    activity['value'] = {
+        'reqsys_action': 'ai_conversation_reply',
+        'conversation_id': 'conversation-1',
+        'mensagem': 'Continue',
+        'correlation_id': 'corr-card',
+    }
+
+    with (
+        patch.object(inbound, 'obter_conversa', return_value=conversa) as obter,
+        patch.object(
+            inbound,
+            'executar_turno',
+            return_value={'mensagem_assistente': resposta, 'duplicado': False},
+        ) as executar,
+        patch.object(inbound, 'enviar_cartao_conversa_bot', bot),
+        patch.object(inbound, '_responder_no_chat', texto),
+        patch.object(inbound, 'registrar_evento'),
+    ):
+        result = asyncio.run(inbound.processar_activity_teams_bot(db, activity))
+
+    obter.assert_called_once_with(db, 'conversation-1')
+    assert executar.call_args.kwargs['idempotency_key'] == 'teams-activity:activity-card-1'
+    bot.assert_awaited_once_with(
+        db,
+        conversa=conversa,
+        resposta='Resposta do cartão',
+        correlation_id='corr-card',
+    )
+    texto.assert_not_awaited()
+    assert result['duplicado'] is False
+    db.commit.assert_called()
+
+
+def test_submit_de_cartao_replay_nao_entrega_segundo_cartao():
+    db = MagicMock()
+    conversa = _conversation()
+    resposta = SimpleNamespace(content='Resposta já persistida')
+    bot = AsyncMock()
+    texto = AsyncMock()
+    activity = _activity(activity_id='activity-card-replay')
+    activity['value'] = {
+        'reqsys_action': 'ai_conversation_reply',
+        'conversation_id': 'conversation-1',
+        'mensagem': 'Continue',
+        'correlation_id': 'corr-card-replay',
+    }
+
+    with (
+        patch.object(inbound, 'obter_conversa', return_value=conversa),
+        patch.object(
+            inbound,
+            'executar_turno',
+            return_value={'mensagem_assistente': resposta, 'duplicado': True},
+        ),
+        patch.object(inbound, 'enviar_cartao_conversa_bot', bot),
+        patch.object(inbound, '_responder_no_chat', texto),
+        patch.object(inbound, 'registrar_evento'),
+    ):
+        result = asyncio.run(inbound.processar_activity_teams_bot(db, activity))
+
+    assert result['duplicado'] is True
+    bot.assert_not_awaited()
+    texto.assert_not_awaited()
+
+
 def test_background_notifica_falha_sem_expor_excecao():
     db = MagicMock()
     notificar = AsyncMock()

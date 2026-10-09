@@ -79,6 +79,12 @@ https://<HOST_REQSYS>/v1/teams-gateway/ai-conversations/bot/messages
 
 O endpoint valida o JWT do Bot Framework. O cartão envia somente identificadores de roteamento; credenciais dos provedores permanecem no servidor.
 
+O `Action.Submit` recebe confirmação HTTP 200 vazia assim que o JWT, a mensagem e
+a associação entre conversa e usuário AAD são validados. O turno de IA continua
+em segundo plano, com sessão de banco própria, e o novo Adaptive Card é enviado
+pelo Connector quando a resposta termina. Isso mantém o endpoint dentro da janela
+de resposta do Teams sem enfraquecer autorização, idempotência ou auditoria.
+
 ### Consultar estado
 
 `GET /v1/teams-gateway/ai-conversations/status`
@@ -284,3 +290,8 @@ retries do Bot Framework executem novamente o mesmo turno.
 Falhas internas ou de provedor nunca expõem a exceção ao Teams. O usuário recebe
 uma resposta genérica para tentar novamente, enquanto o diagnóstico sanitizado é
 registrado no runtime.
+
+Submits dos Adaptive Cards seguem o mesmo modelo assíncrono das mensagens livres:
+o webhook valida autorização e ownership, confirma o recebimento imediatamente e
+usa `teams-activity:<activity.id>` no processamento em segundo plano. Um replay da
+mesma Activity não chama o provedor nem entrega um segundo cartão.
