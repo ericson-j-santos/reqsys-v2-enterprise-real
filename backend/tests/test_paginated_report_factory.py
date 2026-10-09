@@ -96,6 +96,8 @@ def test_factory_rejeita_segredo_inline_na_connection_string():
         'UPDATE tbDemandas SET Status = 1',
         'EXEC dbo.GerarRelatorio',
         'SELECT * FROM tbDemandas; DROP TABLE tbDemandas',
+        'SELECT Status INTO tbDemandasBackup FROM tbDemandas',
+        'WITH itens AS (SELECT Status FROM tbDemandas) SELECT Status INTO tbDemandasBackup FROM itens',
     ],
 )
 def test_factory_rejeita_query_que_nao_e_somente_leitura(query):
