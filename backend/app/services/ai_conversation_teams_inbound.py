@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from typing import Any
 
@@ -32,6 +33,9 @@ from app.services.teams_gateway import (
 logger = logging.getLogger('reqsys.ai_conversation_teams_inbound')
 
 _PROVIDER_PRIORITY = ('ollama_gateway', 'gemini', 'groq', 'openai', 'claude', 'ollama')
+REPLAY_PROOF_TTL_SECONDS = 600
+_replay_proof_deadlines: dict[str, float] = {}
+_replay_proof_lock = threading.Lock()
 
 
 def _activity_id_sha256(activity_id: str) -> str | None:
@@ -39,6 +43,44 @@ def _activity_id_sha256(activity_id: str) -> str | None:
     if not normalized:
         return None
     return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+
+def _replay_proof_scope_key(usuario_aad_object_id: str, teams_conversation_id: str) -> str:
+    raw = f'{usuario_aad_object_id.strip()}\0{teams_conversation_id.strip()}'
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+
+def armar_prova_replay_teams(
+    *,
+    usuario_aad_object_id: str,
+    teams_conversation_id: str,
+    ttl_seconds: int = REPLAY_PROOF_TTL_SECONDS,
+) -> int:
+    if not usuario_aad_object_id.strip() or not teams_conversation_id.strip():
+        raise ValueError('replay_proof_scope_invalid')
+    ttl = max(30, min(int(ttl_seconds), REPLAY_PROOF_TTL_SECONDS))
+    key = _replay_proof_scope_key(usuario_aad_object_id, teams_conversation_id)
+    now = time.monotonic()
+    with _replay_proof_lock:
+        expired = [item for item, deadline in _replay_proof_deadlines.items() if deadline <= now]
+        for item in expired:
+            _replay_proof_deadlines.pop(item, None)
+        _replay_proof_deadlines[key] = now + ttl
+    return ttl
+
+
+def _consumir_prova_replay_teams(
+    *,
+    usuario_aad_object_id: str,
+    teams_conversation_id: str,
+) -> bool:
+    if not usuario_aad_object_id.strip() or not teams_conversation_id.strip():
+        return False
+    key = _replay_proof_scope_key(usuario_aad_object_id, teams_conversation_id)
+    now = time.monotonic()
+    with _replay_proof_lock:
+        deadline = _replay_proof_deadlines.pop(key, None)
+    return deadline is not None and deadline > now
 
 
 def _teams_chat_area_id(teams_conversation_id: str) -> str:
@@ -150,7 +192,12 @@ async def _responder_no_chat(
     await _enviar_atividade_bot_framework(url, payload)
 
 
-async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) -> dict[str, Any]:
+async def processar_activity_teams_bot(
+    db: Session,
+    activity: dict[str, Any],
+    *,
+    _replay_probe: bool = False,
+) -> dict[str, Any]:
     started = time.perf_counter()
     if str(activity.get('type') or '').strip().lower() != 'message':
         return {'processado': False, 'motivo': 'activity_type_ignored'}
@@ -178,6 +225,14 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
     tenant_id = str(((activity.get('channelData') or {}).get('tenant') or {}).get('id') or '').strip()
     supplied_correlation_id = value.get('correlation_id') if isinstance(value, dict) else None
     correlation_id = resolver_correlation_id(str(supplied_correlation_id or '').strip() or None, None)
+    replay_proof_requested = (
+        False
+        if _replay_probe
+        else _consumir_prova_replay_teams(
+            usuario_aad_object_id=usuario_aad_object_id,
+            teams_conversation_id=teams_conversation_id,
+        )
+    )
 
     if action == 'ai_conversation_reply':
         conversation_id = str(value.get('conversation_id') or '').strip()
@@ -218,7 +273,7 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
         origem='teams',
         enviar_teams=False,
     )
-    if not result['duplicado']:
+    if not result['duplicado'] and not _replay_probe:
         await _responder_no_chat(
             db,
             usuario_aad_object_id=usuario_aad_object_id,
@@ -239,18 +294,34 @@ async def processar_activity_teams_bot(db: Session, activity: dict[str, Any]) ->
                 'duplicate': bool(result['duplicado']),
                 'latency_ms': max(0, int((time.perf_counter() - started) * 1000)),
                 'provider_invoked': not result['duplicado'],
-                'response_sent': not result['duplicado'],
+                'response_sent': not result['duplicado'] and not _replay_probe,
                 'status': 'completed',
             },
             separators=(',', ':'),
             sort_keys=True,
         ),
     )
+    replay_result = None
+    if replay_proof_requested:
+        replay_result = await processar_activity_teams_bot(
+            db,
+            activity,
+            _replay_probe=True,
+        )
     return {
         'processado': True,
         'conversation_id': conversa.id,
         'duplicado': result['duplicado'],
         'correlation_id': correlation_id,
+        'replay_proof': (
+            {
+                'requested': True,
+                'duplicate': replay_result.get('duplicado') is True,
+                'response_sent': False,
+            }
+            if replay_result is not None
+            else None
+        ),
     }
 
 

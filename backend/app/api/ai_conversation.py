@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
@@ -35,6 +37,7 @@ from app.services.ai_conversation_teams_bot import (
     enviar_cartao_conversa_bot,
 )
 from app.services.ai_conversation_teams_inbound import (
+    armar_prova_replay_teams,
     processar_activity_teams_bot_background,
 )
 from app.services.ai_corporate_policy import policy_mode
@@ -44,6 +47,8 @@ from app.services.ai_history_protection import (
 )
 from app.services.auditoria import registrar_evento
 from app.services.teams_gateway import (
+    diagnosticar_propriedade_conversa_referencia,
+    obter_conversa_referencia_bot,
     salvar_conversa_referencia_bot,
     validar_jwt_bot_framework,
 )
@@ -171,6 +176,54 @@ def ai_conversations_readiness(
     db: Session = Depends(get_db),
 ):
     return ok(avaliar_prontidao_ai_teams(db))
+
+
+@router.post('/{conversation_id}/replay-proof/arm')
+def ai_conversations_replay_proof_arm(
+    conversation_id: str,
+    ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    if settings.normalized_environment != 'desenvolvimento':
+        raise HTTPException(status_code=403, detail='Prova de replay permitida somente em DEV.')
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    try:
+        conversa = obter_conversa(db, conversation_id)
+    except AIConversationError as exc:
+        raise _http_error(exc) from None
+    usuario_aad_object_id = str(conversa.teams_destino_id or '').strip()
+    if conversa.teams_modo != 'bot' or not usuario_aad_object_id:
+        raise HTTPException(status_code=409, detail='Conversa sem destino Bot elegível para replay.')
+    referencia = obter_conversa_referencia_bot(db, usuario_aad_object_id)
+    if referencia is None or diagnosticar_propriedade_conversa_referencia(referencia):
+        raise HTTPException(status_code=409, detail='Referência Bot vigente indisponível para replay.')
+    ttl = armar_prova_replay_teams(
+        usuario_aad_object_id=usuario_aad_object_id,
+        teams_conversation_id=referencia.conversation_id,
+    )
+    registrar_evento(
+        db,
+        correlation_id,
+        ctx.ator,
+        'AI_CONVERSATION_TEAMS_REPLAY_PROOF_ARMED',
+        'ai_conversation',
+        conversation_id,
+        payload_minimo=json.dumps(
+            {'expires_in_seconds': ttl, 'one_shot': True, 'status': 'armed'},
+            separators=(',', ':'),
+            sort_keys=True,
+        ),
+    )
+    return ok(
+        {
+            'armed': True,
+            'conversation_id': conversation_id,
+            'expires_in_seconds': ttl,
+            'one_shot': True,
+        },
+        correlation_id,
+    )
 
 
 @router.post('/retention/purge')

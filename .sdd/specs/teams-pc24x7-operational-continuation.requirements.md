@@ -39,6 +39,10 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
     os indicadores `duplicate`, `provider_invoked` e `response_sent`. Um replay do mesmo
     `activity.id` DEVE produzir o mesmo fingerprint com `duplicate=true`,
     `provider_invoked=false` e `response_sent=false`, sem persistir o identificador original.
+14. A prova física de replay inbound DEVE usar um gatilho exclusivamente DEV, one-shot, com TTL
+    máximo de dez minutos e escopo derivado da referência Bot vigente. O gatilho DEVE reutilizar
+    em memória a mesma Activity real, suprimir uma segunda resposta mesmo se a idempotência
+    regredir, expirar apó consumo e permanecer bloqueado em TEST, HML e PROD.
 
 ## Rollback
 

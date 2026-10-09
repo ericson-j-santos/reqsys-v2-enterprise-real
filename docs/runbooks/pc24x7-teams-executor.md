@@ -122,3 +122,11 @@ Após o primeiro Adaptive Card real chegar ao Teams:
 3. retransmitir a mesma `activity.id` em teste controlado;
 4. comprovar que não houve segunda chamada ao provedor;
 5. conferir `correlation_id`, `content_sha256` e auditoria.
+
+O E2E DEV arma automaticamente uma prova one-shot por até dez minutos para a
+referência Bot da conversa recém-entregue. A próxima mensagem real enviada pelo
+mesmo chat é processada normalmente e reapresentada uma única vez em memória. O
+replay suprime qualquer segunda resposta e deve gerar dois eventos com o mesmo
+`activity_id_sha256`; o segundo precisa registrar `duplicate=true`,
+`provider_invoked=false` e `response_sent=false`. O gatilho é recusado fora de DEV,
+não persiste a Activity e expira apó uso ou TTL.
