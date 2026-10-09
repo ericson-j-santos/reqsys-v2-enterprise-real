@@ -64,6 +64,23 @@ def test_rotates_allowlisted_identity_and_audits(monkeypatch):
     assert db.committed is True
 
 
+def test_rotates_report_builder_dev_identity(monkeypatch):
+    monkeypatch.setattr(bootstrap, 'settings', SimpleNamespace(normalized_environment='desenvolvimento'))
+    db = FakeDb()
+
+    raw = bootstrap.rotate_dev_service_token(
+        db,
+        label='report-builder-email-dev',
+        scope='report_builder:send',
+    )
+
+    assert len(raw) > 20
+    created = next(value for value in db.added if isinstance(value, ServiceToken))
+    assert created.label == 'report-builder-email-dev'
+    assert json.loads(created.scopes) == ['report_builder:send']
+    assert db.committed is True
+
+
 @pytest.mark.parametrize('environment', ['production', 'staging', 'testes'])
 def test_blocks_outside_development(monkeypatch, environment):
     monkeypatch.setattr(bootstrap, 'settings', SimpleNamespace(normalized_environment=environment))
