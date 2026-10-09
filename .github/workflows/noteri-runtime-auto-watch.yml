@@ -35,7 +35,38 @@ jobs:
           test -n "$sha"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
+      # Reuse a pending job rather than dispatch every 10 minutes while the runner is unavailable.
+      - name: Avoid duplicate active Noteri probe
+        id: preflight
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const activeStates = ['queued', 'pending', 'waiting', 'requested', 'in_progress'];
+            const active = [];
+            for (const status of activeStates) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: process.env.TARGET_WORKFLOW,
+                status,
+                per_page: 100,
+              });
+              active.push(...(data.workflow_runs || []).filter(run => activeStates.includes(run.status)));
+            }
+            active.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.id - b.id);
+            const existing = active[0];
+            if (existing) {
+              core.setOutput('blocked', 'true');
+              core.setOutput('run_id', String(existing.id));
+              core.setOutput('run_url', String(existing.html_url));
+              core.setOutput('head_sha', String(existing.head_sha));
+              core.setOutput('status', String(existing.status));
+              core.info(`Existing active Noteri probe ${existing.id}; dispatch suppressed`);
+            } else {
+              core.setOutput('blocked', 'false');
+            }
       - name: Dispatch fixed Noteri probe
+        if: steps.preflight.outputs.blocked != 'true'
         id: dispatch
         shell: bash
         env:
@@ -55,6 +86,7 @@ jobs:
           printf 'run_url=%s\n' "$run_url" >> "$GITHUB_OUTPUT"
 
       - name: Validate dispatched run identity
+        if: steps.preflight.outputs.blocked != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,6 +115,7 @@ jobs:
           PY
 
       - name: Wait for self-hosted pickup
+        if: steps.preflight.outputs.blocked != 'true'
         id: pickup
         shell: bash
         env:
@@ -185,17 +218,17 @@ jobs:
         id: monitor
         shell: bash
         env:
-          PICKUP_STATE: ${{ steps.pickup.outputs.state }}
-          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status }}
+          PICKUP_STATE: ${{ steps.preflight.outputs.blocked == 'true' && 'existing_probe_active' || steps.pickup.outputs.state }}
+          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status || steps.preflight.outputs.status }}
           PICKUP_CONCLUSION: ${{ steps.pickup.outputs.conclusion }}
           PROBE_CONCLUSION: ${{ steps.completion.outputs.conclusion }}
           EVIDENCE_STATE: ${{ steps.evidence.outputs.state }}
           HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
           RUNNER_LISTENER: ${{ steps.evidence.outputs.runner_listener_detected }}
           RDC_REQUIRED: ${{ steps.evidence.outputs.rdc_required }}
-          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
-          TARGET_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id || steps.preflight.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url || steps.preflight.outputs.run_url }}
+          TARGET_SHA: ${{ steps.preflight.outputs.head_sha || steps.main.outputs.sha }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -240,10 +273,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           STATE: ${{ steps.monitor.outputs.state }}
-          TARGET_SHA: ${{ steps.main.outputs.sha }}
-          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
-          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status }}
+          TARGET_SHA: ${{ steps.preflight.outputs.head_sha || steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id || steps.preflight.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url || steps.preflight.outputs.run_url }}
+          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status || steps.preflight.outputs.status }}
           PROBE_CONCLUSION: ${{ steps.completion.outputs.conclusion }}
           HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
           RUNNER_LISTENER: ${{ steps.evidence.outputs.runner_listener_detected }}
@@ -310,7 +343,7 @@ jobs:
         shell: bash
         env:
           STATE: ${{ steps.monitor.outputs.state }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url || steps.preflight.outputs.run_url }}
         run: |
           {
             echo '## Noteri Runtime Auto Watch'
