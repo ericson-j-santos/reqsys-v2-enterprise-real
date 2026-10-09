@@ -359,7 +359,7 @@ async def ai_conversations_reply(
         conversa=conversa,
         resposta=result['mensagem_assistente'].content,
         correlation_id=correlation_id,
-        habilitado=payload.enviar_teams,
+        habilitado=payload.enviar_teams and not result['duplicado'],
     )
     registrar_evento(
         db,
@@ -491,7 +491,7 @@ async def ai_conversations_bot_messages(
             conversa=conversa,
             resposta=result['mensagem_assistente'].content,
             correlation_id=correlation_id,
-            habilitado=True,
+            habilitado=not result['duplicado'],
         )
         registrar_evento(
             db,

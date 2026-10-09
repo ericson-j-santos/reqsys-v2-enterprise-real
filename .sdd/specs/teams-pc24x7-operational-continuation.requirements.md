@@ -25,6 +25,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 9. O Adaptive Card bidirecional DEVE bloquear submissão sem mensagem no cliente. Caso um cliente
    ainda envie o payload vazio, o endpoint do Bot Framework DEVE responder HTTP 200, registrar a
    rejeição e não chamar o provedor de IA, evitando que o Teams apresente falso erro de aplicativo.
+10. O replay de uma mesma chave idempotente na rota `/reply` ou do mesmo `activity.id` no submit
+    do Bot Framework DEVE retornar `duplicate=true` sem nova entrega direta, novo Adaptive Card ou
+    novo item de fila Teams.
 
 ## Rollback
 
