@@ -224,7 +224,45 @@ jobs:
             '--correlation-id', "noteri-heartbeat-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           )
           $lines = & $env:REQSYS_PYTHON (Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py') @args
-          if ($LASTEXITCODE -ne 0) { throw 'HEARTBEAT_NOT_PROVED' }
+          if ($LASTEXITCODE -ne 0) {
+            # Extrair apenas códigos allowlisted do recibo já mascarado pelo Gateway.
+            $failureReason = 'gateway_nonzero'
+            try {
+              $failureReceipt = @($lines)[-1] | ConvertFrom-Json
+              if ($failureReceipt.stdout) {
+                $inner = ([string]$failureReceipt.stdout).Trim() | ConvertFrom-Json
+                $candidate = [string]$inner.reason
+                if ($candidate -cmatch '^[a-z][a-z0-9_]{0,79}
+          $receipt = @($lines)[-1] | ConvertFrom-Json
+          if ($receipt.result -ne 'ok' -or $receipt.command_exit_code -ne 0 -or $receipt.state_changed -eq $true) {
+            throw 'GATEWAY_RESULT_INVALID'
+          }
+          $proof = ([string]$receipt.stdout).Trim() | ConvertFrom-Json
+          if ($proof.ok -ne $true -or $proof.heartbeat_advanced -ne $true -or
+              $proof.expected_sha -ne $env:GITHUB_SHA -or $proof.observed_sha -ne $env:GITHUB_SHA -or
+              $proof.worker_id -ne 'noteri') { throw 'HEARTBEAT_READBACK_INVALID' }
+          Write-Host ('NOTERI_HEARTBEAT_PROOF=' + ($proof | ConvertTo-Json -Compress))
+) { $failureReason = $candidate }
+              }
+              if ($failureReason -eq 'gateway_nonzero') {
+                $candidate = [string]$failureReceipt.result
+                if ($candidate -cmatch '^[a-z][a-z0-9_]{0,79}
+          $receipt = @($lines)[-1] | ConvertFrom-Json
+          if ($receipt.result -ne 'ok' -or $receipt.command_exit_code -ne 0 -or $receipt.state_changed -eq $true) {
+            throw 'GATEWAY_RESULT_INVALID'
+          }
+          $proof = ([string]$receipt.stdout).Trim() | ConvertFrom-Json
+          if ($proof.ok -ne $true -or $proof.heartbeat_advanced -ne $true -or
+              $proof.expected_sha -ne $env:GITHUB_SHA -or $proof.observed_sha -ne $env:GITHUB_SHA -or
+              $proof.worker_id -ne 'noteri') { throw 'HEARTBEAT_READBACK_INVALID' }
+          Write-Host ('NOTERI_HEARTBEAT_PROOF=' + ($proof | ConvertTo-Json -Compress))
+) { $failureReason = $candidate }
+              }
+            } catch {
+              $failureReason = 'gateway_receipt_unavailable'
+            }
+            throw "HEARTBEAT_NOT_PROVED:$failureReason"
+          }
           $receipt = @($lines)[-1] | ConvertFrom-Json
           if ($receipt.result -ne 'ok' -or $receipt.command_exit_code -ne 0 -or $receipt.state_changed -eq $true) {
             throw 'GATEWAY_RESULT_INVALID'
