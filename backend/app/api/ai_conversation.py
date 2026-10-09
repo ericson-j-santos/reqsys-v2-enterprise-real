@@ -3,7 +3,15 @@ from __future__ import annotations
 import logging
 import re
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+)
 from sqlalchemy.orm import Session
 
 from app.core.correlation import resolver_correlation_id
@@ -36,6 +44,9 @@ from app.services.ai_conversation_teams_bot import (
 )
 from app.services.ai_conversation_teams_inbound import (
     processar_activity_teams_bot_background,
+)
+from app.services.ai_conversation_teams_observability import (
+    obter_snapshot_teams_inbound,
 )
 from app.services.ai_corporate_policy import policy_mode
 from app.services.ai_history_protection import (
@@ -171,6 +182,15 @@ def ai_conversations_readiness(
     db: Session = Depends(get_db),
 ):
     return ok(avaliar_prontidao_ai_teams(db))
+
+
+@router.get('/observability')
+def ai_conversations_observability(
+    window_minutes: int = Query(default=15, ge=5, le=1440),
+    _ctx: ServiceAuthContext = Depends(require_ai_conversation_auth),
+    db: Session = Depends(get_db),
+):
+    return ok(obter_snapshot_teams_inbound(db, window_minutes=window_minutes))
 
 
 @router.post('/retention/purge')

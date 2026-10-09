@@ -773,3 +773,20 @@ def test_bot_submit_duplicado_nao_reenvia_cartao_nem_enfileira(api_overrides, mo
     bot.assert_not_awaited()
     enfileirar.assert_not_called()
     executar_fila.assert_not_awaited()
+
+
+def test_observability_retorna_snapshot_sanitizado(api_overrides, monkeypatch):
+    snapshot = {
+        'schema_version': '1.0.0',
+        'status': 'healthy',
+        'alert_required': False,
+        'metrics': {'total': 1},
+    }
+    obter = MagicMock(return_value=snapshot)
+    monkeypatch.setattr(api, 'obter_snapshot_teams_inbound', obter)
+
+    response = client.get('/v1/teams-gateway/ai-conversations/observability?window_minutes=30')
+
+    assert response.status_code == 200
+    assert response.json()['data'] == snapshot
+    obter.assert_called_once_with(api_overrides, window_minutes=30)
