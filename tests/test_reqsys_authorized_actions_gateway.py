@@ -9,9 +9,12 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_gateway_concurrency_is_scoped_per_issue() -> None:
+def test_gateway_concurrency_is_scoped_per_immutable_comment() -> None:
     content = _workflow()
-    assert "group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}" in content
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.comment.id }}" in content
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}" not in content
+    assert "github.event.comment.body" not in content.split("concurrency:", 1)[1].split("jobs:", 1)[0]
+    assert "cancel-in-progress: false" in content
     assert "group: reqsys-authorized-actions-gateway\n" not in content
 
 
