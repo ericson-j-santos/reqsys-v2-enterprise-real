@@ -33,4 +33,5 @@ sender_factory existente
 - **Observabilidade:** cada mensagem carrega `X-Correlation-ID` e `X-Report-SHA256`.
 - **Sem segredo novo:** o endpoint usa somente configuração já resolvida pelo runtime.
 - **Sem publicação Fabric:** gerar/enviar RDL é independente de criar/atualizar item no Fabric.
-- **E2E:** CI cobre o fluxo FastAPI com sender controlado; entrega real exige runtime configurado e confirmação no destino.
+- **Estado de entrega verdadeiro:** Graph HTTP 202 e aceitação SMTP demonstram apenas recepção pelo provedor. A API retorna `accepted_by_provider` e indicadores `provider_accepted=true`, `recipient_delivery_confirmed=false`, `recipient_delivery_evidence=not_observed`; o `dry_run` mantém `planned` e nenhum envio.
+- **E2E:** CI cobre o fluxo FastAPI com sender controlado e controles negativos; entrega real exige runtime configurado e readback independente do destinatário. Não inferir entrega pela resposta da API.
