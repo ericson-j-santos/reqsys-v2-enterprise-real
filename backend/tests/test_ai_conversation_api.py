@@ -724,3 +724,20 @@ def test_bot_submit_valido_confirma_imediatamente_e_agenda_background(
     assert conversa.teams_modo == 'bot'
     db.commit.assert_called()
     assert registrar.call_args.args[3] == 'AI_CONVERSATION_TEAMS_REPLY_ACCEPTED'
+
+
+def test_observability_retorna_snapshot_sanitizado(api_overrides, monkeypatch):
+    snapshot = {
+        'schema_version': '1.0.0',
+        'status': 'healthy',
+        'alert_required': False,
+        'metrics': {'total': 1},
+    }
+    obter = MagicMock(return_value=snapshot)
+    monkeypatch.setattr(api, 'obter_snapshot_teams_inbound', obter)
+
+    response = client.get('/v1/teams-gateway/ai-conversations/observability?window_minutes=30')
+
+    assert response.status_code == 200
+    assert response.json()['data'] == snapshot
+    obter.assert_called_once_with(api_overrides, window_minutes=30)
