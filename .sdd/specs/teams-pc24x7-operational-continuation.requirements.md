@@ -22,6 +22,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
    da codificação do arquivo temporário criado pelo Windows PowerShell.
 8. No gateway público PC24x7, health e autenticação DEV DEVEM usar o prefixo `/api`, enquanto
    as rotas públicas protegidas do Teams permanecem em `/v1/teams-gateway/`.
+9. O Adaptive Card bidirecional DEVE bloquear submissão sem mensagem no cliente. Caso um cliente
+   ainda envie o payload vazio, o endpoint do Bot Framework DEVE responder HTTP 200, registrar a
+   rejeição e não chamar o provedor de IA, evitando que o Teams apresente falso erro de aplicativo.
 
 ## Rollback
 

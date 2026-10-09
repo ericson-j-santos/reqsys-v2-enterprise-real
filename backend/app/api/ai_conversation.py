@@ -418,16 +418,35 @@ async def ai_conversations_bot_messages(
     if isinstance(value, dict) and value.get('reqsys_action') == 'ai_conversation_reply':
         conversation_id = str(value.get('conversation_id') or '').strip()
         mensagem = str(value.get('mensagem') or activity.get('text') or '').strip()
-        if not conversation_id or not mensagem:
-            raise HTTPException(status_code=422, detail='conversation_id e mensagem são obrigatórios no cartão.')
-        if not usuario_aad_object_id:
-            raise HTTPException(status_code=403, detail='Identidade AAD do remetente Teams ausente.')
-
-        activity_id = str(activity.get('id') or '').strip()
         correlation_id = resolver_correlation_id(
             str(value.get('correlation_id') or '').strip() or None,
             None,
         )
+        if not conversation_id:
+            raise HTTPException(status_code=422, detail='conversation_id é obrigatório no cartão.')
+        if not mensagem:
+            registrar_evento(
+                db,
+                correlation_id,
+                'teams-bot-user',
+                'AI_CONVERSATION_TEAMS_REPLY_REJECTED_EMPTY',
+                'ai_conversation',
+                conversation_id,
+            )
+            return ok(
+                {
+                    'type': 'message',
+                    'recebido': True,
+                    'acao_ia': False,
+                    'conversation_id': conversation_id,
+                    'validation_error': 'mensagem_required',
+                },
+                correlation_id,
+            )
+        if not usuario_aad_object_id:
+            raise HTTPException(status_code=403, detail='Identidade AAD do remetente Teams ausente.')
+
+        activity_id = str(activity.get('id') or '').strip()
         try:
             conversa = obter_conversa(
                 db,

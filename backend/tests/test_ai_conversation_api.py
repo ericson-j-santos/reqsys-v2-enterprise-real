@@ -17,6 +17,7 @@ from app.services.ai_conversation import (
     AIConversationScopeError,
     AIProviderConfigurationError,
     AIProviderExecutionError,
+    construir_adaptive_card,
 )
 from app.services.ai_conversation_teams_bot import AITeamsBotDeliveryError
 
@@ -55,6 +56,19 @@ def _turn_result(content='resposta-ok', duplicate=False):
         'mensagem_assistente': SimpleNamespace(content=content),
         'duplicado': duplicate,
     }
+
+
+def test_adaptive_card_exige_mensagem_antes_do_submit():
+    card = construir_adaptive_card(
+        _conversation(),
+        'resposta teams',
+        correlation_id='corr-card-required',
+    )
+
+    input_text = next(item for item in card['body'] if item.get('type') == 'Input.Text')
+    assert input_text['isRequired'] is True
+    assert input_text['errorMessage'] == 'Digite uma mensagem para continuar.'
+    assert card['actions'][0]['associatedInputs'] == 'auto'
 
 
 @pytest.mark.parametrize(
@@ -497,7 +511,7 @@ def test_bot_mensagem_texto_agenda_fluxo_ia_bidirecional(api_overrides, monkeypa
     processar.assert_called_once_with(activity)
 
 
-def test_bot_submit_exige_conversa_e_mensagem(api_overrides, monkeypatch):
+def test_bot_submit_exige_conversa(api_overrides, monkeypatch):
     monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
 
     response = client.post(
@@ -511,6 +525,53 @@ def test_bot_submit_exige_conversa_e_mensagem(api_overrides, monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def test_bot_submit_vazio_retorna_200_sem_chamar_ia(api_overrides, monkeypatch):
+    executar = MagicMock()
+    registrar = MagicMock()
+    monkeypatch.setattr(api, 'validar_jwt_bot_framework', lambda token: {'aud': 'bot'})
+    monkeypatch.setattr(api, 'salvar_conversa_referencia_bot', MagicMock())
+    monkeypatch.setattr(api, 'executar_turno', executar)
+    monkeypatch.setattr(api, 'registrar_evento', registrar)
+
+    response = client.post(
+        '/v1/teams-gateway/ai-conversations/bot/messages',
+        headers={'Authorization': 'Bearer token-valido'},
+        json={
+            'id': 'activity-empty',
+            'type': 'message',
+            'serviceUrl': 'https://smba.trafficmanager.net/br/',
+            'from': {'id': '29:user', 'aadObjectId': 'aad-user-1'},
+            'recipient': {'id': '28:bot'},
+            'conversation': {'id': 'a:teams-1'},
+            'channelData': {'tenant': {'id': 'tenant-1'}},
+            'value': {
+                'reqsys_action': 'ai_conversation_reply',
+                'conversation_id': 'conv-1',
+                'mensagem': '   ',
+                'correlation_id': 'corr-empty',
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data'] == {
+        'type': 'message',
+        'recebido': True,
+        'acao_ia': False,
+        'conversation_id': 'conv-1',
+        'validation_error': 'mensagem_required',
+    }
+    executar.assert_not_called()
+    registrar.assert_called_once_with(
+        api_overrides,
+        'corr-empty',
+        'teams-bot-user',
+        'AI_CONVERSATION_TEAMS_REPLY_REJECTED_EMPTY',
+        'ai_conversation',
+        'conv-1',
+    )
 
 
 def test_bot_submit_exige_identidade_aad(api_overrides, monkeypatch):
