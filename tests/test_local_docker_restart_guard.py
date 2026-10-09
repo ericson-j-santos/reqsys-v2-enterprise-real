@@ -356,7 +356,9 @@ def test_preflight_blocks_missing_frontend_manifest_before_docker() -> None:
             text=True,
         )
 
-    output = " ".join(ANSI_ESCAPE.sub("", result.stdout + result.stderr).split())
+    output = " ".join(
+        ANSI_ESCAPE.sub("", result.stdout + result.stderr).replace("|", " ").split()
+    )
     assert result.returncode != 0
     assert "frontend" in output
     assert "package.json" in output
