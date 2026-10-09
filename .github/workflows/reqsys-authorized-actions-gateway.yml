@@ -10,7 +10,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}
+  group: reqsys-authorized-actions-gateway-${{ github.event.comment.id }}
   cancel-in-progress: false
 
 jobs:
