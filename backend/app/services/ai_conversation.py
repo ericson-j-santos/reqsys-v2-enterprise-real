@@ -351,12 +351,16 @@ def construir_adaptive_card(
             {'type': 'TextBlock', 'text': resposta[:8000], 'wrap': True},
             {
                 'type': 'Input.Text', 'id': 'mensagem', 'isMultiline': True,
-                'maxLength': 20000, 'placeholder': 'Escreva aqui para continuar esta mesma conversa.',
+                'maxLength': 20000,
+                'placeholder': 'Escreva aqui para continuar esta mesma conversa.',
+                'isRequired': True,
+                'errorMessage': 'Digite uma mensagem para continuar.',
             },
         ],
         'actions': [{
             'type': 'Action.Submit',
             'title': 'Continuar conversa',
+            'associatedInputs': 'auto',
             'data': {
                 'reqsys_action': 'ai_conversation_reply',
                 'conversation_id': conversa.id,
