@@ -19,7 +19,8 @@ Permitir que a própria aplicação ReqSys gere um relatório paginado e envie o
 8. Anexar exatamente um arquivo `<report_name>.rdl`.
 9. Incluir `X-Correlation-ID` e `X-Report-SHA256` na mensagem.
 10. Não retornar token, senha, client secret ou conteúdo de credencial na resposta/log.
-11. O envio real só pode ser declarado concluído após sucesso do provedor e evidência independente de entrega ao destinatário.
+11. Aceitação pelo SMTP/Graph retorna `status=accepted_by_provider`, `provider_accepted=true`, `recipient_delivery_confirmed=false` e `recipient_delivery_evidence=not_observed`; não declarar `sent`/entregue sem readback independente do destinatário. Em `dry_run=true`, `status=planned` e ambos os indicadores de aceitação e entrega são `false`.
+12. E2E de entrega real só pode ser declarado concluído após evidência independente de recebimento pelo destinatário, fora do escopo da mera aceitação do provedor.
 
 ## Critérios de aceite
 
