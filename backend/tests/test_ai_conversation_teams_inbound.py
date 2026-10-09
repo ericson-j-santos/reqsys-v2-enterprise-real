@@ -1,8 +1,10 @@
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.services import ai_conversation_teams_inbound as inbound
 
@@ -67,7 +69,7 @@ def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
             return_value={'mensagem_assistente': resposta, 'duplicado': False},
         ) as executar,
         patch.object(inbound, '_responder_no_chat', enviar),
-        patch.object(inbound, 'registrar_evento'),
+        patch.object(inbound, 'registrar_evento') as registrar,
     ):
         result = asyncio.run(inbound.processar_activity_teams_bot(db, _activity()))
 
@@ -80,6 +82,15 @@ def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
     )
     enviar.assert_awaited_once()
     assert enviar.await_args.kwargs['resposta'] == 'Resposta do ReqSys'
+    audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
+    assert audit_payload == {
+        'channel': 'teams_bot',
+        'duplicate': False,
+        'latency_ms': audit_payload['latency_ms'],
+        'response_sent': True,
+        'status': 'completed',
+    }
+    assert audit_payload['latency_ms'] >= 0
 
 
 def test_processar_retry_idempotente_nao_reenvia_resposta():
@@ -158,9 +169,39 @@ def test_background_notifica_falha_sem_expor_excecao():
             AsyncMock(side_effect=RuntimeError('segredo-que-nao-pode-vazar')),
         ),
         patch.object(inbound, '_responder_no_chat', notificar),
+        patch.object(inbound, 'registrar_evento') as registrar,
     ):
         asyncio.run(inbound.processar_activity_teams_bot_background(_activity()))
 
     notificar.assert_awaited_once()
     assert 'segredo-que-nao-pode-vazar' not in notificar.await_args.kwargs['resposta']
+    audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
+    assert audit_payload['status'] == 'failed'
+    assert audit_payload['channel'] == 'teams_bot'
+    assert audit_payload['error_category'] == 'RuntimeError'
+    assert audit_payload['latency_ms'] >= 0
+    assert 'segredo-que-nao-pode-vazar' not in registrar.call_args.kwargs['payload_minimo']
+    db.close.assert_called_once()
+
+
+def test_background_notifica_usuario_mesmo_se_auditoria_falhar():
+    db = MagicMock()
+    notificar = AsyncMock()
+
+    with (
+        patch.object(inbound, 'SessionLocal', return_value=db),
+        patch.object(
+            inbound,
+            'processar_activity_teams_bot',
+            AsyncMock(side_effect=RuntimeError('falha-do-runtime')),
+        ),
+        patch.object(inbound, '_responder_no_chat', notificar),
+        patch.object(inbound, 'registrar_evento', side_effect=SQLAlchemyError('db-offline')),
+    ):
+        asyncio.run(inbound.processar_activity_teams_bot_background(_activity()))
+
+    db.rollback.assert_called_once()
+    notificar.assert_awaited_once()
+    assert 'falha-do-runtime' not in notificar.await_args.kwargs['resposta']
+    assert 'db-offline' not in notificar.await_args.kwargs['resposta']
     db.close.assert_called_once()

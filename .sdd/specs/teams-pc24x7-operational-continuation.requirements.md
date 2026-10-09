@@ -31,6 +31,9 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 11. O Bot Connector DEVE aceitar HTTP 204 sem corpo como resposta HTTP bem-sucedida,
     sem tentar interpretar JSON e sem acionar fallback por erro de parsing. Respostas
     200/201/202 com corpo malformado e respostas HTTP de erro continuam bloqueadas.
+12. O processamento assíncrono de mensagens Teams DEVE registrar sucesso ou falha com latência,
+    estado de entrega e categoria técnica sanitizada, sem persistir texto da mensagem, resposta do
+    modelo, identidade do usuário, token ou detalhe da exceção.
 
 ## Rollback
 
