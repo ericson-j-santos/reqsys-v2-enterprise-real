@@ -1,0 +1,24 @@
+{
+  "feature_name": "docker-local-restart-storm-guard",
+  "project": "ReqSys v2 Enterprise — runtime Docker local",
+  "created_at": "2026-10-07",
+  "updated_at": "2026-10-08",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Impede tempestades de reinício em stacks Docker locais com políticas limitadas, preflight fail-closed, auditoria sanitizada e testes regressivos.",
+  "traceability": {
+    "issue": 2499,
+    "gap_reference": "OPS-GAP-DOCKER-RESTART-20261008",
+    "production_touched": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_local_docker_restart_guard.py",
+      "tests/test_local_docker_restart_guard_safety.py"
+    ]
+  }
+}

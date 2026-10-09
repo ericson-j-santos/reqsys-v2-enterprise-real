@@ -6,6 +6,8 @@ Computador analisado: estacao local (identificadores redigidos)
 
 Status: incidente principal contido; controles permanentes preparados; pendencias inventariadas
 
+Rastreabilidade: issue #2499; `OPS-GAP-DOCKER-RESTART-20261008`
+
 Horarios abaixo usam `America/Sao_Paulo` (UTC-03), salvo quando UTC estiver
 indicado explicitamente.
 
