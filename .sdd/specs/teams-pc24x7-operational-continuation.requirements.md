@@ -28,9 +28,10 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 10. O replay de uma mesma chave idempotente na rota `/reply` ou do mesmo `activity.id` no submit
     do Bot Framework DEVE retornar `duplicate=true` sem nova entrega direta, novo Adaptive Card ou
     novo item de fila Teams.
-11. O Bot Connector DEVE aceitar HTTP 204 sem corpo como resposta HTTP bem-sucedida,
-    sem tentar interpretar JSON e sem acionar fallback por erro de parsing. Respostas
-    200/201/202 com corpo malformado e respostas HTTP de erro continuam bloqueadas.
+11. O Bot Connector DEVE aceitar qualquer resposta HTTP 2xx sem corpo como bem-sucedida,
+    sem tentar interpretar JSON e sem acionar fallback por erro de parsing. O status HTTP
+    aceito DEVE ser preservado na evidência. Respostas com corpo não vazio malformado e
+    respostas HTTP de erro continuam bloqueadas.
 12. O processamento assíncrono de mensagens Teams DEVE registrar sucesso ou falha com latência,
     estado de entrega e categoria técnica sanitizada, sem persistir texto da mensagem, resposta do
     modelo, identidade do usuário, token ou detalhe da exceção.

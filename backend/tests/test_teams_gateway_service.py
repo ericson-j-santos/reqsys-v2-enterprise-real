@@ -19,13 +19,16 @@ def _run(coro):
 @pytest.mark.parametrize(
     ('status_code', 'body', 'expected', 'error_type'),
     [
-        (201, b'{"id": "atividade-1"}', {'id': 'atividade-1'}, None),
-        (204, b'', {}, None),
+        (201, b'{"id": "atividade-1"}', {'id': 'atividade-1', 'status_code': 201}, None),
+        (204, b'', {'status_code': 204}, None),
+        (200, b'', {'status_code': 200}, None),
+        (202, b'  \n', {'status_code': 202}, None),
         (200, b'invalid-json', None, ValueError),
+        (200, b'[]', None, TypeError),
         (401, b'{"error": "unauthorized"}', None, httpx.HTTPStatusError),
     ],
 )
-def test_bot_connector_trata_http_204_sem_duplicar_por_erro_de_json(
+def test_bot_connector_trata_resposta_2xx_vazia_sem_duplicar_por_erro_de_json(
     monkeypatch, status_code, body, expected, error_type,
 ):
     requests = []

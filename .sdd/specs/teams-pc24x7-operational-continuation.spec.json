@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Replatforma os probes Teams de DEV para o locator assinado do PC24x7, usa o prefixo /api para health e autenticação no gateway público, aposenta o workflow Fly do Merge Console, impede falso-ready quando a conversationReference pertence a outro bot, normaliza apenas o prefixo oficial 28: do channel account do Teams, bloqueia Action.Submit vazio sem falso erro de aplicativo, aceita HTTP 204 vazio do Bot Connector sem disparar fallback, impede reenvio Teams em replay idempotente, registra telemetria sanitizada do processamento assíncrono e torna a validação Risk3 resiliente ao encoding do Windows PowerShell.",
+  "description": "Replatforma os probes Teams de DEV para o locator assinado do PC24x7, usa o prefixo /api para health e autenticação no gateway público, aposenta o workflow Fly do Merge Console, impede falso-ready quando a conversationReference pertence a outro bot, normaliza apenas o prefixo oficial 28: do channel account do Teams, bloqueia Action.Submit vazio sem falso erro de aplicativo, aceita resposta 2xx vazia do Bot Connector sem disparar fallback e preserva o status HTTP na evidência, impede reenvio Teams em replay idempotente, registra telemetria sanitizada do processamento assíncrono e torna a validação Risk3 resiliente ao encoding do Windows PowerShell.",
   "traceability": {
     "issues": [
       1112,

@@ -113,7 +113,7 @@ def test_enviar_gateway_bot_sucesso(mock_obter_referencia, mock_enviar_atividade
         bot_id='28:bot-app-id', tenant_id='bot-tenant-id',
     )
     mock_obter_referencia.return_value = referencia
-    mock_enviar_atividade.return_value = {'id': 'activity-1'}
+    mock_enviar_atividade.return_value = {'id': 'activity-1', 'status_code': 200}
     fake_db = MagicMock()
     payload = TeamsGatewayMessageRequest(destino_tipo='chat', destino_id='aad-1', texto='Ola via bot', modo='bot')
 
@@ -123,6 +123,7 @@ def test_enviar_gateway_bot_sucesso(mock_obter_referencia, mock_enviar_atividade
     assert resultado['canal_usado'] == 'bot'
     assert resultado['message_id'] == 'activity-1'
     assert resultado['chat_id'] == 'conv-1'
+    assert resultado['status_code'] == 200
     mock_enviar_atividade.assert_awaited_once()
     url_chamada, payload_chamado = mock_enviar_atividade.await_args.args
     assert url_chamada == 'https://smba.trafficmanager.net/br/v3/conversations/conv-1/activities'
