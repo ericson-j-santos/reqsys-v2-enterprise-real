@@ -12,7 +12,7 @@ mesmo tenant.
 Como usuario de aceite no Teams, quero submeter uma mensagem nao vazia no Adaptive Card para
 que o ReqSys acrescente o novo turno ao `conversation_id` exibido no cartao.
 
-### Criterios de aceite
+### Critérios de aceite
 
 1. DADA uma Activity autenticada pelo Bot Framework com tenant Entra valido, QUANDO o cartao
    referencia uma conversa cujo tenant logico e diferente, ENTAO a conversa DEVE ser buscada
@@ -27,7 +27,7 @@ que o ReqSys acrescente o novo turno ao `conversation_id` exibido no cartao.
 Como responsavel pela seguranca do gateway, quero corrigir o escopo da consulta sem ampliar a
 autorizacao do endpoint.
 
-### Criterios de aceite
+### Critérios de aceite
 
 1. O endpoint DEVE continuar exigindo JWT valido do Bot Framework.
 2. A entrega da resposta DEVE continuar usando a `conversationReference` governada pelo bot.
