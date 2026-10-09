@@ -184,7 +184,7 @@ def test_enviar_cartao_bot_entrega_adaptive_card_e_vincula_conversa():
         bot_id='bot-id',
         tenant_id='tenant-id',
     )
-    provider = AsyncMock(return_value={'id': 'teams-message-1'})
+    provider = AsyncMock(return_value={'id': 'teams-message-1', 'status_code': 202})
 
     with (
         patch('app.services.ai_conversation_teams_bot.settings', settings),
@@ -215,6 +215,7 @@ def test_enviar_cartao_bot_entrega_adaptive_card_e_vincula_conversa():
         'canal_usado': 'bot',
         'message_id': 'teams-message-1',
         'chat_id': 'a:teams-conv-1',
+        'status_code': 202,
         'usuario_aad_object_id': 'aad-user-1',
     }
     url, payload = provider.await_args.args
