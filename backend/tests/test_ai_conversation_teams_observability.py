@@ -55,7 +55,6 @@ def test_snapshot_saudavel_expoe_apenas_metricas_sanitizadas():
     assert 'mensagem' not in json.dumps(snapshot)
 
 
-
 def test_snapshot_contabiliza_reply_completed_e_replay_sem_segunda_resposta():
     snapshot = construir_snapshot_teams_inbound(
         [
