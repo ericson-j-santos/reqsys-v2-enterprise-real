@@ -44,6 +44,34 @@ describe('hostProfileLocalAgent via same-origin API', () => {
     expect(api.get).toHaveBeenCalledWith('/v1/noteri/profile', expect.any(Object))
   })
 
+  it('lê o perfil com URL única sem cabeçalho Cache-Control não autorizado pelo CORS', async () => {
+    api.get.mockResolvedValue(envelope({
+      host: 'Noteri',
+      profile: 'ESTUDO',
+      accepts_new_development: false,
+    }))
+    const clock = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1760000000001)
+      .mockReturnValueOnce(1760000000002)
+
+    try {
+      await obterPerfilNoteri()
+      await obterPerfilNoteri()
+    } finally {
+      clock.mockRestore()
+    }
+
+    expect(api.get).toHaveBeenNthCalledWith(1, '/v1/noteri/profile', {
+      params: { _noteri_cache_bust: 1760000000001 },
+    })
+    expect(api.get).toHaveBeenNthCalledWith(2, '/v1/noteri/profile', {
+      params: { _noteri_cache_bust: 1760000000002 },
+    })
+    for (const [, config] of api.get.mock.calls) {
+      expect(config.headers?.['Cache-Control']).toBeUndefined()
+    }
+  })
+
   it('altera para ESTUDO e exige leitura independente coerente', async () => {
     api.post.mockResolvedValue(envelope({
       host: 'Noteri',
