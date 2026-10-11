@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 DEV reconciliation diagnostics",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-11",
+  "updated_at": "2026-10-11",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_public_dev_static_runtime.py",
+      "tests/test_diagnose_pc24x7_public_dev.py"
+    ],
+    "evidence_contract": "Testes isolados comprovam loader, fases sanitizadas e diagnóstico DEV read-only. Não representam Docker físico ou replay Teams."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-dev-reconcile-diagnostics.requirements.md",
+    "implementation": "scripts/diagnose_pc24x7_public_dev.py",
+    "regression_tests": "tests/test_diagnose_pc24x7_public_dev.py",
+    "issues": [
+      1532
+    ],
+    "failed_run": "38110040712"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "permissions": false,
+    "scope": "cloud-offline-tests-and-dev-read-only-diagnostic"
+  },
+  "acceptance_criteria": [
+    "Falhas sensíveis incluem fase allowlisted e nunca conteúdo de segredo.",
+    "ImportError na execução direta usa fallback sibling.",
+    "Diagnóstico recusa daemon remoto, PROD, identidade ambígua/trocada e metadados inválidos.",
+    "Somente ps e inspect de metadados permitidos; nenhum deploy/restart/log/credencial.",
+    "Evidência JSON nova confinada sem sobrescrita ou reparse point.",
+    "Nenhuma declaração de runtime ready, SHA validado ou E2E físico."
+  ]
+}
+
