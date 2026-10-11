@@ -1,0 +1,62 @@
+name: Noteri CORS Preflight Diagnostic
+on:
+  push:
+    branches:
+      - diag/noteri-msal-secret-probe-20261011
+    paths:
+      - .github/workflows/noteri-cors-preflight-diagnostic.yml
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+      - name: Validate OPTIONS GET with Cache-Control and without
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$RUNNER_TEMP/locator.json" >/dev/null
+          python - "$RUNNER_TEMP/locator.json" <<'PY'
+          import json,sys,re,urllib.request,urllib.error
+          with open(sys.argv[1],encoding="utf-8") as inp:
+              loc=json.load(inp)
+          base=loc.get("selected_url","")
+          if not re.fullmatch(r"https://[a-z0-9-]+\.trycloudflare\.com",base):
+              raise SystemExit("signed_locator_bad_target")
+          endpoint=base+"/api/v1/noteri/profile"
+          origin="https://ericson-j-santos.github.io"
+          def check(label,headers):
+              req=urllib.request.Request(endpoint,method="OPTIONS",headers={
+                  "Origin":origin,
+                  "Access-Control-Request-Method":"GET",
+                  "Access-Control-Request-Headers":headers,
+                  "User-Agent":"ReqSysNoteriCorsPreflight/1",
+              })
+              try:
+                  with urllib.request.urlopen(req,timeout=20) as resp:
+                      status=resp.status
+                      allow_origin=resp.headers.get("Access-Control-Allow-Origin","")
+                      allow_headers=resp.headers.get("Access-Control-Allow-Headers","")
+              except urllib.error.HTTPError as e:
+                  status=e.code
+                  allow_origin=e.headers.get("Access-Control-Allow-Origin","")
+                  allow_headers=e.headers.get("Access-Control-Allow-Headers","")
+              print(json.dumps({"case":label,"http_status":status,"cors_origin_allowed":allow_origin==origin,"cache_control_allowed":"cache-control" in allow_headers.lower()},sort_keys=True))
+              return status, allow_origin
+          status_default,origin_default=check("browser_without_cache_control","authorization,x-correlation-id")
+          status_cache,origin_cache=check("browser_with_cache_control","authorization,x-correlation-id,cache-control")
+          if status_default not in (200,204) or origin_default!=origin:
+              raise SystemExit("base_preflight_not_allowed")
+          if status_cache in (200,204) and origin_cache==origin:
+              print("CORS_CACHE_CONTROL_NOT_BLOCKED")
+          else:
+              print("CORS_CACHE_CONTROL_BLOCKED")
+          PY
