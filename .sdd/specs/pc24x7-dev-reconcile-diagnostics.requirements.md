@@ -15,12 +15,16 @@ credenciais e fornecer uma leitura mínima do runtime DEV antes de autorizar rec
    Não coletar Config.Env, logs, credenciais ou health log; não executar build/up/restart/rm.
 5. Projetos desconhecidos, PROD, inventário ambíguo, troca/desaparecimento da API
    e metadados inválidos devem falhar fechado.
-6. A única escrita é evidência JSON nova sob artifacts/pc24x7-dev-diagnostic.
-   Sobrescrita, escape do diretório, symlink e reparse point devem ser recusados.
+6. O modo explícito --stdout-only deve emitir JSON completo sem escrever arquivo,
+   preservando o estado do worktree e os códigos de saída; execução governada usa -B.
+   O modo alternativo --output exige contrato de escrita e só permite evidência JSON
+   nova sob artifacts/pc24x7-dev-diagnostic. Sobrescrita, escape do diretório, symlink
+   e reparse point devem ser recusados. Exigir exatamente um dos dois modos.
 7. Metadados coletados não comprovam runtime saudável, SHA implantado ou E2E Teams.
 
 ## Critérios de aceite
 - Testes isolados cobrem os requisitos positivos e negativos, sem Docker ou Teams externo.
 - READY_FOR_PR pertence ao HEAD publicado antes de abrir PR.
 - Diagnóstico físico e replay Teams permanecem pendentes de execução autorizada em DEV.
+
 
