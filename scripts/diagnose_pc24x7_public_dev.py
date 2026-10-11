@@ -178,7 +178,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--environment", required=True, choices=["dev"])
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    destination = parser.add_mutually_exclusive_group(required=True)
+    destination.add_argument("--stdout-only", action="store_true", help="Emit JSON without creating an evidence file")
+    destination.add_argument("--output", type=Path, help="Create a new evidence file (requires an authorized write contract)")
     args = parser.parse_args()
     try:
         result = diagnose(args.environment, args.expected_sha)
@@ -186,15 +188,17 @@ def main() -> int:
     except DiagnosticError as exc:
         result = {"status": "blocked", "reason": str(exc), "runtime_mutated": False}
         code = 1
-    try:
-        _write_evidence(args.output, result)
-    except (DiagnosticError, OSError):
-        print(json.dumps({"status": "blocked", "reason": "evidence_write_blocked"}))
-        return 1
+    if args.output is not None:
+        try:
+            _write_evidence(args.output, result)
+        except (DiagnosticError, OSError):
+            print(json.dumps({"status": "blocked", "reason": "evidence_write_blocked"}))
+            return 1
     print(json.dumps(result, sort_keys=True))
     return code
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

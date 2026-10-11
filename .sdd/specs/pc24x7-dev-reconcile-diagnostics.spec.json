@@ -40,7 +40,7 @@
     "Diagnóstico recusa daemon remoto, PROD, identidade ambígua/trocada e metadados inválidos.",
     "Somente ps e inspect de metadados permitidos; nenhum deploy/restart/log/credencial.",
     "Evidência JSON nova confinada sem sobrescrita ou reparse point.",
-    "Nenhuma declaração de runtime ready, SHA validado ou E2E físico."
+    "Nenhuma declaração de runtime ready, SHA validado ou E2E físico.",
+    "Modo stdout-only preserva snapshot sem escrita, JSON sanitizado e exit codes; -B impede bytecode."
   ]
 }
-
