@@ -68,6 +68,12 @@ jobs:
           if not js: raise SystemExit("pages_compiled_bundle_missing")
           script=urljoin(pages,js[-1])
           with urllib.request.urlopen(script,timeout=20) as r: bundle=r.read(5000000).decode("utf-8","replace")
+          expected_asset="/assets/index-BOgrxthJ.js"
+          published_asset_valid=script.endswith(expected_asset)
+          profile_cache_bust="_noteri_cache_bust" in bundle
+          print(json.dumps({"expected_asset":expected_asset,"published_asset_matches_deploy_run":published_asset_valid,"noteri_cache_bust_in_live_js":profile_cache_bust},sort_keys=True))
+          if not published_asset_valid or not profile_cache_bust:
+              raise SystemExit("published_frontend_noteri_cors_fix_not_verified")
           callback="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev"
           print(json.dumps({"pages_bundle_published":True,"pages_callback_origin_embedded":callback in bundle,"pages_callback_route_embedded":"auth/callback.html" in bundle,"script_same_host":script.startswith(origin)},sort_keys=True))
           if callback not in bundle: raise SystemExit("pages_compiled_auth_origin_missing")
