@@ -25,8 +25,10 @@ function normalizarErro(error) {
 
 export async function obterPerfilNoteri() {
   try {
+    // Evita respostas em cache sem enviar Cache-Control na requisição:
+    // o CORS do DEV não permite esse cabeçalho no preflight do navegador.
     const response = await api.get('/v1/noteri/profile', {
-      headers: { 'Cache-Control': 'no-store' },
+      params: { _noteri_cache_bust: Date.now() },
     })
     return validarPayload(response.data)
   } catch (error) {
