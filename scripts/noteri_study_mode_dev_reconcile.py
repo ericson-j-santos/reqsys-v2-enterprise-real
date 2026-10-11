@@ -30,7 +30,7 @@ from typing import Any
 
 try:
     from scripts import self_hosted_dev_maintenance as portable_dev
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     import self_hosted_dev_maintenance as portable_dev
 
 EXPECTED_HOST = "DESKTOP-PDQK954"
@@ -1854,3 +1854,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

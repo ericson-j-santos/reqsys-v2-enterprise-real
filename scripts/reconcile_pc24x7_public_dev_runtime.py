@@ -82,23 +82,33 @@ def _run(
     timeout: int = 300,
     check: bool = True,
     sensitive: bool = False,
+    stage: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        args,
-        cwd=str(cwd),
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        shell=False,
-    )
+    if stage not in (None, "compose_config", "api_frontend_up", "nginx_up"):
+        raise ReconcileError("command_stage_not_allowed")
+    try:
+        completed = subprocess.run(
+            args,
+            cwd=str(cwd),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if sensitive:
+            category = "timeout" if isinstance(exc, subprocess.TimeoutExpired) else "spawn_failed"
+            raise ReconcileError(f"sensitive_command_{category}:{stage or 'unspecified'}") from None
+        raise
     if check and completed.returncode != 0:
         if sensitive:
             raise ReconcileError(
-                f"sensitive_command_failed:{Path(args[0]).name}:exit_{completed.returncode}"
+                f"sensitive_command_failed:{stage or 'unspecified'}:"
+                f"{Path(args[0]).name}:exit_{completed.returncode}"
             )
         detail = (completed.stderr or completed.stdout or "").strip().replace("\n", " ")
         raise ReconcileError(
@@ -460,6 +470,7 @@ def _recreate_public_stack(
             env=env,
             timeout=90,
             sensitive=True,
+            stage="compose_config",
         )
         _run(
             base
@@ -475,6 +486,7 @@ def _recreate_public_stack(
             env=env,
             timeout=900,
             sensitive=True,
+            stage="api_frontend_up",
         )
         api_startup = _wait_for_api_ready(expected_sha)
         _run(
@@ -483,6 +495,7 @@ def _recreate_public_stack(
             env=env,
             timeout=180,
             sensitive=True,
+            stage="nginx_up",
         )
     finally:
         env["TEAMS_BOT_SECRET"] = ""
@@ -710,3 +723,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -238,11 +238,12 @@ def test_recreate_resolves_teams_secret_only_in_child_environment(
     child_environments: list[dict[str, str]] = []
     events: list[str] = []
 
-    def fake_run(args, *, cwd, env=None, timeout=300, check=True, sensitive=False):
+    def fake_run(args, *, cwd, env=None, timeout=300, check=True, sensitive=False, stage=None):
         child_environments.append(dict(env or {}))
         events.append(" ".join(args))
         assert cwd == governed
         assert sensitive is True
+        assert stage in {"compose_config", "api_frontend_up", "nginx_up"}
         return SimpleNamespace(stdout="", returncode=0)
 
     monkeypatch.setattr(module, "_run", fake_run)
@@ -416,3 +417,63 @@ def test_reconciler_direct_help_runs_without_scripts_package_import_error() -> N
     )
     assert completed.returncode == 0, completed.stderr
     assert "--expected-sha" in completed.stdout
+
+
+@pytest.mark.parametrize("stage", ["compose_config", "api_frontend_up", "nginx_up"])
+def test_sensitive_failure_identifies_only_allowlisted_stage(monkeypatch, tmp_path, stage):
+    module = _load()
+    monkeypatch.setattr(module.subprocess, "run", lambda *a, **kw: SimpleNamespace(
+        returncode=1, stderr="SECRET=never-publish", stdout="private-output"
+    ))
+    with pytest.raises(module.ReconcileError) as caught:
+        module._run(["docker", "compose"], cwd=tmp_path, sensitive=True, stage=stage)
+    assert str(caught.value) == f"sensitive_command_failed:{stage}:docker:exit_1"
+
+
+def test_stage_rejects_arbitrary_text_before_running_command(monkeypatch, tmp_path):
+    module = _load()
+    def forbidden(*args, **kwargs):
+        raise AssertionError("subprocess must not execute")
+    monkeypatch.setattr(module.subprocess, "run", forbidden)
+    with pytest.raises(module.ReconcileError, match="command_stage_not_allowed"):
+        module._run(["docker"], cwd=tmp_path, sensitive=True, stage="SECRET=private")
+
+
+def test_study_mode_direct_help_handles_namespace_import_error():
+    script = ROOT / "scripts" / "noteri_study_mode_dev_reconcile.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"], cwd=ROOT,
+        text=True, capture_output=True, timeout=30, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--expected-sha" in completed.stdout
+
+
+@pytest.mark.parametrize("failure", [OSError("SECRET=private"), subprocess.TimeoutExpired(["secret-command"], 1, output="SECRET")])
+def test_sensitive_spawn_and_timeout_preserve_stage_without_details(monkeypatch, tmp_path, failure):
+    module = _load()
+    def fail(*args, **kwargs):
+        raise failure
+    monkeypatch.setattr(module.subprocess, "run", fail)
+    with pytest.raises(module.ReconcileError) as caught:
+        module._run(["docker"], cwd=tmp_path, sensitive=True, stage="compose_config")
+    assert "compose_config" in str(caught.value)
+    assert "SECRET" not in str(caught.value)
+    assert "secret-command" not in str(caught.value)
+
+
+def test_study_mode_loader_falls_back_on_explicit_import_error(monkeypatch):
+    import builtins
+    import runpy
+    original_import = builtins.__import__
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "scripts" and "self_hosted_dev_maintenance" in fromlist:
+            raise ImportError("cannot import name self_hosted_dev_maintenance")
+        return original_import(name, globals, locals, fromlist, level)
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    monkeypatch.setattr(sys, "argv", ["noteri_study_mode_dev_reconcile.py", "--help"])
+    with pytest.raises(SystemExit) as caught:
+        runpy.run_path(str(ROOT / "scripts/noteri_study_mode_dev_reconcile.py"), run_name="__main__")
+    assert caught.value.code == 0
+
