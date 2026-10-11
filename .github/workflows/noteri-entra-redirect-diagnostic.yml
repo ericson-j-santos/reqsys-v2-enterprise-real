@@ -1,0 +1,94 @@
+name: Noteri Entra Redirect Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/noteri-msal-secret-probe-20261011
+    paths:
+      - .github/workflows/noteri-entra-redirect-diagnostic.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-entra-redirect-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+
+      - name: Verify live client and redirect registrations without sign-in
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$RUNNER_TEMP/dev-signed.json" >/dev/null
+          python - "$RUNNER_TEMP/dev-signed.json" <<'PY'
+          import base64, hashlib, json, re, secrets, sys, urllib.error, urllib.parse, urllib.request
+
+          CALLBACK="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/auth/callback.html"
+          EXPECTED_COMPOSE_CLIENT="4061c542-cdc1-4007-ab57-40ab8f9109fc"
+          ERROR_CLIENT="a02a473b-19c1-4579-b482-c83e11cc0f4e"
+          locator=json.load(open(sys.argv[1],encoding="utf-8"))
+          base=str(locator["selected_url"]).rstrip("/")
+          if not re.fullmatch(r"https://[a-z0-9-]+\.trycloudflare\.com",base):
+              raise SystemExit("signed_locator_host_invalid")
+          with urllib.request.urlopen(
+              urllib.request.Request(base+"/api/v1/auth/config",headers={"Accept":"application/json","User-Agent":"ReqSysCallbackDiagnostic/1"}),
+              timeout=15,
+          ) as response:
+              config=json.loads(response.read(131072)).get("data") or {}
+          tenant=str(config.get("azure_tenant_id") or "")
+          current=str(config.get("azure_client_id") or "")
+          callback=str(config.get("expected_redirect_uri") or "")
+          if not re.fullmatch(r"[0-9a-fA-F-]{36}",tenant):
+              raise SystemExit("tenant_identity_invalid")
+          if not re.fullmatch(r"[0-9a-fA-F-]{36}",current):
+              raise SystemExit("client_identity_invalid")
+          print(json.dumps({"live_client_id":current,"live_callback_matches_pages":callback==CALLBACK,"azure_enabled":config.get("azure_enabled") is True,"demo_login_disabled":config.get("demo_login_enabled") is False},sort_keys=True))
+          if callback != CALLBACK or config.get("azure_enabled") is not True:
+              raise SystemExit("dev_auth_config_divergent")
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, msg, headers, url):
+                  return None
+          opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect)
+          for label,client in (("current_live",current),("compose_expected",EXPECTED_COMPOSE_CLIENT),("user_error",ERROR_CLIENT)):
+              state="reqsys-diagnostic-"+secrets.token_hex(10)
+              verifier=secrets.token_urlsafe(40)
+              challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+              params={
+                  "client_id":client,"response_type":"code",
+                  "redirect_uri":CALLBACK,"response_mode":"query",
+                  "scope":"openid profile email","prompt":"none",
+                  "state":state,"code_challenge":challenge,"code_challenge_method":"S256",
+              }
+              url=f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?"+urllib.parse.urlencode(params)
+              request=urllib.request.Request(url,headers={"Accept":"text/html","User-Agent":"ReqSysCallbackDiagnostic/1"})
+              try:
+                  with opener.open(request,timeout=20) as response:
+                      status=response.status
+                      location=response.headers.get("Location","")
+                      body=response.read(131072).decode("utf-8","replace")
+              except urllib.error.HTTPError as error:
+                  status=error.code
+                  location=error.headers.get("Location","")
+                  body=error.read(131072).decode("utf-8","replace")
+              loc=urllib.parse.urlparse(location)
+              qs=urllib.parse.parse_qs(loc.query,keep_blank_values=True)
+              valid_return=location.startswith(CALLBACK+"?") and qs.get("state")==[state] and "error" in qs and "code" not in qs
+              mismatch="AADSTS50011" in body or "AADSTS50011" in urllib.parse.unquote(location)
+              classification="valid_redirect_unauthenticated" if valid_return else "mismatch_AADSTS50011" if mismatch else "inconclusive"
+              print(json.dumps({"client_label":label,"matches_live":client==current,"http_status":status,"registration_probe":classification},sort_keys=True))
+          PY
