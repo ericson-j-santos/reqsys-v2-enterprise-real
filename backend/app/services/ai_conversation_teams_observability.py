@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from app.models.auditoria import AuditoriaEvento
 
 _COMPLETED = 'AI_CONVERSATION_TEAMS_MESSAGE_COMPLETED'
+_REPLY_COMPLETED = 'AI_CONVERSATION_TEAMS_REPLY_COMPLETED'
+_COMPLETED_ACTIONS = (_COMPLETED, _REPLY_COMPLETED)
 _FAILED = 'AI_CONVERSATION_TEAMS_MESSAGE_FAILED'
-_ACTIONS = (_COMPLETED, _FAILED)
+_ACTIONS = (*_COMPLETED_ACTIONS, _FAILED)
 
 
 def _percentile_95(values: list[int]) -> int | None:
@@ -46,7 +48,7 @@ def construir_snapshot_teams_inbound(
         payload = _payload(event)
         if payload.get('channel') != 'teams_bot':
             continue
-        if event.acao == _COMPLETED:
+        if event.acao in _COMPLETED_ACTIONS:
             completed += 1
             duplicates += int(payload.get('duplicate') is True)
             responses_sent += int(payload.get('response_sent') is True)
