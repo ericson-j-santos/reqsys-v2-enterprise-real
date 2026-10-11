@@ -1,0 +1,41 @@
+{
+  "feature_name": "noteri-pages-cors-profile",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-11",
+  "updated_at": "2026-10-11",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige a falha Network Error do Task Console DEV no GitHub Pages ao consultar o perfil do Noteri via API HTTPS em outra origem, sem ampliar a allowlist CORS nem reduzir controles de autenticação.",
+  "environment": "dev",
+  "runtime_target": "GitHub Pages /dev/ -> Cloudflare DEV -> ReqSys API -> Engineering Orchestrator -> Noteri",
+  "acceptance_criteria": [
+    "A leitura do perfil utiliza a API ReqSys /v1/noteri/profile e o mesmo token autenticado; sem acesso direto do navegador ao host Noteri ou ao control plane.",
+    "O GET de perfil não adiciona Cache-Control à requisição: a API DEV rejeita essa opção no preflight CORS, comprovado por teste físico negativo.",
+    "Cada leitura tem query de cache-bust distinta e não altera a API/host; o preflight da origem GitHub Pages com os headers permitidos retorna 200 e o que inclui cache-control retorna 400 no baseline real.",
+    "As transições POST NORMAL/ESTUDO seguem autorizadas apenas ao administrador e com correlation_id; somente o GET é alterado.",
+    "O controlador da interface não interpreta Network Error como status real do Noteri, e não libera botões se o GET falha.",
+    "Testes de perfil incluem cenário positivo, URL sem cache, cabeçalho ausente, repetição, divergência de estado e indisponibilidade do backend.",
+    "A correção funcional depende de publicação do frontend compilado no GitHub Pages e de E2E autenticado com leitura independente no runtime DEV atual; CI verde isoladamente não homologa a interface.",
+    "Não alterar autenticação, Azure Entra, regras de CORS globais, HML/PROD ou serviços e processos locais."
+  ],
+  "controls": {
+    "production_enabled": false,
+    "hml_enabled": false,
+    "cross_origin_cache_control_request_header": false,
+    "cache_bust_query_required": true,
+    "admin_role_for_profile_mutation": true,
+    "negative_cors_preflight_required": true,
+    "independent_readback_required": true,
+    "browser_e2e_required": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js"
+    ],
+    "evidence_contract": "Teste físico do preflight no runtime DEV: /api/v1/noteri/profile com Authorization/X-Correlation-Id HTTP 200; com Cache-Control HTTP 400. SHA da correção inclui GET com cache-bust sem esse header, Vitest e compilação Pages. E2E real exige UI autenticada sem Network Error, perfil observado e transição/replay segura com leitura independente. Não declarar deploy ou merge sem checks e evidência atual."
+  }
+}
