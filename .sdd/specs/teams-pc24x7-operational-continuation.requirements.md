@@ -42,6 +42,11 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
 14. A superfície autenticada de conversas DEVE expor um snapshot operacional agregado do inbound
     Teams com volume, falhas, duplicidade, envio e latência, além de estado e códigos de alerta
     determinísticos, sem retornar conteúdo de mensagem, identidade ou resposta do provedor.
+15. O snapshot operacional do inbound Teams DEVE contabilizar tanto conclusões de mensagens livres
+    (`AI_CONVERSATION_TEAMS_MESSAGE_COMPLETED`) quanto conclusões de respostas de Adaptive Card
+    (`AI_CONVERSATION_TEAMS_REPLY_COMPLETED`). O replay de uma resposta de cartão DEVE incrementar
+    a métrica de duplicidade sem incrementar `responses_sent`, preservando os mesmos controles de
+    privacidade e sem exigir o `activity.id` original.
 
 ## Rollback
 
