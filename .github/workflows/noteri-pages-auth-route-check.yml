@@ -49,3 +49,45 @@ jobs:
               if status!=200 or not safe["same_host"]:
                   raise SystemExit(2)
           PY
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+      - name: Verify compiled callback and CORS preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$RUNNER_TEMP/noteri-locator.json" >/dev/null
+          python - "$RUNNER_TEMP/noteri-locator.json" <<'PY'
+          import json, urllib.request, urllib.error, re, sys
+          from urllib.parse import urljoin
+          pages="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/"
+          origin="https://ericson-j-santos.github.io"
+          req=urllib.request.Request(pages, headers={"User-Agent":"ReqSysAuthRouteTest/1.0"})
+          with urllib.request.urlopen(req,timeout=15) as r: html=r.read(120000).decode()
+          js=re.findall(r'<script[^>]*src="([^"]+\.js)"',html)
+          if not js: raise SystemExit("pages_compiled_bundle_missing")
+          script=urljoin(pages,js[-1])
+          with urllib.request.urlopen(script,timeout=20) as r: bundle=r.read(5000000).decode("utf-8","replace")
+          callback="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev"
+          print(json.dumps({"pages_bundle_published":true,"pages_callback_origin_embedded":callback in bundle,"pages_callback_route_embedded":"auth/callback.html" in bundle,"script_same_host":script.startswith(origin)},sort_keys=True))
+          if callback not in bundle: raise SystemExit("pages_compiled_auth_origin_missing")
+          signed=json.load(open(sys.argv[1],encoding="utf-8"))
+          base=signed["selected_url"]
+          opts=urllib.request.Request(base+"/api/v1/auth/azure",method="OPTIONS",headers={
+             "Origin":origin,"Access-Control-Request-Method":"POST",
+             "Access-Control-Request-Headers":"content-type,authorization,x-correlation-id",
+             "User-Agent":"ReqSysAuthRouteTest/1.0"})
+          try:
+              with urllib.request.urlopen(opts,timeout=15) as response:
+                  status=response.status
+                  allowed=response.headers.get("Access-Control-Allow-Origin")
+                  headers=response.headers.get("Access-Control-Allow-Headers","")
+          except urllib.error.HTTPError as e:
+              status=e.code
+              allowed=e.headers.get("Access-Control-Allow-Origin")
+              headers=e.headers.get("Access-Control-Allow-Headers","")
+          safe={"cors_http_status":status,"cors_pages_allowed":allowed==origin,
+                "cors_auth_headers_allowed":"authorization" in headers.lower() or headers=="*"}
+          print(json.dumps(safe,sort_keys=True))
+          if not safe["cors_pages_allowed"] or status not in (200,204): raise SystemExit("pages_auth_cors_not_ready")
+          PY
