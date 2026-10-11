@@ -19,7 +19,7 @@ credenciais e fornecer uma leitura mínima do runtime DEV antes de autorizar rec
    Sobrescrita, escape do diretório, symlink e reparse point devem ser recusados.
 7. Metadados coletados não comprovam runtime saudável, SHA implantado ou E2E Teams.
 
-## Aceite
+## Critérios de aceite
 - Testes isolados cobrem os requisitos positivos e negativos, sem Docker ou Teams externo.
 - READY_FOR_PR pertence ao HEAD publicado antes de abrir PR.
 - Diagnóstico físico e replay Teams permanecem pendentes de execução autorizada em DEV.
