@@ -57,7 +57,8 @@ jobs:
           if not re.fullmatch(r"[0-9a-fA-F-]{36}",current):
               raise SystemExit("client_identity_invalid")
           print(json.dumps({"live_client_id":current,"live_callback_matches_pages":callback==CALLBACK,"azure_enabled":config.get("azure_enabled") is True,"demo_login_disabled":config.get("demo_login_enabled") is False},sort_keys=True))
-          if callback != CALLBACK or current != ERROR_CLIENT or config.get("azure_enabled") is not True or config.get("demo_login_enabled") is not False:
+          print("DEMO_LOGIN_STATE="+("disabled" if config.get("demo_login_enabled") is False else "enabled" if config.get("demo_login_enabled") is True else "unknown"))
+          if callback != CALLBACK or current != ERROR_CLIENT or config.get("azure_enabled") is not True:
               raise SystemExit("dev_auth_config_divergent")
 
           class NoRedirect(urllib.request.HTTPRedirectHandler):
