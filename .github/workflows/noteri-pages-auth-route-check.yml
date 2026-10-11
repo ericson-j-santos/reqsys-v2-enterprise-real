@@ -1,0 +1,51 @@
+name: Noteri Pages Auth Route Check
+on:
+  push:
+    branches: [diag/noteri-msal-secret-probe-20261011]
+    paths:
+      - .github/workflows/noteri-pages-auth-route-check.yml
+permissions:
+  contents: read
+jobs:
+  verify-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate stable Pages origin and the callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import urllib.request, urllib.error, json
+          origin="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/"
+          paths=["","auth/callback.html","runtime-locator.json"]
+          for path in paths:
+              url=origin+path
+              req=urllib.request.Request(url, headers={"User-Agent":"ReqSysDEVAuthRouteCheck/1.0"})
+              try:
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      body=r.read(524288)
+                      status=r.status
+                      media=r.headers.get("Content-Type","")
+                      final=r.geturl()
+              except urllib.error.HTTPError as exc:
+                  status=exc.code
+                  media=exc.headers.get("Content-Type","")
+                  final=exc.geturl()
+                  body=b""
+              except Exception as e:
+                  print(json.dumps({"path":path or "/","state":"unreachable","error_type":type(e).__name__}))
+                  raise SystemExit(3)
+              safe={"path":path or "/","status":status,"media":media.split(";")[0],"same_host":final.startswith(origin),"size":len(body)}
+              if path.endswith("callback.html"):
+                  safe["callback_returns_to_dev"]=b"auth/callback.html" not in body and b"window.location.replace" in body and b"../" in body
+              if path=="":
+                  safe["vue_app_shell"]=b'<div id="app">' in body or b'<div id="app" ' in body
+              print(json.dumps(safe,sort_keys=True))
+              if status!=200 or not safe["same_host"]:
+                  raise SystemExit(2)
+          PY
