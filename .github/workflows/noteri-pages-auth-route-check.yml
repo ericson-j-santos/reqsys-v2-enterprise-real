@@ -69,7 +69,7 @@ jobs:
           script=urljoin(pages,js[-1])
           with urllib.request.urlopen(script,timeout=20) as r: bundle=r.read(5000000).decode("utf-8","replace")
           callback="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev"
-          print(json.dumps({"pages_bundle_published":true,"pages_callback_origin_embedded":callback in bundle,"pages_callback_route_embedded":"auth/callback.html" in bundle,"script_same_host":script.startswith(origin)},sort_keys=True))
+          print(json.dumps({"pages_bundle_published":True,"pages_callback_origin_embedded":callback in bundle,"pages_callback_route_embedded":"auth/callback.html" in bundle,"script_same_host":script.startswith(origin)},sort_keys=True))
           if callback not in bundle: raise SystemExit("pages_compiled_auth_origin_missing")
           signed=json.load(open(sys.argv[1],encoding="utf-8"))
           base=signed["selected_url"]
