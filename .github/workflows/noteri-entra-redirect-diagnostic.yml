@@ -57,14 +57,15 @@ jobs:
           if not re.fullmatch(r"[0-9a-fA-F-]{36}",current):
               raise SystemExit("client_identity_invalid")
           print(json.dumps({"live_client_id":current,"live_callback_matches_pages":callback==CALLBACK,"azure_enabled":config.get("azure_enabled") is True,"demo_login_disabled":config.get("demo_login_enabled") is False},sort_keys=True))
-          if callback != CALLBACK or config.get("azure_enabled") is not True:
+          if callback != CALLBACK or current != ERROR_CLIENT or config.get("azure_enabled") is not True or config.get("demo_login_enabled") is not False:
               raise SystemExit("dev_auth_config_divergent")
 
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, request, fp, code, msg, headers, url):
                   return None
           opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect)
-          for label,client in (("current_live",current),("compose_expected",EXPECTED_COMPOSE_CLIENT),("user_error",ERROR_CLIENT)):
+          current_registration_verified=False
+          for label,client in (("current_live",current),("compose_expected",EXPECTED_COMPOSE_CLIENT)):
               state="reqsys-diagnostic-"+secrets.token_hex(10)
               verifier=secrets.token_urlsafe(40)
               challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -91,4 +92,9 @@ jobs:
               mismatch="AADSTS50011" in body or "AADSTS50011" in urllib.parse.unquote(location)
               classification="valid_redirect_unauthenticated" if valid_return else "mismatch_AADSTS50011" if mismatch else "inconclusive"
               print(json.dumps({"client_label":label,"matches_live":client==current,"http_status":status,"registration_probe":classification},sort_keys=True))
+              if label=="current_live":
+                  current_registration_verified=valid_return
+          if not current_registration_verified:
+              raise SystemExit("live_app_registration_callback_not_verified")
+          print("REQSYS_ENTRA_CALLBACK_CONFIRMED=true")
           PY
