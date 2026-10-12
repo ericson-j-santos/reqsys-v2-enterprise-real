@@ -246,9 +246,9 @@ def test_workflow_keeps_study_mode_default_and_allows_only_governed_public_stati
     assert "- public-static" in raw
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "environment: development" in raw
-    assert "--confirm RECONCILE-NOTERI-STUDY-MODE-DEV" in raw
+    assert "'--confirm', 'RECONCILE-NOTERI-STUDY-MODE-DEV'" in raw
     assert "production_touched" in raw
-    assert "secrets." not in raw
+    assert raw.count("secrets.") == raw.count("secrets.REQSYS_NOTERI_DEV_MSAL_STATE_B64")
 
 
 def test_workflow_reexecutes_when_gateway_or_runtime_contract_changes():
@@ -271,10 +271,10 @@ def test_workflow_recovers_orchestrator_before_study_mode_e2e():
     reconcile = raw.index("Reconcile same-origin Study Mode and execute physical E2E")
     assert recover < reconcile
     assert "recover_reqsys_engineering_orchestrator_dev.py" in raw
-    assert "--confirm RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV" in raw
+    assert "'--confirm', 'RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV'" in raw
     assert "orchestrator-recovery.json" in raw
-    assert "path: artifacts/noteri-study-mode-dev/" in raw
-    assert "secrets." not in raw
+    assert "steps.session.outputs.target_path }}/artifacts/noteri-study-mode-dev/" in raw
+    assert raw.count("secrets.") == raw.count("secrets.REQSYS_NOTERI_DEV_MSAL_STATE_B64")
 
 
 def test_policy_and_gateway_allow_only_fixed_reconcile_command():
@@ -614,23 +614,31 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "reqsys-live-nginx-1" not in raw
 
 
-def test_workflow_blocks_unsafe_legacy_e2e_before_host_mutation():
+def test_workflow_requires_explicit_msal_session_before_physical_mutation():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "if: github.event_name == 'workflow_dispatch'" in raw
-    guard = raw.index("Block legacy study-mode until authenticated governed E2E exists")
-    recovery = raw.index("Recover and validate Engineering Orchestrator DEV")
-    assert guard < recovery
-    block = raw[guard:raw.index("Validate public static reconciler syntax", guard)]
-    assert "inputs.mode == 'study-mode'" in block
-    assert "STUDY_MODE_AUTHENTICATED_E2E_NOT_GOVERNED" in block
-    assert "exit 2" in block
-    assert "inputs.mode == 'public-static'" in raw
+    secret = raw.index("Require explicitly provisioned Microsoft test session")
+    bootstrap = raw.index("Bootstrap isolated and governed Desktop session")
+    recover = raw.index("Recover and validate Engineering Orchestrator DEV")
+    e2e = raw.index("Reconcile same-origin Study Mode and execute physical E2E")
+    assert secret < bootstrap < recover < e2e
+    assert "NOTERI_DEV_MSAL_TEST_IDENTITY_NOT_PROVISIONED" in raw
+    assert "REQSYS_NOTERI_DEV_MSAL_STATE_B64" in raw
+    assert "STUDY_MODE_AUTHENTICATED_E2E_NOT_GOVERNED" not in raw
+    assert "noteri_study_mode_pages_e2e.py" in raw
+    assert "GOVERNED_NOTERI_PAGES_E2E_FAILED" in raw
     assert "Reconcile full DEV runtime and static frontend" in raw
 
 
-def test_guard_is_fail_closed_without_bootstrap_bypass():
+def test_study_mode_requires_session_launcher_and_command_gateway():
     raw = WORKFLOW.read_text(encoding="utf-8")
     start = raw.index("  reconcile:")
     intro = raw[start:raw.index("      - name: Checkout immutable source SHA", start)]
     assert "if: github.event_name == 'workflow_dispatch'" in intro
-    assert "github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode'" in raw
+    assert "--require-runner-version-preflight" in raw
+    assert "SESSION_LAUNCH_OK" in raw
+    assert "state_validated" in raw
+    assert "command_gateway.py" in raw
+    assert "'--risk', '2'" in raw
+    assert "'--expected-head', '${{ github.sha }}'".replace("\\", "") in raw
+    assert "inputs.mode == 'public-static'" in raw
+    assert "python scripts/noteri_study_mode_dev_reconcile.py" not in raw
