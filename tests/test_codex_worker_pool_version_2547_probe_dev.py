@@ -222,3 +222,14 @@ def test_workflow_and_owner_command_are_fixed_and_non_deploying():
     assert "runtime_mutated_by_probe" in workflow
     assert "-f task_id=" not in gateway
     assert "-f worker_id=" not in gateway
+
+
+def test_version_probe_evidence_location_matches_workflow():
+    workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text(encoding="utf-8")
+    assert workflow.count("\n  version-2547-read:\n") == 1
+    section = workflow.split("\n  version-2547-read:\n", 1)[1]
+    lines = [line.strip() for line in section.splitlines() if line.strip().startswith("EVIDENCE_REL: ")]
+    assert len(lines) == 1
+    declared = lines[0].split("EVIDENCE_REL: ", 1)[1]
+    assert (ROOT / Path(*declared.split("\\"))) == probe.EVIDENCE
+    assert ("path: ${{ steps.session.outputs.target_path }}\\" + declared) in section
