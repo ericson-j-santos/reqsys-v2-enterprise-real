@@ -16,6 +16,6 @@ Comprovar o carregamento do frontend publicado no GitHub Pages /dev/ e, quando h
 
 ## Evidências
 - frontend/tests/e2e/global-search-published.spec.js
-- .github/workflows/global-search-published-dev-e2e.yml
+- .github/workflows/validacao-acessos.yml
 - Run público independente vinculado a main implantada e ao bundle servido.
 - Run autenticado apenas quando houver sessão delegada Microsoft válida e autorizado seu uso.
