@@ -1,5 +1,6 @@
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -78,3 +79,107 @@ def test_canary_failure_evidence_does_not_leak_exception(tmp_path: Path) -> None
     assert "must-not-leak" not in persisted
     payload = subject.json.loads(persisted)
     assert payload["error"] == "desktop_runner_pickup_not_proven"
+
+
+GIB = 1024**3
+
+
+def test_capacity_snapshot_synthetic_readonly() -> None:
+    readers = dict(
+        memory_reader=lambda: (16 * GIB, 7 * GIB),
+        disk_reader=lambda _path: SimpleNamespace(total=256 * GIB, free=87 * GIB),
+        cpu_reader=lambda: 6,
+        sql_reader=lambda: 1,
+        docker_reader=lambda: True,
+        system_drive="C:",
+    )
+    first = subject.host_capacity(**readers)
+    second = subject.host_capacity(**readers)
+    assert first == second
+    assert first["status"] == "measured"
+    assert first["ram_total_gib"] == 16
+    assert first["ram_available_gib"] == 7
+    assert first["system_disk_free_gib"] == 87
+    assert first["logical_cpu_count"] == 6
+    assert first["registered_sql_instances"] == 1
+    assert first["registered_sql_instances_are_live"] is False
+    assert first["docker_daemon_verified"] is False
+    assert first["hml_existing_verified"] is False
+    assert first["hml_provisioning_authorized"] is False
+    assert first["production_touched"] is False
+    assert "password" not in str(first).lower()
+
+
+def test_capacity_rejects_unexpected_drive_without_file_access() -> None:
+    disk = Mock()
+    with pytest.raises(subject.CanaryError, match="capacity_drive_invalid"):
+        subject.host_capacity(system_drive=r"C:\users", disk_reader=disk)
+    disk.assert_not_called()
+
+
+def test_capacity_rejects_inconsistent_numbers() -> None:
+    with pytest.raises(subject.CanaryError, match="capacity_metrics_invalid"):
+        subject.host_capacity(
+            memory_reader=lambda: (8 * GIB, 12 * GIB),
+            disk_reader=lambda _path: SimpleNamespace(total=256 * GIB, free=2 * GIB),
+            cpu_reader=lambda: 6,
+            sql_reader=lambda: 0,
+            docker_reader=lambda: False,
+            system_drive="C:",
+        )
+
+
+def test_capacity_report_is_not_hml_approval(tmp_path: Path) -> None:
+    env = {
+        "RUNNER_NAME": subject.TARGET_HOST,
+        "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "GITHUB_SHA": "b" * 40,
+    }
+    with patch.dict(subject.os.environ, env):
+        result = subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host=subject.TARGET_HOST,
+            platform="nt",
+            capacity_probe=lambda: {"status": "measured", "hml_provisioning_authorized": False},
+        )
+    assert result["ok"] is True
+    assert result["capacity"]["hml_provisioning_authorized"] is False
+    assert subject.json.loads((tmp_path / "result.json").read_text()) == result
+
+
+def test_capacity_errors_remain_sanitized_and_non_authorizing(tmp_path: Path) -> None:
+    env = {
+        "RUNNER_NAME": subject.TARGET_HOST,
+        "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "GITHUB_SHA": "c" * 40,
+    }
+    with patch.dict(subject.os.environ, env):
+        result = subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host=subject.TARGET_HOST,
+            platform="nt",
+            capacity_probe=Mock(side_effect=RuntimeError("secret=never-print-this")),
+        )
+    raw = (tmp_path / "result.json").read_text()
+    assert result["ok"] is True  # Runner picked up; capacity is separately unknown.
+    assert result["capacity"] == {
+        "status": "unavailable",
+        "reason": "capacity_probe_failed",
+        "hml_provisioning_authorized": False,
+    }
+    assert "never-print-this" not in raw
+
+
+def test_wrong_host_does_not_probe_capacity(tmp_path: Path) -> None:
+    probe = Mock()
+    with pytest.raises(subject.CanaryError, match="wrong_host"):
+        subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host="NOT-AN-AUTHORIZED-DESKTOP",
+            platform="nt",
+            capacity_probe=probe,
+        )
+    probe.assert_not_called()

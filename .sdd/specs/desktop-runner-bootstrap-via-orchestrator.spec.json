@@ -35,7 +35,8 @@
     "evidence_location": "RUNNER_TEMP outside governed worktree",
     "job_timeout_minutes": 12,
     "command_gateway_timeout_seconds": 150,
-    "orchestrator_timeout_seconds": 90
+    "orchestrator_timeout_seconds": 90,
+    "capacity_evidence": "Métricas Windows locais somente leitura, sem subprocess, sem dados confidenciais, e com hml_provisioning_authorized=false. Readback físico de capacidade deve ser independente; registradores SQL não comprovam instância online."
   },
   "risk": {
     "production": false,
@@ -67,6 +68,9 @@
     "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual.",
     "O refresh do bootstrap está pinado ao SHA corrente 313f5da4bb0ee9dd70937c238c7cfdf4e3514602 da main do Engineering Orchestrator, preservando o fallback governado de recovery do runner ReqSys, o reexec pós-refresh e o inventário Windows somente-leitura.",
     "Execuções duplicadas do mesmo modo não cancelam uma recuperação já em andamento; o workflow serializa por mode com cancel-in-progress=false.",
-    "O job runner-bootstrap reserva 12 minutos para checkout, download pinado e gateway, sem ampliar os limites internos de 150 segundos do Command Gateway e 90 segundos do bootstrap do Orchestrator."
+    "O job runner-bootstrap reserva 12 minutos para checkout, download pinado e gateway, sem ampliar os limites internos de 150 segundos do Command Gateway e 90 segundos do bootstrap do Orchestrator.",
+    "O canário de pickup físico inclui snapshot facultativo de RAM, CPU, disco do sistema, instâncias SQL registradas e presença do binário Docker, sem novas rotas de execução ou alterações persistentes.",
+    "Sem métricas ou com leitura inválida, a capacidade fica status=unavailable com erro genérico, sem validar HML e sem mascarar o sucesso/falha real do pickup.",
+    "A capacidade não autoriza instalação HML; são exigidos ainda serviços/daemon comprovados, folga operacional, isolamento e controle de mudanças, antes de qualquer banco ou container novo."
   ]
 }
