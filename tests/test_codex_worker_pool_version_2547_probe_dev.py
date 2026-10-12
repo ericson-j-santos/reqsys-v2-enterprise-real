@@ -204,6 +204,24 @@ def test_redirect_is_refused_and_loopback_does_not_use_proxy():
     assert "urlopen(" not in source
 
 
+def test_evidence_filename_matches_workflow_validation_and_upload():
+    expected = Path("artifacts") / "codex-worker-pool-version-2547-read-dev" / "evidence.json"
+    assert probe.EVIDENCE == ROOT / expected
+    workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text()
+    normalized = workflow.replace(chr(92), "/")
+    assert "EVIDENCE_REL: artifacts/codex-worker-pool-version-2547-read-dev/evidence.json" in normalized
+    assert "path: ${{ steps.session.outputs.target_path }}/artifacts/codex-worker-pool-version-2547-read-dev/evidence.json" in normalized
+    assert "VERSION_PROBE_EVIDENCE_MISSING" in workflow
+
+
+def test_evidence_is_written_to_expected_location_without_runtime_activity(monkeypatch, tmp_path):
+    path = tmp_path / "artifacts" / "codex-worker-pool-version-2547-read-dev" / "evidence.json"
+    monkeypatch.setattr(probe, "EVIDENCE", path)
+    record = {"result": "WORKER_POOL_VERSION_PROBE_OK", "runtime_mutated_by_probe": False}
+    probe._evidence(record)
+    assert path.exists()
+    assert json.loads(path.read_text(encoding="utf-8")) == record
+
 def test_workflow_and_owner_command_are_fixed_and_non_deploying():
     workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text()
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text()
