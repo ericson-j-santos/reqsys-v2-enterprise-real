@@ -1,0 +1,133 @@
+name: ReqSys one-shot legacy Desktop runner pickup
+
+on:
+  push:
+    branches:
+      - diag/legacy-runner-pickup-20261012
+    paths:
+      - .github/workflows/legacy-desktop-runner-pickup-probe-20261012.yml
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: reqsys-legacy-runner-pickup-20261012
+  cancel-in-progress: false
+
+jobs:
+  pickup:
+    name: Legacy ReqSys Desktop pickup
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 3
+    steps:
+      - name: Checkout immutable ReqSys commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Checkout canonical operational rules
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: f6ccb143a581e28650e9b640226f9ef671d469f2
+          path: _rules
+          persist-credentials: false
+      - name: Bootstrap and inspect only exact Desktop runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954' -or $env:RUNNER_NAME -ne 'DESKTOP-PDQK954') {
+            throw 'LEGACY_RUNNER_IDENTITY_NOT_MATCHED'
+          }
+          $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if (-not $python) { throw 'LEGACY_PYTHON_NOT_AVAILABLE' }
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $launcher = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\session_launcher.py'
+          $args = @('--policy', $policy, '--repo', $env:GITHUB_WORKSPACE,
+            '--session-prefix', 'reqsys-legacy-pickup',
+            '--correlation-id', "reqsys-legacy-pickup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT",
+            '--expected-head', $env:GITHUB_SHA,
+            '--sync-ref', 'origin/diag/legacy-runner-pickup-20261012',
+            '--require-runner-version-preflight')
+          $raw = @(& $python $launcher @args)
+          if ($LASTEXITCODE -ne 0 -or -not $raw) { throw 'LEGACY_SESSION_LAUNCH_BLOCKED' }
+          $s = @($raw)[-1] | ConvertFrom-Json
+          if ($s.result -ne 'SESSION_LAUNCH_OK' -or $s.state_validated -ne $true -or
+              $s.head -ne $env:GITHUB_SHA -or $s.host -ne 'DESKTOP-PDQK954' -or
+              $s.runner_version_preflight.ok -ne $true) {
+            throw 'LEGACY_SESSION_INVALID'
+          }
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $inspectArgs = @('--policy', $policy,
+            '--correlation-id', "reqsys-legacy-pickup-$env:GITHUB_RUN_ID",
+            'inspect', '--cwd', $s.target_path, '--session-id', $s.session_id)
+          $inspected = @(& $python $gateway @inspectArgs)
+          if ($LASTEXITCODE -ne 0 -or -not $inspected) { throw 'LEGACY_GATEWAY_INSPECT_BLOCKED' }
+          $proof = [ordered]@{
+            schema_version = 1
+            result = 'REQSYS_LEGACY_PICKUP_CONFIRMED'
+            host = 'DESKTOP-PDQK954'
+            runner_name = 'DESKTOP-PDQK954'
+            repository = 'ericson-j-santos/reqsys-v2-enterprise-real'
+            source_sha = $env:GITHUB_SHA
+            session_ok = $true
+            state_validated = $true
+            actions_runner_version = [string]$s.runner_version_preflight.installed_version
+            production_touched = $false
+            credentials_read = $false
+            runner_restarted = $false
+            recovery_executed = $false
+          }
+          New-Item -ItemType Directory -Force -Path 'artifacts\legacy-pickup' | Out-Null
+          $proof | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 'artifacts\legacy-pickup\evidence.json'
+      - name: Upload sanitized pickup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reqsys-legacy-desktop-pickup
+          path: artifacts/legacy-pickup/evidence.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  queue_watchdog:
+    name: Cancel unpicked probe after bounded deadline
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate branch, inspect exact run and cancel if not picked up
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const expectedBranch = 'refs/heads/diag/legacy-runner-pickup-20261012';
+            if (context.ref !== expectedBranch) {
+              core.setFailed('UNEXPECTED_DIAGNOSTIC_BRANCH');
+              return;
+            }
+            const started = Date.now();
+            const deadline = started + 90000;
+            while (Date.now() < deadline) {
+              const response = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                per_page: 100
+              });
+              const physical = response.data.jobs.find(
+                job => job.name === 'Legacy ReqSys Desktop pickup'
+              );
+              if (physical && (physical.status === 'in_progress'
+                  || physical.status === 'completed' || Number(physical.runner_id || 0) > 0)) {
+                core.notice('LEGACY_DESKTOP_PICKUP_OBSERVED:' + physical.id);
+                return;
+              }
+              await new Promise(resolve => setTimeout(resolve, 15000));
+            }
+            core.warning('LEGACY_DESKTOP_RUNNER_NOT_PICKED_UP_IN_WINDOW');
+            await github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            core.setFailed('LEGACY_DESKTOP_PICKUP_TIMEOUT');
