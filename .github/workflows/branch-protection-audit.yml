@@ -790,7 +790,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally { Pop-Location }
 
-      - name: Aplicar proteção e auto-merge via Owner Risk3 Gateway
+      - name: Aplicar somente proteção via Owner Risk3 Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -833,7 +833,7 @@ jobs:
           if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
           if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
           if (-not $data.enforce_admins) { throw "ADMIN_ENFORCEMENT_MISSING" }
-          if (-not $data.auto_merge_enabled) { throw "AUTO_MERGE_NOT_ENABLED" }
+          if ($data.auto_merge_unchanged -ne $true -or $data.auto_merge_modified -ne $false) { throw "AUTO_MERGE_MUTATION_DETECTED" }
           if ($data.force_push_allowed) { throw "FORCE_PUSH_ALLOWED" }
           if ($data.deletion_allowed) { throw "BRANCH_DELETION_ALLOWED" }
           if (-not $data.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
@@ -916,7 +916,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally { Pop-Location }
 
-      - name: Aplicar proteção e auto-merge via Owner Risk3 Gateway
+      - name: Aplicar somente proteção via Owner Risk3 Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -959,7 +959,7 @@ jobs:
           if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
           if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
           if (-not $data.enforce_admins) { throw "ADMIN_ENFORCEMENT_MISSING" }
-          if (-not $data.auto_merge_enabled) { throw "AUTO_MERGE_NOT_ENABLED" }
+          if ($data.auto_merge_unchanged -ne $true -or $data.auto_merge_modified -ne $false) { throw "AUTO_MERGE_MUTATION_DETECTED" }
           if ($data.force_push_allowed) { throw "FORCE_PUSH_ALLOWED" }
           if ($data.deletion_allowed) { throw "BRANCH_DELETION_ALLOWED" }
           if (-not $data.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
