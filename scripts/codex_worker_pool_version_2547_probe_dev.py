@@ -27,6 +27,7 @@ TASK_BASE_SHA = "14232beac63c8d202f90bed1cf23df8680a54b2e"
 ENGINE_SOURCE_SHA = "d05ad0ce7c2945db1914a400127621bce4256a8b"
 EVIDENCE = ROOT / "artifacts" / "codex-worker-pool-version-read-dev" / "evidence.json"
 DIAG_PATH = f"/v1/tasks/{TASK_ID}/diagnostics"
+OPENAPI_DIAG_TEMPLATE = "/v1/tasks/{task_id}/diagnostics"
 TASK_PATH = f"/v1/tasks/{TASK_ID}"
 ALLOWED_PATHS = {"/health", "/openapi.json", TASK_PATH, DIAG_PATH}
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -169,7 +170,9 @@ def probe_version(
     if match is None:
         raise ProbeBlocked("runtime_version_invalid")
     version_tuple = tuple(int(x) for x in match.groups())
-    diag_present = DIAG_PATH in paths and isinstance(paths[DIAG_PATH], dict) and "get" in paths[DIAG_PATH]
+    diag_present = (OPENAPI_DIAG_TEMPLATE in paths and
+                    isinstance(paths[OPENAPI_DIAG_TEMPLATE], dict) and
+                    "get" in paths[OPENAPI_DIAG_TEMPLATE])
     if label == "ReqSys Codex Worker Pool" and version_tuple >= (1, 4, 0):
         raise ProbeBlocked("legacy_service_version_inconsistent")
     if label == "Engineering Worker Pool" and version_tuple < (1, 4, 0):
