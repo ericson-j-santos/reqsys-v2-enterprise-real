@@ -5,6 +5,10 @@
       <span class="brand-sm ml-1"><span class="brand-dot brand-dot--sm">R</span> ReqSys</span>
       <AmbienteNavigator :environment-hint="environment" compact :show-prefix="false" class="ml-2" />
       <v-spacer />
+      <v-btn icon variant="text" color="white" aria-label="Buscar no ReqSys" data-testid="global-search-trigger-mobile" @click="buscaAberta = true">
+        <v-icon icon="mdi-magnify" />
+        <v-tooltip activator="parent" location="bottom" text="Buscar telas e funcionalidades do ReqSys" aria-label="Buscar telas e funcionalidades do ReqSys" />
+      </v-btn>
       <v-chip size="x-small" color="amber" variant="tonal" class="mr-2 req-role-chip">
         {{ auth.usuario?.papel || 'user' }}
         <v-tooltip activator="parent" location="bottom" text="Seu perfil define permissoes de leitura, edicao, auditoria e acoes administrativas." aria-label="Seu perfil define permissoes de leitura, edicao, auditoria e acoes administrativas." />
@@ -62,6 +66,23 @@
         <v-btn v-else icon size="small" variant="tonal" color="primary" class="theme-toggle-rail mt-3" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" @click="alternarTemaVisual">
           <v-icon :icon="temaClaro ? 'mdi-weather-night' : 'mdi-white-balance-sunny'" size="18" />
           <v-tooltip activator="parent" location="right" :text="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" :aria-label="temaClaro ? 'Ativar tema escuro' : 'Ativar tema claro'" />
+        </v-btn>
+        <v-btn
+          v-if="sidebarRecolhidoVisivel"
+          icon size="small" variant="tonal" color="primary" class="mt-2"
+          aria-label="Buscar no ReqSys" data-testid="global-search-trigger-rail"
+          @click="buscaAberta = true"
+        >
+          <v-icon icon="mdi-magnify" />
+          <v-tooltip activator="parent" location="right" text="Buscar telas e funcionalidades do ReqSys" aria-label="Buscar telas e funcionalidades do ReqSys" />
+        </v-btn>
+        <v-btn
+          v-else block variant="outlined" prepend-icon="mdi-magnify" class="mt-2"
+          aria-label="Buscar no ReqSys" data-testid="global-search-trigger-desktop"
+          @click="buscaAberta = true"
+        >
+          Buscar no ReqSys
+          <v-tooltip activator="parent" location="right" text="Pesquisar telas e funcionalidades. Atalho: Ctrl+K ou ⌘K." aria-label="Pesquisar telas e funcionalidades. Atalho: Ctrl+K ou ⌘K." />
         </v-btn>
       </div>
       <v-divider />
@@ -129,22 +150,25 @@
     <v-main class="req-main">
       <div class="req-content-shell"><router-view /></div>
     </v-main>
+    <GlobalSearchDialog v-model="buscaAberta" />
   </v-layout>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
 import AmbienteNavigator from '../components/AmbienteNavigator.vue'
+import GlobalSearchDialog from '../components/GlobalSearchDialog.vue'
 import { carregarDadosPendenciasNav } from '../composables/navPendencias'
 import { lerSidebarColapsadoPersistido, lerSubgrupoRequisitosPersistido, lerTemaPersistido, salvarSidebarColapsadoPersistido, salvarSubgrupoRequisitosPersistido, salvarTemaPersistido } from '../composables/navTemaPersist'
 import { NAV_TEMAS, itensDoSubgrupo, subgrupoIdPorRota, temaIdPorRota, temaPorId, temaTemSubgrupos } from '../constants/navCatalog'
 import { useAppVersion } from '../composables/useAppVersion'
 
 const { mobile } = useDisplay()
+const buscaAberta = ref(false)
 const theme = useTheme()
 const { versionLabel, hasVersionDrift } = useAppVersion()
 const auth = useAuthStore()
@@ -178,6 +202,7 @@ watch(() => route.path, (path) => {
 })
 
 onMounted(async () => {
+  window.addEventListener('keydown', atalhoBusca)
   if (!navegacaoInicializada.value) {
     const persistido = lerTemaPersistido()
     const rotaTema = temaIdPorRota(route.path)
@@ -200,6 +225,15 @@ onMounted(async () => {
     pendenciasPorTema.value = {}
   }
 })
+
+onUnmounted(() => window.removeEventListener('keydown', atalhoBusca))
+
+function atalhoBusca(event) {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    buscaAberta.value = true
+  }
+}
 
 function badgeTema(temaId) { return pendenciasPorTema.value[temaId] ?? { count: 0, level: null } }
 function badgeLabel(count) { return count > 99 ? '99+' : String(count) }
