@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker-pool` com custo adicional zero, aplicando branch protection real e habilitando auto-merge por rota administrativa fixa, auditável e fail-closed, com PC24x7 como primário e Noteri como fallback governado.
+Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker-pool` com custo adicional zero, aplicando somente branch protection por rota administrativa fixa, auditável e fail-closed, com PC24x7 como primário e Noteri como fallback governado.
 
 ## Requisitos
 
@@ -17,9 +17,9 @@ Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker
 9. A autenticação GitHub deve usar somente o perfil local existente do `gh`; subprocessos removem `GH_TOKEN` e `GITHUB_TOKEN`.
 10. Antes da mutação, capturar o SHA corrente de `engineering-worker-pool/main` e exigir o check `test` como `completed/success`.
 11. A branch protection deve exigir Pull Request, `test` com `strict=true`, enforcement para administradores e bloquear force-push e exclusão.
-12. O repositório deve terminar com `allow_auto_merge=true`.
+12. O repositório deve manter o valor anterior de `allow_auto_merge` (false ou true), sem executar PATCH em configuração de repositório.
 13. O SHA da branch deve ser relido antes e depois da mutação e permanecer idêntico.
-14. A proteção e o estado de auto-merge devem ser relidos por API após a mutação.
+14. A proteção deve ser relida por API e o estado de auto-merge deve ser comparado ao valor anterior, rejeitando qualquer divergência.
 15. Se o estado já estiver correto, a execução deve ser idempotente e terminar como `ALREADY_COMPLIANT`.
 16. A autorização Risk3 temporária deve ser removida em `always()`.
 17. A evidência não pode conter credenciais e não pode tocar produção, deploy, banco ou conteúdo da branch.
@@ -31,6 +31,14 @@ Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker
 - O SHA alvo é estável antes/depois da mutação.
 - O check `test` do SHA corrente está verde antes da escrita.
 - A API confirma `protected=true`, Pull Request obrigatório, enforcement para admins, `test` strict, force-push bloqueado e exclusão bloqueada.
-- A API do repositório confirma `allow_auto_merge=true`.
+- A API do repositório confirma `allow_auto_merge` inalterado e o executor não envia PATCH para habilitá-lo.
 - O fluxo é idempotente e publica evidência sanitizada com leitura independente.
 - Nenhum segredo, deploy ou produção é tocado.
+
+## Decisão superveniente (12/10/2026)
+
+A autorização atual é apenas para proteger `engineering-worker-pool/main`.
+Habilitação de auto-merge passa a ser incremento administrativo separado e
+exige autorização própria. Nenhum workflow de proteção pode alterar
+`allow_auto_merge`, mesmo quando originalmente false. Preservar o valor anterior
+é um controle positivo e negativo obrigatório para ambos os hosts governados.
