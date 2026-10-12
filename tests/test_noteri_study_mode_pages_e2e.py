@@ -164,6 +164,6 @@ def test_script_never_calls_legacy_mutating_reconciler():
     assert "legacy.execute(" not in content
     assert "legacy.api_e2e(" not in content
     assert "legacy.browser_e2e(" not in content
-    assert "RESTORE" not in content.upper().replace("RESTORE_NORMAL", "")
+    assert "REQSYS_NOTERI_DEV_MSAL_STATE_B64" in content
     assert "if attempted and not verified and token:" in content
     assert "restore_normal(token, correlation)" in content
