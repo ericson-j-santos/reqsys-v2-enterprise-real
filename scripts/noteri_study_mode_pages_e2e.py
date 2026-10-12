@@ -15,7 +15,6 @@ from pathlib import Path
 import re
 import socket
 import subprocess
-import sys
 import time
 
 import noteri_study_mode_dev_reconcile as legacy
