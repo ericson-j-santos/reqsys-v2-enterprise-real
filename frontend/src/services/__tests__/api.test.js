@@ -51,6 +51,34 @@ describe('services/api — interceptor de request', () => {
     expect(obterCorrelationIdSessao()).toBe('corr-sessao-fixa')
   })
 
+  it('preserva o X-Correlation-Id específico da operação sem modificar o ID da sessão', async () => {
+    definirCorrelationIdSessao('corr-sessao-fixa')
+    const request = await runRequestInterceptor({
+      url: '/v1/noteri/profile',
+      method: 'post',
+      headers: { 'X-Correlation-Id': 'corr-noteri-estudo-001' },
+    })
+    expect(request.headers['X-Correlation-Id']).toBe('corr-noteri-estudo-001')
+    expect(obterCorrelationIdSessao()).toBe('corr-sessao-fixa')
+
+    const retry = await runRequestInterceptor(request)
+    expect(retry.headers['X-Correlation-Id']).toBe('corr-noteri-estudo-001')
+  })
+
+  it('respeita o nome do cabeçalho sem diferenciar maiúsculas e restaura default quando vazio', async () => {
+    definirCorrelationIdSessao('corr-sessao-fixa')
+    const lower = await runRequestInterceptor({
+      headers: { 'x-correlation-id': 'corr-noteri-normal-001' },
+    })
+    expect(lower.headers['x-correlation-id']).toBe('corr-noteri-normal-001')
+    expect(lower.headers['X-Correlation-Id']).toBeUndefined()
+
+    const empty = await runRequestInterceptor({
+      headers: { 'X-Correlation-Id': '' },
+    })
+    expect(empty.headers['X-Correlation-Id']).toBe('corr-sessao-fixa')
+  })
+
   it('anexa Authorization quando há token no localStorage', async () => {
     localStorage.setItem('reqsys_token', 'jwt-abc')
     const config = await runRequestInterceptor({ headers: {} })

@@ -95,8 +95,26 @@ describe('hostProfileLocalAgent via same-origin API', () => {
     expect(api.post).toHaveBeenCalledWith('/v1/noteri/profile', {
       profile: 'ESTUDO',
       correlation_id: 'corr-estudo-001',
+    }, {
+      headers: { 'X-Correlation-Id': 'corr-estudo-001' },
     })
     expect(api.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('falha fechado no HTTP 409 de correlação sem fazer leitura ou alegar mudança', async () => {
+    api.post.mockRejectedValue({
+      response: { status: 409, data: { detail: 'correlation_id_mismatch' } },
+    })
+
+    await expect(alterarPerfilNoteri('ESTUDO', 'corr-mismatch-001'))
+      .rejects.toThrow('correlation_id_mismatch')
+    expect(api.post).toHaveBeenCalledWith('/v1/noteri/profile', {
+      profile: 'ESTUDO',
+      correlation_id: 'corr-mismatch-001',
+    }, {
+      headers: { 'X-Correlation-Id': 'corr-mismatch-001' },
+    })
+    expect(api.get).not.toHaveBeenCalled()
   })
 
   it('preserva idempotência informada pelo backend', async () => {
