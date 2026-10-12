@@ -511,7 +511,8 @@ def test_cycle_attempts_rdc_when_runner_fails(monkeypatch, tmp_path: Path) -> No
 
 def test_cycle_missing_rdc_script_still_recovers_runner(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
-    release = tmp_path / "release"; release.mkdir()
+    release = tmp_path / "release"
+    release.mkdir()
     runtime = tmp_path / "runtime"
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "validate_runner_home", lambda p: runner_home)
