@@ -28,12 +28,20 @@ test('atalho Ctrl+K e Enter levam ao primeiro resultado', async ({ page }) => {
 })
 
 test('perfil sem autorização não encontra áreas administrativas', async ({ page }) => {
-  await page.evaluate(() => {
-    const usuario = JSON.parse(localStorage.getItem('reqsys_usuario'))
-    usuario.permissoes = ['dashboard:read']
-    localStorage.setItem('reqsys_usuario', JSON.stringify(usuario))
-  })
-  await page.reload()
+  await mockResponsiveApis(page, [{
+    pattern: /\\/api\\/v1\\/auth\\/login$/,
+    body: {
+      access_token: 'token-e2e',
+      token_type: 'bearer',
+      usuario: {
+        nome: 'Pessoa com acesso limitado',
+        email: 'limitado@reqsys.local',
+        papel: 'user',
+        permissoes: ['dashboard:read'],
+      },
+    },
+  }])
+  await loginDemo(page)
   await page.getByTestId('global-search-trigger-desktop').click()
   await page.getByTestId('global-search-input').fill('central operacional')
   await expect(page.getByTestId('global-search-empty')).toBeVisible()
