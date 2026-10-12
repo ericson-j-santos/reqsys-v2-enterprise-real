@@ -27,3 +27,12 @@ Remover o cabeçalho `Cache-Control` **da requisição** feita pelo navegador pa
 - Prova pré-correção: GitHub Actions `38140758588`.
 - Testes frontend + build Pages da mudança: GitHub Actions `38140994935` (8 testes aprovados; código idêntico ao final).
 - Validação funcional final após publicação ainda pendente.
+
+## Regressão após publicação — divergência de correlação do POST (12/10/2026)
+
+- Evidência de interface: Task Console autenticado apresentou `correlation_id_mismatch` e bloqueou a alternância.
+- Causa determinada no código: a tela gerava `correlation_id` de operação com sufixo `-noteri-<perfil>`, mas o interceptor Axios sobrescrevia `X-Correlation-Id` com o ID geral da sessão; o POST protegido exigia igualdade e retornava HTTP 409.
+- Critério positivo: POST NORMAL/ESTUDO envia exatamente o mesmo ID no corpo e no cabeçalho, sem alterar token, CORS ou verificação do backend.
+- Controle negativo: backend mantém HTTP 409 quando houver divergência; frontend não marca o Noteri como pronto nem realiza leitura independente após POST rejeitado.
+- Idempotência e regressão: interceptor preserva cabeçalho explícito em operações repetidas, aceita capitalização diferente, continua injetando ID de sessão quando ausente e mantém o cache-bust do GET.
+- Aceite final: teste Vitest dos dois serviços, build do frontend e E2E autenticado em DEV com leitura independente do estado físico/worker. CI ou HTTP 200 isolados não comprovam o funcionamento dos botões.
