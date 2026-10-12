@@ -43,6 +43,7 @@ jobs:
         github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144' ||
         github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-task-2546-read-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
@@ -162,6 +163,10 @@ jobs:
             '/reqsys run codex-worker-pool-smoke-dev')
               target='codex-worker-pool-smoke-dev.yml'
               mode='smoke'
+              ;;
+            '/reqsys run codex-worker-pool-task-2546-read-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='task-read'
               ;;
             '/reqsys run codex-worker-pool-handoff-e2e-dev')
               target='codex-worker-pool-handoff.yml'
@@ -440,6 +445,11 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=restore)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "task-read" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=task-read)"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml" ]; then
             test "$TARGET_MODE" = "work-e2e" || { echo 'worker_pool_handoff_mode_not_allowlisted' >&2; exit 3; }
             request_id="$(python -c 'import hashlib, os; raw=(os.environ["GITHUB_REPOSITORY"]+":2020:main").encode("utf-8"); print(hashlib.sha256(raw).hexdigest()[:24])')"
