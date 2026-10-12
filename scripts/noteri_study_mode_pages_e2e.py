@@ -200,14 +200,17 @@ def browser_e2e(entries: list[dict], correlation: str) -> dict:
         token = ""
         try:
             context = browser.new_context(ignore_https_errors=False)
-            context.add_init_script(
+            page = context.new_page()
+            page.goto(PAGES + "/login", wait_until="domcontentloaded", timeout=30000)
+            page.evaluate(
                 """items => {
-                  if (location.origin !== 'https://ericson-j-santos.github.io') return;
+                  if (location.origin !== 'https://ericson-j-santos.github.io') {
+                    throw Error('unexpected_pages_origin');
+                  }
                   items.forEach(item => sessionStorage.setItem(item.name, item.value));
                 }""",
-                arg=entries,
+                entries,
             )
-            page = context.new_page()
             page.goto(PAGES + "/task-console", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_function(
                 "() => Boolean(localStorage.getItem('reqsys_token'))",
