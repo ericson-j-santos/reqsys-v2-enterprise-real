@@ -87,7 +87,14 @@ api.interceptors.request.use(async (config) => {
     config.baseURL = requireProviderNeutralRuntimeUrl(publicRuntimeBase, 'endereço público da execução')
   }
   const token = localStorage.getItem('reqsys_token')
-  config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
+  // O POST de mudança de perfil usa um ID por operação. Preservá-lo impede
+  // divergência entre o cabeçalho e o corpo, sem alterar a correlação padrão.
+  const hasExplicitCorrelation = Object.entries(config.headers).some(
+    ([name, value]) => name.toLowerCase() === 'x-correlation-id' && Boolean(String(value || '').trim()),
+  )
+  if (!hasExplicitCorrelation) {
+    config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
+  }
   if (token) config.headers.Authorization = `Bearer ${token}`
   if (isJourneyRequest(config)) showJourneyLoading(journeyLoadingMessage(config))
   return config

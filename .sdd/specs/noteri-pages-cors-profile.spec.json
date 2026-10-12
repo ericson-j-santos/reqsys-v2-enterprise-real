@@ -2,14 +2,14 @@
   "feature_name": "noteri-pages-cors-profile",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-11",
-  "updated_at": "2026-10-11",
+  "updated_at": "2026-10-12",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Corrige a falha Network Error do Task Console DEV no GitHub Pages ao consultar o perfil do Noteri via API HTTPS em outra origem, sem ampliar a allowlist CORS nem reduzir controles de autenticação.",
+  "description": "Corrige a falha Network Error do Task Console DEV no GitHub Pages ao consultar o perfil do Noteri via API HTTPS em outra origem, sem ampliar a allowlist CORS nem reduzir controles de autenticação. Complementa a correção para preservar o X-Correlation-Id específico do POST entre o corpo e o cabeçalho, evitando HTTP 409 por divergência.",
   "environment": "dev",
   "runtime_target": "GitHub Pages /dev/ -> Cloudflare DEV -> ReqSys API -> Engineering Orchestrator -> Noteri",
   "acceptance_criteria": [
@@ -20,7 +20,10 @@
     "O controlador da interface não interpreta Network Error como status real do Noteri, e não libera botões se o GET falha.",
     "Testes de perfil incluem cenário positivo, URL sem cache, cabeçalho ausente, repetição, divergência de estado e indisponibilidade do backend.",
     "A correção funcional depende de publicação do frontend compilado no GitHub Pages e de E2E autenticado com leitura independente no runtime DEV atual; CI verde isoladamente não homologa a interface.",
-    "Não alterar autenticação, Azure Entra, regras de CORS globais, HML/PROD ou serviços e processos locais."
+    "Não alterar autenticação, Azure Entra, regras de CORS globais, HML/PROD ou serviços e processos locais.",
+    "Para alternar NORMAL/ESTUDO, o POST envia X-Correlation-Id idêntico ao correlation_id do corpo; o interceptor preserva correlação explícita por operação e usa a sessão como fallback somente quando o cabeçalho não vier preenchido.",
+    "O backend continua rejeitando divergência de correlação com HTTP 409 e exige administrador; nenhum token, allowlist CORS ou rota do runtime é relaxado.",
+    "Vitest cobre cabeçalho explícito (inclusive caixa diferente), sessão, repetição, POST aceito, rejeição 409 e leitura independente; teste físico autenticado em DEV é obrigatório antes da homologação."
   ],
   "controls": {
     "production_enabled": false,
@@ -30,12 +33,16 @@
     "admin_role_for_profile_mutation": true,
     "negative_cors_preflight_required": true,
     "independent_readback_required": true,
-    "browser_e2e_required": true
+    "browser_e2e_required": true,
+    "correlation_header_body_match_required": true,
+    "reject_correlation_mismatch_required": true,
+    "session_correlation_fallback_required": true
   },
   "sdd_gate": {
     "tests": [
-      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js"
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
+      "frontend/src/services/__tests__/api.test.js"
     ],
-    "evidence_contract": "Teste físico do preflight no runtime DEV: /api/v1/noteri/profile com Authorization/X-Correlation-Id HTTP 200; com Cache-Control HTTP 400. SHA da correção inclui GET com cache-bust sem esse header, Vitest e compilação Pages. E2E real exige UI autenticada sem Network Error, perfil observado e transição/replay segura com leitura independente. Não declarar deploy ou merge sem checks e evidência atual."
+    "evidence_contract": "Teste físico do preflight no runtime DEV: /api/v1/noteri/profile com Authorization/X-Correlation-Id HTTP 200; com Cache-Control HTTP 400. SHA da correção inclui GET com cache-bust sem esse header, Vitest e compilação Pages. E2E real exige UI autenticada sem Network Error, perfil observado e transição/replay segura com leitura independente. Não declarar deploy ou merge sem checks e evidência atual. Hotfix 12/10/2026: o POST deve usar o mesmo ID de correlação no corpo/cabeçalho e continuar falhando fechado em HTTP 409 para divergência. E2E autenticado permanece pendente até a publicação separada em DEV."
   }
 }

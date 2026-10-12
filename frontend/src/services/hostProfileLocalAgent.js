@@ -49,6 +49,8 @@ export async function alterarPerfilNoteri(profile, correlationId) {
     const response = await api.post('/v1/noteri/profile', {
       profile: normalized,
       correlation_id: correlation,
+    }, {
+      headers: { 'X-Correlation-Id': correlation },
     })
     changed = validarPayload(response.data)
   } catch (error) {
