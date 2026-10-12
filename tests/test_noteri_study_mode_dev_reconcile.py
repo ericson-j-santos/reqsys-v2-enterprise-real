@@ -612,3 +612,25 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "reqsys-live-api-1" not in raw
     assert "reqsys-live-frontend-1" not in raw
     assert "reqsys-live-nginx-1" not in raw
+
+
+def test_workflow_blocks_unsafe_legacy_e2e_before_host_mutation():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "if: github.event_name == 'workflow_dispatch'" in raw
+    guard = raw.index("Block legacy study-mode until authenticated governed E2E exists")
+    recovery = raw.index("Recover and validate Engineering Orchestrator DEV")
+    assert guard < recovery
+    block = raw[guard:raw.index("Validate public static reconciler syntax", guard)]
+    assert "inputs.mode == 'study-mode'" in block
+    assert "STUDY_MODE_AUTHENTICATED_E2E_NOT_GOVERNED" in block
+    assert "exit 2" in block
+    assert "inputs.mode == 'public-static'" in raw
+    assert "Reconcile full DEV runtime and static frontend" in raw
+
+
+def test_guard_is_fail_closed_without_bootstrap_bypass():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    start = raw.index("  reconcile:")
+    intro = raw[start:raw.index("      - name: Checkout immutable source SHA", start)]
+    assert "if: github.event_name == 'workflow_dispatch'" in intro
+    assert "github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode'" in raw
