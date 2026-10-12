@@ -1,0 +1,27 @@
+{
+  "feature_name": "reqsys-global-search-published-e2e",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-12",
+  "updated_at": "2026-10-12",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "E2E independente da lupa no ReqSys DEV publicado: browser sem mocks, autenticação Microsoft real fail-closed e navegação, sem mutação de ambiente.",
+  "environment": "dev",
+  "sdd_gate": {
+    "tests": [
+      "frontend/tests/e2e/global-search-published.spec.js"
+    ],
+    "evidence_contract": "Testar Pages real e negar login demo anônimo; sessão MSAL delegada somente válida e same-origin para interagir com lupa, pesquisar, Enter e controle negativo. A aprovação anônima não representa homologação autenticada; runtime SHA exigido em dispatch."
+  },
+  "controls": {
+    "production_touched": false,
+    "hml_touched": false,
+    "uses_mock_auth": false,
+    "requires_authenticated_browser_for_complete_acceptance": true,
+    "secrets_in_artifacts": false
+  }
+}

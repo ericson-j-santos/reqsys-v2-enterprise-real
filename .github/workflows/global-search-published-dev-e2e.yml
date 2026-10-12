@@ -1,0 +1,149 @@
+name: ReqSys Global Search Published DEV E2E
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/global-search-published-dev-e2e.yml'
+      - 'frontend/tests/e2e/global-search-published.spec.js'
+      - '.sdd/specs/reqsys-global-search-published-e2e.spec.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/global-search-published-dev-e2e.yml'
+      - 'frontend/tests/e2e/global-search-published.spec.js'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Prova pública ou interação autenticada por MSAL'
+        required: true
+        type: choice
+        default: anonymous
+        options: [anonymous, authenticated]
+      expected_published_sha:
+        description: 'SHA completo do runtime DEV publicado para conferir sem falso verde'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reqsys-search-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  anonymous:
+    name: Public browser — real Pages and anonymous access
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      E2E_BASE_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/
+      REQSYS_PUBLISHED_SEARCH_E2E: anonymous
+    steps:
+      - name: Checkout versioned test (no deployment)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Resolve DEV signed locator and independently verify runtime
+        env:
+          EXPECTED_PUBLISHED_SHA: ${{ inputs.expected_published_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$RUNNER_TEMP/reqsys-dev-locator.json" >/dev/null
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          from urllib.request import Request, urlopen
+          locator = json.loads((Path(os.environ['RUNNER_TEMP']) / 'reqsys-dev-locator.json').read_text())
+          base = locator['selected_url'].rstrip('/')
+          url = urlsplit(base)
+          if url.scheme != 'https' or not url.hostname or not url.hostname.endswith('.trycloudflare.com'):
+              raise SystemExit('signed_locator_target_invalid')
+          def fetch(path):
+              with urlopen(Request(base + path, headers={'User-Agent': 'ReqSysSearchBrowserGate/1.0'}), timeout=20) as resp:
+                  if resp.status != 200: raise SystemExit('runtime_http_unexpected')
+                  return json.loads(resp.read(524288))
+          build = fetch('/api/runtime/build-info')
+          observed = str(build.get('data', build).get('build_sha', '')).lower()
+          if not re.fullmatch('[0-9a-f]{40}', observed):
+              raise SystemExit('runtime_build_sha_invalid')
+          if os.environ['EVENT_NAME'] == 'workflow_dispatch':
+              expected = os.environ.get('EXPECTED_PUBLISHED_SHA', '').lower()
+              if not re.fullmatch('[0-9a-f]{40}', expected) or observed != expected:
+                  raise SystemExit('published_runtime_sha_mismatch')
+          config = fetch('/api/v1/auth/config')
+          data = config.get('data', config)
+          if data.get('demo_login_enabled') is not False or data.get('azure_enabled') is not True:
+              raise SystemExit('public_dev_auth_controls_invalid')
+          print(json.dumps({'environment':'dev', 'observed_sha':observed,
+                            'auth_mode':'microsoft', 'demo_login_enabled':False,
+                            'workflow_sha':os.environ.get('GITHUB_SHA'),
+                            'proven_same_sha': os.environ['EVENT_NAME'] == 'workflow_dispatch'}))
+          PY
+      - name: Install browser test dependencies
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Exercise real published browser (no mocks)
+        working-directory: frontend
+        run: npx playwright test tests/e2e/global-search-published.spec.js --grep 'ReqSys Pages DEV' --reporter=line
+
+  authenticated:
+    name: Real Microsoft session — interactive search and navigation
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'authenticated'
+    needs: anonymous
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: development
+    env:
+      E2E_BASE_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/
+      REQSYS_PUBLISHED_SEARCH_E2E: authenticated
+    steps:
+      - name: Checkout versioned test (no deployment)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install browser dependencies
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Validate existing Microsoft session without logging secrets
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$WSJF_MSAL_STORAGE_STATE_B64" || { echo 'MSAL_DELEGATED_SESSION_MISSING'; exit 3; }
+          umask 077
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$RUNNER_TEMP/reqsys-msal-state.json"
+          unset WSJF_MSAL_STORAGE_STATE_B64
+          MSAL_STORAGE_STATE_PATH="$RUNNER_TEMP/reqsys-msal-state.json" node frontend/scripts/check-msal-state.mjs --json >/dev/null || {
+            echo 'MSAL_DELEGATED_SESSION_EXPIRED_OR_INVALID'; exit 4;
+          }
+          echo "MSAL_STORAGE_STATE_PATH=$RUNNER_TEMP/reqsys-msal-state.json" >> "$GITHUB_ENV"
+      - name: Test real search after Entra ID authentication
+        working-directory: frontend
+        run: npx playwright test tests/e2e/global-search-published.spec.js --grep 'ReqSys Pages DEV' --reporter=line
+      - name: Remove ephemeral session file
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/reqsys-msal-state.json"
