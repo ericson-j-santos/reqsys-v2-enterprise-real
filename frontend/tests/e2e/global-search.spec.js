@@ -29,7 +29,7 @@ test('atalho Ctrl+K e Enter levam ao primeiro resultado', async ({ page }) => {
 
 test('perfil sem autorização não encontra áreas administrativas', async ({ page }) => {
   await mockResponsiveApis(page, [{
-    pattern: /\\/api\\/v1\\/auth\\/login$/,
+    pattern: /\/api\/v1\/auth\/login$/,
     body: {
       access_token: 'token-e2e',
       token_type: 'bearer',
