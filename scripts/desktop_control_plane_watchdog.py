@@ -415,30 +415,55 @@ def recover_rdc(*, python_executable: Path, recovery_script: Path, evidence_path
 
 
 def cycle(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Independently recover the GitHub runner and RDC; never gate one on the other.
+
+    In particular, a degraded remote GUI controller must not prevent the runner
+    from starting during a headless Windows boot before interactive login.
+    """
     host = require_windows_desktop()
     runtime_root = Path(metadata["runtime_root"])
     release_root = Path(metadata["release_root"])
     runner_home = validate_runner_home(Path(metadata["runner_home"]))
     python_executable = Path(metadata["python_executable"])
     recovery_script = release_root / "scripts" / RDC_RECOVERY_SCRIPT
-    if not recovery_script.is_file():
-        raise WatchdogError("script de recuperação RDC ausente na release")
 
-    rdc = recover_rdc(
-        python_executable=python_executable,
-        recovery_script=recovery_script,
-        evidence_path=runtime_root / "evidence" / "rdc-recovery-last.json",
-    )
-    runner = start_runner(runner_home, runtime_root / "logs" / "github-runner.log")
+    # The runner is first. Errors are categorized without logging exception text,
+    # and RDC recovery is still attempted independently.
+    try:
+        runner = start_runner(runner_home, runtime_root / "logs" / "github-runner.log")
+    except Exception as exc:
+        runner = {"status": "failed", "component": "github_runner",
+                  "error_code": type(exc).__name__, "started": False}
+
+    if recovery_script.is_file():
+        try:
+            rdc = recover_rdc(
+                python_executable=python_executable,
+                recovery_script=recovery_script,
+                evidence_path=runtime_root / "evidence" / "rdc-recovery-last.json",
+            )
+        except Exception as exc:
+            rdc = {"status": "failed", "component": "rdc",
+                   "error_code": type(exc).__name__, "recovered": False}
+    else:
+        rdc = {"status": "failed", "component": "rdc",
+               "error_code": "rdc_recovery_script_missing", "recovered": False}
+
+    runner_ok = runner.get("status") in {"process_running", "recovered"}
+    rdc_ok = rdc.get("status") in {"healthy", "recovered"}
     payload = {
-        "schema_version": "1",
+        "schema_version": "2",
         "service": SERVICE_NAME,
         "host": host,
         "source_sha": metadata["source_sha"],
         "generated_at": now_iso(),
         "rdc": rdc,
         "github_runner": runner,
-        "ok": True,
+        "runner_recovery_ok": runner_ok,
+        "rdc_recovery_ok": rdc_ok,
+        "ok": runner_ok and rdc_ok,
+        "partial": runner_ok != rdc_ok,
+        "github_pickup_required": runner_ok,
         "production_touched": False,
         "secrets_read": False,
         "reboot_performed": False,

@@ -72,3 +72,25 @@ A correção só pode ser classificada como totalmente ativada no Desktop quando
 7. nenhum reboot, segredo ou produção tocados.
 
 Enquanto a instalação física no Desktop não for evidenciada, o código pode estar integrado/validado, mas o runtime permanece \`activation_pending\`.
+
+
+## Correção da dependência RDC → runner (PR #2544, 12/10/2026)
+
+A leitura física do Desktop em 12/10/2026 identificou a tarefa legada
+AtStartup/S4U instalada, mas o código físico recupera o RDC antes do runner.
+Se a recuperação RDC falhar, o ciclo falha e nem tenta o runner.
+
+Requisitos adicionais de recuperação sem login:
+
+25. A tentativa de iniciar ou observar `Runner.Listener.exe` deve ocorrer **antes e independentemente** de recuperar o RDC, sem depender de GUI, sessão interativa ou acesso remoto.
+26. Uma falha ou ausência de script RDC não deve suprimir a tentativa de recuperação do runner. Uma falha do runner também não deve suprimir a tentativa de diagnóstico e recuperação RDC.
+27. A evidência local deve publicar separadamente `runner_recovery_ok`, `rdc_recovery_ok`, `partial` e `github_pickup_required`, sem declarar `ok=true` quando qualquer dos componentes obrigatórios estiver falho.
+28. Erros devem ser categorizados por tipo e não podem publicar a mensagem original de exceção, argumentos, tokens ou caminhos sensíveis no artefato.
+29. A validação em runner hospedado deve testar controles positivos e negativos: RDC falha, runner falha e script de RDC ausente, todos sem impedir a outra tentativa.
+30. A correção em GitHub, isoladamente, não comprova a instalação física. O reboot só pode ocorrer após atualização imutável e reversível do watchdog instalado e readback independente de recuperação do runner sem RDC, preservando capacidade de rollback e o login humano desnecessário para o runtime.
+
+### Critérios de aceite adicionais
+- Executar testes da função `cycle` na versão atual e comprovar flags corretas e ausência de texto sensível.
+- Manter a tarefa S4U/AtStartup do Desktop e não promover alteração de serviço ou UAC sem autorização e preflight.
+- Concluir teste físico no mesmo SHA, respeitando a indisponibilidade atual do RDC e sem afirmar autoinício visual do ChatGPT antes de uma sessão Windows autenticada.
+

@@ -19,7 +19,9 @@
     "reboot_required": false,
     "secrets_read": false,
     "production_touched": false,
-    "uac_activation": "Last-resort governed launcher after a fixed local passwordless schtasks /NP registration attempt; restricted to immutable release register-task-com metadata"
+    "uac_activation": "Last-resort governed launcher after a fixed local passwordless schtasks /NP registration attempt; restricted to immutable release register-task-com metadata",
+    "independent_runner_recovery": "Attempt start_runner first and independently; failing RDC must not suppress runner startup or publish a false full-success result.",
+    "partial_evidence": "Persist separate runner_recovery_ok, rdc_recovery_ok, partial, github_pickup_required; error types only, never exception text."
   },
   "sdd_gate": {
     "tests": [
@@ -27,7 +29,7 @@
       "tests/test_desktop_control_plane_watchdog_uac_launcher.py",
       "tests/test_pc24x7_rdc_recovery.py"
     ],
-    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If COM registration is unavailable or denied, one fixed local passwordless schtasks /NP registration is allowed for the exact task; independent XML must prove enabled+AtStartup+S4U. If native registration is also denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task."
+    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If COM registration is unavailable or denied, one fixed local passwordless schtasks /NP registration is allowed for the exact task; independent XML must prove enabled+AtStartup+S4U. If native registration is also denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task. The runner is recovered first; failures of either component do not suppress the other. Persist independent health flags and require external runner pickup E2E before declaring runtime ready."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
@@ -57,6 +59,12 @@
   "quality_followup": {
     "source_pr": 1855,
     "finding": "CodeQL empty-except findings eliminated with explicit fallback/evidence semantics.",
-    "regression_test": "tests/test_desktop_control_plane_watchdog.py"
+    "regression_test": "tests/test_desktop_control_plane_watchdog.py",
+    "runner_first_fix": {
+      "source_pr": 2544,
+      "reason": "Physical readback: installed watchdog release is rdc_first, latest cycle failed, and no dedicated runner auto-service exists.",
+      "tests": "tests/test_desktop_control_plane_watchdog.py",
+      "runtime_gate": "Versioned, reversible on-host update and independent post-boot pickup; no reboot before attested readiness."
+    }
   }
 }
