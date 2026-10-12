@@ -8,8 +8,8 @@ test.beforeEach(async ({ page }) => {
 
 test('lupa abre, encontra seção e navega no desktop', async ({ page }) => {
   await page.getByTestId('global-search-trigger-desktop').click()
-  await expect(page.getByTestId('global-search-input')).toBeFocused()
-  await page.getByTestId('global-search-input').fill('RASTREABILIDADE')
+  await expect(page.getByTestId('global-search-input').locator('input')).toBeFocused()
+  await page.getByTestId('global-search-input').locator('input').fill('RASTREABILIDADE')
   const resultado = page.getByTestId('global-search-result').filter({
     has: page.getByText('Rastreabilidade', { exact: true }),
   })
@@ -21,8 +21,8 @@ test('lupa abre, encontra seção e navega no desktop', async ({ page }) => {
 
 test('atalho Ctrl+K e Enter levam ao primeiro resultado', async ({ page }) => {
   await page.keyboard.press('Control+k')
-  await page.getByTestId('global-search-input').fill('painel de projetos')
-  await page.getByTestId('global-search-input').press('Enter')
+  await page.getByTestId('global-search-input').locator('input').fill('painel de projetos')
+  await page.getByTestId('global-search-input').locator('input').press('Enter')
   await expect(page).toHaveURL(/\/painel-projetos\/?$/)
   await expect(page.getByTestId('global-search-dialog')).not.toBeVisible()
 })
@@ -43,14 +43,14 @@ test('perfil sem autorização não encontra áreas administrativas', async ({ p
   }])
   await loginDemo(page)
   await page.getByTestId('global-search-trigger-desktop').click()
-  await page.getByTestId('global-search-input').fill('central operacional')
+  await page.getByTestId('global-search-input').locator('input').fill('central operacional')
   await expect(page.getByTestId('global-search-empty')).toBeVisible()
 })
 
 test('lupa pode ser usada no cabeçalho do celular', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTestId('global-search-trigger-mobile').click()
-  await page.getByTestId('global-search-input').fill('qualidade ia')
+  await page.getByTestId('global-search-input').locator('input').fill('qualidade ia')
   await expect(page.getByTestId('global-search-result').filter({
     has: page.getByText('Qualidade IA', { exact: true }),
   })).toBeVisible()
