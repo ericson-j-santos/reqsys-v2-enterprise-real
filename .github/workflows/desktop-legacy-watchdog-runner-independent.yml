@@ -1,0 +1,30 @@
+name: Desktop Legacy Watchdog - Runner Independence Contracts
+on:
+  push:
+    branches:
+      - fix/desktop-legacy-watchdog-runner-first-20261012
+    paths:
+      - scripts/desktop_control_plane_watchdog.py
+      - tests/test_desktop_control_plane_watchdog.py
+      - .github/workflows/desktop-legacy-watchdog-runner-independent.yml
+permissions:
+  contents: read
+jobs:
+  tests:
+    name: Runner-first watchdog positive and negative contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check pytest==8.4.2
+      - name: Compile and execute actual watchdog contracts
+        run: |
+          python -m py_compile scripts/desktop_control_plane_watchdog.py tests/test_desktop_control_plane_watchdog.py
+          python -m pytest tests/test_desktop_control_plane_watchdog.py -q
