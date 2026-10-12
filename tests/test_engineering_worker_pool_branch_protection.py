@@ -158,7 +158,6 @@ def _simulate_protection(monkeypatch, tmp_path, initial_auto_merge, *, check_gre
 
 def test_admin_protection_applies_without_automerging_and_replays(monkeypatch, tmp_path):
     import json
-    import pytest
 
     for value in (False, True):
         with monkeypatch.context() as m:
