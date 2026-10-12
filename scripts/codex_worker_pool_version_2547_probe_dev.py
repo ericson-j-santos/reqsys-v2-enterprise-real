@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -40,6 +40,13 @@ class ProbeBlocked(RuntimeError):
     """Only enumerated codes are published; never raw HTTP or credential text."""
 
 
+class RefuseRedirect(HTTPRedirectHandler):
+    """Never forward a protected loopback request to a redirect destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def current_sha() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
@@ -56,7 +63,7 @@ def request_json(path: str, token: str | None) -> tuple[int, dict[str, Any]]:
         headers["Authorization"] = "Bearer " + token
     req = Request(POOL_URL + path, headers=headers, method="GET")
     try:
-        with urlopen(req, timeout=12) as response:  # noqa: S310 - fixed loopback endpoint.
+        with build_opener(ProxyHandler({}), RefuseRedirect()).open(req, timeout=12) as response:  # noqa: S310 - fixed loopback endpoint.
             body = response.read(262145)
             if len(body) > 262144:
                 raise ProbeBlocked("response_size_exceeded")
