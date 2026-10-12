@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protege engineering-worker-pool/main e habilita auto-merge usando a autenticação GitHub local do PC24x7."""
+"""Protege engineering-worker-pool/main sem alterar auto-merge, via auth local governada."""
 from __future__ import annotations
 
 import argparse
@@ -197,9 +197,18 @@ def main() -> int:
             raise ProtectionError("required_checks_not_green")
 
         repo_before = _repository()
+        auto_merge_before = repo_before.get("allow_auto_merge")
+        if type(auto_merge_before) is not bool:
+            raise ProtectionError("auto_merge_precheck_unknown")
         if before.get("protected") is True:
             current_protection = _protection()
-            if protection_compliant(current_protection) and repo_before.get("allow_auto_merge") is True:
+            if protection_compliant(current_protection):
+                verified_branch = _branch()
+                if str((verified_branch.get("commit") or {}).get("sha") or "").strip().lower() != target_sha:
+                    raise ProtectionError("target_sha_changed_after_read")
+                verified_repo = _repository()
+                if verified_repo.get("allow_auto_merge") is not auto_merge_before:
+                    raise ProtectionError("auto_merge_changed_during_protection")
                 _write_evidence(output, {
                     "status": "ALREADY_COMPLIANT",
                     "repository": TARGET_REPOSITORY,
@@ -211,7 +220,9 @@ def main() -> int:
                     "enforce_admins": True,
                     "force_push_allowed": False,
                     "deletion_allowed": False,
-                    "auto_merge_enabled": True,
+                    "auto_merge_enabled": auto_merge_before,
+                    "auto_merge_modified": False,
+                    "auto_merge_unchanged": True,
                     "local_github_auth": True,
                     "host": socket.gethostname(),
                     "independent_readback": True,
@@ -257,20 +268,6 @@ def main() -> int:
         if update.returncode != 0:
             raise ProtectionError("branch_protection_update_failed")
 
-        repo_update = _gh(
-            [
-                "api",
-                "--method", "PATCH",
-                "-H", "Accept: application/vnd.github+json",
-                "-H", f"X-GitHub-Api-Version: {API_VERSION}",
-                f"repos/{TARGET_REPOSITORY}",
-                "--input", "-",
-            ],
-            stdin=json.dumps({"allow_auto_merge": True}, separators=(",", ":")),
-        )
-        if repo_update.returncode != 0:
-            raise ProtectionError("auto_merge_update_failed")
-
         after_branch = _branch()
         after_sha = str((after_branch.get("commit") or {}).get("sha") or "").strip().lower()
         if after_sha != target_sha:
@@ -283,8 +280,8 @@ def main() -> int:
             raise ProtectionError("protection_readback_mismatch")
 
         after_repo = _repository()
-        if after_repo.get("allow_auto_merge") is not True:
-            raise ProtectionError("auto_merge_readback_mismatch")
+        if after_repo.get("allow_auto_merge") is not auto_merge_before:
+            raise ProtectionError("auto_merge_changed_during_protection")
 
         _write_evidence(output, {
             "status": "PROTECTION_APPLIED",
@@ -297,7 +294,9 @@ def main() -> int:
             "enforce_admins": True,
             "force_push_allowed": False,
             "deletion_allowed": False,
-            "auto_merge_enabled": True,
+            "auto_merge_enabled": auto_merge_before,
+            "auto_merge_modified": False,
+            "auto_merge_unchanged": True,
             "local_github_auth": True,
             "host": socket.gethostname(),
             "independent_readback": True,
