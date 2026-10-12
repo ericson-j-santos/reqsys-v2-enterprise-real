@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 
@@ -185,6 +186,15 @@ def test_nonallowlisted_paths_are_rejected_without_transport():
         probe.request_json("/v1/snapshot", "private-test-token")
     with pytest.raises(probe.ProbeBlocked, match="non_allowlisted_endpoint"):
         probe.request_json("/v1/workers", "private-test-token")
+
+
+def test_redirect_is_refused_and_loopback_does_not_use_proxy():
+    assert probe.RefuseRedirect().redirect_request(
+        None, None, 302, "Moved", {}, "https://outside.example/steal"
+    ) is None
+    source = inspect.getsource(probe.request_json)
+    assert "build_opener(ProxyHandler({}), RefuseRedirect())" in source
+    assert "urlopen(" not in source
 
 
 def test_workflow_and_owner_command_are_fixed_and_non_deploying():
