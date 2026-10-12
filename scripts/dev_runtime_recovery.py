@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""Closed-scope capture, preservation and rollback for PC24x7 DEV."""
+from __future__ import annotations
+import argparse, hashlib, json, os, re, socket, stat, subprocess, time
+from dataclasses import dataclass
+from pathlib import Path, PurePath
+from typing import Protocol, Sequence
+HOST="DESKTOP-PDQK954"; ENV="dev"; PROJECT="wt-pc24x7-piloto"; SERVICES=("api","frontend","nginx"); ROOT=Path(r"C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed")
+IMAGE=re.compile(r"^sha256:[0-9a-f]{64}$"); SHA=re.compile(r"^[0-9a-f]{40}$"); PREPARE_CONFIRM="PREPARE-ROLLBACK-PC24X7-PUBLIC-DEV"; ROLLBACK_CONFIRM="ROLLBACK-PC24X7-PUBLIC-DEV"
+LEGACY_DB_PROBE='''import json
+from app.db import SessionLocal
+from sqlalchemy import text
+s=None
+try:
+ s=SessionLocal(); value=s.execute(text("SELECT 1")).scalar(); ok=value==1
+ print(json.dumps({"database_ok":ok,"category":"ok" if ok else "unexpected_result"},sort_keys=True,separators=(",",":")))
+ raise SystemExit(0 if ok else 1)
+except SystemExit: raise
+except Exception:
+ print('{"category":"query_failed","database_ok":false}'); raise SystemExit(1)
+finally:
+ if s is not None:
+  try:s.close()
+  except Exception:pass
+'''
+class RecoveryError(RuntimeError):pass
+@dataclass(frozen=True)
+class Result:returncode:int;stdout:str="";stderr:str=""
+class Runner(Protocol):
+ def run(self,argv:Sequence[str],timeout:int=30,input_text:str|None=None)->Result:...
+class SubprocessRunner:
+ def run(self,argv,timeout=30,input_text=None):
+  p=subprocess.run(list(argv),input=input_text,capture_output=True,text=True,timeout=timeout,check=False);return Result(p.returncode,p.stdout,p.stderr)
+def invoke(runner,argv,timeout=30,input_text=None,allow_failure=False):
+ r=runner.run(tuple(argv),timeout,input_text)
+ if r.returncode and not allow_failure:raise RecoveryError(f"command_failed:{argv[0]}:{argv[1] if len(argv)>1 else 'unknown'}")
+ return r
+def checked(runner,argv,timeout=30,input_text=None):return invoke(runner,argv,timeout,input_text).stdout
+def parsed_output(result):
+ try:return json.loads(result.stdout)
+ except (ValueError,TypeError) as exc:raise RecoveryError("invalid_metadata") from exc
+def parsed(runner,argv):return parsed_output(invoke(runner,argv))
+def observed_scope(hostname=None):
+ if (hostname or socket.gethostname()).upper()!=HOST:raise RecoveryError("host_identity_refused")
+def _reparse(path):
+ attrs=getattr(path.lstat(),"st_file_attributes",0);return path.is_symlink() or bool(attrs & getattr(stat,"FILE_ATTRIBUTE_REPARSE_POINT",0))
+def safe_relative(path,root):
+ root_abs=Path(os.path.abspath(root));path_abs=Path(os.path.abspath(path))
+ if _reparse(root_abs):raise RecoveryError("root_reparse_refused")
+ try:rel=path_abs.relative_to(root_abs)
+ except ValueError as exc:raise RecoveryError("external_path_refused") from exc
+ if ".." in PurePath(path).parts:raise RecoveryError("traversal_refused")
+ cursor=root_abs
+ for part in rel.parts:
+  cursor=cursor/part
+  if _reparse(cursor):raise RecoveryError("link_refused")
+ resolved_root=root_abs.resolve(strict=True);resolved=path_abs.resolve(strict=True)
+ try:resolved.relative_to(resolved_root)
+ except ValueError as exc:raise RecoveryError("external_path_refused") from exc
+ if not resolved.is_file():raise RecoveryError("non_file_refused")
+ return rel
+def file_meta(path,root):
+ rel=safe_relative(path,root);h=hashlib.sha256()
+ with path.open("rb") as stream:
+  for chunk in iter(lambda:stream.read(1048576),b""):h.update(chunk)
+ return {"relative_path":rel.as_posix(),"size":path.stat().st_size,"sha256":h.hexdigest()}
+def image_id(value):
+ value=str(value).lower()
+ if not IMAGE.fullmatch(value):raise RecoveryError("invalid_image_id")
+ return value
+def unique_container(runner,service):
+ out=checked(runner,("docker","ps","--filter",f"label=com.docker.compose.project={PROJECT}","--filter",f"label=com.docker.compose.service={service}","--format","{{.ID}}"));ids=[x.strip() for x in out.splitlines() if x.strip()]
+ if len(ids)!=1:raise RecoveryError(f"container_cardinality:{service}")
+ return ids[0]
+def inspect_container(runner,cid,service,root):
+ data=parsed(runner,("docker","inspect",cid))
+ if not isinstance(data,list) or len(data)!=1 or not isinstance(data[0],dict):raise RecoveryError("invalid_container_metadata")
+ item=data[0];labels=((item.get("Config") or {}).get("Labels") or {})
+ if labels.get("com.docker.compose.project")!=PROJECT or labels.get("com.docker.compose.service")!=service:raise RecoveryError("compose_identity_mismatch")
+ if Path(labels.get("com.docker.compose.project.working_dir","")).resolve(strict=True)!=root.resolve(strict=True):raise RecoveryError("working_dir_mismatch")
+ return item,labels
+def observe_identity():
+ try:
+  from scripts.probe_pc24x7_dev_runtime_identity import ProbeError,run
+ except ModuleNotFoundError as exc:
+  if exc.name not in {"scripts","scripts.probe_pc24x7_dev_runtime_identity"}:raise
+  from probe_pc24x7_dev_runtime_identity import ProbeError,run
+ try:result=run("0"*40)
+ except ProbeError as exc:raise RecoveryError("live_probe_unavailable") from exc
+ build=str(result["routes"]["/api/runtime/build-info"].get("build_sha","")).lower()
+ if result.get("identity_validated") is not True or not SHA.fullmatch(build):raise RecoveryError("live_identity_invalid")
+ for route in ("/api/runtime/health","/api/runtime/readiness"):
+  item=result["routes"].get(route,{})
+  if item.get("status_invalid_type") is True or str(item.get("status","")).casefold() not in {"healthy","ready","ok"}:raise RecoveryError("live_readiness_invalid")
+ liveness=result["routes"].get("/api/runtime/liveness",{})
+ if liveness.get("alive_invalid_type") is True:raise RecoveryError("live_liveness_invalid")
+ if liveness.get("status_invalid_type") is True:raise RecoveryError("live_liveness_invalid")
+ if "alive" in liveness and (type(liveness["alive"]) is not bool or liveness["alive"] is not True):raise RecoveryError("live_liveness_invalid")
+ if "status" in liveness and (not isinstance(liveness["status"],str) or liveness["status"].casefold() not in {"alive","healthy","ok"}):raise RecoveryError("live_liveness_invalid")
+ if liveness.get("alive") is not True and str(liveness.get("status","")).casefold() not in {"alive","healthy","ok"}:raise RecoveryError("live_liveness_invalid")
+ return build
+def live_guard(runner,root=ROOT,identity_probe=observe_identity,hostname=None):
+ observed_scope(hostname);root_abs=Path(os.path.abspath(root))
+ if _reparse(root_abs) or root_abs.resolve(strict=True)!=root_abs:raise RecoveryError("runtime_root_invalid")
+ containers={}
+ for service in SERVICES:
+  cid=unique_container(runner,service);item,_=inspect_container(runner,cid,service,root);containers[service]={"container_id":cid,"image_id":image_id(item.get("Image"))}
+ return {"host":HOST,"root":str(root_abs),"runtime_sha":identity_probe(),"containers":containers}
+def fingerprint(body):return hashlib.sha256(json.dumps(body,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+def seal(body):
+ value=dict(body);value["fingerprint"]=fingerprint(value);return value
+def ordered_label(value):
+ result=[]
+ for raw in str(value or "").split(","):
+  item=raw.strip()
+  if item and item not in result:result.append(item)
+ return result
+def capture(runner,root=ROOT,identity_probe=observe_identity,hostname=None):
+ live=live_guard(runner,root,identity_probe,hostname);configs=None;envfiles=None
+ for service in SERVICES:
+  _,labels=inspect_container(runner,live["containers"][service]["container_id"],service,root)
+  current_configs=ordered_label(labels.get("com.docker.compose.project.config_files",""));current_env=ordered_label(labels.get("com.docker.compose.project.environment_file",""))
+  if configs is None:configs=current_configs
+  elif configs!=current_configs:raise RecoveryError("compose_config_order_mismatch")
+  if envfiles is None:envfiles=current_env
+  elif envfiles!=current_env:raise RecoveryError("environment_file_order_mismatch")
+ if not configs:raise RecoveryError("compose_config_missing")
+ return seal({"schema":2,"state":"captured","host":live["host"],"environment":ENV,"project":PROJECT,"runtime_root":live["root"],"runtime_sha":live["runtime_sha"],"services":live["containers"],"compose_files":[file_meta(Path(x),root) for x in configs],"environment_files":[file_meta(Path(x),root) for x in envfiles]})
+def validate(manifest,runner,expected_fingerprint,root=ROOT,require_prepared=False):
+ if not expected_fingerprint or manifest.get("fingerprint")!=expected_fingerprint:raise RecoveryError("external_fingerprint_mismatch")
+ unsigned={k:v for k,v in manifest.items() if k!="fingerprint"}
+ if fingerprint(unsigned)!=expected_fingerprint:raise RecoveryError("manifest_integrity_failed")
+ if manifest.get("host")!=HOST or manifest.get("environment")!=ENV or manifest.get("project")!=PROJECT:raise RecoveryError("scope_refused")
+ if Path(str(manifest.get("runtime_root"))).resolve(strict=True)!=root.resolve(strict=True):raise RecoveryError("runtime_root_mismatch")
+ if not SHA.fullmatch(str(manifest.get("runtime_sha",""))):raise RecoveryError("runtime_sha_invalid")
+ services=manifest.get("services")
+ if not isinstance(services,dict) or set(services)!=set(SERVICES):raise RecoveryError("service_set_mismatch")
+ for service in SERVICES:
+  if not isinstance(services[service],dict):raise RecoveryError("service_metadata_invalid")
+  expected=image_id(services[service].get("image_id"));checked(runner,("docker","image","inspect",expected))
+  if require_prepared:verify_tag(runner,str(services[service].get("rollback_tag","")),expected)
+ for group in ("compose_files","environment_files"):
+  records=manifest.get(group)
+  if not isinstance(records,list):raise RecoveryError("file_metadata_invalid")
+  for record in records:
+   if not isinstance(record,dict) or file_meta(root/str(record.get("relative_path")),root)!=record:raise RecoveryError("runtime_file_changed")
+ if require_prepared:
+  if manifest.get("state")!="prepared":raise RecoveryError("manifest_not_prepared")
+  if file_meta(root/manifest["rollback_override"]["relative_path"],root)!=manifest["rollback_override"]:raise RecoveryError("override_changed")
+def rollback_tag(service,sha):return f"reqsys-rollback/{PROJECT}-{service}:{sha}"
+def verify_tag(runner,tag,expected):
+ result=invoke(runner,("docker","image","inspect",tag),allow_failure=True)
+ if result.returncode:raise RecoveryError("rollback_tag_missing")
+ data=parsed_output(result)
+ if not isinstance(data,list) or len(data)!=1 or image_id(data[0].get("Id"))!=expected:raise RecoveryError("rollback_tag_collision")
+def prepare(manifest,runner,expected_fingerprint,root=ROOT):
+ validate(manifest,runner,expected_fingerprint,root);sha=manifest["runtime_sha"];services={k:dict(v) for k,v in manifest["services"].items()}
+ for service in SERVICES:
+  expected=services[service]["image_id"];tag=rollback_tag(service,sha);existing=invoke(runner,("docker","image","inspect",tag),allow_failure=True)
+  if existing.returncode==0:
+   data=parsed_output(existing)
+   if not isinstance(data,list) or len(data)!=1 or image_id(data[0].get("Id"))!=expected:raise RecoveryError("rollback_tag_collision")
+  else:checked(runner,("docker","image","tag",expected,tag))
+  verify_tag(runner,tag,expected);services[service]["rollback_tag"]=tag
+ override={"services":{s:{"image":services[s]["rollback_tag"]} for s in SERVICES}};recovery_dir=root/".reqsys-recovery"
+ if recovery_dir.exists() and (_reparse(recovery_dir) or not recovery_dir.is_dir()):raise RecoveryError("recovery_dir_refused")
+ recovery_dir.mkdir(exist_ok=True);path=recovery_dir/f"rollback-{expected_fingerprint}.json";payload=json.dumps(override,sort_keys=True,separators=(",",":"))
+ if path.exists():
+  if _reparse(path) or path.read_text(encoding="utf-8")!=payload:raise RecoveryError("override_collision")
+ else:path.write_text(payload,encoding="utf-8")
+ body={k:v for k,v in manifest.items() if k!="fingerprint"};body.update({"state":"prepared","services":services,"rollback_override":file_meta(path,root),"capture_fingerprint":expected_fingerprint});return seal(body)
+def legacy_database_probe(runner,api):
+ try:result=invoke(runner,("docker","exec","-i",api,"python","-B","-"),30,LEGACY_DB_PROBE,allow_failure=True)
+ except subprocess.TimeoutExpired as exc:raise RecoveryError("database_probe_timeout") from exc
+ try:data=json.loads(result.stdout)
+ except ValueError as exc:raise RecoveryError("database_probe_invalid") from exc
+ if result.returncode or data!={"database_ok":True,"category":"ok"}:raise RecoveryError("database_probe_failed")
+def deploy_check(expected_sha,runner,root=ROOT,identity_probe=observe_identity,hostname=None,wait_timeout=90,wait_interval=2,clock=time.monotonic,sleeper=time.sleep):
+ if not SHA.fullmatch(str(expected_sha).lower()):raise RecoveryError("expected_sha_invalid")
+ try:live=wait_live(runner,str(expected_sha).lower(),root,identity_probe,hostname,wait_timeout,wait_interval,clock,sleeper)
+ except RecoveryError as exc:
+  if str(exc)=="readiness_timeout":raise RecoveryError("deploy_readiness_timeout") from exc
+  raise
+ api=unique_container(runner,"api");legacy_database_probe(runner,api)
+ return {"deploy_check_ok":True,"environment":ENV,"project":PROJECT,"runtime_sha":live["runtime_sha"],"database_ok":True}
+def restored(runner,manifest,root):
+ for service in SERVICES:
+  cid=unique_container(runner,service);item,_=inspect_container(runner,cid,service,root)
+  if image_id(item.get("Image"))!=manifest["services"][service]["image_id"]:raise RecoveryError("restored_image_mismatch")
+def wait_live(runner,expected_sha,root,identity_probe,hostname,timeout,interval,clock,sleeper):
+ deadline=clock()+timeout
+ while True:
+  try:
+   live=live_guard(runner,root,identity_probe,hostname)
+   if live["runtime_sha"]==expected_sha:return live
+  except RecoveryError:
+   pass
+  if clock()>=deadline:raise RecoveryError("readiness_timeout")
+  sleeper(interval)
+def rollback(manifest,runner,expected_fingerprint,root=ROOT,identity_probe=observe_identity,hostname=None,wait_timeout=90,wait_interval=2,clock=time.monotonic,sleeper=time.sleep):
+ try:
+  validate(manifest,runner,expected_fingerprint,root,True);old=manifest["runtime_sha"];live_guard(runner,root,identity_probe,hostname)
+  base=["docker","compose","--project-name",PROJECT]
+  for record in manifest["environment_files"]:base.extend(("--env-file",str(root/record["relative_path"])))
+  for record in manifest["compose_files"]:base.extend(("--file",str(root/record["relative_path"])))
+  base.extend(("--file",str(root/manifest["rollback_override"]["relative_path"])))
+  checked(runner,(*base,"up","-d","--no-build","--no-deps","--force-recreate","api","frontend"),300);wait_live(runner,old,root,identity_probe,hostname,wait_timeout,wait_interval,clock,sleeper)
+  legacy_database_probe(runner,unique_container(runner,"api"));validate(manifest,runner,expected_fingerprint,root,True);live_guard(runner,root,identity_probe,hostname)
+  checked(runner,(*base,"up","-d","--no-build","--no-deps","--force-recreate","nginx"),120);wait_live(runner,old,root,identity_probe,hostname,wait_timeout,wait_interval,clock,sleeper)
+  restored(runner,manifest,root);return {"rollback_ok":True,"project":PROJECT,"runtime_sha":old}
+ except Exception as exc:
+  if isinstance(exc,RecoveryError):raise RecoveryError(f"rollback_failed:{exc}") from exc
+  raise RecoveryError("rollback_failed:unexpected") from exc
+def load(path):
+ value=json.loads(path.read_text(encoding="utf-8"))
+ if not isinstance(value,dict):raise RecoveryError("manifest_invalid")
+ return value
+def save(path,value):path.write_text(json.dumps(value,sort_keys=True,separators=(",",":")),encoding="utf-8")
+def main():
+ p=argparse.ArgumentParser();p.add_argument("mode",choices=("capture","prepare","validate","rollback","deploy-check"));p.add_argument("--manifest",type=Path);p.add_argument("--expected-fingerprint");p.add_argument("--expected-sha");p.add_argument("--confirm");a=p.parse_args();runner=SubprocessRunner()
+ try:
+  if a.mode=="deploy-check":out=deploy_check(a.expected_sha,runner)
+  elif a.manifest is None:raise RecoveryError("manifest_required")
+  elif a.mode=="capture":value=capture(runner);save(a.manifest,value);out={"capture_ok":True,"fingerprint":value["fingerprint"]}
+  elif a.mode=="prepare":
+   if a.confirm!=PREPARE_CONFIRM:raise RecoveryError("confirmation_refused")
+   value=prepare(load(a.manifest),runner,a.expected_fingerprint);save(a.manifest,value);out={"prepare_ok":True,"fingerprint":value["fingerprint"],"capture_fingerprint":value["capture_fingerprint"]}
+  elif a.mode=="validate":validate(load(a.manifest),runner,a.expected_fingerprint,require_prepared=True);out={"manifest_valid":True}
+  else:
+   if a.confirm!=ROLLBACK_CONFIRM:raise RecoveryError("confirmation_refused")
+   out=rollback(load(a.manifest),runner,a.expected_fingerprint)
+  print(json.dumps(out,sort_keys=True,separators=(",",":")));return 0
+ except RecoveryError as exc:print(json.dumps({"ok":False,"category":str(exc).split(":",1)[0]},sort_keys=True,separators=(",",":")));return 1
+if __name__=="__main__":raise SystemExit(main())
