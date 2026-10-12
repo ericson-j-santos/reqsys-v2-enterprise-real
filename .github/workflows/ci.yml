@@ -452,10 +452,10 @@ jobs:
           echo "Vite não ficou disponível no tempo esperado"
           cat /tmp/reqsys-vite.log || true
           exit 1
-      - name: Run responsive layout tests
+      - name: Run responsive layout and global search tests
         env:
           E2E_BASE_URL: http://127.0.0.1:5173
-        run: npx playwright test tests/e2e/responsividade.spec.js
+        run: npx playwright test tests/e2e/responsividade.spec.js tests/e2e/global-search.spec.js
 
   pipeline-governance:
     name: Pipeline Governança + Evidence Snapshot
