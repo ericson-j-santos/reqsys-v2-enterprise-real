@@ -340,6 +340,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP-PDQK954" in raw
 
     # Todos os modos físicos não ligados à exceção de reboot usam a main canônica atual.
-    assert raw.count("562fc4274aff24f7058cb135f27a509aa69031c1") == 4
+    assert raw.count("562fc4274aff24f7058cb135f27a509aa69031c1") == 3
+    runner_canary = raw.split("  runner-canary:", 1)[1].split("  alm-runner-bootstrap:", 1)[0]
+    assert "RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2" in runner_canary
+    assert "RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1" not in runner_canary
     assert "881d9ca2f8e77025edb7298b22981109c567a730" not in raw
     assert "5af7b5ab6e31c24744176abd774855168c55953f" not in raw

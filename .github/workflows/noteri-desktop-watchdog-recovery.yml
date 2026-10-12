@@ -957,7 +957,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
+      RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
       CORRELATION_ID: desktop-runner-pickup-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\desktop-runner-pickup\evidence.json
     steps:
