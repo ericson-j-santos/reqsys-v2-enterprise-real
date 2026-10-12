@@ -1,0 +1,62 @@
+{
+  "feature_name": "pc24x7-worker-pool-sql-inventory-dev",
+  "project": "Engineering Control Plane / Runtime Platform PC24x7 DEV",
+  "created_at": "2026-10-12",
+  "updated_at": "2026-10-12",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Sonda de capacidade física do Worker Pool usando SQLite transacional mode=ro sem snapshot ou recovery e execução controlada no contêiner existente.",
+  "environment": "PC24x7 Desktop DEV / GitHub Actions",
+  "runtime_target": "pc24x7",
+  "owner_command": "/reqsys run pc24x7-worker-pool-inventory-dev",
+  "workflows": [
+    ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  ],
+  "scripts": [
+    "scripts/pc24x7_worker_pool_inventory_dev.py"
+  ],
+  "tests": [
+    "tests/test_pc24x7_worker_pool_inventory_dev.py",
+    "tests/test_pc24x7_worker_pool_inventory_workflow.py"
+  ],
+  "risk": {
+    "physical_host": "DESKTOP-PDQK954",
+    "environment": "dev",
+    "read_only_sql": true,
+    "external_docker_actions": [
+      "ps",
+      "inspect",
+      "exec"
+    ],
+    "claim": false,
+    "requeue": false,
+    "deploy": false,
+    "restart": false,
+    "production_touched": false,
+    "secrets_exposed": false
+  },
+  "acceptance_criteria": [
+    "Host e SHA exatos via Session Launcher e Command Gateway, sem shell irrestrito.",
+    "Somente inventory-read por comando literal do owner na issue #1705.",
+    "Container Docker Compose único com 127.0.0.1:8097, DB em volume e token bind RO.",
+    "SQLite mode=ro, PRAGMA query_only=ON, integridade e identidade das duas tasks.",
+    "Workers e lane por resumo sanitizado, precheck não equivale a claim.",
+    "Teste positivo, negativo, replay, fail-closed e ausência de mutação.",
+    "CI exato e evidência física por leitura independente.",
+    "Cutover real separado, dependente de backup/rollback e E2E."
+  ],
+  "evidence_contract": "WORKER_POOL_PHYSICAL_INVENTORY_READ_OK: source SHA, correlation, imagem sha, duas tasks, lane, contagens de workers, flags de read-only; sem IDs em claro ou segredos.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_inventory_dev.py",
+      "tests/test_pc24x7_worker_pool_inventory_workflow.py"
+    ],
+    "evidence_contract": "Fixed DEV worker inventory via authenticated owner workflow and Command Gateway; 1 container; SQLite mode=ro; positive, negative, no-mutation, replay; SHA-bound physical artifact; no deploy or secrets."
+  }
+}
