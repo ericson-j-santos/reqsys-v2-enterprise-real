@@ -12,3 +12,12 @@ Incident ReqSys #1532, implementation issue #2546; authorized gateway issue #170
 8. Missing task or wrong identity, SHA, host, state, or HTTP status must fail closed and publish only sanitized evidence.
 9. Worker eligibility and why_idle remain unverified; proving them requires another truly read-only contract.
 10. Before a PR, require READY_FOR_PR=passed for the final branch SHA; merge only after required checks.
+
+## Critérios de aceite
+
+- O workflow só aceita o comando exato do proprietário na issue #1705, sem parâmetro livre.
+- O Desktop executa Session Launcher + Command Gateway sobre SHA completo verificado.
+- A operação lê somente GET /v1/tasks/cwp-cdb85c31e3cc4e972f3094ab e valida identidade do request.
+- Nenhuma chamada ao snapshot capaz de recuperar leases, nem claim/requeue/enqueue, é admitida.
+- Casos positivos e negativos, redação de credenciais e ausência de efeitos sobre runtime passam nos testes.
+- READY_FOR_PR, checks obrigatórios e validação física pertencem ao SHA corrente e permanecem separados.
