@@ -24,7 +24,8 @@ Depois da integração da PR #20 do engineering-worker-pool, verificar se a vers
 8. Não consultar GET /v1/snapshot, GET /v1/workers ou GET /v1/repositories, capazes de recuperar leases no legado. Não chamar POST/PUT/PATCH/DELETE nem alterar container, lane ou worker.
 9. Exigir controles positivos, negativos e idempotentes no Pre-PR Readiness Gate do SHA final; criar PR somente após READY_FOR_PR=passed e merge exclusivamente após gates obrigatórios verdes no HEAD corrente.
 10. Quando a versão física estiver atrasada, somente preparar o plano DEV com compatibilidade de banco, backup, rollback, CI/E2E e autorização independente de deploy/restart. Não alterar o runtime nesta entrega.
-11. Se a versão nova já estiver disponível, não atualizar o container; reportar a razão exata de inelegibilidade, sem confundir precheck com claim.\n12. O arquivo emitido por `scripts/codex_worker_pool_version_2547_probe_dev.py` deve coincidir exatamente com `EVIDENCE_REL` e `upload-artifact` do job `version-2547-read`, em `artifacts/codex-worker-pool-version-2547-read-dev/evidence.json`; o teste de regressão deve rejeitar o caminho divergente antigo.
+11. Se a versão nova já estiver disponível, não atualizar o container; reportar a razão exata de inelegibilidade, sem confundir precheck com claim.
+12. O arquivo emitido por `scripts/codex_worker_pool_version_2547_probe_dev.py` deve coincidir exatamente com `EVIDENCE_REL` e `upload-artifact` do job `version-2547-read`, em `artifacts/codex-worker-pool-version-2547-read-dev/evidence.json`; o teste de regressão deve rejeitar o caminho divergente antigo.
 
 ## Proibições
 Nenhum novo enqueue, claim, requeue, leitura de snapshot, rotação de token, reinício, deploy, alteração HML/STG/PROD ou custo adicional. Falhar fechado diante de bloqueio.
