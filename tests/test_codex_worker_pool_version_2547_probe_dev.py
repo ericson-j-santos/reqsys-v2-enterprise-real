@@ -43,7 +43,7 @@ def legacy_schema():
 def modern_schema():
     return {
         "info": {"title": "Engineering Worker Pool", "version": "1.4.0"},
-        "paths": {probe.TASK_PATH: {"get": {}}, probe.DIAG_PATH: {"get": {}}},
+        "paths": {probe.TASK_PATH: {"get": {}}, probe.OPENAPI_DIAG_TEMPLATE: {"get": {}}},
     }
 
 
@@ -143,6 +143,13 @@ def test_modern_runtime_exposes_readonly_worker_precheck_with_no_ids():
 def test_invalid_service_identity_or_version_fails_closed(bad, expected):
     with pytest.raises(probe.ProbeBlocked, match="^" + expected + "$"):
         call(bad)
+
+
+def test_concrete_runtime_url_is_not_an_openapi_template():
+    wrong_schema = modern_schema()
+    wrong_schema["paths"] = {probe.DIAG_PATH: {"get": {}}}
+    with pytest.raises(probe.ProbeBlocked, match="modern_runtime_missing_diagnostics"):
+        call(wrong_schema)
 
 
 def test_missing_host_invalid_sha_and_token_fail_before_transport():
