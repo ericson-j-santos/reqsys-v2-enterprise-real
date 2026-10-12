@@ -46,6 +46,7 @@ concurrency:
 
 jobs:
   reconcile:
+    if: github.event_name == 'workflow_dispatch'
     name: Reconcile Study Mode on PC24x7 DEV
     permissions:
       contents: read
@@ -65,6 +66,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Block legacy study-mode until authenticated governed E2E exists
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
+        shell: powershell
+        run: |
+          Write-Error 'STUDY_MODE_AUTHENTICATED_E2E_NOT_GOVERNED'
+          exit 2
       - name: Validate public static reconciler syntax
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
