@@ -1,0 +1,39 @@
+{
+  "feature_name": "reqsys-global-site-search",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-12",
+  "updated_at": "2026-10-12",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Busca rápida na aplicação autenticada /dev/ usando o catálogo estático de navegação; não realiza pesquisa de dados operacionais nem consultas de backend.",
+  "environment": "dev",
+  "runtime_target": "GitHub Pages /dev/ (Vue/Vuetify)",
+  "acceptance_criteria": [
+    "Uma lupa visível no menu desktop e no cabeçalho móvel abre a pesquisa sem trocar de página.",
+    "Ctrl+K ou ⌘K abre a pesquisa, Enter navega ao primeiro resultado e o fechamento mantém a tela corrente.",
+    "Busca por nome, descrição, tema e rota ignora acentos e caixa, com resultados únicos por destino.",
+    "Resultados só incluem rotas existentes e permitidas pelas permissões do usuário; o router aplica a política de autorização novamente na navegação.",
+    "Consultas vazias ou sem correspondência possuem estado claro; nenhuma chamada ao backend é feita pela pesquisa.",
+    "Testes unitários e E2E em desktop, teclado, permissão e mobile, com build de frontend do SHA.",
+    "Publicação do GitHub Pages /dev/ exige autorização e validação E2E independente do merge."
+  ],
+  "controls": {
+    "production_enabled": false,
+    "hml_enabled": false,
+    "search_scope": "static_route_catalog",
+    "backend_queries": false,
+    "authorization_filtered": true,
+    "real_browser_e2e_required": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/utils/globalSearch.test.js",
+      "frontend/tests/e2e/global-search.spec.js"
+    ],
+    "evidence_contract": "Testes unitários, navegação simulada, build e pré-PR no SHA; após merge e autorização de publicação, testar página /dev/ autenticada no Pages com verificação independente. Não declarar entrega final sem publicação."
+  }
+}
