@@ -51,5 +51,12 @@
     "CI exato e evidência física por leitura independente.",
     "Cutover real separado, dependente de backup/rollback e E2E."
   ],
-  "evidence_contract": "WORKER_POOL_PHYSICAL_INVENTORY_READ_OK: source SHA, correlation, imagem sha, duas tasks, lane, contagens de workers, flags de read-only; sem IDs em claro ou segredos."
+  "evidence_contract": "WORKER_POOL_PHYSICAL_INVENTORY_READ_OK: source SHA, correlation, imagem sha, duas tasks, lane, contagens de workers, flags de read-only; sem IDs em claro ou segredos.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_inventory_dev.py",
+      "tests/test_pc24x7_worker_pool_inventory_workflow.py"
+    ],
+    "evidence_contract": "Fixed DEV worker inventory via authenticated owner workflow and Command Gateway; 1 container; SQLite mode=ro; positive, negative, no-mutation, replay; SHA-bound physical artifact; no deploy or secrets."
+  }
 }

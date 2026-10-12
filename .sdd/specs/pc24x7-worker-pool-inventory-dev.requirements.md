@@ -44,7 +44,7 @@ Não habilita Builder/Validator, não migra banco nem inicia cutover.
     rollback, E2E, e política engineering-worker-pool/
     migration/cutover-policy-v1.json. Nunca excluir legado.
 
-## Aceite
+## Critérios de aceite
 WORKER_POOL_PHYSICAL_INVENTORY_READ_OK no Desktop no SHA integrado;
 artefato íntegro, integridade DB, identidades originais,
 contagem real de Builder/Validator e prova de não-mutação.
