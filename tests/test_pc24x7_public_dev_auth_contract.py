@@ -155,6 +155,8 @@ def test_recreate_uses_selected_inspection_and_sanitized_failure_contract() -> N
 
 
 def test_docker_environment_overrides_fail_before_inspection(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(recreate.os, "name", "nt")
+    monkeypatch.setattr(recreate.socket, "gethostname", lambda: recreate.EXPECTED_HOST)
     monkeypatch.setenv("DOCKER_HOST", "npipe:////./pipe/docker_engine")
     monkeypatch.setattr(
         recreate,
