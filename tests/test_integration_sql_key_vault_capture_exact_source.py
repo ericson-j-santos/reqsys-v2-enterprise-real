@@ -21,7 +21,7 @@ def test_usa_nome_exato_configurado_para_dsn_sql() -> None:
     assert "INTEGRATION_E2E_SQL_DSN_SECRET_NAME: ${{ vars.INTEGRATION_E2E_SQL_DSN_SECRET_NAME }}" in workflow
     assert 'secret_name="${INTEGRATION_E2E_SQL_DSN_SECRET_NAME:-}"' in workflow
     assert 'az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$secret_name"' in workflow
-    assert '"selection_mode": "exact_configured_name"' in preflight
+    assert 'selection_mode="exact_configured_name"' in preflight
 
 
 def test_nao_enumera_segredos_nem_aplica_heuristica_por_nome() -> None:

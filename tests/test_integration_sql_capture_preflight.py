@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 from scripts.integration_sql_capture_preflight import (
     initial_evidence,
     record_oidc_outcome,
