@@ -143,3 +143,33 @@ def test_canary_never_means_cutover_ready():
     assert '"live_database_modified": False' in text
     assert '"claim_performed": False' in text
     assert '"127.0.0.1:18098:8097"' in text
+
+
+def test_candidate_startup_retries_only_transient_http_unavailability():
+    responses = [module.CanaryBlocked("candidate_http_unavailable"),
+                 (200, {"status": "healthy"})]
+    with patch.object(module, "request", side_effect=responses) as req:
+        with patch.object(module.time, "sleep") as sleeper:
+            module.wait_for_candidate_health("synthetic-token")
+    assert req.call_count == 2
+    sleeper.assert_called_once_with(0.5)
+
+
+def test_candidate_startup_rejects_policy_fault_without_retry():
+    with patch.object(module, "request",
+                      side_effect=module.CanaryBlocked("candidate_url_invalid")) as req:
+        with patch.object(module.time, "sleep") as sleeper:
+            with pytest.raises(module.CanaryBlocked, match="candidate_url_invalid"):
+                module.wait_for_candidate_health("synthetic-token")
+    req.assert_called_once()
+    sleeper.assert_not_called()
+
+
+def test_candidate_startup_terminal_timeout_never_approves_canary():
+    with patch.object(module, "request",
+                      side_effect=module.CanaryBlocked("candidate_http_unavailable")) as req:
+        with patch.object(module.time, "sleep") as sleeper:
+            with pytest.raises(module.CanaryBlocked, match="candidate_not_ready"):
+                module.wait_for_candidate_health("synthetic-token")
+    assert req.call_count == 26
+    assert sleeper.call_count == 26
