@@ -12,8 +12,10 @@
   "risk": {"production": false, "deploy": false, "secrets": false, "physical_execution": false},
   "acceptance_criteria": [
     "No subprocess, shell, WSL or service execution",
-    "Exact host and SHA fail closed",
-    "Only sanitized virtualization flags and WSL count",
+    "Exact host and requested SHA format fail closed",
+    "Requested SHA remains unverified without independent provenance",
+    "Only sanitized virtualization flags and current-executor HKCU WSL count",
+    "Registry access and query failures return unknown or unavailable with null count",
     "systemd_verified and ready_for_linux_pilot remain false"
   ],
   "sdd_gate": {
