@@ -79,6 +79,7 @@ jobs:
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
+          import re
           from pathlib import Path
 
           from scripts.evaluate_integration_sql_capture_contract import (
@@ -109,25 +110,35 @@ jobs:
               )
               preflight_ready = True
           elif direct:
+              secret_name = os.environ.get("INTEGRATION_E2E_SQL_DSN_SECRET_NAME", "").strip()
               configured = {
                   "AZURE_TENANT_ID": bool(os.environ.get("AZURE_TENANT_ID", "").strip()),
                   "AZURE_SUBSCRIPTION_ID": bool(os.environ.get("AZURE_SUBSCRIPTION_ID", "").strip()),
                   "REQSYS_KEY_VAULT_NAME": bool(os.environ.get("REQSYS_KEY_VAULT_NAME", "").strip()),
-                  "INTEGRATION_E2E_SQL_DSN_SECRET_NAME": bool(
-                      os.environ.get("INTEGRATION_E2E_SQL_DSN_SECRET_NAME", "").strip()
-                  ),
+                  "INTEGRATION_E2E_SQL_DSN_SECRET_NAME": bool(secret_name),
                   # No provider-neutral reader binding has been approved yet.
                   "AZURE_CLIENT_ID_READER_BINDING": False,
               }
               missing = sorted(name for name, present in configured.items() if not present)
+              invalid = []
+              if secret_name and re.fullmatch(r"[A-Za-z0-9-]{1,127}", secret_name) is None:
+                  invalid.append("INTEGRATION_E2E_SQL_DSN_SECRET_NAME")
+              status = (
+                  "oidc_configuration_missing"
+                  if missing
+                  else "oidc_configuration_invalid"
+                  if invalid
+                  else "oidc_configuration_ready"
+              )
               source.update(
                   source="azure_key_vault",
-                  status="oidc_configuration_missing" if missing else "oidc_configuration_ready",
+                  status=status,
                   selection_mode="exact_configured_name",
                   configured={name: present for name, present in sorted(configured.items())},
                   missing_configuration=missing,
+                  invalid_configuration=invalid,
               )
-              preflight_ready = not missing
+              preflight_ready = not missing and not invalid
           Path(os.environ["EVIDENCE_DIR"], "source.json").write_text(
               json.dumps(source, sort_keys=True) + "\n", encoding="utf-8"
           )
