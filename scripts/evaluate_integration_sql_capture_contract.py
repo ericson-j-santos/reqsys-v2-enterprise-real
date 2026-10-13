@@ -86,6 +86,10 @@ def evaluate(
     blockers = sorted(set(blockers))
     passed = not blockers
 
+    source_category = str(source.get("source") or "").strip()
+    if source_category not in {"configuration", "azure_key_vault", "power_platform_gateway"}:
+        source_category = "configuration"
+
     payload: dict[str, Any] = {
         "schema_version": "2.0.0",
         "contract": "integration-sql-capture-unified",
@@ -97,7 +101,7 @@ def evaluate(
         "passed": passed,
         "checks": checks,
         "failed_checks": blockers,
-        "source": "azure_key_vault" if direct_dsn_required(normalized) else "power_platform_gateway",
+        "source": source_category,
         "source_status": source_status,
         "dsn_resolved": dsn_resolved,
         "source_sha": source_sha,
