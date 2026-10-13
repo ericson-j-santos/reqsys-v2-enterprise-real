@@ -35,7 +35,7 @@ env:
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev/key-vault-capture
   EXPECTED_KEY_VAULT_NAME: kv-reqsys-ccp
   INTEGRATION_E2E_SQL_DSN_SECRET_NAME: ${{ vars.INTEGRATION_E2E_SQL_DSN_SECRET_NAME }}
-  INTEGRATION_E2E_SQL_VALIDATION_MODE: ${{ vars.INTEGRATION_E2E_SQL_VALIDATION_MODE || 'direct_dsn' }}
+  INTEGRATION_E2E_SQL_VALIDATION_MODE: ${{ vars.INTEGRATION_E2E_SQL_VALIDATION_MODE }}
 
 jobs:
   capture:
@@ -66,28 +66,20 @@ jobs:
           set -euo pipefail
           python -m pytest tests/test_integration_excel_sql_sharepoint_sql_locator.py -q
 
-      - name: Validar configuração OIDC DEV
+      - name: Resolver modo e inicializar evidência sanitizada
+        id: sql-mode
+        shell: bash
         env:
-          AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
           AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
-            test -n "${!name:-}"
-          done
-          test "$REQSYS_KEY_VAULT_NAME" = "$EXPECTED_KEY_VAULT_NAME"
-
-      - name: Resolver modo canônico de validação SQL
-        id: sql-mode
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
           python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
           import os
+          from pathlib import Path
 
           from scripts.evaluate_integration_sql_capture_contract import (
               SUPPORTED_SQL_VALIDATION_MODES,
@@ -96,78 +88,113 @@ jobs:
           )
 
           mode = normalize_mode(os.environ.get("INTEGRATION_E2E_SQL_VALIDATION_MODE"))
-          if mode not in SUPPORTED_SQL_VALIDATION_MODES:
-              raise SystemExit(f"sql_validation_mode_invalido:{mode or 'vazio'}")
+          source = {
+              "source": "configuration",
+              "status": "sql_validation_mode_unconfigured" if not mode else "sql_validation_mode_invalid",
+              "selection_mode": "explicit",
+              "dsn_resolved": False,
+              "secret_value_exposed": False,
+              "business_data_read": False,
+              "production_touched": False,
+              "test_touched": False,
+          }
+          supported = mode in SUPPORTED_SQL_VALIDATION_MODES
+          direct = supported and direct_dsn_required(mode)
+          preflight_ready = False
+          if mode == "power_platform_gateway":
+              source.update(
+                  source="power_platform_gateway",
+                  status="direct_dsn_not_required",
+                  selection_mode="gateway_contract",
+              )
+              preflight_ready = True
+          elif direct:
+              configured = {
+                  "AZURE_TENANT_ID": bool(os.environ.get("AZURE_TENANT_ID", "").strip()),
+                  "AZURE_SUBSCRIPTION_ID": bool(os.environ.get("AZURE_SUBSCRIPTION_ID", "").strip()),
+                  "REQSYS_KEY_VAULT_NAME": bool(os.environ.get("REQSYS_KEY_VAULT_NAME", "").strip()),
+                  "INTEGRATION_E2E_SQL_DSN_SECRET_NAME": bool(
+                      os.environ.get("INTEGRATION_E2E_SQL_DSN_SECRET_NAME", "").strip()
+                  ),
+                  # No provider-neutral reader binding has been approved yet.
+                  "AZURE_CLIENT_ID_READER_BINDING": False,
+              }
+              missing = sorted(name for name, present in configured.items() if not present)
+              source.update(
+                  source="azure_key_vault",
+                  status="oidc_configuration_missing" if missing else "oidc_configuration_ready",
+                  selection_mode="exact_configured_name",
+                  configured={name: present for name, present in sorted(configured.items())},
+                  missing_configuration=missing,
+              )
+              preflight_ready = not missing
+          Path(os.environ["EVIDENCE_DIR"], "source.json").write_text(
+              json.dumps(source, sort_keys=True) + "\n", encoding="utf-8"
+          )
           print(f"mode={mode}")
-          print(f"direct_dsn_required={'true' if direct_dsn_required(mode) else 'false'}")
+          print(f"mode_supported={'true' if supported else 'false'}")
+          print(f"direct_dsn_required={'true' if direct else 'false'}")
+          print(f"preflight_ready={'true' if preflight_ready else 'false'}")
+          print("azure_client_id=")
           PY
-        env:
-          PYTHONPATH: .
 
-      - name: Registrar dispensa do DSN direto no modo gateway
-        if: steps.sql-mode.outputs.direct_dsn_required != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
-          printf '%s\n' '{"source":"power_platform_gateway","status":"direct_dsn_not_required","selection_mode":"gateway_contract","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
-
-      - name: Login Azure OIDC com identidade Key Vault DEV
+      - name: Login Azure OIDC com identidade reader Key Vault DEV
         id: azure-login
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true'
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true'
         continue-on-error: true
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
-          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          client-id: ${{ steps.sql-mode.outputs.azure_client_id }}
           tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
 
+      - name: Registrar falha OIDC sanitizada
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true' && steps.azure-login.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(os.environ["EVIDENCE_DIR"], "source.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload.update(status="oidc_login_failed", dsn_resolved=False)
+          path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
       - name: Capturar DSN sem expor nome ou valor
         id: key-vault
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.azure-login.outcome == 'success'
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true' && steps.azure-login.outcome == 'success'
         env:
           REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
         shell: bash
         run: |
           set -euo pipefail
           set +x
-          mkdir -p "$EVIDENCE_DIR"
           secret_name="${INTEGRATION_E2E_SQL_DSN_SECRET_NAME:-}"
-          if [ -z "$secret_name" ]; then
-            printf '%s\n' '{"source":"azure_key_vault","status":"secret_name_unconfigured","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
-            exit 0
-          fi
-          if [[ ! "$secret_name" =~ ^[A-Za-z0-9-]{1,127}$ ]]; then
-            printf '%s\n' '{"source":"azure_key_vault","status":"secret_name_invalid","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
-            exit 0
-          fi
           if ! dsn="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$secret_name" --query value -o tsv 2>/dev/null)"; then
-            printf '%s\n' '{"source":"azure_key_vault","status":"secret_read_unavailable","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            printf '%s\n' '{"source":"azure_key_vault","status":"secret_read_unavailable","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            echo "dsn_resolved=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ -z "$dsn" ]; then
-            printf '%s\n' '{"source":"azure_key_vault","status":"secret_empty","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            printf '%s\n' '{"source":"azure_key_vault","status":"secret_empty","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            echo "dsn_resolved=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           case "$dsn" in *$'\n'*|*$'\r'*)
-            printf '%s\n' '{"source":"azure_key_vault","status":"secret_multiline_rejected","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            printf '%s\n' '{"source":"azure_key_vault","status":"secret_multiline_rejected","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+            echo "dsn_resolved=false" >> "$GITHUB_OUTPUT"
             exit 0
           esac
-
           echo "::add-mask::$dsn"
           printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
+          echo "dsn_resolved=true" >> "$GITHUB_OUTPUT"
           printf '%s\n' '{"source":"azure_key_vault","status":"resolved","selection_mode":"exact_configured_name","dsn_resolved":true,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
 
-      - name: Registrar bloqueio OIDC sanitizado
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.azure-login.outcome != 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
-          printf '%s\n' '{"source":"azure_key_vault","status":"oidc_login_failed","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
-
       - name: Validar procedure e contrato SQL
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true'
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.key-vault.outputs.dsn_resolved == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -177,13 +204,14 @@ jobs:
             --correlation-id "kv-sql-capture-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
       - name: Gerar evidência consolidada sanitizada
+        if: always()
         shell: bash
         env:
           PYTHONPATH: .
         run: |
           set -euo pipefail
           locator_arg=()
-          if [ "${{ steps.sql-mode.outputs.direct_dsn_required }}" = "true" ]; then
+          if [ "${{ steps.key-vault.outputs.dsn_resolved }}" = "true" ]; then
             locator_arg=(--locator "$EVIDENCE_DIR/sql-locator.json")
           fi
           # A decisao vinculante fica no gate final; aqui apenas materializamos
