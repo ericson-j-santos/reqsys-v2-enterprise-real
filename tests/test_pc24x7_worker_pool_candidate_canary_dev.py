@@ -173,3 +173,49 @@ def test_candidate_startup_terminal_timeout_never_approves_canary():
                 module.wait_for_candidate_health("synthetic-token")
     assert req.call_count == 26
     assert sleeper.call_count == 26
+
+
+def test_docker_desktop_bind_sources_match_only_exact_token():
+    """Win32 vs Linux VM bind mapping must resolve to the same precise file."""
+    original = r"C:\Users\Windows\AppData\Local\ReqSys\WorkerPoolCanary\test-run\test-token"
+    translated = [
+        original,
+        "c:/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/test-token",
+        "/run/desktop/mnt/host/c/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/test-token",
+        "/host_mnt/c/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/test-token",
+    ]
+    for source in translated:
+        assert module._same_token_mount_source(source, original)
+        assert module._same_token_mount_source(source, original)
+
+    bad_sources = [
+        "/host_mnt/d/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/test-token",
+        "/run/desktop/mnt/host/c/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/other-token",
+        "/etc/secret",
+        "/mnt/c/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/test-token",
+        "c:/Users/Windows/AppData/Local/ReqSys/WorkerPoolCanary/test-run/../test-token",
+        "",
+    ]
+    for source in bad_sources:
+        assert not module._same_token_mount_source(source, original)
+
+
+def test_isolation_distinguishes_data_mount_token_flags_and_source(tmp_path):
+    payload, image, name, token = example(tmp_path)
+    for mutation, reason in (
+        ("volume", "candidate_data_mount_invalid"),
+        ("flags", "candidate_token_mount_flags_invalid"),
+        ("source", "candidate_token_mount_source_invalid"),
+    ):
+        import copy
+
+        receipt = copy.deepcopy(payload)
+        if mutation == "volume":
+            receipt["Mounts"][0]["Name"] = "foreign"
+        elif mutation == "flags":
+            receipt["Mounts"][1]["RW"] = True
+        else:
+            receipt["Mounts"][1]["Source"] = str(tmp_path / "foreign-token")
+        with pytest.raises(module.CanaryBlocked, match="^" + reason + "$"):
+            module.candidate_identity(receipt, image=image, name=name,
+                                      volume=name, token_file=token)

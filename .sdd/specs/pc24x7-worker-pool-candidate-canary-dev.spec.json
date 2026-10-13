@@ -36,6 +36,6 @@
       "tests/test_pc24x7_worker_pool_backup_restore_dev.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Literal owner command and immutable SHAs; Windows runner Session Launcher and Command Gateway; isolated Docker image/volume on loopback:18098 with real ReqSys consumer v1, synthetic idempotency, negative auth, independent SQL readback, legacy before/after, cleanup. Never authorize cutover: real backup import and rollback remain pending."
+    "evidence_contract": "Literal owner command and immutable SHAs; Windows runner Session Launcher and Command Gateway; isolated Docker image/volume on loopback:18098 with real ReqSys consumer v1, synthetic idempotency, negative auth, independent SQL readback, legacy before/after, cleanup. Never authorize cutover: real backup import and rollback remain pending. In Windows Docker Desktop, the candidate's read-only bind source must match the exact private file after validating either the native drive path or one of the two explicitly allowed drive mappings; cross-drive and path drift must fail closed with sanitized reason codes."
   }
 }
