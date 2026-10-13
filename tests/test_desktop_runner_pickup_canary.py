@@ -183,3 +183,69 @@ def test_wrong_host_does_not_probe_capacity(tmp_path: Path) -> None:
             capacity_probe=probe,
         )
     probe.assert_not_called()
+
+
+def test_runtime_probe_attaches_sanitized_observation(tmp_path: Path) -> None:
+    env = {
+        "RUNNER_NAME": subject.TARGET_HOST,
+        "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "GITHUB_SHA": "f" * 40,
+    }
+    probe = Mock(return_value={
+        "status": "partial",
+        "docker": {"status": "unavailable", "engine_verified": False},
+        "hml_provisioning_authorized": False,
+        "production_touched": False,
+        "secrets_read": False,
+    })
+    with patch.dict(subject.os.environ, env):
+        evidence = subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host=subject.TARGET_HOST,
+            platform="nt",
+            capacity_probe=lambda: {"status": "measured", "hml_provisioning_authorized": False},
+            runtime_probe=probe,
+        )
+    assert probe.call_count == 1
+    assert evidence["sql_hml_host_inventory"]["status"] == "partial"
+    assert subject.json.loads((tmp_path / "result.json").read_text(encoding="utf-8")) == evidence
+
+
+def test_runtime_probe_rejects_false_hml_authorization_without_raw_error(tmp_path: Path) -> None:
+    env = {
+        "RUNNER_NAME": subject.TARGET_HOST,
+        "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "GITHUB_SHA": "f" * 40,
+    }
+    with patch.dict(subject.os.environ, env):
+        evidence = subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host=subject.TARGET_HOST,
+            platform="nt",
+            capacity_probe=lambda: {"status": "measured"},
+            runtime_probe=lambda: {
+                "status": "measured",
+                "hml_provisioning_authorized": True,
+                "token": "must-not-leak",
+                "production_touched": False,
+                "secrets_read": False,
+            },
+        )
+    assert evidence["ok"] is True
+    assert evidence["sql_hml_host_inventory"]["status"] == "unavailable"
+    assert "must-not-leak" not in (tmp_path / "result.json").read_text(encoding="utf-8")
+
+
+def test_wrong_host_never_calls_runtime_probe(tmp_path: Path) -> None:
+    runtime = Mock()
+    with pytest.raises(subject.CanaryError, match="wrong_host"):
+        subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=tmp_path / "result.json",
+            host="SOME-OTHER-PC",
+            platform="nt",
+            runtime_probe=runtime,
+        )
+    runtime.assert_not_called()
