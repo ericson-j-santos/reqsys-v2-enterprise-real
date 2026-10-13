@@ -32,10 +32,15 @@ SUPPORTED_SQL_VALIDATION_MODES = (
     SQL_VALIDATION_POWER_PLATFORM_GATEWAY,
 )
 GATEWAY_SOURCE_STATUS = "direct_dsn_not_required"
+INVALID_MODE_MARKER = "invalid"
+EMPTY_MODE_MARKER = "empty"
 
 
 def normalize_mode(raw: str | None) -> str:
-    return (raw or "").strip().lower()
+    normalized = (raw or "").strip().lower()
+    if normalized in SUPPORTED_SQL_VALIDATION_MODES:
+        return normalized
+    return EMPTY_MODE_MARKER if not normalized else INVALID_MODE_MARKER
 
 
 def direct_dsn_required(mode: str) -> bool:
@@ -57,13 +62,16 @@ def evaluate(
     blockers: list[str] = []
 
     if normalized not in SUPPORTED_SQL_VALIDATION_MODES:
-        blockers.append(f"sql_validation_mode_invalido:{normalized or 'vazio'}")
+        blockers.append(f"sql_validation_mode_invalido:{normalized}")
         checks["mode_supported"] = False
     else:
         checks["mode_supported"] = True
 
     dsn_resolved = source.get("dsn_resolved") is True
     source_status = source.get("status")
+    if source_status == "source_evidence_missing":
+        blockers.append("source_evidence_missing")
+        checks["source_evidence_present"] = False
 
     if normalized == SQL_VALIDATION_DIRECT_DSN:
         locator_payload = locator or {}
@@ -86,6 +94,10 @@ def evaluate(
     blockers = sorted(set(blockers))
     passed = not blockers
 
+    source_category = str(source.get("source") or "").strip()
+    if source_category not in {"configuration", "azure_key_vault", "power_platform_gateway"}:
+        source_category = "configuration"
+
     payload: dict[str, Any] = {
         "schema_version": "2.0.0",
         "contract": "integration-sql-capture-unified",
@@ -97,7 +109,7 @@ def evaluate(
         "passed": passed,
         "checks": checks,
         "failed_checks": blockers,
-        "source": "azure_key_vault" if direct_dsn_required(normalized) else "power_platform_gateway",
+        "source": source_category,
         "source_status": source_status,
         "dsn_resolved": dsn_resolved,
         "source_sha": source_sha,
@@ -153,7 +165,11 @@ def main() -> int:
 
     source = _load(args.source)
     if source is None:
-        raise SystemExit(f"evidencia_de_origem_ausente:{args.source}")
+        source = {
+            "source": "configuration",
+            "status": "source_evidence_missing",
+            "dsn_resolved": False,
+        }
 
     report = evaluate(
         mode=args.mode,

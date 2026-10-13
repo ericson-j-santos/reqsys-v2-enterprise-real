@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -190,30 +193,192 @@ def test_direct_dsn_required_helper() -> None:
 # --- contrato do workflow ----------------------------------------------------
 
 
-def test_workflow_gates_the_legacy_secret_behind_the_mode() -> None:
+def test_workflow_resolves_explicit_mode_before_any_oidc_step() -> None:
     document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     steps = document["jobs"]["capture"]["steps"]
+    names = [str(step.get("name", "")) for step in steps]
+
+    resolver = names.index("Resolver modo e atualizar evidência sanitizada")
+    login = names.index("Login Azure OIDC com identidade reader Key Vault DEV")
+    capture = names.index("Capturar DSN sem expor nome ou valor")
+    locator = names.index("Validar procedure e contrato SQL")
+    assert resolver < login < capture < locator
+
     by_name = {str(step.get("name", "")): step for step in steps}
-
-    dsn_step = next(
-        step for name, step in by_name.items() if "Capturar DSN" in name
-    )
-    assert "steps.sql-mode.outputs.direct_dsn_required == 'true'" in dsn_step["if"]
-
-    locator_step = next(
-        step for name, step in by_name.items() if "Validar procedure" in name
-    )
-    assert locator_step["if"] == "steps.sql-mode.outputs.direct_dsn_required == 'true'"
-
-    gateway_step = next(
-        step for name, step in by_name.items() if "dispensa do DSN" in name
-    )
-    assert gateway_step["if"] == "steps.sql-mode.outputs.direct_dsn_required != 'true'"
-    assert GATEWAY_SOURCE_STATUS in gateway_step["run"]
+    assert "preflight_ready == 'true'" in by_name[names[login]]["if"]
+    assert "azure-login.outcome == 'success'" in by_name[names[capture]]["if"]
+    assert "key-vault.outputs.dsn_resolved == 'true'" in by_name[names[locator]]["if"]
 
 
-def test_workflow_defaults_to_direct_dsn_mode() -> None:
+def test_workflow_has_no_implicit_mode_or_retired_or_mutator_identity() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
 
     assert "INTEGRATION_E2E_SQL_VALIDATION_MODE" in raw
-    assert "|| 'direct_dsn'" in raw
+    assert "|| 'direct_dsn'" not in raw
+    assert "CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND" not in raw
+    assert "vars.CCP_AZURE_CLIENT_ID }}" not in raw
+    assert "--reader-configured false" in raw
+
+
+def test_workflow_gateway_path_never_calls_azure_key_vault_or_sql() -> None:
+    document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = document["jobs"]["capture"]["steps"]
+    guarded = [
+        step
+        for step in steps
+        if any(
+            token in str(step.get("name", ""))
+            for token in ("Login Azure", "Capturar DSN", "Validar procedure")
+        )
+    ]
+
+    assert guarded
+    for step in guarded:
+        condition = str(step.get("if", ""))
+        assert "steps.sql-mode.outputs.direct_dsn_required == 'true'" in condition
+
+
+def test_workflow_always_materializes_and_publishes_sanitized_evidence() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    document = yaml.safe_load(raw)
+    steps = document["jobs"]["capture"]["steps"]
+    by_name = {str(step.get("name", "")): step for step in steps}
+
+    names = [str(step.get("name", "")) for step in steps]
+    initializer = by_name["Inicializar evidência sanitizada antes de passos falíveis"]
+    resolver = by_name["Resolver modo e atualizar evidência sanitizada"]
+    assert names.index("Inicializar evidência sanitizada antes de passos falíveis") < names.index("Instalar dependências mínimas")
+    assert "integration_sql_capture_preflight.py init" in initializer["run"]
+    assert resolver["if"] == "always()"
+    assert "integration_sql_capture_preflight.py resolve" in resolver["run"]
+    assert "--python-setup-outcome" in resolver["run"]
+    assert "--contract-tests-outcome" in resolver["run"]
+    assert "--expected-vault" in resolver["run"]
+
+    consolidated = by_name["Gerar evidência consolidada sanitizada"]
+    published = by_name["Publicar evidência sanitizada"]
+    gate = by_name["Gate funcional obrigatório antes do verde"]
+    assert consolidated["if"] == "always()"
+    assert published["if"] == "always()"
+    assert gate["if"] == "always()"
+
+
+@pytest.mark.parametrize(
+    ("status", "source_category"),
+    [
+        ("oidc_configuration_missing", "azure_key_vault"),
+        ("oidc_login_failed", "azure_key_vault"),
+    ],
+)
+def test_direct_failures_preserve_origin_and_never_turn_green(
+    status: str, source_category: str
+) -> None:
+    report = evaluate(
+        mode="direct_dsn",
+        source={
+            "source": source_category,
+            "status": status,
+            "dsn_resolved": False,
+        },
+        locator=None,
+        **RUN_CONTEXT,
+    )
+
+    assert report["passed"] is False
+    assert report["source"] == source_category
+    assert report["source_status"] == status
+    assert "dsn_resolved" in report["failed_checks"]
+    assert "source_resolved" in report["failed_checks"]
+
+
+@pytest.mark.parametrize("mode", ["", "unknown"])
+def test_invalid_mode_preserves_configuration_category(mode: str) -> None:
+    report = evaluate(
+        mode=mode,
+        source={
+            "source": "configuration",
+            "status": (
+                "sql_validation_mode_unconfigured"
+                if not mode
+                else "sql_validation_mode_invalid"
+            ),
+            "dsn_resolved": False,
+        },
+        locator=None,
+        **RUN_CONTEXT,
+    )
+
+    assert report["passed"] is False
+    assert report["source"] == "configuration"
+    assert report["source_status"].startswith("sql_validation_mode_")
+
+
+def test_cli_materializes_sanitized_summary_when_source_is_missing(tmp_path) -> None:
+    missing = tmp_path / "private-location" / "source.json"
+    output = tmp_path / "capture-summary.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "evaluate_integration_sql_capture_contract.py"),
+            "--mode",
+            "direct_dsn",
+            "--source",
+            str(missing),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    serialized = json.dumps(report)
+    assert completed.returncode == 1
+    assert report["passed"] is False
+    assert report["source_status"] == "source_evidence_missing"
+    assert "source_evidence_missing" in report["failed_checks"]
+    assert str(missing) not in serialized
+    assert str(missing) not in completed.stdout
+    assert str(missing) not in completed.stderr
+
+
+def test_upstream_failure_remains_blocked_by_evaluator() -> None:
+    from scripts.integration_sql_capture_preflight import resolve_preflight
+
+    source, outputs = resolve_preflight(
+        mode="power_platform_gateway",
+        upstream={
+            "python_setup": "success",
+            "dependencies": "failure",
+            "contract_tests": "skipped",
+        },
+        tenant_configured=False,
+        subscription_configured=False,
+        actual_vault="",
+        expected_vault="kv-reqsys-ccp",
+        secret_name="",
+        reader_configured=False,
+    )
+    report = evaluate(
+        mode=outputs["mode"], source=source, locator=None, **RUN_CONTEXT
+    )
+
+    assert source["status"] == "upstream_validation_failed"
+    assert report["passed"] is False
+    assert "direct_dsn_not_requested" in report["failed_checks"]
+
+
+def test_workflow_passes_mode_to_consolidation_through_environment() -> None:
+    document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = document["jobs"]["capture"]["steps"]
+    consolidated = next(
+        step
+        for step in steps
+        if step.get("name") == "Gerar evidência consolidada sanitizada"
+    )
+
+    assert consolidated["env"]["SQL_VALIDATION_MODE"] == "${{ steps.sql-mode.outputs.mode }}"
+    assert consolidated["env"]["DSN_RESOLVED"] == "${{ steps.key-vault.outputs.dsn_resolved }}"
+    assert '--mode "$SQL_VALIDATION_MODE"' in consolidated["run"]
+    assert '${{ steps.sql-mode.outputs.mode }}' not in consolidated["run"]
+    assert '${{ steps.key-vault.outputs.dsn_resolved }}' not in consolidated["run"]

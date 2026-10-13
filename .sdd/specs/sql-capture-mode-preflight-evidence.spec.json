@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Fail-closed SQL capture mode preflight",
+  "increment_type": "workflow-safety",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/sql-capture-mode-preflight-evidence.requirements.md",
+    "workflow": ".github/workflows/integration-excel-sql-sharepoint-key-vault-capture-dev.yml",
+    "evaluator": "scripts/evaluate_integration_sql_capture_contract.py",
+    "tests": [
+      "tests/test_evaluate_integration_sql_capture_contract.py",
+      "tests/test_integration_sql_key_vault_capture_exact_source.py",
+      "tests/test_integration_sql_capture_preflight.py"
+    ],
+    "preflight": "scripts/integration_sql_capture_preflight.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "rbac": false,
+    "sql_execution": false
+  },
+  "acceptance_criteria": [
+    "Evidence initialized immediately after checkout",
+    "Upstream setup, dependency, or test failure remains red",
+    "Explicit mode before OIDC",
+    "Gateway never invokes Azure, Key Vault, or direct SQL",
+    "Direct mode fails closed without a confirmed reader",
+    "Exact DEV vault target required before login",
+    "Skipped and failed OIDC outcomes remain distinct",
+    "No retired Fly or mutator identity binding",
+    "No false green after upstream failure"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_evaluate_integration_sql_capture_contract.py",
+      "tests/test_integration_sql_key_vault_capture_exact_source.py",
+      "tests/test_integration_sql_capture_preflight.py"
+    ]
+  }
+}
