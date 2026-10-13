@@ -152,25 +152,60 @@ def _zip_difference(first: Path, second: Path) -> str:
         return "invalid_zip"
 
 
+def _bundle_hashes(directory: Path) -> dict[str, str]:
+    wheel = _single_wheel(directory)
+    hashes: dict[str, str] = {}
+    for name in (wheel.name, *REPRODUCIBLE_FILES):
+        path = directory / name
+        if not path.is_file():
+            raise RuntimePackageError(f"ocr_reproducibility_file_missing:{name}")
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
 def compare_bundles(first: Path, second: Path) -> dict[str, str]:
     left_wheel = _single_wheel(first)
     right_wheel = _single_wheel(second)
     required = (left_wheel.name, *REPRODUCIBLE_FILES)
     if right_wheel.name != left_wheel.name:
         raise RuntimePackageError("ocr_reproducibility_wheel_filename_mismatch")
-    hashes: dict[str, str] = {}
     for name in required:
         left = first / name
         right = second / name
         if not left.is_file() or not right.is_file():
             raise RuntimePackageError(f"ocr_reproducibility_file_missing:{name}")
-        left_bytes = left.read_bytes()
-        right_bytes = right.read_bytes()
-        if left_bytes != right_bytes:
+        if left.read_bytes() != right.read_bytes():
             detail = _zip_difference(left, right) if name.endswith(".whl") else "file_bytes"
             raise RuntimePackageError(f"ocr_reproducibility_mismatch:{name}:{detail}")
-        hashes[name] = hashlib.sha256(left_bytes).hexdigest()
-    return hashes
+    return _bundle_hashes(first)
+
+
+def reproducibility_report(
+    first: Path,
+    second: Path,
+    source_sha: str,
+    toolchain: dict[str, str],
+    negative_control_detected: bool,
+) -> dict[str, Any]:
+    compare_bundles(first, second)
+    return {
+        "schema_version": "1.0",
+        "source_sha": source_sha,
+        "toolchain": toolchain,
+        "build_a": _bundle_hashes(first),
+        "build_b": _bundle_hashes(second),
+        "byte_identical": True,
+        "negative_control_detected": negative_control_detected,
+    }
+
+
+def _write_toolchain_evidence(path: Path, record: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def prepare(
@@ -179,6 +214,7 @@ def prepare(
     output_dir: Path,
     toolchain_path: Path = Path("config/ocr-build-toolchain.json"),
     compare_with: Path | None = None,
+    toolchain_evidence_path: Path = Path("artifacts/ocr-build-toolchain.json"),
 ) -> dict[str, str]:
     lock = _load_lock(lock_path)
     toolchain = _load_toolchain(toolchain_path)
@@ -269,11 +305,7 @@ def prepare(
         "pythonhashseed": "0",
         "toolchain": toolchain,
     }
-    (output_dir / "build-toolchain.json").write_text(
-        json.dumps(build_record, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    _write_toolchain_evidence(toolchain_evidence_path, build_record)
 
     if compare_with is not None:
         hashes = compare_bundles(compare_with, output_dir)
@@ -302,6 +334,9 @@ def main() -> int:
     parser.add_argument("--source", default=".external/ocr-evidence-engine")
     parser.add_argument("--output-dir", default="backend/vendor/ocr-evidence-engine")
     parser.add_argument("--compare-with", default="")
+    parser.add_argument(
+        "--toolchain-evidence", default="artifacts/ocr-build-toolchain.json"
+    )
     args = parser.parse_args()
     try:
         prepare(
@@ -310,6 +345,7 @@ def main() -> int:
             Path(args.output_dir),
             Path(args.toolchain),
             Path(args.compare_with) if args.compare_with else None,
+            Path(args.toolchain_evidence),
         )
         return 0
     except (

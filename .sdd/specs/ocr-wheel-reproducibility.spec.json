@@ -1,20 +1,31 @@
 {
-  "id": "ocr-wheel-reproducibility",
-  "title": "Reprodutibilidade binária do wheel OCR 1.2.0",
-  "status": "approved",
+  "schema_version": "1.0",
+  "feature_name": "OCR Wheel Reproducibility",
+  "status": "implemented_pending_ci",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Fixa a toolchain e compara duas builds limpas do mesmo SHA do motor.",
-  "acceptance_criteria": [
-    "wheel, MANIFEST.sha256 e SHA256SUMS são byte a byte idênticos",
-    "adulteração é rejeitada",
-    "ambos os consumidores usam o pacote canônico"
-  ],
-  "tests": [
-    "tests/test_prepare_ocr_runtime_package.py",
-    ".github/workflows/ocr-benchmark.yml"
-  ]
+  "description": "Fixa a toolchain e compara duas builds limpas do mesmo SHA do motor OCR.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_prepare_ocr_runtime_package.py",
+      "tests/test_ocr_external_package_workflow.py",
+      "tests/test_ocr_external_runtime_package.py"
+    ],
+    "evidence_contract": "Duas árvores limpas independentes no SHA fixado devem produzir wheel, MANIFEST.sha256 e SHA256SUMS byte a byte idênticos; adulteração deve falhar e ambos os consumidores devem usar o bundle canônico."
+  },
+  "traceability": {
+    "implementation": "scripts/prepare_ocr_runtime_package.py",
+    "action": ".github/actions/prepare-ocr-runtime/action.yml",
+    "workflow": ".github/workflows/ocr-benchmark.yml",
+    "toolchain": "config/ocr-build-toolchain.json"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
 }

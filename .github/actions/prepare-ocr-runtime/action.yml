@@ -125,6 +125,35 @@ runs:
         test "$negative_rc" -eq 3
         echo "OCR_REPRODUCIBILITY_NEGATIVE_CONTROL_OK"
 
+        python - <<'PY' "$bundle_a" "backend/vendor/ocr-evidence-engine"
+        import json
+        import sys
+        from pathlib import Path
+        from scripts.prepare_ocr_runtime_package import reproducibility_report
+
+        first, second = map(Path, sys.argv[1:3])
+        lock = json.loads(Path("config/ocr-engine-lock.json").read_text())
+        toolchain = json.loads(Path("config/ocr-build-toolchain.json").read_text())
+        report = reproducibility_report(
+            first, second, lock["sha"], toolchain, negative_control_detected=True
+        )
+        report_path = Path("artifacts/ocr-reproducibility-report.json")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        wheel = next(name for name in report["build_a"] if name.endswith(".whl"))
+        import os
+        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+            summary.write("## OCR binary reproducibility\n")
+            summary.write(f"- source: \`{report['source_sha']}\`\n")
+            summary.write(f"- wheel SHA-256 A/B: \`{report['build_a'][wheel]}\`\n")
+            summary.write(f"- manifests byte-identical: \`{report['byte_identical']}\`\n")
+            summary.write(f"- negative control detected: \`{report['negative_control_detected']}\`\n")
+        print(json.dumps(report, sort_keys=True))
+        PY
+
         python - <<'PY' >> "$GITHUB_OUTPUT"
         import json
         from pathlib import Path
