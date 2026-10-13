@@ -2,7 +2,7 @@
   "feature_name": "reqsys-global-search-published-e2e",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-12",
-  "updated_at": "2026-10-12",
+  "updated_at": "2026-10-13",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -15,13 +15,17 @@
     "tests": [
       "frontend/tests/e2e/global-search-published.spec.js"
     ],
-    "evidence_contract": "Testar Pages real e negar login demo anônimo; sessão MSAL delegada somente válida e same-origin para interagir com lupa, pesquisar, Enter e controle negativo. A aprovação anônima não representa homologação autenticada; runtime SHA exigido em dispatch."
+    "evidence_contract": "No workflow_dispatch, executar o Playwright anônimo contra o Pages DEV real independentemente da condição do runtime para obter captura apenas da tela pública; não transformar o teste anônimo em falso verde do gate geral. A validação do runtime PC24x7 mantém SHA exato obrigatório quando o escopo exigir, e qualquer divergência continua reprovando o workflow. O teste autenticado depende do êxito dos jobs validar-acessos e anonymous, além de MSAL delegada válida no origin correto e POST real /api/v1/auth/azure=200; exigir navegação, buscas, controle negativo e mobile, sem mocks nem segredos em artifacts."
   },
   "controls": {
     "production_touched": false,
     "hml_touched": false,
     "uses_mock_auth": false,
     "requires_authenticated_browser_for_complete_acceptance": true,
-    "secrets_in_artifacts": false
+    "secrets_in_artifacts": false,
+    "anonymous_browser_runs_despite_runtime_drift_on_dispatch": true,
+    "runtime_sha_gate_must_remain_blocking": true,
+    "authenticated_browser_requires_runtime_and_anonymous_success": true,
+    "anonymous_screenshot_only": true
   }
 }
