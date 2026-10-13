@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -24,6 +22,9 @@ def _args(tmp_path: Path) -> argparse.Namespace:
         expected_runtime_sha="a" * 40,
         vault_name="kv-test",
         expected_tenant_id="tenant-test",
+        runtime_profile="uncontracted-local",
+        compose_project="teams-local-test",
+        api_port="9210",
         admin_override=admin,
         teams_override=teams,
         correlation_id="teams-bot-test",
@@ -47,42 +48,29 @@ def test_teams_bot_rejects_wrong_confirmation(tmp_path: Path) -> None:
         provision.execute(args)
 
 
-def test_teams_bot_reuses_secret_without_exposing_it(monkeypatch, tmp_path: Path) -> None:
+def test_unsupported_runtime_identity_blocks_before_secret(monkeypatch, tmp_path: Path) -> None:
     args = _args(tmp_path)
-    monkeypatch.setattr(provision, "_git_head", lambda _repo: args.expected_runtime_sha)
-    monkeypatch.setattr(
-        provision,
-        "_load_existing_bot_secret",
-        lambda _vault, _tenant: ("app-test", "super-secret-test-value"),
-    )
+    args.runtime_profile = "uncontracted-local"
+    args.compose_project = "uncontracted-project"
+    args.api_port = "9210"
+    touched = {"secret": False, "run": False}
 
-    seen_secret_values: list[str | None] = []
+    def forbidden_secret(*_args, **_kwargs):
+        touched["secret"] = True
+        raise AssertionError("secret must not be loaded")
 
-    def fake_run(command, *, cwd=None, env=None, timeout=120, sensitive=False):
-        seen_secret_values.append(None if env is None else env.get("TEAMS_BOT_SECRET"))
-        if any("recreate_cofre_dev_pc24x7.py" in str(item) for item in command):
-            return SimpleNamespace(stdout=json.dumps({"status": "passed"}), returncode=0)
-        if any("pc24x7_teams_ephemeral_e2e.py" in str(item) for item in command):
-            payload = {
-                "status": "done",
-                "token_revoked": True,
-                "readiness": {"ready": True},
-                "turn_idempotency_proven": True,
-                "delivery_attempts": [{"teams_delivered": True, "teams_channel": "bot"}],
-            }
-            return SimpleNamespace(stdout=json.dumps(payload), returncode=0)
-        raise AssertionError(command)
+    def forbidden_run(*_args, **_kwargs):
+        touched["run"] = True
+        raise AssertionError("command must not run")
 
-    monkeypatch.setattr(provision, "_run", fake_run)
+    monkeypatch.setattr(provision, "_load_existing_bot_secret", forbidden_secret)
+    monkeypatch.setattr(provision, "_run", forbidden_run)
 
-    evidence = provision.execute(args)
+    with pytest.raises(provision.ProvisionError, match="unsupported_runtime_identity"):
+        provision.execute(args)
 
-    assert evidence["status"] == "passed"
-    assert evidence["secret_value_exposed"] is False
-    assert evidence["production_touched"] is False
-    assert seen_secret_values[0] == "super-secret-test-value"
-    assert seen_secret_values[1] == ""
-    assert "super-secret-test-value" not in args.evidence_file.read_text(encoding="utf-8")
+    assert touched == {"secret": False, "run": False}
+    assert not args.evidence_file.exists()
 
 
 def test_compose_passes_teams_credentials_without_inline_secret_literal() -> None:
@@ -97,3 +85,16 @@ def test_compose_passes_teams_credentials_without_inline_secret_literal() -> Non
     assert "- TEAMS_BOT_SECRET" in override
     assert "TEAMS_BOT_SECRET:" not in override
     assert "AI_CONVERSATION_OLLAMA_BASE_URL=http://host.docker.internal:11434" in override
+
+
+def test_run_never_embeds_subprocess_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        provision.subprocess,
+        "run",
+        lambda *_args, **_kwargs: argparse.Namespace(
+            returncode=9, stdout="SECRET_STDOUT", stderr="SECRET_STDERR"
+        ),
+    )
+    with pytest.raises(provision.ProvisionError, match="^command_failed$") as captured:
+        provision._run(["tool"], cwd=tmp_path)
+    assert "SECRET" not in str(captured.value)

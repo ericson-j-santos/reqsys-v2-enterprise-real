@@ -12,6 +12,9 @@ from typing import Any
 
 CONFIRMATION = "REUSE-EXISTING-TEAMS-BOT-DEV"
 BOT_SECRET_NAME = "reqsys-teams-bot-dev-secret"
+PUBLIC_PROJECT = "wt-pc24x7-piloto"
+PUBLIC_API_PORT = "8210"
+PUBLIC_RUNTIME_PROFILE = "pc24x7-public-dev"
 
 
 class ProvisionError(RuntimeError):
@@ -34,23 +37,26 @@ def _run(
     timeout: int = 120,
     sensitive: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        shell=False,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise ProvisionError("command_timeout") from None
+    except OSError:
+        raise ProvisionError("command_spawn_failed") from None
     if result.returncode != 0:
-        if sensitive:
-            raise ProvisionError(f"sensitive_command_failed:{Path(args[0]).name}:exit_{result.returncode}")
-        detail = (result.stderr or result.stdout or "sem detalhe").strip().replace("\n", " ")
-        raise ProvisionError(f"command_failed:{Path(args[0]).name}:exit_{result.returncode}:{detail[:500]}")
+        code = "sensitive_command_failed" if sensitive else "command_failed"
+        raise ProvisionError(code)
     return result
 
 
@@ -118,11 +124,23 @@ def _parse_json_stdout(result: subprocess.CompletedProcess[str], label: str) -> 
     raise ProvisionError(f"{label}_json_missing")
 
 
+def _guard_demo_runtime_identity(args: argparse.Namespace) -> None:
+    is_public = (
+        args.runtime_profile == PUBLIC_RUNTIME_PROFILE
+        or args.compose_project == PUBLIC_PROJECT
+        or str(args.api_port) == PUBLIC_API_PORT
+    )
+    if is_public:
+        raise ProvisionError("public_runtime_demo_e2e_incompatible")
+    raise ProvisionError("unsupported_runtime_identity")
+
+
 def execute(args: argparse.Namespace) -> dict[str, Any]:
     if args.confirm != CONFIRMATION:
         raise ProvisionError(f"confirmation_required:{CONFIRMATION}")
     if args.environment != "dev":
         raise ProvisionError("environment_must_be_dev")
+    _guard_demo_runtime_identity(args)
 
     runtime_root = args.runtime_repo_root.resolve()
     if not runtime_root.is_dir():
@@ -148,6 +166,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             str(runtime_root),
             "--expected-sha",
             args.expected_runtime_sha,
+            "--runtime-profile",
+            args.runtime_profile,
+            "--project",
+            args.compose_project,
+            "--container",
+            f"{args.compose_project}-api-1",
             "--admin-override",
             str(args.admin_override.resolve()),
             "--teams-override",
@@ -171,7 +195,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             sys.executable,
             str(runtime_root / "scripts" / "pc24x7_teams_ephemeral_e2e.py"),
             "--api-base",
-            "http://127.0.0.1:8210",
+            f"http://127.0.0.1:{args.api_port}",
             "--correlation-id",
             args.correlation_id,
             "--evidence-path",
@@ -224,6 +248,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--environment", default="dev")
+    parser.add_argument("--runtime-profile", default=PUBLIC_RUNTIME_PROFILE)
+    parser.add_argument("--compose-project", default=PUBLIC_PROJECT)
+    parser.add_argument("--api-port", default=PUBLIC_API_PORT)
     parser.add_argument("--runtime-repo-root", type=Path, required=True)
     parser.add_argument("--expected-runtime-sha", required=True)
     parser.add_argument("--vault-name", required=True)
@@ -244,8 +271,7 @@ def main() -> int:
             "schema_version": "1.0.0",
             "status": "blocked",
             "environment": "dev",
-            "reason": type(exc).__name__,
-            "detail": str(exc)[:300],
+            "error_code": str(exc) if isinstance(exc, ProvisionError) else "unexpected_error",
             "credential_rotated": False,
             "secret_value_exposed": False,
             "production_touched": False,
