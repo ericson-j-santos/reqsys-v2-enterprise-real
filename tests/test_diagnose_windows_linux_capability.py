@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -26,9 +27,12 @@ class FakeKey:
 
 def _windows(monkeypatch):
     monkeypatch.setattr(probe.socket, "gethostname", lambda: "DESKTOP-PDQK954")
-    monkeypatch.setattr(probe.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(probe.platform, "release", lambda: "11")
-    monkeypatch.setattr(probe.platform, "machine", lambda: "AMD64")
+
+
+class FakeWindowsVersion:
+    major = 10
+    minor = 0
+    build = 26100
 
 
 def test_collect_is_read_only_and_never_claims_source_or_linux_ready(monkeypatch):
@@ -44,12 +48,17 @@ def test_collect_is_read_only_and_never_claims_source_or_linux_ready(monkeypatch
         feature_checker=lambda value: checks[value],
         wsl_opener=lambda: FakeKey(),
         wsl_query_info=lambda _key: (2, 0, 0),
+        windows_version_provider=lambda: FakeWindowsVersion(),
+        windows_identity=lambda: True,
     )
     assert result["status"] == "diagnostic_collected"
     assert result["requested_source_sha"] == SHA
     assert result["observed_source_sha"] is None
     assert result["source_verified"] is False
     assert result["source_provenance"] == "requested_only"
+    assert result["os"] == "Windows"
+    assert result["os_release"] == "10.0.26100"
+    assert "architecture" not in result
     assert result["wsl"] == {
         "status": "measured",
         "count": 2,
@@ -88,6 +97,7 @@ def test_valid_but_incorrect_requested_sha_is_not_claimed_as_verified(monkeypatc
         feature_checker=lambda _value: True,
         wsl_opener=lambda: FakeKey(),
         wsl_query_info=lambda _key: (0, 0, 0),
+        windows_identity=lambda: True,
     )
     assert result["requested_source_sha"] == requested
     assert result["observed_source_sha"] is None
@@ -154,15 +164,48 @@ def test_main_never_emits_sensitive_exception_text(monkeypatch, capsys):
 
 def test_non_windows_is_blocked(monkeypatch):
     monkeypatch.setattr(probe.socket, "gethostname", lambda: "DESKTOP-PDQK954")
-    monkeypatch.setattr(probe.platform, "system", lambda: "Linux")
     with pytest.raises(ValueError, match="windows_required"):
-        probe.collect(expected_host="DESKTOP-PDQK954", requested_source_sha=SHA)
+        probe.collect(
+            expected_host="DESKTOP-PDQK954",
+            requested_source_sha=SHA,
+            windows_identity=lambda: False,
+        )
+
+
+def test_safe_windows_metadata_omits_optional_release_when_api_fails():
+    result = probe._safe_windows_metadata(
+        lambda: (_ for _ in ()).throw(OSError(r"C:\\private\\version"))
+    )
+    assert result == {"os": "Windows"}
+
+
+def test_real_collector_path_cannot_reach_subprocess_or_shell(monkeypatch):
+    _windows(monkeypatch)
+
+    def blocked(*_args, **_kwargs):
+        raise AssertionError("shell_or_subprocess_reached")
+
+    monkeypatch.setattr(subprocess, "run", blocked)
+    monkeypatch.setattr(subprocess, "Popen", blocked)
+    monkeypatch.setattr(subprocess, "check_output", blocked)
+    monkeypatch.setattr(probe.os, "system", blocked)
+    result = probe.collect(
+        expected_host="DESKTOP-PDQK954",
+        requested_source_sha=SHA,
+        feature_checker=lambda _value: True,
+        wsl_opener=lambda: FakeKey(),
+        wsl_query_info=lambda _key: (0, 0, 0),
+        windows_version_provider=lambda: FakeWindowsVersion(),
+        windows_identity=lambda: True,
+    )
+    assert result["status"] == "diagnostic_collected"
+    assert result["source_verified"] is False
 
 
 def test_source_has_no_subprocess_shell_wsl_or_mutating_commands():
     source = FILE.read_text(encoding="utf-8")
     for forbidden in (
-        "subprocess",
+        "platform",
         "os.system",
         "shell=True",
         "wsl.exe",
