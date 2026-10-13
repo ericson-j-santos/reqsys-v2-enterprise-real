@@ -9,12 +9,13 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 def _load_provision_module():
@@ -35,11 +36,16 @@ EXPECTED_PROJECT = "wt-pc24x7-piloto"
 EXPECTED_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEV_API_PORT = "8210"
 ADMIN_OVERRIDE_NAME = "docker-compose.admin-dev.override.yml"
+PUBLIC_OVERRIDE_NAME = "docker-compose.pc24x7-public-dev.yml"
+PUBLIC_RUNTIME_PROFILE = "pc24x7-public-dev"
 TEAMS_OVERRIDE_REL = Path("config/pc24x7-teams-bot-runtime.override.yml")
 
 
 class ReconcileError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, mutation_state: str = "not_attempted") -> None:
+        super().__init__(message)
+        self.mutation_state = mutation_state
+        self.mutation_performed = mutation_state != "not_attempted"
 
 
 def _tool(name: str) -> str:
@@ -59,27 +65,26 @@ def _run(
     sensitive: bool = False,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        shell=False,
-    )
-    if check and result.returncode != 0:
-        if sensitive:
-            raise ReconcileError(
-                f"sensitive_command_failed:{Path(args[0]).name}:exit_{result.returncode}"
-            )
-        detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")
-        raise ReconcileError(
-            f"command_failed:{Path(args[0]).name}:exit_{result.returncode}:{detail[:300]}"
+    try:
+        result = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
         )
+    except subprocess.TimeoutExpired:
+        raise ReconcileError("command_timeout") from None
+    except OSError:
+        raise ReconcileError("command_spawn_failed") from None
+    if check and result.returncode != 0:
+        code = "sensitive_command_failed" if sensitive else "command_failed"
+        raise ReconcileError(code)
     return result
 
 
@@ -102,52 +107,138 @@ def _require_host() -> None:
         raise ReconcileError("host_not_allowed")
 
 
-def _inspect_container(container_id: str, cwd: Path) -> dict[str, Any]:
-    raw = _run(
-        [_tool("docker"), "inspect", container_id],
+def _inspect_value(container_id: str, template: str, cwd: Path) -> str:
+    return _run(
+        [_tool("docker"), "inspect", "--format", template, container_id],
         cwd=cwd,
         timeout=60,
-    ).stdout
-    payload = json.loads(raw)
-    if not isinstance(payload, list) or len(payload) != 1:
-        raise ReconcileError("docker_inspect_invalid")
-    return payload[0]
+    ).stdout.strip()
 
 
-def _discover_runtime() -> tuple[Path, Path, str]:
+def _has_reparse_point(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ReconcileError("public_override_metadata_unreadable") from exc
+    attrs = getattr(metadata, "st_file_attributes", 0)
+    return path.is_symlink() or bool(
+        attrs & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
+def _validate_public_override(
+    runtime_root: Path,
+    candidate: Path,
+    expected_sha: str | None = None,
+) -> Path:
+    raw = str(candidate)
+    if (
+        not raw
+        or raw.startswith(("\\\\", "//"))
+        or re.match(r"^[A-Za-z]:[^\\/]", raw)
+        or re.search(r"[\\/]{2,}", raw)
+        or ".." in PureWindowsPath(raw).parts
+        or ":" in raw[2:]
+    ):
+        raise ReconcileError("public_override_path_unsafe")
+    root_abs = Path(os.path.abspath(runtime_root))
+    candidate_abs = Path(os.path.abspath(candidate))
+    expected_abs = root_abs / PUBLIC_OVERRIDE_NAME
+    if os.path.normcase(str(candidate_abs)) != os.path.normcase(str(expected_abs)):
+        raise ReconcileError("public_override_not_canonical")
+    for target in (root_abs, candidate_abs):
+        chain = [target, *target.parents]
+        for cursor in reversed(chain):
+            if not cursor.exists():
+                raise ReconcileError("public_override_metadata_unreadable")
+            if _has_reparse_point(cursor):
+                raise ReconcileError("public_override_reparse_blocked")
+    resolved_root = root_abs.resolve(strict=True)
+    resolved = candidate_abs.resolve(strict=True)
+    if resolved.parent != resolved_root:
+        raise ReconcileError("public_override_outside_runtime")
+    head = expected_sha or _git(runtime_root, "rev-parse", "HEAD").stdout.strip()
+    tracked = _git(runtime_root, "rev-parse", f"{head}:{PUBLIC_OVERRIDE_NAME}", check=False)
+    observed = _git(runtime_root, "hash-object", "--no-filters", str(candidate_abs), check=False)
+    if (
+        tracked.returncode != 0
+        or observed.returncode != 0
+        or not re.fullmatch(r"[0-9a-f]{40}", tracked.stdout.strip())
+        or tracked.stdout.strip() != observed.stdout.strip()
+    ):
+        raise ReconcileError("public_override_head_mismatch")
+    return resolved
+
+
+def _require_local_docker(cwd: Path) -> None:
+    if os.environ.get("DOCKER_HOST") or os.environ.get("DOCKER_CONTEXT"):
+        raise ReconcileError("docker_environment_override_blocked")
+    raw = _run(
+        [_tool("docker"), "context", "inspect", "--format", "{{json .Endpoints.docker.Host}}"],
+        cwd=cwd,
+        timeout=60,
+    ).stdout.strip()
+    try:
+        endpoint = str(json.loads(raw)).lower()
+    except json.JSONDecodeError as exc:
+        raise ReconcileError("docker_context_invalid") from exc
+    if endpoint != "npipe:////./pipe/docker_engine":
+        raise ReconcileError("docker_remote_context_blocked")
+
+
+def _discover_runtime() -> tuple[Path, Path, Path, str]:
     cwd = Path.cwd()
+    _require_local_docker(cwd)
     result = _run(
         [
             _tool("docker"),
             "ps",
-            "--filter",
-            f"publish={DEV_API_PORT}",
-            "--format",
-            "{{.ID}}",
+            "--filter", f"label=com.docker.compose.project={EXPECTED_PROJECT}",
+            "--filter", "label=com.docker.compose.service=api",
+            "--format", "{{.ID}}",
         ],
         cwd=cwd,
         timeout=60,
     )
     ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     if len(ids) != 1:
-        raise ReconcileError("dev_api_8210_not_unique")
+        raise ReconcileError("public_api_container_cardinality")
+    bindings = [
+        line.strip()
+        for line in _run([_tool("docker"), "port", ids[0]], cwd=cwd, timeout=60).stdout.splitlines()
+        if line.strip()
+    ]
+    if not bindings or any(
+        not re.fullmatch(r"8000/tcp -> (?:0\.0\.0\.0|\[::\]):8210", line)
+        for line in bindings
+    ):
+        raise ReconcileError("dev_api_port_binding_mismatch")
 
-    item = _inspect_container(ids[0], cwd)
-    labels = (item.get("Config") or {}).get("Labels") or {}
-    project = str(labels.get("com.docker.compose.project") or "").strip()
-    service = str(labels.get("com.docker.compose.service") or "").strip()
+    labels = {
+        name: _inspect_value(ids[0], f'{{{{index .Config.Labels "{name}"}}}}', cwd)
+        for name in (
+            "com.docker.compose.project",
+            "com.docker.compose.service",
+            "com.docker.compose.project.working_dir",
+            "com.docker.compose.project.config_files",
+        )
+    }
+    project = labels["com.docker.compose.project"].strip()
+    service = labels["com.docker.compose.service"].strip()
     if project != EXPECTED_PROJECT or service != "api":
         raise ReconcileError("non_dev_runtime_target_blocked")
 
-    working_raw = str(labels.get("com.docker.compose.project.working_dir") or "").strip()
+    working_raw = labels["com.docker.compose.project.working_dir"].strip()
     if not working_raw:
         raise ReconcileError("compose_working_dir_missing")
-    runtime_root = _windows_path(working_raw).resolve()
+    runtime_root = _windows_path(working_raw)
     if not runtime_root.is_dir():
         raise ReconcileError("compose_working_dir_not_found")
 
-    config_raw = str(labels.get("com.docker.compose.project.config_files") or "")
-    candidates: list[Path] = []
+    config_raw = labels["com.docker.compose.project.config_files"]
+    admin_candidates: list[Path] = []
+    public_candidates: list[Path] = []
+    ordered_paths: list[Path] = []
     for raw in config_raw.split(","):
         value = raw.strip()
         if not value:
@@ -155,11 +246,19 @@ def _discover_runtime() -> tuple[Path, Path, str]:
         path = _windows_path(value)
         if not path.is_absolute():
             path = runtime_root / path
+        ordered_paths.append(path)
         if path.name.casefold() == ADMIN_OVERRIDE_NAME.casefold() and path.is_file():
-            candidates.append(path.resolve())
-    if len(candidates) != 1:
+            admin_candidates.append(path.resolve())
+        if path.name.casefold() == PUBLIC_OVERRIDE_NAME.casefold() and path.is_file():
+            public_candidates.append(path)
+    if len(admin_candidates) != 1:
         raise ReconcileError("admin_override_not_unique")
-    return runtime_root, candidates[0], project
+    if len(public_candidates) != 1:
+        raise ReconcileError("public_dev_runtime_identity_not_proven")
+    public_override = _validate_public_override(runtime_root, public_candidates[0])
+    if not ordered_paths or Path(os.path.abspath(ordered_paths[-1])) != Path(os.path.abspath(public_candidates[0])):
+        raise ReconcileError("public_dev_override_not_last")
+    return runtime_root.resolve(strict=True), admin_candidates[0], public_override, project
 
 
 def _origin_is_expected(raw: str) -> bool:
@@ -260,6 +359,7 @@ def _parse_last_json(stdout: str, label: str) -> dict[str, Any]:
 def _recreate_api(
     runtime_root: Path,
     admin_override: Path,
+    public_override: Path,
     expected_sha: str,
     vault_name: str,
     expected_tenant_id: str,
@@ -276,6 +376,7 @@ def _recreate_api(
     child_env["TEAMS_BOT_APP_ID"] = app_id
     child_env["TEAMS_BOT_APP_TENANT_ID"] = expected_tenant_id
     child_env["TEAMS_BOT_SECRET"] = bot_secret
+    mutation_state = "attempted_unknown"
     try:
         result = _run(
             [
@@ -287,6 +388,10 @@ def _recreate_api(
                 expected_sha,
                 "--admin-override",
                 str(admin_override),
+                "--runtime-profile",
+                PUBLIC_RUNTIME_PROFILE,
+                "--public-dev-override",
+                str(public_override),
                 "--teams-override",
                 str(teams_override),
                 "--health-timeout",
@@ -296,20 +401,60 @@ def _recreate_api(
             env=child_env,
             timeout=720,
             sensitive=True,
+            check=False,
         )
-        return _parse_last_json(result.stdout, "recreate")
+        try:
+            payload = _parse_last_json(
+                result.stdout if result.returncode == 0 else result.stderr,
+                "recreate",
+            )
+        except ReconcileError:
+            raise ReconcileError(
+                "recreate_json_invalid", mutation_state="attempted_unknown"
+            ) from None
+        child_state = str(payload.get("mutation_state") or "").strip()
+        if child_state not in {
+            "not_attempted", "attempted_unknown",
+            "attempted_unverified", "verified",
+        }:
+            child_state = "attempted_unknown"
+        if result.returncode != 0:
+            code = str(payload.get("error_code") or "recreate_failed")
+            if not re.fullmatch(r"[a-z0-9_]+", code):
+                code = "recreate_failed"
+            raise ReconcileError(code, mutation_state=child_state)
+        if child_state != "verified":
+            raise ReconcileError(
+                "recreate_not_verified", mutation_state=child_state
+            )
+        return payload
+    except ReconcileError as exc:
+        state = exc.mutation_state
+        if mutation_state != "not_attempted" and state == "not_attempted":
+            state = mutation_state
+        raise ReconcileError(str(exc), mutation_state=state) from None
     finally:
         child_env["TEAMS_BOT_SECRET"] = ""
         bot_secret = ""
 
 
-def _probe_json(path: str, timeout: float = 20.0) -> dict[str, Any]:
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _probe_json(
+    path: str,
+    timeout: float = 20.0,
+    *,
+    require_envelope: bool = False,
+) -> dict[str, Any]:
     request = urllib.request.Request(
         f"http://127.0.0.1:{DEV_API_PORT}{path}",
         headers={"Accept": "application/json", "User-Agent": "reqsys-pc24x7-reconcile/1.0"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect).open(request, timeout=timeout) as response:
             if int(response.status) != 200:
                 raise ReconcileError(f"runtime_probe_http_{response.status}")
             payload = json.loads(response.read(262_144).decode("utf-8"))
@@ -317,6 +462,8 @@ def _probe_json(path: str, timeout: float = 20.0) -> dict[str, Any]:
         raise ReconcileError("runtime_probe_failed") from exc
     if not isinstance(payload, dict):
         raise ReconcileError("runtime_probe_payload_invalid")
+    if require_envelope and ("data" not in payload or not isinstance(payload.get("data"), dict)):
+        raise ReconcileError("runtime_probe_envelope_invalid")
     data = payload.get("data", payload)
     if not isinstance(data, dict):
         raise ReconcileError("runtime_probe_data_invalid")
@@ -331,10 +478,16 @@ def _verify_runtime(expected_sha: str) -> dict[str, Any]:
             build = _probe_json("/api/runtime/build-info")
             last_build = str(build.get("build_sha") or "").strip().lower()
             health = _probe_json("/api/runtime/health")
+            auth = _probe_json("/v1/auth/config", require_envelope=True)
+            demo = auth.get("demo_login_enabled")
+            if demo is not False:
+                raise ReconcileError("public_auth_demo_login_not_false")
             if last_build == expected_sha.lower():
                 return {
                     "build_sha": last_build,
                     "health_status": str(health.get("status") or "unknown"),
+                    "demo_login_enabled": False,
+                    "auth_contract_consistent": True,
                 }
         except ReconcileError:
             pass
@@ -347,18 +500,32 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise ReconcileError(f"confirmation_required:{CONFIRMATION}")
     if args.environment != "dev":
         raise ReconcileError("environment_must_be_dev")
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", args.expected_sha):
+        raise ReconcileError("expected_sha_invalid")
     _require_host()
 
-    runtime_root, admin_override, project = _discover_runtime()
+    runtime_root, admin_override, public_override, project = _discover_runtime()
     sync = _sync_runtime_repo(runtime_root, args.expected_sha)
+    public_override = _validate_public_override(runtime_root, public_override, args.expected_sha)
     recreate = _recreate_api(
         runtime_root,
         admin_override,
+        public_override,
         args.expected_sha,
         args.vault_name,
         args.expected_tenant_id,
     )
-    runtime = _verify_runtime(args.expected_sha)
+    try:
+        runtime = _verify_runtime(args.expected_sha)
+    except ReconcileError as exc:
+        raise ReconcileError(
+            str(exc), mutation_state="attempted_unverified"
+        ) from None
+    except Exception:
+        raise ReconcileError(
+            "runtime_verify_unknown",
+            mutation_state="attempted_unknown",
+        ) from None
 
     evidence = {
         "schema_version": "1.0.0",
@@ -371,6 +538,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "runtime_root_discovered_from_compose": True,
         "admin_override_reused": True,
         "teams_override_reused": True,
+        "public_dev_override_reused": True,
+        "runtime_profile": PUBLIC_RUNTIME_PROFILE,
         "sync": sync,
         "recreate": recreate,
         "runtime": runtime,
@@ -411,7 +580,16 @@ def main() -> int:
             "correlation_id": args.correlation_id,
             "expected_sha": args.expected_sha,
             "reason": type(exc).__name__,
-            "detail": str(exc)[:300],
+            "error_code": str(exc) if isinstance(exc, ReconcileError) else "unexpected_error",
+            "mutation_state": str(
+                getattr(exc, "mutation_state", "unknown")
+            ),
+            "mutation_performed": bool(
+                getattr(exc, "mutation_performed", False)
+            ),
+            "validation_failed_after_mutation": bool(
+                getattr(exc, "mutation_performed", False)
+            ),
             "secret_value_exposed": False,
             "production_touched": False,
         }
