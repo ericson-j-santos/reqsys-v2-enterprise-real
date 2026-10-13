@@ -199,3 +199,104 @@ def test_port_numbers_bounded_and_deduplicated():
         "0.0.0.0:8210->1433/tcp, :::8210->1433/tcp, 1.1.1.1:65536->1433/tcp"
     ) == [8210]
     assert subject._published_tcp_ports("not-a-port") == []
+
+def test_untrusted_docker_cli_attests_without_executing_or_leaking_paths():
+    import io
+    from types import SimpleNamespace
+
+    path = r"C:\Users\Example\Temp\docker.exe"
+    binary = b"MZ" + b"test" * 1024
+    stat = SimpleNamespace(st_size=len(binary), st_file_attributes=0)
+    runner = Mock(side_effect=AssertionError("untrusted binary was launched"))
+    with (
+        patch.object(subject.os, "lstat", return_value=stat),
+        patch("builtins.open", side_effect=lambda *_: io.BytesIO(binary)),
+        patch.object(subject, "_win_authenticode_status", return_value="valid"),
+    ):
+        first = subject.collect(
+            platform="nt", cli_path=path, docker_runner=runner, service_reader=services,
+        )
+        second = subject.collect(
+            platform="nt", cli_path=path, docker_runner=runner, service_reader=services,
+        )
+    assert first == second
+    assert first["status"] == "partial"
+    assert first["docker"]["reason"] == "docker_cli_untrusted"
+    attestation = first["docker"]["provenance"]
+    assert attestation["status"] == "observed"
+    assert attestation["authenticode_status"] == "valid"
+    assert attestation["file_sha256"] == subject.hashlib.sha256(binary).hexdigest()
+    assert attestation["size_bytes"] == len(binary)
+    assert attestation["location_class"] == "user_profile"
+    assert attestation["executable_launched"] is False
+    assert path not in json.dumps(first)
+    assert first["hml_provisioning_authorized"] is False
+    runner.assert_not_called()
+
+
+def test_untrusted_cli_attestation_rejects_remote_and_nonexe_without_file_access():
+    probe = Mock(side_effect=AssertionError("no read"))
+    with patch.object(subject.os, "lstat", probe):
+        remote = subject._untrusted_cli_provenance(r"\\server\share\docker.exe")
+        wrapper = subject._untrusted_cli_provenance(r"C:\Temp\docker.cmd")
+    assert remote["reason"] == "local_exe_required"
+    assert wrapper["reason"] == "local_exe_required"
+    assert remote["file_sha256"] is None
+    assert wrapper["authenticode_status"] == "unavailable"
+    probe.assert_not_called()
+
+
+def test_reparse_point_attestation_fails_closed_without_signature_call():
+    from types import SimpleNamespace
+
+    validator = Mock(side_effect=AssertionError("no signature check"))
+    with (
+        patch.object(
+            subject.os, "lstat",
+            return_value=SimpleNamespace(st_size=4096, st_file_attributes=0x400),
+        ),
+        patch.object(subject, "_win_authenticode_status", validator),
+    ):
+        result = subject._untrusted_cli_provenance(r"C:\Temp\docker.exe")
+    assert result["reason"] == "reparse_point_blocked"
+    assert result["status"] == "unavailable"
+    assert result["file_sha256"] is None
+    validator.assert_not_called()
+
+
+def test_untrusted_cli_read_failure_sanitizes_secrets_and_never_runs():
+    runner = Mock(side_effect=AssertionError("CLI cannot run"))
+    with patch.object(subject.os, "lstat", side_effect=PermissionError("token=NEVER-PRINT")):
+        result = subject.collect(
+            platform="nt", cli_path=r"C:\Temp\docker.exe",
+            docker_runner=runner, service_reader=services,
+        )
+    assert result["docker"]["reason"] == "docker_cli_untrusted"
+    assert result["docker"]["provenance"]["reason"] == "file_read_unavailable"
+    assert "NEVER-PRINT" not in json.dumps(result)
+    assert result["hml_provisioning_authorized"] is False
+    runner.assert_not_called()
+
+
+def test_untrusted_cli_valid_signature_does_not_become_an_allowlist():
+    import io
+    from types import SimpleNamespace
+
+    binary = b"MZ" + b"x" * 2048
+    runner = Mock(side_effect=AssertionError("no execution after valid signature"))
+    with (
+        patch.object(subject.os, "lstat", return_value=SimpleNamespace(
+            st_size=len(binary), st_file_attributes=0,
+        )),
+        patch("builtins.open", side_effect=lambda *_: io.BytesIO(binary)),
+        patch.object(subject, "_win_authenticode_status", return_value="valid"),
+    ):
+        result = subject.collect(
+            platform="nt", cli_path=r"C:\Windows\Temp\docker.exe",
+            docker_runner=runner, service_reader=services,
+        )
+    assert result["docker"]["engine_verified"] is False
+    assert result["docker"]["reason"] == "docker_cli_untrusted"
+    assert result["docker"]["provenance"]["authenticode_status"] == "valid"
+    assert result["hml_provisioning_authorized"] is False
+    runner.assert_not_called()
