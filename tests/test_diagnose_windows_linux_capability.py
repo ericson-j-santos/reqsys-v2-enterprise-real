@@ -29,13 +29,13 @@ def test_collect_is_read_only_and_never_claims_linux_ready(monkeypatch):
     monkeypatch.setattr(probe.platform, "machine", lambda: "AMD64")
     checks = {probe.PF_NX_ENABLED: True, probe.PF_SECOND_LEVEL_ADDRESS_TRANSLATION: True,
               probe.PF_VIRT_FIRMWARE_ENABLED: True}
-    with patch("winreg.QueryInfoKey", return_value=(2, 0, 0)):
-        result = probe.collect(
-            expected_host="DESKTOP-PDQK954",
-            source_sha=SHA,
-            feature_checker=lambda value: checks[value],
-            wsl_opener=lambda: FakeKey(),
-        )
+    result = probe.collect(
+        expected_host="DESKTOP-PDQK954",
+        source_sha=SHA,
+        feature_checker=lambda value: checks[value],
+        wsl_opener=lambda: FakeKey(),
+        wsl_query_info=lambda _key: (2, 0, 0),
+    )
     assert result["status"] == "diagnostic_collected"
     assert result["virtualization"]["status"] == "measured"
     assert result["wsl"]["count"] == 2
