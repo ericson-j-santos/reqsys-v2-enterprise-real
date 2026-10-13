@@ -14,8 +14,10 @@
     "evaluator": "scripts/evaluate_integration_sql_capture_contract.py",
     "tests": [
       "tests/test_evaluate_integration_sql_capture_contract.py",
-      "tests/test_integration_sql_key_vault_capture_exact_source.py"
-    ]
+      "tests/test_integration_sql_key_vault_capture_exact_source.py",
+      "tests/test_integration_sql_capture_preflight.py"
+    ],
+    "preflight": "scripts/integration_sql_capture_preflight.py"
   },
   "risk": {
     "production": false,
@@ -25,17 +27,21 @@
     "sql_execution": false
   },
   "acceptance_criteria": [
+    "Evidence initialized immediately after checkout",
+    "Upstream setup, dependency, or test failure remains red",
     "Explicit mode before OIDC",
     "Gateway never invokes Azure, Key Vault, or direct SQL",
     "Direct mode fails closed without a confirmed reader",
-    "Sanitized evidence exists before failures",
+    "Exact DEV vault target required before login",
+    "Skipped and failed OIDC outcomes remain distinct",
     "No retired Fly or mutator identity binding",
     "No false green after upstream failure"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_evaluate_integration_sql_capture_contract.py",
-      "tests/test_integration_sql_key_vault_capture_exact_source.py"
+      "tests/test_integration_sql_key_vault_capture_exact_source.py",
+      "tests/test_integration_sql_capture_preflight.py"
     ]
   }
 }

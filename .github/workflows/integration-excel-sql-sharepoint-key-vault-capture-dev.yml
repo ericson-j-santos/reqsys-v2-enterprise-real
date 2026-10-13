@@ -46,13 +46,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
 
+      - name: Inicializar evidência sanitizada antes de passos falíveis
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/integration_sql_capture_preflight.py init \
+            --output "$EVIDENCE_DIR/source.json"
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5.6.0
+        id: python-setup
+        continue-on-error: true
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
       - name: Instalar dependências mínimas
+        id: dependencies
+        if: steps.python-setup.outcome == 'success'
+        continue-on-error: true
         run: |
           set -euo pipefail
           bash .github/scripts/install-unixodbc-ci.sh
@@ -60,98 +72,45 @@ jobs:
           pip install pyodbc pytest
 
       - name: Validar contrato da sonda
+        id: contract-tests
+        if: steps.dependencies.outcome == 'success'
+        continue-on-error: true
         env:
           PYTHONPATH: .
         run: |
           set -euo pipefail
           python -m pytest tests/test_integration_excel_sql_sharepoint_sql_locator.py -q
 
-      - name: Resolver modo e inicializar evidência sanitizada
+      - name: Resolver modo e atualizar evidência sanitizada
         id: sql-mode
+        if: always()
         shell: bash
         env:
           AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          PYTHON_SETUP_OUTCOME: ${{ steps.python-setup.outcome }}
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+          CONTRACT_TESTS_OUTCOME: ${{ steps.contract-tests.outcome }}
         run: |
           set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          from scripts.evaluate_integration_sql_capture_contract import (
-              SUPPORTED_SQL_VALIDATION_MODES,
-              direct_dsn_required,
-              normalize_mode,
-          )
-
-          mode = normalize_mode(os.environ.get("INTEGRATION_E2E_SQL_VALIDATION_MODE"))
-          source = {
-              "source": "configuration",
-              "status": "sql_validation_mode_unconfigured" if not mode else "sql_validation_mode_invalid",
-              "selection_mode": "explicit",
-              "dsn_resolved": False,
-              "secret_value_exposed": False,
-              "business_data_read": False,
-              "production_touched": False,
-              "test_touched": False,
-          }
-          supported = mode in SUPPORTED_SQL_VALIDATION_MODES
-          direct = supported and direct_dsn_required(mode)
-          preflight_ready = False
-          if mode == "power_platform_gateway":
-              source.update(
-                  source="power_platform_gateway",
-                  status="direct_dsn_not_required",
-                  selection_mode="gateway_contract",
-              )
-              preflight_ready = True
-          elif direct:
-              secret_name = os.environ.get("INTEGRATION_E2E_SQL_DSN_SECRET_NAME", "").strip()
-              configured = {
-                  "AZURE_TENANT_ID": bool(os.environ.get("AZURE_TENANT_ID", "").strip()),
-                  "AZURE_SUBSCRIPTION_ID": bool(os.environ.get("AZURE_SUBSCRIPTION_ID", "").strip()),
-                  "REQSYS_KEY_VAULT_NAME": bool(os.environ.get("REQSYS_KEY_VAULT_NAME", "").strip()),
-                  "INTEGRATION_E2E_SQL_DSN_SECRET_NAME": bool(secret_name),
-                  # No provider-neutral reader binding has been approved yet.
-                  "AZURE_CLIENT_ID_READER_BINDING": False,
-              }
-              missing = sorted(name for name, present in configured.items() if not present)
-              invalid = []
-              if secret_name and re.fullmatch(r"[A-Za-z0-9-]{1,127}", secret_name) is None:
-                  invalid.append("INTEGRATION_E2E_SQL_DSN_SECRET_NAME")
-              status = (
-                  "oidc_configuration_missing"
-                  if missing
-                  else "oidc_configuration_invalid"
-                  if invalid
-                  else "oidc_configuration_ready"
-              )
-              source.update(
-                  source="azure_key_vault",
-                  status=status,
-                  selection_mode="exact_configured_name",
-                  configured={name: present for name, present in sorted(configured.items())},
-                  missing_configuration=missing,
-                  invalid_configuration=invalid,
-              )
-              preflight_ready = not missing and not invalid
-          Path(os.environ["EVIDENCE_DIR"], "source.json").write_text(
-              json.dumps(source, sort_keys=True) + "\n", encoding="utf-8"
-          )
-          print(f"mode={mode}")
-          print(f"mode_supported={'true' if supported else 'false'}")
-          print(f"direct_dsn_required={'true' if direct else 'false'}")
-          print(f"preflight_ready={'true' if preflight_ready else 'false'}")
-          print("azure_client_id=")
-          PY
+          python scripts/integration_sql_capture_preflight.py resolve \
+            --output "$EVIDENCE_DIR/source.json" \
+            --mode "$INTEGRATION_E2E_SQL_VALIDATION_MODE" \
+            --expected-vault "$EXPECTED_KEY_VAULT_NAME" \
+            --actual-vault "$REQSYS_KEY_VAULT_NAME" \
+            --tenant-configured "${AZURE_TENANT_ID:+true}" \
+            --subscription-configured "${AZURE_SUBSCRIPTION_ID:+true}" \
+            --secret-name "$INTEGRATION_E2E_SQL_DSN_SECRET_NAME" \
+            --reader-configured false \
+            --python-setup-outcome "$PYTHON_SETUP_OUTCOME" \
+            --dependencies-outcome "$DEPENDENCIES_OUTCOME" \
+            --contract-tests-outcome "$CONTRACT_TESTS_OUTCOME" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Login Azure OIDC com identidade reader Key Vault DEV
         id: azure-login
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true'
+        if: steps.sql-mode.outputs.upstream_ready == 'true' && steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true'
         continue-on-error: true
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
@@ -159,20 +118,14 @@ jobs:
           tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Registrar falha OIDC sanitizada
-        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true' && steps.azure-login.outcome != 'success'
+      - name: Registrar resultado OIDC sanitizado
+        if: always() && steps.sql-mode.outputs.upstream_ready == 'true' && steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.sql-mode.outputs.preflight_ready == 'true' && steps.azure-login.outcome != 'success'
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          path = Path(os.environ["EVIDENCE_DIR"], "source.json")
-          payload = json.loads(path.read_text(encoding="utf-8"))
-          payload.update(status="oidc_login_failed", dsn_resolved=False)
-          path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
-          PY
+          python scripts/integration_sql_capture_preflight.py oidc \
+            --output "$EVIDENCE_DIR/source.json" \
+            --outcome "${{ steps.azure-login.outcome }}"
 
       - name: Capturar DSN sem expor nome ou valor
         id: key-vault

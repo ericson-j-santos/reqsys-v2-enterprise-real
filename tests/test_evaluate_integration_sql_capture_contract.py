@@ -195,7 +195,7 @@ def test_workflow_resolves_explicit_mode_before_any_oidc_step() -> None:
     steps = document["jobs"]["capture"]["steps"]
     names = [str(step.get("name", "")) for step in steps]
 
-    resolver = names.index("Resolver modo e inicializar evidência sanitizada")
+    resolver = names.index("Resolver modo e atualizar evidência sanitizada")
     login = names.index("Login Azure OIDC com identidade reader Key Vault DEV")
     capture = names.index("Capturar DSN sem expor nome ou valor")
     locator = names.index("Validar procedure e contrato SQL")
@@ -214,7 +214,7 @@ def test_workflow_has_no_implicit_mode_or_retired_or_mutator_identity() -> None:
     assert "|| 'direct_dsn'" not in raw
     assert "CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND" not in raw
     assert "vars.CCP_AZURE_CLIENT_ID }}" not in raw
-    assert '"AZURE_CLIENT_ID_READER_BINDING": False' in raw
+    assert "--reader-configured false" in raw
 
 
 def test_workflow_gateway_path_never_calls_azure_key_vault_or_sql() -> None:
@@ -241,13 +241,16 @@ def test_workflow_always_materializes_and_publishes_sanitized_evidence() -> None
     steps = document["jobs"]["capture"]["steps"]
     by_name = {str(step.get("name", "")): step for step in steps}
 
-    resolver = by_name["Resolver modo e inicializar evidência sanitizada"]
-    assert "source.json" in resolver["run"]
-    assert "sql_validation_mode_unconfigured" in resolver["run"]
-    assert "sql_validation_mode_invalid" in resolver["run"]
-    assert "oidc_configuration_missing" in resolver["run"]
-    assert "missing_configuration" in resolver["run"]
-    assert "secret_value_exposed" in resolver["run"]
+    names = [str(step.get("name", "")) for step in steps]
+    initializer = by_name["Inicializar evidência sanitizada antes de passos falíveis"]
+    resolver = by_name["Resolver modo e atualizar evidência sanitizada"]
+    assert names.index("Inicializar evidência sanitizada antes de passos falíveis") < names.index("Instalar dependências mínimas")
+    assert "integration_sql_capture_preflight.py init" in initializer["run"]
+    assert resolver["if"] == "always()"
+    assert "integration_sql_capture_preflight.py resolve" in resolver["run"]
+    assert "--python-setup-outcome" in resolver["run"]
+    assert "--contract-tests-outcome" in resolver["run"]
+    assert "--expected-vault" in resolver["run"]
 
     consolidated = by_name["Gerar evidência consolidada sanitizada"]
     published = by_name["Publicar evidência sanitizada"]
