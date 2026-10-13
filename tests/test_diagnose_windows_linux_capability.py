@@ -46,9 +46,9 @@ def test_collect_is_read_only_and_never_claims_source_or_linux_ready(monkeypatch
         expected_host="DESKTOP-PDQK954",
         requested_source_sha=SHA,
         feature_checker=lambda value: checks[value],
-        wsl_opener=lambda: FakeKey(),
+        wsl_opener=FakeKey,
         wsl_query_info=lambda _key: (2, 0, 0),
-        windows_version_provider=lambda: FakeWindowsVersion(),
+        windows_version_provider=FakeWindowsVersion,
         windows_identity=lambda: True,
     )
     assert result["status"] == "diagnostic_collected"
@@ -95,7 +95,7 @@ def test_valid_but_incorrect_requested_sha_is_not_claimed_as_verified(monkeypatc
         expected_host="DESKTOP-PDQK954",
         requested_source_sha=requested,
         feature_checker=lambda _value: True,
-        wsl_opener=lambda: FakeKey(),
+        wsl_opener=FakeKey,
         wsl_query_info=lambda _key: (0, 0, 0),
         windows_identity=lambda: True,
     )
@@ -193,9 +193,9 @@ def test_real_collector_path_cannot_reach_subprocess_or_shell(monkeypatch):
         expected_host="DESKTOP-PDQK954",
         requested_source_sha=SHA,
         feature_checker=lambda _value: True,
-        wsl_opener=lambda: FakeKey(),
+        wsl_opener=FakeKey,
         wsl_query_info=lambda _key: (0, 0, 0),
-        windows_version_provider=lambda: FakeWindowsVersion(),
+        windows_version_provider=FakeWindowsVersion,
         windows_identity=lambda: True,
     )
     assert result["status"] == "diagnostic_collected"
