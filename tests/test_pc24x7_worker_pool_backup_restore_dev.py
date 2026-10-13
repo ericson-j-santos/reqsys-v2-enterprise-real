@@ -108,7 +108,9 @@ def test_wal_online_backup_and_independent_sqlite_restore(tmp_path: Path):
     assert first["result"] == "WORKER_POOL_DEV_PROTECTED_BACKUP_VERIFIED"
     assert first["private_encrypted_copy"] if "private_encrypted_copy" in first else first["encrypted_private_backup"]
     assert first["isolated_memory_restore_verified"] is True
-    assert first["separate_file_restore_verified"] is False
+    assert first["separate_file_restore_verified"] is True
+    assert first["private_restore_temp_cleanup_verified"] is True
+    assert not list((tmp_path / "private").glob("workerpool-restore-check-*"))
     assert first["cutover_ready"] is False
     assert first["claim_performed"] is False and first["live_database_modified"] is False
     assert [args[0] for args in commands] == ["ps", "inspect"]
@@ -205,3 +207,44 @@ def test_backup_script_loads_pinned_inventory_in_isolated_python(tmp_path: Path)
     assert negative.returncode != 0
     assert "inventory_helper_missing_or_redirected" in negative.stderr
     assert not list(tmp_path.glob("*.dpapi"))
+
+
+def test_separate_file_restore_detects_corrupt_copy_and_cleans_up(tmp_path: Path, monkeypatch) -> None:
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    private = tmp_path / "private"
+    private.mkdir()
+    reference = module.verify_restore(raw)
+    original_write = module._write_restore_copy
+
+    def corrupt_last_byte(path: Path, payload: bytes) -> None:
+        original_write(path, payload[:-1] + bytes([payload[-1] ^ 1]))
+
+    monkeypatch.setattr(module, "_write_restore_copy", corrupt_last_byte)
+    with pytest.raises(module.BackupBlocked, match="separate_restore_hash_mismatch"):
+        module.verify_file_restore(raw, private, reference)
+    assert not list(private.glob("workerpool-restore-check-*"))
+
+
+def test_separate_restore_requires_private_existing_root(tmp_path: Path) -> None:
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    with pytest.raises(module.BackupBlocked, match="private_restore_root_invalid"):
+        module.verify_file_restore(raw, tmp_path / "nonexistent", module.verify_restore(raw))
+
+
+def test_separate_restore_happens_after_encrypted_copy_readback(tmp_path: Path, monkeypatch) -> None:
+    db = seed(tmp_path)
+    restored = []
+    original = module.verify_file_restore
+
+    def readback(payload: bytes, root: Path, expected: dict) -> bool:
+        assert len(list(root.glob("*.dpapi"))) == 1
+        restored.append(expected["sha256"])
+        return original(payload, root, expected)
+
+    monkeypatch.setattr(module, "verify_file_restore", readback)
+    first, _ = invoke(tmp_path, db)
+    assert restored == [first["backup_plain_sha256"]]
+    assert first["separate_file_restore_verified"] is True
+    assert not list((tmp_path / "private").glob("workerpool-restore-check-*"))

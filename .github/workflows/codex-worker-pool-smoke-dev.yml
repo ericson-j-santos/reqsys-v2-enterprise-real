@@ -966,7 +966,8 @@ jobs:
               $e.backup_bytes -lt 100 -or $e.backup_bytes -gt 67108864) {
             throw "BACKUP_PHYSICAL_EVIDENCE_INVALID"
           }
-          if ($e.separate_file_restore_verified -ne $false -or
+          if ($e.separate_file_restore_verified -ne $true -or
+              $e.private_restore_temp_cleanup_verified -ne $true -or
               $e.cutover_ready -ne $false -or $e.live_database_modified -ne $false -or
               $e.claim_performed -ne $false -or $e.secrets_exposed -ne $false -or
               $e.production_touched -ne $false) {

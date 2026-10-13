@@ -20,8 +20,8 @@
     "production_touched": false,
     "secrets_exposed": false,
     "persistent_backup_cipher": "user-scope DPAPI",
-    "restore_medium": "independent SQLite memory",
-    "separate_file_restore_verified": false,
+    "restore_medium": "independent SQLite memory plus private temporary file",
+    "separate_file_restore_verified": true,
     "cutover_ready": false
   },
   "traceability": {
@@ -37,6 +37,6 @@
       "tests/test_pc24x7_worker_pool_inventory_dev.py",
       "tests/test_pc24x7_worker_pool_inventory_workflow.py"
     ],
-    "evidence_contract": "Encrypted private DPAPI SQLite online backup with WAL, restored in isolated :memory: and independently checked. Physical file/volume restore and 1.4 canary remain blocked; never set CUTOVER_READY. Inventory sibling resolved via immutable worktree file path; positive python -I and missing-sibling negative regression prevent physical ModuleNotFoundError (run #38331728505)."
+    "evidence_contract": "Encrypted private DPAPI SQLite online backup with WAL, restored in isolated :memory: and independently checked. Physical file/volume restore and 1.4 canary remain blocked; never set CUTOVER_READY. Inventory sibling resolved via immutable worktree file path; positive python -I and missing-sibling negative regression prevent physical ModuleNotFoundError (run #38331728505). On the PC24x7 host, decrypt only the private DPAPI snapshot into a unique protected temporary SQLite file, reopen it mode=ro, compare SHA/integrity/task identity and prove cleanup; positive, tamper-negative and replay tests required. This still does NOT authorize cutover, canary or production."
   }
 }
