@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 DEV Worker Pool 1.4 isolated physical canary with protected restore",
+  "increment_type": "gap_fix",
+  "issue": 2020,
+  "origin_issue": 2547,
+  "created_at": "2026-10-13",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "target_host": "DESKTOP-PDQK954",
+    "legacy_port": 8097,
+    "candidate_port": 18099,
+    "candidate_source_sha": "9074b170d47a7d63a4e0ef6cee2d37282bbbace8",
+    "existing_backup_run": 38389083856,
+    "new_enqueue_allowed": false,
+    "legacy_service_mutation_allowed": false,
+    "production_touched": false,
+    "cutover_allowed": false,
+    "rollback_rehearsal_claimed": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_physical_candidate_dev.py",
+      "tests/test_pc24x7_worker_pool_physical_canary_workflow.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "DEV-only immutable Worker Pool main source pinned to SHA, existing DPAPI ciphertext re-used by exact digest without rebackup, no live Docker mutation; isolated loopback 18099, volume and short-lived auth distinct from legacy, SQLite stdin-only hydration, read-only diagnostics and independent SQLite readback. Positives and negatives, cleanup, no secrets, no enqueue/claim; CUTOVER_BLOCKED pending true rollback and real handlers."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-worker-pool-physical-canary-dev.requirements.md",
+    "script": "scripts/pc24x7_worker_pool_physical_candidate_dev.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests": "tests/test_pc24x7_worker_pool_physical_candidate_dev.py"
+  }
+}
