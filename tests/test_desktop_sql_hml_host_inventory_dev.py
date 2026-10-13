@@ -335,7 +335,7 @@ def test_signed_official_cli_replaces_untrusted_path_without_running_wrapper():
     assert runner.call_count == 8
     assert cert.call_count == 2
     assert probe.call_count == 2
-    assert all(call.args[0] == official for call in runner.call_args_list)
+    assert all(call.args[0][0] == official for call in runner.call_args_list)
 
 
 def test_unsigned_official_cli_does_not_override_untrusted_path():
