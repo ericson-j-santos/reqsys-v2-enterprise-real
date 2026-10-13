@@ -162,7 +162,11 @@ def test_docker_environment_overrides_fail_before_inspection(monkeypatch, tmp_pa
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("docker must not run")),
     )
     with pytest.raises(recreate.RecreateError, match="docker_environment_override_blocked"):
-        recreate.validate_local_docker(recreate.DEFAULT_CONTAINER, cwd=tmp_path)
+        recreate.validate_local_docker(
+            recreate.DEFAULT_CONTAINER,
+            cwd=tmp_path,
+            public_override=tmp_path / recreate.PUBLIC_DEV_OVERRIDE_REL,
+        )
 
 
 def test_auth_probe_disables_proxy_and_redirects(monkeypatch) -> None:

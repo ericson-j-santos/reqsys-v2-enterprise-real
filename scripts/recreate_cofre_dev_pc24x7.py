@@ -454,7 +454,7 @@ def execute(args: argparse.Namespace) -> dict:
     except RecreateError as exc:
         state = exc.mutation_state
         if mutation_state != "not_attempted" and state == "not_attempted":
-            state = "attempted_unverified"
+            state = mutation_state
         raise RecreateError(str(exc), mutation_state=state) from None
     except Exception:
         raise RecreateError(
