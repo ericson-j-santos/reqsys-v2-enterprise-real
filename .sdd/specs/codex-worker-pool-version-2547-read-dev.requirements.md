@@ -25,7 +25,7 @@ Depois da integração da PR #20 do engineering-worker-pool, verificar se a vers
 9. Exigir controles positivos, negativos e idempotentes no Pre-PR Readiness Gate do SHA final; criar PR somente após READY_FOR_PR=passed e merge exclusivamente após gates obrigatórios verdes no HEAD corrente.
 10. Quando a versão física estiver atrasada, somente preparar o plano DEV com compatibilidade de banco, backup, rollback, CI/E2E e autorização independente de deploy/restart. Não alterar o runtime nesta entrega.
 11. Se a versão nova já estiver disponível, não atualizar o container; reportar a razão exata de inelegibilidade, sem confundir precheck com claim.
-12. O arquivo emitido por `scripts/codex_worker_pool_version_2547_probe_dev.py` deve coincidir exatamente com `EVIDENCE_REL` e `upload-artifact` do job `version-2547-read`, em `artifacts/codex-worker-pool-version-2547-read-dev/evidence.json`; o teste de regressão deve rejeitar o caminho divergente antigo.
+12. O script e o workflow DEV devem compartilhar o caminho exato `artifacts/codex-worker-pool-version-2547-read-dev/evidence.json` para escrita, validação e upload. Um teste de regressão deve provar a igualdade dos caminhos e a gravação do JSON; a validação física só estará concluída quando o artifact estiver presente e puder ter identidade, SHA e integridade confirmados.
 
 ## Proibições
 Nenhum novo enqueue, claim, requeue, leitura de snapshot, rotação de token, reinício, deploy, alteração HML/STG/PROD ou custo adicional. Falhar fechado diante de bloqueio.

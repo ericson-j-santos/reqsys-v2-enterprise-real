@@ -204,6 +204,24 @@ def test_redirect_is_refused_and_loopback_does_not_use_proxy():
     assert "urlopen(" not in source
 
 
+def test_evidence_filename_matches_workflow_validation_and_upload():
+    expected = Path("artifacts") / "codex-worker-pool-version-2547-read-dev" / "evidence.json"
+    assert probe.EVIDENCE == ROOT / expected
+    workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text()
+    normalized = workflow.replace(chr(92), "/")
+    assert "EVIDENCE_REL: artifacts/codex-worker-pool-version-2547-read-dev/evidence.json" in normalized
+    assert "path: ${{ steps.session.outputs.target_path }}/artifacts/codex-worker-pool-version-2547-read-dev/evidence.json" in normalized
+    assert "VERSION_PROBE_EVIDENCE_MISSING" in workflow
+
+
+def test_evidence_is_written_to_expected_location_without_runtime_activity(monkeypatch, tmp_path):
+    path = tmp_path / "artifacts" / "codex-worker-pool-version-2547-read-dev" / "evidence.json"
+    monkeypatch.setattr(probe, "EVIDENCE", path)
+    record = {"result": "WORKER_POOL_VERSION_PROBE_OK", "runtime_mutated_by_probe": False}
+    probe._evidence(record)
+    assert path.exists()
+    assert json.loads(path.read_text(encoding="utf-8")) == record
+
 def test_workflow_and_owner_command_are_fixed_and_non_deploying():
     workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text()
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text()
@@ -224,12 +242,51 @@ def test_workflow_and_owner_command_are_fixed_and_non_deploying():
     assert "-f worker_id=" not in gateway
 
 
-def test_version_probe_evidence_location_matches_workflow():
+def test_version_2547_evidence_contract_rejects_drift_duplicates():
+    """Reject duplicate env keys and upload paths drifting from the physical probe."""
+    import re
+
     workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text(encoding="utf-8")
-    assert workflow.count("\n  version-2547-read:\n") == 1
-    section = workflow.split("\n  version-2547-read:\n", 1)[1]
-    lines = [line.strip() for line in section.splitlines() if line.strip().startswith("EVIDENCE_REL: ")]
-    assert len(lines) == 1
-    declared = lines[0].split("EVIDENCE_REL: ", 1)[1]
-    assert (ROOT / Path(*declared.split("\\"))) == probe.EVIDENCE
-    assert ("path: ${{ steps.session.outputs.target_path }}\\" + declared) in section
+    expected = r"artifacts\codex-worker-pool-version-2547-read-dev\evidence.json"
+    upload_root = "${{ steps.session.outputs.target_path }}" + chr(92)
+
+    def validate(content: str) -> None:
+        jobs = re.findall(
+            r"(?ms)^  version-2547-read:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+            content,
+        )
+        assert len(jobs) == 1
+        job = jobs[0]
+        declared = re.findall(r"(?m)^      EVIDENCE_REL: ([^\r\n]+)$", job)
+        assert declared == [expected]
+        assert probe.EVIDENCE == ROOT / Path(*declared[0].split(chr(92)))
+        assert "Join-Path $env:TARGET_PATH $env:EVIDENCE_REL" in job
+        uploads = [
+            line.strip().split("path: ", 1)[1]
+            for line in job.splitlines()
+            if line.strip().startswith("path: " + upload_root)
+        ]
+        assert uploads == [upload_root + expected]
+        assert job.count("uses: actions/upload-artifact@") == 1
+
+    validate(workflow)
+    validate(workflow)  # Read-only and idempotent.
+    drifted_env = workflow.replace(
+        "      EVIDENCE_REL: " + expected,
+        "      EVIDENCE_REL: " + r"artifacts\codex-worker-pool-version-read-dev\evidence.json",
+        1,
+    )
+    duplicate_env = workflow.replace(
+        "      EVIDENCE_REL: " + expected,
+        "      EVIDENCE_REL: " + expected + "\n      EVIDENCE_REL: " + expected,
+        1,
+    )
+    drifted_upload = workflow.replace(
+        "path: " + upload_root + expected,
+        "path: " + upload_root + r"artifacts\unexpected\evidence.json",
+        1,
+    )
+    for mutation in (drifted_env, duplicate_env, drifted_upload):
+        assert mutation != workflow  # The negative control must actually mutate.
+        with pytest.raises(AssertionError):
+            validate(mutation)

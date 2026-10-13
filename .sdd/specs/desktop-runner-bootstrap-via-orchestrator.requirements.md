@@ -30,6 +30,11 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
 19. O snapshot deve diferenciar `status=measured` de `status=unavailable`. Uma falha do inventário nunca transforma pickup verdadeiro em aprovação HML e nunca revela detalhes de exceção. Nenhuma métrica individual comprova SQL ativo, Docker daemon, autorização de provisionamento, isolamento de recursos ou prontidão HML.
 20. O escopo continua restrito ao runner `DESKTOP-PDQK954` e ao SHA/repositório exatos. Host incorreto deve ser rejeitado antes da coleta. Nenhum novo workflow, modo de dispatch, configuração de host, serviço, credencial, banco ou recurso de produção é criado/modificado.
 
+21. Uma prova **separada** de runtime anexa `sql_hml_host_inventory` ao mesmo canário, sem transformar capacidade anterior em autorização HML. O coletor usa somente leituras Win32/registro e operações Docker de listagem/versão com argumentos fixos, `shell=False`, timeout, sem login/pull/start/stop/inspect/volume read.
+22. Docker é consultado exclusivamente por pipes locais do Windows e um executável Docker de origem previamente permitida; configurações externas `DOCKER_HOST`, contextos remotos e dados de autenticação são ignorados. A distinção `engine_verified=true` requer versão real do servidor, não presença da CLI nem exit code de uma listagem isolada.
+23. Contêineres, volumes, redes e serviços Windows são descritos de modo restrito com estados, classes, hashes de identificadores e portas TCP publicadas, sem revelar nomes completos, URLs, credenciais, caminhos privados ou conteúdo de volumes. Leitura parcial e falha produzem `status=partial|unavailable`, jamais o estado `measured` por engano.
+24. O canário continua fail-closed, vinculando a leitura física à identidade do runner e SHA exatos; o workflow valida presença e ausência de permissão HML, produção e segredos. Os testes incluem caso positivo, daemon indisponível, Windows engine, host incorreto, erro, limites, segredo, contexto remoto e replay sem efeito. Não criar novo workflow, serviço, banco, credencial ou porta.
+
 ## Critérios de aceite
 
 O fluxo só é concluído quando houver evidência atual e vinculada ao mesmo ciclo operacional de:
