@@ -1,0 +1,19 @@
+{
+  "feature_name": "teams-notification-material-evidence",
+  "project": "ReqSys v2 Enterprise — GitHub Actions / Teams notifications",
+  "created_at": "2026-10-12",
+  "updated_at": "2026-10-12",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "increment_type": "gap_fix",
+  "gap_reference": "OPS-GAP-38316316058",
+  "description": "Exige evidência material para notificar triagem e evidência de entrega real para recuperar incidentes do Teams.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_teams_notification_event_policy.py",
+      "tests/test_teams_commit_notification_fallback_contract.py"
+    ],
+    "evidence_contract": "A implementação local valida critérios, rota oficial e falsos positivos; recuperação funcional exige novo run pós-integração cujo job Enviar commit ao Teams tenha run ID e HEAD SHA coincidentes e conclua com sucesso o marcador Confirmar entrega real. Apenas motivos allowlisted são material_noop. API indisponível ou paginação incompleta gera observation_unavailable separado."
+  },
+  "risk": {"production": false, "deploy": false, "secrets": false, "scope": "teams-notification-governance"}
+}

@@ -459,6 +459,13 @@ jobs:
           from urllib.parse import urlsplit
           from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
+          from scripts.teams_notification_event_policy import (
+              delivery_result_decision,
+              remediation_decision,
+              suppression_class,
+              triage_decision,
+          )
+
           event = json.loads(Path(os.environ["EVENT_PATH"]).read_text(encoding="utf-8"))
           repository = os.environ["REPOSITORY"]
           sha = os.environ["SHA"]
@@ -571,7 +578,17 @@ jobs:
               source_conclusion = str(source.get("conclusion") or "unknown")
 
               if source_name == "Ollama CI Triage":
-                  evidence = artifact_json(source_run_id, "ollama-ci-triage-", "evidence.json") or {}
+                  evidence = artifact_json(source_run_id, "ollama-ci-triage-", "evidence.json")
+                  allowed, skip_reason = triage_decision(source_conclusion, evidence)
+                  if not allowed:
+                      skip_class = suppression_class(skip_reason)
+                      with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                          output.write(f"notification_skipped={'true' if skip_class == 'material_noop' else 'false'}\n")
+                          output.write(f"skip_class={skip_class}\n")
+                          output.write(f"skip_reason={skip_reason}\n")
+                      if skip_class != "material_noop":
+                          raise SystemExit(f"Evidência de triagem inválida: {skip_reason}")
+                      raise SystemExit(0)
                   pr = evidence.get("pr") if isinstance(evidence.get("pr"), dict) else {}
                   triage = evidence.get("triage") if isinstance(evidence.get("triage"), dict) else {}
                   pool = evidence.get("worker_pool") if isinstance(evidence.get("worker_pool"), dict) else {}
@@ -601,13 +618,18 @@ jobs:
                       f"[Abrir triagem]({source_url})"
                   )
               elif source_name == "PR CI Remediation":
-                  report = artifact_json(source_run_id, "pr-ci-remediation-evidence-", "report.json") or {}
-                  reruns = int(report.get("reruns_executed") or 0)
-                  if reruns <= 0:
+                  report = artifact_json(source_run_id, "pr-ci-remediation-evidence-", "report.json")
+                  allowed, skip_reason = remediation_decision(report)
+                  if not allowed:
+                      skip_class = suppression_class(skip_reason)
                       with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                          output.write("notification_skipped=true\n")
-                          output.write("skip_reason=no_material_remediation\n")
+                          output.write(f"notification_skipped={'true' if skip_class == 'material_noop' else 'false'}\n")
+                          output.write(f"skip_class={skip_class}\n")
+                          output.write(f"skip_reason={skip_reason}\n")
+                      if skip_class != "material_noop":
+                          raise SystemExit(f"Evidência de remediação inválida: {skip_reason}")
                       raise SystemExit(0)
+                  reruns = int(report.get("reruns_executed") or 0)
                   pr_number = report.get("target_pr_number")
                   title = f"ReqSys — PR #{pr_number} CI reexecutado" if pr_number else "ReqSys — CI reexecutado"
                   subtitle = f"{reruns} reexecução(ões) transitória(s) disparada(s) de forma governada."
@@ -624,6 +646,7 @@ jobs:
               else:
                   with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                       output.write("notification_skipped=true\n")
+                      output.write("skip_class=material_noop\n")
                       output.write("skip_reason=workflow_run_not_supported\n")
                   raise SystemExit(0)
           elif event_name == "schedule":
@@ -784,25 +807,48 @@ jobs:
           if delivery_mode == "gateway":
               result = json.loads(evidence_path.read_text(encoding="utf-8"))
               evidence_path.unlink(missing_ok=True)
-              result["success"] = bool(result.get("entregue"))
               result["status_code"] = result.get("status_code") or result.get("provider_response", {}).get("status_code")
               result["correlation_id"] = result.get("correlation_id") or result.get("provider_response", {}).get("correlation_id")
           else:
               result = json.loads(completed.stdout)
 
-          if not result.get("success"):
-              raise SystemExit(f"Teams não confirmou envio pela rota {delivery_mode}: {result}")
-          status_code = result.get("status_code")
-          if status_code is not None and not 200 <= int(status_code) < 300:
-              raise SystemExit(f"Teams retornou HTTP inesperado: {status_code}")
+          delivered, delivery_reason = delivery_result_decision(delivery_mode, result)
+          if not delivered:
+              raise SystemExit(
+                  f"Teams não confirmou envio pela rota {delivery_mode}: {delivery_reason}"
+              )
+          status_code = result["status_code"]
 
           correlation_id = result.get("correlation_id", "n/a")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("notification_skipped=false\n")
+              output.write("delivered=true\n")
+              output.write("dry_run=false\n")
+              output.write("suppressed=false\n")
               output.write(f"delivery_route={delivery_mode}\n")
               output.write(f"correlation_id={correlation_id}\n")
               output.write(f"status_code={status_code or 'accepted'}\n")
           PY
+
+      - name: Confirmar entrega real
+        if: steps.notify.outputs.delivered == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.notify.outputs.notification_skipped }}" != "true"
+          test "${{ steps.notify.outputs.dry_run }}" == "false"
+          test "${{ steps.notify.outputs.suppressed }}" == "false"
+          [[ "${{ steps.notify.outputs.status_code }}" =~ ^2[0-9][0-9]$ ]]
+
+      - name: Confirmar supressão sem mudança material
+        if: steps.notify.outputs.notification_skipped == 'true' && steps.notify.outputs.skip_class == 'material_noop'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ steps.notify.outputs.skip_reason }}" in
+            source_conclusion_skipped|source_conclusion_cancelled|no_material_remediation|workflow_run_not_supported) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Registrar evidência
         if: always()
