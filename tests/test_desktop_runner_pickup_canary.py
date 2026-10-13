@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -249,3 +251,81 @@ def test_wrong_host_never_calls_runtime_probe(tmp_path: Path) -> None:
             runtime_probe=runtime,
         )
     runtime.assert_not_called()
+
+
+def test_runtime_probe_loads_with_isolated_python(tmp_path: Path) -> None:
+    """Reproduce the portable Python ._pth layout: script directory absent."""
+    isolated_code = """
+import importlib.util
+import json
+import os
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("isolated_desktop_canary", sys.argv[1])
+assert spec is not None and spec.loader is not None
+subject = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(subject)
+os.environ.update({
+    "RUNNER_NAME": subject.TARGET_HOST,
+    "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "GITHUB_SHA": "f" * 40,
+})
+evidence_path = Path(sys.argv[2])
+result = subject.execute(
+    confirm=subject.CONFIRM,
+    evidence_file=evidence_path,
+    host=subject.TARGET_HOST,
+    platform="nt",
+    capacity_probe=lambda: {"status": "measured"},
+)
+runtime = result["sql_hml_host_inventory"]
+assert runtime["status"] in {"measured", "partial", "unavailable"}
+assert runtime.get("reason") != "runtime_probe_failed", runtime
+assert runtime["hml_provisioning_authorized"] is False
+assert runtime["production_touched"] is False
+assert runtime["secrets_read"] is False
+assert json.loads(evidence_path.read_text(encoding="utf-8")) == result
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            isolated_code,
+            str(Path(subject.__file__).resolve()),
+            str(tmp_path / "isolated-evidence.json"),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr[-800:]
+
+
+def test_runtime_probe_import_failure_is_sanitized(tmp_path: Path) -> None:
+    env = {
+        "RUNNER_NAME": subject.TARGET_HOST,
+        "GITHUB_REPOSITORY": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "GITHUB_SHA": "f" * 40,
+    }
+    evidence_path = tmp_path / "result.json"
+    with (
+        patch.dict(subject.os.environ, env),
+        patch.object(
+            subject,
+            "_load_runtime_probe",
+            side_effect=OSError("secret=never-print-this"),
+        ),
+    ):
+        result = subject.execute(
+            confirm=subject.CONFIRM,
+            evidence_file=evidence_path,
+            host=subject.TARGET_HOST,
+            platform="nt",
+            capacity_probe=lambda: {"status": "measured"},
+        )
+    assert result["sql_hml_host_inventory"]["status"] == "unavailable"
+    assert result["sql_hml_host_inventory"]["reason"] == "runtime_probe_failed"
+    assert "never-print-this" not in evidence_path.read_text(encoding="utf-8")
