@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -308,3 +311,74 @@ def test_invalid_mode_preserves_configuration_category(mode: str) -> None:
     assert report["passed"] is False
     assert report["source"] == "configuration"
     assert report["source_status"].startswith("sql_validation_mode_")
+
+
+def test_cli_materializes_sanitized_summary_when_source_is_missing(tmp_path) -> None:
+    missing = tmp_path / "private-location" / "source.json"
+    output = tmp_path / "capture-summary.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "evaluate_integration_sql_capture_contract.py"),
+            "--mode",
+            "direct_dsn",
+            "--source",
+            str(missing),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    serialized = json.dumps(report)
+    assert completed.returncode == 1
+    assert report["passed"] is False
+    assert report["source_status"] == "source_evidence_missing"
+    assert "source_evidence_missing" in report["failed_checks"]
+    assert str(missing) not in serialized
+    assert str(missing) not in completed.stdout
+    assert str(missing) not in completed.stderr
+
+
+def test_upstream_failure_remains_blocked_by_evaluator() -> None:
+    from scripts.integration_sql_capture_preflight import resolve_preflight
+
+    source, outputs = resolve_preflight(
+        mode="power_platform_gateway",
+        upstream={
+            "python_setup": "success",
+            "dependencies": "failure",
+            "contract_tests": "skipped",
+        },
+        tenant_configured=False,
+        subscription_configured=False,
+        actual_vault="",
+        expected_vault="kv-reqsys-ccp",
+        secret_name="",
+        reader_configured=False,
+    )
+    report = evaluate(
+        mode=outputs["mode"], source=source, locator=None, **RUN_CONTEXT
+    )
+
+    assert source["status"] == "upstream_validation_failed"
+    assert report["passed"] is False
+    assert "direct_dsn_not_requested" in report["failed_checks"]
+
+
+def test_workflow_passes_mode_to_consolidation_through_environment() -> None:
+    document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = document["jobs"]["capture"]["steps"]
+    consolidated = next(
+        step
+        for step in steps
+        if step.get("name") == "Gerar evidência consolidada sanitizada"
+    )
+
+    assert consolidated["env"]["SQL_VALIDATION_MODE"] == "${{ steps.sql-mode.outputs.mode }}"
+    assert consolidated["env"]["DSN_RESOLVED"] == "${{ steps.key-vault.outputs.dsn_resolved }}"
+    assert '--mode "$SQL_VALIDATION_MODE"' in consolidated["run"]
+    assert '${{ steps.sql-mode.outputs.mode }}' not in consolidated["run"]
+    assert '${{ steps.key-vault.outputs.dsn_resolved }}' not in consolidated["run"]

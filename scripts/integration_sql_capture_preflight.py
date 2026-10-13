@@ -9,6 +9,8 @@ from pathlib import Path
 
 SUPPORTED_MODES = {"direct_dsn", "power_platform_gateway"}
 VALID_OUTCOMES = {"success", "failure", "skipped", "cancelled"}
+INVALID_MODE_MARKER = "invalid"
+EMPTY_MODE_MARKER = "empty"
 
 
 def _bool(raw: str) -> bool:
@@ -39,7 +41,14 @@ def resolve_preflight(
     secret_name: str,
     reader_configured: bool,
 ) -> tuple[dict, dict[str, str]]:
-    normalized = mode.strip().lower()
+    raw_mode = mode.strip().lower()
+    normalized = (
+        raw_mode
+        if raw_mode in SUPPORTED_MODES
+        else EMPTY_MODE_MARKER
+        if not raw_mode
+        else INVALID_MODE_MARKER
+    )
     evidence = initial_evidence()
     outcomes = {
         name: value if value in VALID_OUTCOMES else "unknown"
@@ -48,8 +57,8 @@ def resolve_preflight(
     upstream_ready = bool(outcomes) and all(value == "success" for value in outcomes.values())
     outputs = {
         "mode": normalized,
-        "mode_supported": str(normalized in SUPPORTED_MODES).lower(),
-        "direct_dsn_required": str(normalized == "direct_dsn").lower(),
+        "mode_supported": str(raw_mode in SUPPORTED_MODES).lower(),
+        "direct_dsn_required": str(raw_mode == "direct_dsn").lower(),
         "preflight_ready": "false",
         "upstream_ready": str(upstream_ready).lower(),
         "azure_client_id": "",
@@ -57,14 +66,14 @@ def resolve_preflight(
     if not upstream_ready:
         evidence.update(status="upstream_validation_failed", upstream=outcomes)
         return evidence, outputs
-    if normalized not in SUPPORTED_MODES:
+    if raw_mode not in SUPPORTED_MODES:
         evidence["status"] = (
             "sql_validation_mode_unconfigured"
-            if not normalized
+            if normalized == EMPTY_MODE_MARKER
             else "sql_validation_mode_invalid"
         )
         return evidence, outputs
-    if normalized == "power_platform_gateway":
+    if raw_mode == "power_platform_gateway":
         evidence.update(
             source="power_platform_gateway",
             status="direct_dsn_not_required",

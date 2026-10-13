@@ -172,16 +172,18 @@ jobs:
         shell: bash
         env:
           PYTHONPATH: .
+          SQL_VALIDATION_MODE: ${{ steps.sql-mode.outputs.mode }}
+          DSN_RESOLVED: ${{ steps.key-vault.outputs.dsn_resolved }}
         run: |
           set -euo pipefail
           locator_arg=()
-          if [ "${{ steps.key-vault.outputs.dsn_resolved }}" = "true" ]; then
+          if [ "$DSN_RESOLVED" = "true" ]; then
             locator_arg=(--locator "$EVIDENCE_DIR/sql-locator.json")
           fi
           # A decisao vinculante fica no gate final; aqui apenas materializamos
           # a evidencia para que o artefato seja publicado mesmo quando bloqueia.
           python scripts/evaluate_integration_sql_capture_contract.py \
-            --mode "${{ steps.sql-mode.outputs.mode }}" \
+            --mode "$SQL_VALIDATION_MODE" \
             --source "$EVIDENCE_DIR/source.json" \
             "${locator_arg[@]}" \
             --output "$EVIDENCE_DIR/capture-summary.json" \

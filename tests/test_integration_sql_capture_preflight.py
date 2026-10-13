@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from scripts.integration_sql_capture_preflight import (
     initial_evidence,
     record_oidc_outcome,
@@ -133,3 +135,43 @@ def test_unknown_oidc_outcome_never_claims_login_failure_or_success() -> None:
     result = record_oidc_outcome(ready, "unknown")
     assert result["status"] == "oidc_outcome_unknown"
     assert result["dsn_resolved"] is False
+
+
+def test_hostile_mode_is_reduced_to_constant_marker_in_cli_outputs(tmp_path) -> None:
+    evidence_path = tmp_path / "source.json"
+    github_output = tmp_path / "github-output.txt"
+    sentinel = tmp_path / "must-not-exist"
+    hostile = f"gateway\\nmode=$(touch {sentinel})\\r$GITHUB_ENV"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/integration_sql_capture_preflight.py",
+            "resolve",
+            "--output",
+            str(evidence_path),
+            "--mode",
+            hostile,
+            "--python-setup-outcome",
+            "success",
+            "--dependencies-outcome",
+            "success",
+            "--contract-tests-outcome",
+            "success",
+            "--github-output",
+            str(github_output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    output = github_output.read_text(encoding="utf-8")
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    assert evidence["status"] == "sql_validation_mode_invalid"
+    assert output.splitlines()[0] == "mode=invalid"
+    assert hostile not in output
+    assert "$(" not in output
+    assert not sentinel.exists()
