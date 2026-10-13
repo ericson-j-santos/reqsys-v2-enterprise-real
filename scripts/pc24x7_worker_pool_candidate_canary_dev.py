@@ -134,6 +134,39 @@ def safe_staging(source: Path, target: Path) -> None:
             "candidate_context_invalid")
 
 
+
+def _canonical_windows_bind_source(value: str) -> str | None:
+    """Accept only drive paths and the documented Docker Desktop drive translations."""
+    if not isinstance(value, str) or not value or "\x00" in value:
+        return None
+    normalized = value.replace("\\", "/")
+    if normalized.startswith("//?/"):
+        normalized = normalized[4:]
+    for prefix in ("/run/desktop/mnt/host/", "/host_mnt/"):
+        if normalized.casefold().startswith(prefix):
+            suffix = normalized[len(prefix):]
+            if re.fullmatch(r"[a-zA-Z]/[^/]+(?:/[^/]+)*", suffix) is None:
+                return None
+            normalized = suffix[0] + ":/" + suffix[2:]
+            break
+    if re.fullmatch(r"[a-zA-Z]:/[^/]+(?:/[^/]+)*", normalized) is None:
+        return None
+    if any(part in {".", ".."} for part in normalized[3:].split("/")):
+        return None
+    return normalized.casefold()
+
+
+def _same_token_mount_source(observed: str, expected: str) -> bool:
+    """Compare a Docker bind source to a fixed host file, never by basename alone."""
+    canonical_expected = _canonical_windows_bind_source(expected)
+    if canonical_expected is not None:
+        return _canonical_windows_bind_source(observed) == canonical_expected
+    if os.name == "nt" or not isinstance(observed, str):
+        return False
+    candidate = Path(observed)
+    return candidate.is_absolute() and candidate.resolve() == Path(expected).resolve()
+
+
 def candidate_identity(payload: dict[str, Any], *, image: str, name: str,
                        volume: str, token_file: Path) -> None:
     """Validate the actual Docker object before sending any test request."""
@@ -152,10 +185,13 @@ def candidate_identity(payload: dict[str, Any], *, image: str, name: str,
             and ports[0].get("HostPort") == "18098",
             "candidate_runtime_or_port_invalid")
     require(len(mounts) == 2 and data.get("Type") == "volume"
-            and data.get("Name") == volume and data.get("RW") is True
-            and token.get("Type") == "bind" and token.get("RW") is False
-            and Path(str(token.get("Source") or "")).resolve() == token_file.resolve(),
-            "candidate_mount_isolation_invalid")
+            and data.get("Name") == volume and data.get("RW") is True,
+            "candidate_data_mount_invalid")
+    require(token.get("Type") == "bind" and token.get("RW") is False,
+            "candidate_token_mount_flags_invalid")
+    require(_same_token_mount_source(str(token.get("Source") or ""),
+                                     str(token_file.resolve())),
+            "candidate_token_mount_source_invalid")
 
 
 def legacy_readback() -> tuple[str, str, dict[str, Any]]:
