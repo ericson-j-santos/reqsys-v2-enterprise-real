@@ -119,13 +119,21 @@ def test_direct_auth_true_never_completes(monkeypatch) -> None:
 
 
 def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(recreate.os, "name", "nt")
+    monkeypatch.setattr(recreate.socket, "gethostname", lambda: recreate.EXPECTED_HOST)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
     monkeypatch.setattr(
         recreate,
         "run",
         lambda *_args, **_kwargs: SimpleNamespace(stdout='"tcp://remote:2375"'),
     )
     with pytest.raises(recreate.RecreateError, match="docker_remote_context_blocked"):
-        recreate.validate_local_docker("container", cwd=tmp_path)
+        recreate.validate_local_docker(
+            "container",
+            cwd=tmp_path,
+            public_override=tmp_path / recreate.PUBLIC_DEV_OVERRIDE_REL,
+        )
     with pytest.raises(recreate.RecreateError, match="public_dev_override_path_unsafe"):
         recreate.validate_public_override(
             tmp_path,
@@ -194,3 +202,118 @@ def test_public_path_rejects_traversal_before_metadata(monkeypatch, tmp_path: Pa
     candidate = Path(str(tmp_path / "safe") + r"\..\docker-compose.pc24x7-public-dev.yml")
     with pytest.raises(recreate.RecreateError, match="public_dev_override_path_unsafe"):
         recreate.validate_public_override(tmp_path, candidate, "a" * 40)
+
+
+
+def _execute_args(tmp_path: Path) -> argparse.Namespace:
+    root = tmp_path / "repo"
+    root.mkdir()
+    for name in ("admin.yml", "teams.yml", "secret.txt", recreate.PUBLIC_DEV_OVERRIDE_REL.name):
+        (root / name).write_text("services: {}\n", encoding="utf-8")
+    return argparse.Namespace(
+        expected_sha="a" * 40,
+        runtime_profile=recreate.PUBLIC_RUNTIME_PROFILE,
+        repo_root=root,
+        public_dev_override=root / recreate.PUBLIC_DEV_OVERRIDE_REL,
+        project=recreate.DEFAULT_PROJECT,
+        container=recreate.DEFAULT_CONTAINER,
+        secret_file=root / "secret.txt",
+        admin_override=root / "admin.yml",
+        teams_override=root / "teams.yml",
+        health_timeout=1,
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "code"),
+    [
+        ({"RuntimeSha": "b" * 40}, "runtime_sha_mismatch"),
+        ({"AllowDemoLogin": "true"}, "runtime_container_demo_login_not_false"),
+        ({"Labels": {}}, "compose_project_mismatch"),
+        ({"Mounts": []}, "secret_mount_not_read_only"),
+    ],
+)
+def test_post_recreate_failures_preserve_mutation_state(
+    monkeypatch, tmp_path: Path, change: dict, code: str
+) -> None:
+    args = _execute_args(tmp_path)
+    root = args.repo_root
+    backend = str((root / "backend").resolve())
+    item = {
+        "RuntimeSha": args.expected_sha,
+        "AllowDemoLogin": "false",
+        "Labels": {
+            "com.docker.compose.project": args.project,
+            "com.docker.compose.service": "api",
+        },
+        "Mounts": [
+            {"Destination": "/run/secrets/cofre_keyring_passphrase", "RW": False},
+            {"Destination": "/data", "Type": "volume", "RW": True},
+            {"Destination": "/app", "Source": backend},
+        ],
+    }
+    item.update(change)
+    monkeypatch.setattr(recreate, "git_head", lambda _root: args.expected_sha)
+    monkeypatch.setattr(
+        recreate, "validate_public_override", lambda *_args: args.public_dev_override
+    )
+    monkeypatch.setattr(recreate, "validate_local_docker", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        recreate,
+        "run",
+        lambda command, **_kwargs: SimpleNamespace(
+            stdout=(
+                '{"services":{"api":{"environment":{"ALLOW_DEMO_LOGIN":"false"}}}}'
+                if "config" in command
+                else ""
+            ),
+            returncode=0,
+        ),
+    )
+    monkeypatch.setattr(recreate, "wait_healthy", lambda *_args, **_kwargs: "healthy")
+    monkeypatch.setattr(recreate, "inspect_container", lambda *_args, **_kwargs: item)
+    monkeypatch.setattr(recreate, "probe_auth_config", lambda: False)
+
+    with pytest.raises(recreate.RecreateError, match=code) as captured:
+        recreate.execute(args)
+
+    assert captured.value.mutation_state == "attempted_unverified"
+    assert captured.value.mutation_performed is True
+
+
+def test_compose_up_timeout_is_mutation_unknown(monkeypatch, tmp_path: Path) -> None:
+    args = _execute_args(tmp_path)
+    monkeypatch.setattr(recreate, "git_head", lambda _root: args.expected_sha)
+    monkeypatch.setattr(
+        recreate, "validate_public_override", lambda *_args: args.public_dev_override
+    )
+    monkeypatch.setattr(recreate, "validate_local_docker", lambda *_args, **_kwargs: None)
+
+    def fake_run(command, **_kwargs):
+        if "config" in command:
+            return SimpleNamespace(
+                stdout='{"services":{"api":{"environment":{"ALLOW_DEMO_LOGIN":"false"}}}}',
+                returncode=0,
+            )
+        raise recreate.RecreateError("command_timeout")
+
+    monkeypatch.setattr(recreate, "run", fake_run)
+    with pytest.raises(recreate.RecreateError, match="command_timeout") as captured:
+        recreate.execute(args)
+    assert captured.value.mutation_state == "attempted_unknown"
+
+
+def test_reparse_ancestor_is_checked_before_resolve(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    overlay = root / recreate.PUBLIC_DEV_OVERRIDE_REL
+    checked = []
+
+    monkeypatch.setattr(Path, "exists", lambda _self: True)
+    monkeypatch.setattr(
+        recreate,
+        "_has_reparse_point",
+        lambda path: checked.append(path) or path == root.parent,
+    )
+    with pytest.raises(recreate.RecreateError, match="public_dev_override_reparse_blocked"):
+        recreate._lexical_public_override(root, overlay)
+    assert root.parent in checked

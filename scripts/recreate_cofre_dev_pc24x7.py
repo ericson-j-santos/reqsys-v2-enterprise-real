@@ -6,6 +6,7 @@ import json
 import os
 import re
 import stat
+import socket
 import subprocess
 import sys
 import time
@@ -17,9 +18,9 @@ DEFAULT_PROJECT = "wt-pc24x7-piloto"
 DEFAULT_CONTAINER = "wt-pc24x7-piloto-api-1"
 DEFAULT_SECRET_FILE = Path(r"C:\ProgramData\ReqSys\secrets\cofre-keyring-passphrase.txt")
 PUBLIC_RUNTIME_PROFILE = "pc24x7-public-dev"
-LOCAL_DEMO_PROFILE = "teams-local-demo"
 PUBLIC_DEV_OVERRIDE_REL = Path("docker-compose.pc24x7-public-dev.yml")
 DEV_API_PORT = "8210"
+EXPECTED_HOST = "DESKTOP-PDQK954"
 
 
 class RecreateError(RuntimeError):
@@ -78,10 +79,23 @@ def inspect_container(container: str, *, cwd: Path) -> dict:
             container, '{{index .Config.Labels "com.docker.compose.service"}}', cwd=cwd
         ),
     }
+    labels["com.docker.compose.project.working_dir"] = _inspect_value(
+        container,
+        '{{index .Config.Labels "com.docker.compose.project.working_dir"}}',
+        cwd=cwd,
+    )
+    labels["com.docker.compose.project.config_files"] = _inspect_value(
+        container,
+        '{{index .Config.Labels "com.docker.compose.project.config_files"}}',
+        cwd=cwd,
+    )
     return {
         "Mounts": mounts,
         "Labels": labels,
         "RuntimeSha": _selected_value(container, "GITHUB_SHA", cwd=cwd),
+        "AllowDemoLogin": _selected_value(
+            container, "ALLOW_DEMO_LOGIN", cwd=cwd
+        ),
     }
 
 
@@ -108,29 +122,36 @@ def _has_reparse_point(path: Path) -> bool:
     )
 
 
+def _validate_no_reparse_ancestors(path: Path) -> None:
+    absolute = Path(os.path.abspath(path))
+    chain = [absolute, *absolute.parents]
+    for item in reversed(chain):
+        if not item.exists():
+            raise RecreateError("public_dev_override_metadata_unreadable")
+        if _has_reparse_point(item):
+            raise RecreateError("public_dev_override_reparse_blocked")
+
+
 def _lexical_public_override(repo_root: Path, candidate: Path) -> Path:
+    root_raw = str(repo_root)
     raw = str(candidate)
-    if (
-        not raw
-        or raw.startswith(("\\\\", "//"))
-        or re.match(r"^[A-Za-z]:[^\\/]", raw)
-        or re.search(r"[\\/]{2,}", raw)
-        or ".." in PureWindowsPath(raw).parts
-        or ":" in raw[2:]
-    ):
-        raise RecreateError("public_dev_override_path_unsafe")
+    for value in (root_raw, raw):
+        if (
+            not value
+            or value.startswith(("\\\\", "//"))
+            or re.match(r"^[A-Za-z]:[^\\/]", value)
+            or re.search(r"[\\/]{2,}", value)
+            or ".." in PureWindowsPath(value).parts
+            or ":" in value[2:]
+        ):
+            raise RecreateError("public_dev_override_path_unsafe")
     root_abs = Path(os.path.abspath(repo_root))
     candidate_abs = Path(os.path.abspath(candidate))
     expected_abs = root_abs / PUBLIC_DEV_OVERRIDE_REL
     if os.path.normcase(str(candidate_abs)) != os.path.normcase(str(expected_abs)):
         raise RecreateError("public_dev_override_not_canonical")
-    cursor = root_abs
-    if _has_reparse_point(cursor):
-        raise RecreateError("public_dev_override_reparse_blocked")
-    for part in PUBLIC_DEV_OVERRIDE_REL.parts:
-        cursor = cursor / part
-        if _has_reparse_point(cursor):
-            raise RecreateError("public_dev_override_reparse_blocked")
+    _validate_no_reparse_ancestors(root_abs)
+    _validate_no_reparse_ancestors(candidate_abs)
     return candidate_abs
 
 
@@ -162,7 +183,9 @@ def _clean_child_env(expected_sha: str) -> dict[str, str]:
     return child
 
 
-def validate_local_docker(container: str, *, cwd: Path) -> None:
+def validate_local_docker(container: str, *, cwd: Path, public_override: Path) -> None:
+    if os.name != "nt" or socket.gethostname().casefold() != EXPECTED_HOST.casefold():
+        raise RecreateError("public_runtime_host_not_allowed")
     if os.environ.get("DOCKER_HOST") or os.environ.get("DOCKER_CONTEXT"):
         raise RecreateError("docker_environment_override_blocked")
     endpoint_raw = run(
@@ -197,6 +220,32 @@ def validate_local_docker(container: str, *, cwd: Path) -> None:
     observed_name = _inspect_value(ids[0], "{{.Name}}", cwd=cwd).lstrip("/")
     if observed_name != container:
         raise RecreateError("public_api_container_identity_mismatch")
+    labels = {
+        name: _inspect_value(
+            ids[0], f'{{{{index .Config.Labels "{name}"}}}}', cwd=cwd
+        )
+        for name in (
+            "com.docker.compose.project",
+            "com.docker.compose.service",
+            "com.docker.compose.project.working_dir",
+            "com.docker.compose.project.config_files",
+        )
+    }
+    if (
+        labels["com.docker.compose.project"] != DEFAULT_PROJECT
+        or labels["com.docker.compose.service"] != "api"
+    ):
+        raise RecreateError("public_runtime_compose_identity_mismatch")
+    observed_root = Path(os.path.abspath(labels["com.docker.compose.project.working_dir"]))
+    if os.path.normcase(str(observed_root)) != os.path.normcase(str(cwd)):
+        raise RecreateError("public_runtime_working_dir_mismatch")
+    observed_files = [
+        Path(os.path.abspath(item.strip()))
+        for item in labels["com.docker.compose.project.config_files"].split(",")
+        if item.strip()
+    ]
+    if not observed_files or os.path.normcase(str(observed_files[-1])) != os.path.normcase(str(public_override)):
+        raise RecreateError("public_runtime_override_not_last")
     bindings = [
         line.strip()
         for line in run(
@@ -291,24 +340,22 @@ def compose_args(project: str, files: list[Path]) -> list[str]:
 def execute(args: argparse.Namespace) -> dict:
     if not re.fullmatch(r"[0-9a-fA-F]{40}", args.expected_sha):
         raise RecreateError("expected_sha_invalid")
-    if args.runtime_profile not in {PUBLIC_RUNTIME_PROFILE, LOCAL_DEMO_PROFILE}:
-        raise RecreateError("runtime_profile_invalid")
-    is_public = args.runtime_profile == PUBLIC_RUNTIME_PROFILE
-    repo_root = args.repo_root.resolve()
-    if git_head(repo_root) != args.expected_sha:
+    if args.runtime_profile != PUBLIC_RUNTIME_PROFILE:
+        raise RecreateError("public_runtime_profile_required")
+    repo_root_lexical = Path(os.path.abspath(args.repo_root))
+    if git_head(repo_root_lexical) != args.expected_sha:
         raise RecreateError("git_head_mismatch")
-    public_override = None
-    if is_public:
-        if args.public_dev_override is None:
-            raise RecreateError("public_dev_override_required")
-        if args.project != DEFAULT_PROJECT or args.container != DEFAULT_CONTAINER:
-            raise RecreateError("non_dev_runtime_target_blocked")
-        public_override = validate_public_override(
-            repo_root, args.public_dev_override, args.expected_sha
-        )
-        validate_local_docker(args.container, cwd=repo_root)
-    elif args.project == DEFAULT_PROJECT or args.container == DEFAULT_CONTAINER:
-        raise RecreateError("local_demo_identity_conflicts_with_public")
+    if args.public_dev_override is None:
+        raise RecreateError("public_dev_override_required")
+    if args.project != DEFAULT_PROJECT or args.container != DEFAULT_CONTAINER:
+        raise RecreateError("non_dev_runtime_target_blocked")
+    public_override = validate_public_override(
+        repo_root_lexical, args.public_dev_override, args.expected_sha
+    )
+    repo_root = repo_root_lexical.resolve(strict=True)
+    validate_local_docker(
+        args.container, cwd=repo_root, public_override=public_override
+    )
     if not args.secret_file.is_file():
         raise RecreateError("cofre_secret_file_missing")
     if not args.admin_override.is_file() or not args.teams_override.is_file():
@@ -334,9 +381,13 @@ def execute(args: argparse.Namespace) -> dict:
     )
     base = compose_args(args.project, files)
     child_env = _clean_child_env(args.expected_sha)
-    rendered = run([*base, "config", "--format", "json"], cwd=repo_root, timeout=120, env=child_env)
-    if is_public:
-        validate_rendered_public_auth(rendered.stdout)
+    rendered = run(
+        [*base, "config", "--format", "json"],
+        cwd=repo_root,
+        timeout=120,
+        env=child_env,
+    )
+    validate_rendered_public_auth(rendered.stdout)
 
     mutation_state = "not_attempted"
     try:
@@ -348,43 +399,67 @@ def execute(args: argparse.Namespace) -> dict:
             env=child_env,
         )
         mutation_state = "attempted_unverified"
-        health = wait_healthy(args.container, cwd=repo_root, timeout_seconds=args.health_timeout)
+        health = wait_healthy(
+            args.container, cwd=repo_root, timeout_seconds=args.health_timeout
+        )
         item = inspect_container(args.container, cwd=repo_root)
-        auth_demo = probe_auth_config() if is_public else None
+        auth_demo = probe_auth_config()
+        labels = item.get("Labels") or {}
+        mounts = item.get("Mounts") or []
+        secret_mount = [
+            mount
+            for mount in mounts
+            if mount.get("Destination") == "/run/secrets/cofre_keyring_passphrase"
+        ]
+        data_mount = [
+            mount for mount in mounts if mount.get("Destination") == "/data"
+        ]
+        backend_mount = [
+            mount for mount in mounts if mount.get("Destination") == "/app"
+        ]
+        observed_sha = str(item.get("RuntimeSha") or "").strip().lower()
+        if observed_sha != args.expected_sha.lower():
+            raise RecreateError("runtime_sha_mismatch")
+        if item.get("AllowDemoLogin", "").strip().lower() != "false":
+            raise RecreateError("runtime_container_demo_login_not_false")
+        if auth_demo is not False:
+            raise RecreateError("runtime_api_demo_login_not_false")
+        if labels.get("com.docker.compose.project") != args.project:
+            raise RecreateError("compose_project_mismatch")
+        if labels.get("com.docker.compose.service") != "api":
+            raise RecreateError("compose_service_mismatch")
+        if not secret_mount or secret_mount[0].get("RW") is not False:
+            raise RecreateError("secret_mount_not_read_only")
+        if (
+            not data_mount
+            or data_mount[0].get("Type") != "volume"
+            or data_mount[0].get("RW") is not True
+        ):
+            raise RecreateError("persistent_data_mount_missing")
+        expected_backend = str((repo_root / "backend").resolve()).replace(
+            "\\", "/"
+        ).lower()
+        actual_backend = str(
+            backend_mount[0].get("Source") if backend_mount else ""
+        ).replace("\\", "/").lower()
+        docker_desktop_backend = expected_backend.replace(
+            "c:/", "/run/desktop/mnt/host/c/"
+        )
+        if (
+            not actual_backend.endswith(docker_desktop_backend)
+            and expected_backend not in actual_backend
+        ):
+            raise RecreateError("backend_bind_not_current_worktree")
+        mutation_state = "verified"
     except RecreateError as exc:
-        if exc.mutation_state == "not_attempted" and mutation_state != "not_attempted":
-            raise RecreateError("runtime_validation_failed", mutation_state=mutation_state) from exc
-        raise
-    except Exception as exc:
-        raise RecreateError("runtime_mutation_state_unknown", mutation_state=mutation_state) from exc
-
-    labels = item.get("Labels") or {}
-    mounts = item.get("Mounts") or []
-
-    secret_mount = [
-        m for m in mounts
-        if m.get("Destination") == "/run/secrets/cofre_keyring_passphrase"
-    ]
-    data_mount = [m for m in mounts if m.get("Destination") == "/data"]
-    backend_mount = [m for m in mounts if m.get("Destination") == "/app"]
-
-    observed_sha = str(item.get("RuntimeSha") or "").strip().lower()
-    if observed_sha != args.expected_sha.lower():
-        raise RecreateError("runtime_sha_mismatch", mutation_state="attempted_unverified")
-    if is_public and auth_demo is not False:
-        raise RecreateError("runtime_demo_login_not_false", mutation_state="attempted_unverified")
-    if labels.get("com.docker.compose.project") != args.project:
-        raise RecreateError("compose_project_mismatch")
-    if labels.get("com.docker.compose.service") != "api":
-        raise RecreateError("compose_service_mismatch")
-    if not secret_mount or secret_mount[0].get("RW") is not False:
-        raise RecreateError("secret_mount_not_read_only")
-    if not data_mount or data_mount[0].get("Type") != "volume" or data_mount[0].get("RW") is not True:
-        raise RecreateError("persistent_data_mount_missing")
-    expected_backend = str((repo_root / "backend").resolve()).replace("\\", "/").lower()
-    actual_backend = str((backend_mount[0].get("Source") if backend_mount else "")).replace("\\", "/").lower()
-    if not actual_backend.endswith(expected_backend.replace("c:/", "/run/desktop/mnt/host/c/")) and expected_backend not in actual_backend:
-        raise RecreateError("backend_bind_not_current_worktree")
+        state = exc.mutation_state
+        if mutation_state != "not_attempted" and state == "not_attempted":
+            state = "attempted_unverified"
+        raise RecreateError(str(exc), mutation_state=state) from None
+    except Exception:
+        raise RecreateError(
+            "runtime_mutation_state_unknown", mutation_state=mutation_state
+        ) from None
 
     return {
         "ok": True,
@@ -395,9 +470,9 @@ def execute(args: argparse.Namespace) -> dict:
         "runtime_sha": observed_sha,
         "health": health,
         "runtime_profile": args.runtime_profile,
-        "allow_demo_login": False if is_public else None,
-        "compose_auth_contract_valid": True if is_public else None,
-        "mutation_state": "verified",
+        "allow_demo_login": False,
+        "compose_auth_contract_valid": True,
+        "mutation_state": mutation_state,
         "mutation_performed": True,
         "secret_file_exists": True,
         "secret_value_observed": False,

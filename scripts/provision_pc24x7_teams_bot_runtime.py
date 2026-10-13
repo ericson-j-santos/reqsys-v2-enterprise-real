@@ -15,7 +15,6 @@ BOT_SECRET_NAME = "reqsys-teams-bot-dev-secret"
 PUBLIC_PROJECT = "wt-pc24x7-piloto"
 PUBLIC_API_PORT = "8210"
 PUBLIC_RUNTIME_PROFILE = "pc24x7-public-dev"
-LOCAL_DEMO_PROFILE = "teams-local-demo"
 
 
 class ProvisionError(RuntimeError):
@@ -38,23 +37,26 @@ def _run(
     timeout: int = 120,
     sensitive: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        shell=False,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise ProvisionError("command_timeout") from None
+    except OSError:
+        raise ProvisionError("command_spawn_failed") from None
     if result.returncode != 0:
-        if sensitive:
-            raise ProvisionError(f"sensitive_command_failed:{Path(args[0]).name}:exit_{result.returncode}")
-        detail = (result.stderr or result.stdout or "sem detalhe").strip().replace("\n", " ")
-        raise ProvisionError(f"command_failed:{Path(args[0]).name}:exit_{result.returncode}:{detail[:500]}")
+        code = "sensitive_command_failed" if sensitive else "command_failed"
+        raise ProvisionError(code)
     return result
 
 
@@ -130,13 +132,7 @@ def _guard_demo_runtime_identity(args: argparse.Namespace) -> None:
     )
     if is_public:
         raise ProvisionError("public_runtime_demo_e2e_incompatible")
-    if (
-        args.runtime_profile != LOCAL_DEMO_PROFILE
-        or not args.compose_project
-        or not str(args.api_port).isdigit()
-    ):
-        raise ProvisionError("local_demo_runtime_identity_required")
-    return None
+    raise ProvisionError("unsupported_runtime_identity")
 
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:

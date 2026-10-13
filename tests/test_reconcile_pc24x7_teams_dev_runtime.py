@@ -155,3 +155,91 @@ def test_docker_environment_override_blocks_before_commands(monkeypatch, tmp_pat
     )
     with pytest.raises(reconcile.ReconcileError, match="docker_environment_override_blocked"):
         reconcile._require_local_docker(tmp_path)
+
+
+
+def test_recreate_invalid_json_preserves_unknown_mutation(monkeypatch, tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    teams = runtime / reconcile.TEAMS_OVERRIDE_REL
+    teams.parent.mkdir(parents=True)
+    teams.write_text("services: {}\n", encoding="utf-8")
+    public = runtime / reconcile.PUBLIC_OVERRIDE_NAME
+    public.write_text("services: {}\n", encoding="utf-8")
+    admin = runtime / reconcile.ADMIN_OVERRIDE_NAME
+    admin.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        reconcile.provision,
+        "_load_existing_bot_secret",
+        lambda *_args: ("app-id", "secret-value"),
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout="not-json", stderr=""
+        ),
+    )
+    with pytest.raises(reconcile.ReconcileError, match="recreate_json_invalid") as captured:
+        reconcile._recreate_api(
+            runtime, admin, public, "a" * 40, "vault", "tenant"
+        )
+    assert captured.value.mutation_state == "attempted_unknown"
+
+
+def test_verify_failure_after_recreate_preserves_unverified_state(
+    monkeypatch, tmp_path: Path
+) -> None:
+    args = _args(tmp_path)
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    admin = runtime / reconcile.ADMIN_OVERRIDE_NAME
+    public = runtime / reconcile.PUBLIC_OVERRIDE_NAME
+    admin.write_text("services: {}\n", encoding="utf-8")
+    public.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setattr(reconcile, "_require_host", lambda: None)
+    monkeypatch.setattr(
+        reconcile,
+        "_discover_runtime",
+        lambda: (runtime, admin, public, reconcile.EXPECTED_PROJECT),
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_sync_runtime_repo",
+        lambda *_args: {
+            "before_sha": args.expected_sha,
+            "after_sha": args.expected_sha,
+            "origin_main_sha": args.expected_sha,
+            "fast_forward_performed": False,
+        },
+    )
+    monkeypatch.setattr(
+        reconcile, "_validate_public_override", lambda *_args: public
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_recreate_api",
+        lambda *_args: {"mutation_state": "verified"},
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_verify_runtime",
+        lambda *_args: (_ for _ in ()).throw(
+            reconcile.ReconcileError("runtime_same_sha_timeout")
+        ),
+    )
+    with pytest.raises(reconcile.ReconcileError, match="runtime_same_sha_timeout") as captured:
+        reconcile.execute(args)
+    assert captured.value.mutation_state == "attempted_unverified"
+
+
+def test_run_never_embeds_subprocess_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        reconcile.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=7, stdout="SECRET_STDOUT", stderr="SECRET_STDERR"
+        ),
+    )
+    with pytest.raises(reconcile.ReconcileError, match="^command_failed$") as captured:
+        reconcile._run(["tool"], cwd=tmp_path)
+    assert "SECRET" not in str(captured.value)

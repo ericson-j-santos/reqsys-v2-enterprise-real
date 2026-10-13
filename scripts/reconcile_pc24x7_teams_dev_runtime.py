@@ -42,9 +42,10 @@ TEAMS_OVERRIDE_REL = Path("config/pc24x7-teams-bot-runtime.override.yml")
 
 
 class ReconcileError(RuntimeError):
-    def __init__(self, message: str, *, mutation_performed: bool = False) -> None:
+    def __init__(self, message: str, *, mutation_state: str = "not_attempted") -> None:
         super().__init__(message)
-        self.mutation_performed = mutation_performed
+        self.mutation_state = mutation_state
+        self.mutation_performed = mutation_state != "not_attempted"
 
 
 def _tool(name: str) -> str:
@@ -64,27 +65,26 @@ def _run(
     sensitive: bool = False,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        shell=False,
-    )
-    if check and result.returncode != 0:
-        if sensitive:
-            raise ReconcileError(
-                f"sensitive_command_failed:{Path(args[0]).name}:exit_{result.returncode}"
-            )
-        detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")
-        raise ReconcileError(
-            f"command_failed:{Path(args[0]).name}:exit_{result.returncode}:{detail[:300]}"
+    try:
+        result = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
         )
+    except subprocess.TimeoutExpired:
+        raise ReconcileError("command_timeout") from None
+    except OSError:
+        raise ReconcileError("command_spawn_failed") from None
+    if check and result.returncode != 0:
+        code = "sensitive_command_failed" if sensitive else "command_failed"
+        raise ReconcileError(code)
     return result
 
 
@@ -146,12 +146,13 @@ def _validate_public_override(
     expected_abs = root_abs / PUBLIC_OVERRIDE_NAME
     if os.path.normcase(str(candidate_abs)) != os.path.normcase(str(expected_abs)):
         raise ReconcileError("public_override_not_canonical")
-    cursor = root_abs
-    if _has_reparse_point(cursor):
-        raise ReconcileError("public_override_reparse_blocked")
-    cursor = cursor / PUBLIC_OVERRIDE_NAME
-    if _has_reparse_point(cursor):
-        raise ReconcileError("public_override_reparse_blocked")
+    for target in (root_abs, candidate_abs):
+        chain = [target, *target.parents]
+        for cursor in reversed(chain):
+            if not cursor.exists():
+                raise ReconcileError("public_override_metadata_unreadable")
+            if _has_reparse_point(cursor):
+                raise ReconcileError("public_override_reparse_blocked")
     resolved_root = root_abs.resolve(strict=True)
     resolved = candidate_abs.resolve(strict=True)
     if resolved.parent != resolved_root:
@@ -375,7 +376,9 @@ def _recreate_api(
     child_env["TEAMS_BOT_APP_ID"] = app_id
     child_env["TEAMS_BOT_APP_TENANT_ID"] = expected_tenant_id
     child_env["TEAMS_BOT_SECRET"] = bot_secret
+    mutation_state = "not_attempted"
     try:
+        mutation_state = "attempted_unknown"
         result = _run(
             [
                 sys.executable,
@@ -401,16 +404,36 @@ def _recreate_api(
             sensitive=True,
             check=False,
         )
-        payload = _parse_last_json(
-            result.stdout if result.returncode == 0 else result.stderr,
-            "recreate",
-        )
-        if result.returncode != 0:
+        try:
+            payload = _parse_last_json(
+                result.stdout if result.returncode == 0 else result.stderr,
+                "recreate",
+            )
+        except ReconcileError:
             raise ReconcileError(
-                str(payload.get("error") or "recreate_failed"),
-                mutation_performed=bool(payload.get("mutation_performed")),
+                "recreate_json_invalid", mutation_state="attempted_unknown"
+            ) from None
+        child_state = str(payload.get("mutation_state") or "").strip()
+        if child_state not in {
+            "not_attempted", "attempted_unknown",
+            "attempted_unverified", "verified",
+        }:
+            child_state = "attempted_unknown"
+        if result.returncode != 0:
+            code = str(payload.get("error_code") or "recreate_failed")
+            if not re.fullmatch(r"[a-z0-9_]+", code):
+                code = "recreate_failed"
+            raise ReconcileError(code, mutation_state=child_state)
+        if child_state != "verified":
+            raise ReconcileError(
+                "recreate_not_verified", mutation_state=child_state
             )
         return payload
+    except ReconcileError as exc:
+        state = exc.mutation_state
+        if mutation_state != "not_attempted" and state == "not_attempted":
+            state = mutation_state
+        raise ReconcileError(str(exc), mutation_state=state) from None
     finally:
         child_env["TEAMS_BOT_SECRET"] = ""
         bot_secret = ""
@@ -493,7 +516,17 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         args.vault_name,
         args.expected_tenant_id,
     )
-    runtime = _verify_runtime(args.expected_sha)
+    try:
+        runtime = _verify_runtime(args.expected_sha)
+    except ReconcileError as exc:
+        raise ReconcileError(
+            str(exc), mutation_state="attempted_unverified"
+        ) from None
+    except Exception:
+        raise ReconcileError(
+            "runtime_verify_unknown",
+            mutation_state="attempted_unknown",
+        ) from None
 
     evidence = {
         "schema_version": "1.0.0",
@@ -549,13 +582,15 @@ def main() -> int:
             "expected_sha": args.expected_sha,
             "reason": type(exc).__name__,
             "error_code": str(exc) if isinstance(exc, ReconcileError) else "unexpected_error",
-            "mutation_state": (
-                "attempted_unknown"
-                if bool(getattr(exc, "mutation_performed", False))
-                else "not_attempted"
+            "mutation_state": str(
+                getattr(exc, "mutation_state", "unknown")
             ),
-            "mutation_performed": bool(getattr(exc, "mutation_performed", False)),
-            "validation_failed_after_mutation": bool(getattr(exc, "mutation_performed", False)),
+            "mutation_performed": bool(
+                getattr(exc, "mutation_performed", False)
+            ),
+            "validation_failed_after_mutation": bool(
+                getattr(exc, "mutation_performed", False)
+            ),
             "secret_value_exposed": False,
             "production_touched": False,
         }
