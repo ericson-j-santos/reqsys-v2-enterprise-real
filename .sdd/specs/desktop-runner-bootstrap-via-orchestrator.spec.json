@@ -78,6 +78,8 @@
     "A capacidade não autoriza instalação HML; são exigidos ainda serviços/daemon comprovados, folga operacional, isolamento e controle de mudanças, antes de qualquer banco ou container novo.",
     "Canário físico inclui sql_hml_host_inventory medido/parcial/indisponível, sem qualquer mutação Docker ou aprovação HML.",
     "Teste positivo, negativo, idempotente e fail-closed valida daemon ausente, contexto remoto, identidades sanitizadas e segurança do workflow existente.",
-    "O Python portátil 3.12 em modo isolado carrega o coletor SQL HML apenas pelo caminho do arquivo-irmão versionado, sem ampliar python312._pth/PYTHONPATH; teste real com -I comprova importação e cenários negativos sanitizados."
+    "O Python portátil 3.12 em modo isolado carrega o coletor SQL HML apenas pelo caminho do arquivo-irmão versionado, sem ampliar python312._pth/PYTHONPATH; teste real com -I comprova importação e cenários negativos sanitizados.",
+    "O canário coleta somente por leitura a classe sanitizada da localização, SHA-256, tamanho e verificação Authenticode offline da CLI Docker rejeitada; jamais executa binário fora da allowlist, não revela caminhos/segredos, não libera HML, e prova casos positivo, negativo, reparse e idempotência.",
+    "Somente CLI Docker existente em dois diretórios oficiais já allowlistados, com verificação Authenticode válida e arquivo sem reparse, pode substituir wrapper insegura do PATH para consultas Docker locais e fixas. Executável do perfil nunca é invocado. Ausência ou assinatura inválida falha fechado; casos positivo, negativo, reparse e replay comprovados; a seleção não autoriza HML."
   ]
 }

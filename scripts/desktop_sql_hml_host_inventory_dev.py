@@ -49,6 +49,139 @@ def fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
+
+
+def _win_authenticode_status(file_path: str) -> str:
+    """Evaluate a Windows Authenticode chain offline without launching the file."""
+    if os.name != "nt":
+        return "unavailable"
+    try:
+        from ctypes import wintypes
+
+        class _GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        class _FileInfo(ctypes.Structure):
+            _fields_ = [
+                ("cbStruct", wintypes.DWORD),
+                ("pcwszFilePath", wintypes.LPCWSTR),
+                ("hFile", wintypes.HANDLE),
+                ("pgKnownSubject", ctypes.c_void_p),
+            ]
+
+        class _TrustData(ctypes.Structure):
+            _fields_ = [
+                ("cbStruct", wintypes.DWORD),
+                ("pPolicyCallbackData", ctypes.c_void_p),
+                ("pSIPClientData", ctypes.c_void_p),
+                ("dwUIChoice", wintypes.DWORD),
+                ("fdwRevocationChecks", wintypes.DWORD),
+                ("dwUnionChoice", wintypes.DWORD),
+                ("pFile", ctypes.c_void_p),
+                ("dwStateAction", wintypes.DWORD),
+                ("hWVTStateData", wintypes.HANDLE),
+                ("pwszURLReference", wintypes.LPCWSTR),
+                ("dwProvFlags", wintypes.DWORD),
+                ("dwUIContext", wintypes.DWORD),
+                ("pSignatureSettings", ctypes.c_void_p),
+            ]
+
+        info = _FileInfo(ctypes.sizeof(_FileInfo), file_path, None, None)
+        trust = _TrustData()
+        trust.cbStruct = ctypes.sizeof(_TrustData)
+        trust.dwUIChoice = 2  # WTD_UI_NONE
+        trust.fdwRevocationChecks = 1  # WTD_REVOKE_WHOLECHAIN
+        trust.dwUnionChoice = 1  # WTD_CHOICE_FILE
+        trust.pFile = ctypes.cast(ctypes.pointer(info), ctypes.c_void_p)
+        trust.dwStateAction = 0  # WTD_STATEACTION_IGNORE (no state handle)
+        trust.dwProvFlags = 0x1000 | 0x80  # Offline cache, chain revocation except root
+        trust.dwUIContext = 0
+        action = _GUID(
+            0x00AAC56B, 0xCD44, 0x11D0,
+            (ctypes.c_ubyte * 8)(0x8C, 0xC2, 0, 0xC0, 0x4F, 0xC2, 0x95, 0xEE),
+        )
+        verify = ctypes.WinDLL("wintrust", use_last_error=True).WinVerifyTrust
+        verify.argtypes = [wintypes.HWND, ctypes.POINTER(_GUID), ctypes.c_void_p]
+        verify.restype = wintypes.LONG
+        code = verify(ctypes.c_void_p(-1), ctypes.byref(action), ctypes.byref(trust))
+        return "valid" if code == 0 else "not_trusted"
+    except (OSError, AttributeError, ValueError, TypeError):
+        return "unavailable"
+
+
+def _untrusted_cli_provenance(cli_path: str) -> dict:
+    """Read-only origin and signature evidence. Never authorizes executing the CLI."""
+    normalized = ntpath.normcase(ntpath.normpath(cli_path))
+    if normalized.startswith("c:\\program files\\"):
+        location = "program_files_other"
+    elif normalized.startswith("c:\\windows\\"):
+        location = "windows"
+    elif normalized.startswith("c:\\users\\"):
+        location = "user_profile"
+    elif normalized.startswith("\\\\"):
+        location = "network"
+    else:
+        location = "other"
+    result = {
+        "status": "unavailable",
+        "location_class": location,
+        "path_fingerprint": hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16],
+        "file_sha256": None,
+        "size_bytes": None,
+        "authenticode_status": "unavailable",
+        "executable_launched": False,
+    }
+    drive = ntpath.splitdrive(normalized)[0]
+    if (drive.startswith("\\\\") or not ntpath.isabs(normalized)
+            or ntpath.basename(normalized) != "docker.exe"):
+        result["reason"] = "local_exe_required"
+        return result
+    try:
+        metadata = os.lstat(cli_path)
+        if getattr(metadata, "st_file_attributes", 0) & 0x400:
+            result["reason"] = "reparse_point_blocked"
+            return result
+        if not 1024 <= metadata.st_size <= 128 * 1024 * 1024:
+            result["reason"] = "binary_size_invalid"
+            return result
+        h = hashlib.sha256()
+        with open(cli_path, "rb") as fh:
+            while chunk := fh.read(1024 * 1024):
+                h.update(chunk)
+        result["file_sha256"] = h.hexdigest()
+        result["size_bytes"] = metadata.st_size
+        result["authenticode_status"] = _win_authenticode_status(cli_path)
+        result["status"] = "observed"
+        return result
+    except (OSError, ValueError, TypeError):
+        result["reason"] = "file_read_unavailable"
+        return result
+
+def _signed_official_docker_cli() -> str | None:
+    """Select only a preapproved local installation with a trusted signature."""
+    candidates = (
+        r"C:\Program Files\Docker\Docker\resources\bin\docker.exe",
+        r"C:\ProgramData\DockerDesktop\version-bin\docker.exe",
+    )
+    for candidate in candidates:
+        try:
+            metadata = os.lstat(candidate)
+            if getattr(metadata, "st_file_attributes", 0) & 0x400:
+                continue
+            if not 1024 <= metadata.st_size <= 128 * 1024 * 1024:
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            if _win_authenticode_status(candidate) == "valid":
+                return candidate
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
 def _docker_env() -> dict[str, str]:
     # Explicit local npipe endpoints only. Never read an existing Docker context
     # or authentication config, and never accept DOCKER_HOST from an agent.
@@ -137,8 +270,14 @@ def _docker_summary(*, cli_path: str | None, runner: DockerRunner) -> dict:
         or not ntpath.isabs(normalized)
         or not any(normalized.startswith(prefix) for prefix in trusted_prefixes)
     ):
-        result["reason"] = "docker_cli_untrusted"
-        return result
+        result["provenance"] = _untrusted_cli_provenance(cli_path)
+        official = _signed_official_docker_cli()
+        if official is None:
+            result["reason"] = "docker_cli_untrusted"
+            return result
+        # Never use the untrusted PATH executable. Use only the fixed signed CLI.
+        cli_path = official
+        result["cli_selection"] = "signed_official_path"
     version: dict | None = None
     endpoint: str | None = None
     endpoint_kind: str | None = None
