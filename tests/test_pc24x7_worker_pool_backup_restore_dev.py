@@ -186,3 +186,22 @@ def test_never_declare_physical_cutover_ready():
     assert "github.event.comment.user.login == 'ericson-j-santos'" in gateway
     assert "github.event.comment.body == '/reqsys run pc24x7-worker-pool-backup-restore-dev'" in gateway
     assert " -f target_path=" not in gateway
+
+def test_backup_script_loads_pinned_inventory_in_isolated_python(tmp_path: Path) -> None:
+    """Regression for real Desktop run 38331728505 ModuleNotFoundError."""
+    script = ROOT / "scripts" / "pc24x7_worker_pool_backup_restore_dev.py"
+    positive = subprocess.run(
+        [sys.executable, "-I", str(script), "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=20, check=False)
+    assert positive.returncode == 0, positive.stderr
+    assert "--expected-sha" in positive.stdout
+    assert "ModuleNotFoundError" not in positive.stderr
+
+    orphan = tmp_path / script.name
+    orphan.write_text(script.read_text(encoding="utf-8"), encoding="utf-8")
+    negative = subprocess.run(
+        [sys.executable, "-I", str(orphan), "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=20, check=False)
+    assert negative.returncode != 0
+    assert "inventory_helper_missing_or_redirected" in negative.stderr
+    assert not list(tmp_path.glob("*.dpapi"))

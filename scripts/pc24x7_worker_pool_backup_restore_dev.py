@@ -10,6 +10,7 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,15 @@ import subprocess
 import sys
 from typing import Callable
 
-import pc24x7_worker_pool_inventory_dev as inventory
+# Resolve this SHA-pinned sibling explicitly even with portable isolated Python.
+_INVENTORY_PATH = Path(__file__).resolve().with_name("pc24x7_worker_pool_inventory_dev.py")
+if not _INVENTORY_PATH.is_file() or _INVENTORY_PATH.is_symlink():
+    raise RuntimeError("inventory_helper_missing_or_redirected")
+_inventory_spec = importlib.util.spec_from_file_location("workerpool_inventory", _INVENTORY_PATH)
+if _inventory_spec is None or _inventory_spec.loader is None:
+    raise RuntimeError("inventory_helper_unloadable")
+inventory = importlib.util.module_from_spec(_inventory_spec)
+_inventory_spec.loader.exec_module(inventory)
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = inventory.HOST
