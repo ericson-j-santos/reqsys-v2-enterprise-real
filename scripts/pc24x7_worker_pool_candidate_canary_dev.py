@@ -191,21 +191,26 @@ def request(method: str, url: str, token: str, body: dict[str, Any] | None):
         raise CanaryBlocked("candidate_http_unavailable") from None
 
 
+def wait_for_candidate_health(token: str) -> None:
+    """Retry only transient startup unavailability, never policy or validation faults."""
+    for _attempt in range(26):
+        try:
+            code, health = request("GET", URL + "/health", token, None)
+            if code == 200 and health.get("status") == "healthy":
+                return
+        except CanaryBlocked as exc:
+            if str(exc) != "candidate_http_unavailable":
+                raise
+        time.sleep(0.5)
+    raise CanaryBlocked("candidate_not_ready")
+
+
 def e2e(token: str, expected_sha: str, correlation_id: str, name: str) -> dict[str, Any]:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from scripts import pending_development_worker_pool_bridge as bridge
 
-    for attempt in range(26):
-        try:
-            code, health = request("GET", URL + "/health", token, None)
-            if code == 200 and health.get("status") == "healthy":
-                break
-        except CanaryBlocked:
-            pass
-        time.sleep(0.5)
-    else:
-        raise CanaryBlocked("candidate_not_ready")
+    wait_for_candidate_health(token)
     contract_code, contract = request("GET", URL + "/v1/contract", token, None)
     require(contract_code == 200 and contract.get("contract_name") == "engineering-worker-pool"
             and contract.get("contract_version") == "v1", "candidate_contract_invalid")
