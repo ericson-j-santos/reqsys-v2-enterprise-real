@@ -28,7 +28,17 @@ def test_nao_enumera_segredos_nem_aplica_heuristica_por_nome() -> None:
 
 def test_falha_fechado_sem_nome_explicito_ou_com_nome_invalido() -> None:
     text = _text()
-    assert '"status":"secret_name_unconfigured"' in text
-    assert '"status":"secret_name_invalid"' in text
-    assert "^[A-Za-z0-9-]{1,127}$" in text
+    assert '"INTEGRATION_E2E_SQL_DSN_SECRET_NAME": bool(secret_name)' in text
+    assert '"oidc_configuration_missing"' in text
+    assert '"oidc_configuration_invalid"' in text
+    assert 'invalid.append("INTEGRATION_E2E_SQL_DSN_SECRET_NAME")' in text
+    assert "[A-Za-z0-9-]{1,127}" in text
+    assert '"secret_value_exposed": False' in text
     assert '"secret_value_exposed":false' in text
+
+
+def test_reader_nao_e_inferido_de_identidade_legada_ou_mutadora() -> None:
+    text = _text()
+    assert '"AZURE_CLIENT_ID_READER_BINDING": False' in text
+    assert "CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND" not in text
+    assert "vars.CCP_AZURE_CLIENT_ID }}" not in text
