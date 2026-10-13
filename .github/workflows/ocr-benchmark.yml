@@ -13,6 +13,9 @@ on:
       - 'scripts/ocr_*.py'
       - 'scripts/prepare_ocr_runtime_package.py'
       - 'config/ocr-engine-lock.json'
+      - 'config/ocr-build-toolchain.json'
+      - 'tests/test_prepare_ocr_runtime_package.py'
+      - '.sdd/specs/ocr-wheel-reproducibility.*'
       - 'benchmark/ocr/**'
       - '.github/actions/prepare-ocr-runtime/**'
       - '.github/workflows/ocr-benchmark.yml'
@@ -36,7 +39,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version: '3.12.15'
       - name: Instalar dependências mínimas do contrato OCR
         working-directory: backend
         run: |
@@ -70,7 +73,7 @@ jobs:
       - name: Python 3.12
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version: '3.12.15'
 
       - name: Instalar dependências mínimas do consumidor
         run: |
@@ -94,50 +97,19 @@ jobs:
           test "$rc" -ne 0
           echo "OCR_EXTERNAL_NEGATIVE_CONTROL_OK"
 
-      - name: Identificar instalação governada do ReqSys
-        id: reqsys-app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+      - name: Preparar pacote OCR canônico e reproduzível
+        id: ocr-package
+        uses: ./.github/actions/prepare-ocr-runtime
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: reqsys-v2-enterprise-real
-          permission-contents: read
 
-      - name: Registrar identificadores não sensíveis da instalação
-        shell: bash
-        run: |
-          echo "REQSYS_GITHUB_APP_SLUG=${{ steps.reqsys-app-token.outputs.app-slug }}"
-          echo "REQSYS_GITHUB_APP_INSTALLATION_ID=${{ steps.reqsys-app-token.outputs.installation-id }}"
-
-      - name: Emitir token temporário somente leitura
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
-          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: |
-            reqsys-v2-enterprise-real
-            ocr-evidence-engine
-          permission-contents: read
-
-      - name: Checkout do OCR privado no SHA pinado
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: ericson-j-santos/ocr-evidence-engine
-          ref: ${{ env.OCR_ENGINE_SHA }}
-          token: ${{ steps.app-token.outputs.token }}
-          path: .external/ocr-evidence-engine
-          persist-credentials: false
-
-      - name: Validar SHA e instalar o pacote externo
+      - name: Instalar somente o wheel canônico verificado
         shell: bash
         run: |
           set -euo pipefail
-          actual="$(git -C .external/ocr-evidence-engine rev-parse HEAD)"
-          test "$actual" = "$OCR_ENGINE_SHA"
-          python -m pip install --disable-pip-version-check --no-deps .external/ocr-evidence-engine
+          test "${{ steps.ocr-package.outputs.ocr-sha }}" = "$OCR_ENGINE_SHA"
+          python -m pip install --disable-pip-version-check --no-deps backend/vendor/ocr-evidence-engine/*.whl
 
       - name: Provar origem externa e executar contratos do ReqSys
         shell: bash
@@ -176,7 +148,7 @@ jobs:
       - name: Python 3.12
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version: '3.12.15'
 
       - name: "Controle negativo: build externo sem wheel deve falhar"
         shell: bash
@@ -241,7 +213,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version: '3.12.15'
       - name: Instalar runtime OCR
         run: |
           sudo apt-get update
@@ -263,7 +235,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version: '3.12.15'
       - name: Instalar runtime do Evidence Gate v2
         run: |
           sudo apt-get update

@@ -4,8 +4,10 @@ from pathlib import Path
 
 import yaml
 
+
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "config" / "ocr-engine-lock.json"
+TOOLCHAIN = ROOT / "config" / "ocr-build-toolchain.json"
 ACTION = ROOT / ".github" / "actions" / "prepare-ocr-runtime" / "action.yml"
 DEV_WORKFLOW = ROOT / ".github" / "workflows" / "fly-dev-fast-deploy.yml"
 ENTERPRISE_WORKFLOW = ROOT / ".github" / "workflows" / "fly-enterprise-sync.yml"
@@ -18,7 +20,6 @@ def _yaml(path: Path) -> dict:
 
 def test_runtime_lock_is_private_repo_full_sha_and_expected_version() -> None:
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
-
     assert lock["repository"] == "ericson-j-santos/ocr-evidence-engine"
     assert lock["sha"] == "15dd067032d7c55e22186ef3587c0d694d0392fd"
     assert re.fullmatch(r"[0-9a-f]{40}", lock["sha"])
@@ -27,64 +28,43 @@ def test_runtime_lock_is_private_repo_full_sha_and_expected_version() -> None:
     assert lock["version"] == "1.2.0"
 
 
-def test_prepare_action_uses_ephemeral_read_only_app_token() -> None:
-    action = _yaml(ACTION)
-    steps = action["runs"]["steps"]
+def test_prepare_action_uses_ephemeral_read_only_app_token_for_two_clean_trees() -> None:
+    steps = _yaml(ACTION)["runs"]["steps"]
     token = next(step for step in steps if step.get("id") == "app-token")
-    checkout = next(
-        step for step in steps if step.get("name") == "Checkout OCR privado no SHA do lock"
-    )
-
+    checkouts = [step for step in steps if str(step.get("name", "")).startswith("Checkout limpo ")]
     assert token["uses"] == "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
     assert token["with"]["permission-contents"] == "read"
-    assert token["with"]["repositories"].splitlines() == [
-        "reqsys-v2-enterprise-real",
-        "ocr-evidence-engine",
-    ]
-    assert checkout["with"]["ref"] == "${{ steps.lock.outputs.sha }}"
-    assert checkout["with"]["persist-credentials"] == "false"
-    text = ACTION.read_text(encoding="utf-8")
-    assert "permission-contents: write" not in text
-    assert "GH_PAT" not in text
+    assert token["with"]["repositories"].splitlines() == ["reqsys-v2-enterprise-real", "ocr-evidence-engine"]
+    assert len(checkouts) == 2
+    assert {step["with"]["path"] for step in checkouts} == {".external/ocr-evidence-engine-a", ".external/ocr-evidence-engine-b"}
+    for checkout in checkouts:
+        assert checkout["with"]["ref"] == "${{ steps.lock.outputs.sha }}"
+        assert checkout["with"]["persist-credentials"] == "false"
+    assert "permission-contents: write" not in ACTION.read_text()
+    assert "GH_PAT" not in ACTION.read_text()
 
 
 def test_prepare_script_generates_and_verifies_canonical_bundle() -> None:
-    text = (ROOT / "scripts" / "prepare_ocr_runtime_package.py").read_text(
-        encoding="utf-8"
-    )
-
-    assert "ocr_distribution_evidence.py" in text
-    assert '"generate"' in text
-    assert '"verify"' in text
-    assert "MANIFEST.sha256" in text
-    assert "SHA256SUMS" in text
-    assert "ocr_manifest_compatibility_mismatch" in text
-    assert "ocr_source_sha_mismatch" in text
-    assert "pip" in text and "wheel" in text and "--no-deps" in text
+    text = (ROOT / "scripts" / "prepare_ocr_runtime_package.py").read_text(encoding="utf-8")
+    for value in ("ocr_distribution_evidence.py", '"generate"', '"verify"', "MANIFEST.sha256", "SHA256SUMS", "ocr_manifest_compatibility_mismatch", "ocr_source_sha_mismatch", "SOURCE_DATE_EPOCH", '"PYTHONHASHSEED": "0"', "--no-build-isolation", "compare_bundles"):
+        assert value in text
 
 
-def test_prepare_action_exports_hash_from_provider_provenance() -> None:
+def test_prepare_action_pins_and_records_complete_toolchain() -> None:
+    expected = json.loads(TOOLCHAIN.read_text(encoding="utf-8"))
     text = ACTION.read_text(encoding="utf-8")
-
-    assert "packaging==25.0" in text
+    assert expected == {"python": "3.12.15", "pip": "26.1.2", "setuptools": "80.9.0", "wheel": "0.45.1", "packaging": "25.0"}
+    for name, version in expected.items():
+        if name != "python":
+            assert f"{name}=={version}" in text
     assert "data['files'][0]['sha256']" in text
     assert "data['wheel_sha256']" not in text
 
 
 def test_dockerfile_fails_closed_and_removes_local_copy_when_external_is_required() -> None:
     text = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
-
-    assert "ARG OCR_EXTERNAL_PACKAGE_REQUIRED=0" in text
-    assert 'test "$wheel_count" = "1"' in text
-    assert "provenance.json" in text
-    assert "MANIFEST.sha256" in text
-    assert "SHA256SUMS" in text
-    assert 'd["schema_version"]=="1.1.0"' in text
-    assert 'actual==expected_names' in text
-    assert "OCR_ENGINE_SHA" in text
-    assert "OCR_ENGINE_VERSION" in text
-    assert "rm -rf /app/ocr_evidencia" in text
-    assert "site-packages" in text
+    for value in ("ARG OCR_EXTERNAL_PACKAGE_REQUIRED=0", 'test "$wheel_count" = "1"', "provenance.json", "MANIFEST.sha256", "SHA256SUMS", 'd["schema_version"]=="1.1.0"', "actual==expected_names", "OCR_ENGINE_SHA", "OCR_ENGINE_VERSION", "rm -rf /app/ocr_evidencia", "site-packages"):
+        assert value in text
     assert "GITHUB_TOKEN" not in text
     assert "REQSYS_STACK_REBASE_PRIVATE_KEY" not in text
 
@@ -99,16 +79,9 @@ def test_canonical_fly_workflows_prepare_package_and_require_external_runtime() 
 
 
 def test_benchmark_builds_real_image_with_negative_control_first() -> None:
-    workflow = _yaml(BENCHMARK_WORKFLOW)
-    job = workflow["jobs"]["external-runtime-image-contract"]
+    job = _yaml(BENCHMARK_WORKFLOW)["jobs"]["external-runtime-image-contract"]
     names = [step.get("name", "") for step in job["steps"]]
-
-    negative = names.index("Controle negativo: build externo sem wheel deve falhar")
-    prepare = names.index("Preparar pacote OCR externo")
-    positive = names.index("Build da imagem com OCR externo obrigatório")
-    runtime = names.index("Provar import externo dentro da imagem")
-    assert negative < prepare < positive < runtime
-
+    assert names.index("Controle negativo: build externo sem wheel deve falhar") < names.index("Preparar pacote OCR externo") < names.index("Build da imagem com OCR externo obrigatório") < names.index("Provar import externo dentro da imagem")
     text = BENCHMARK_WORKFLOW.read_text(encoding="utf-8")
     assert "docker build" in text
     assert "docker run --rm --entrypoint python" in text
