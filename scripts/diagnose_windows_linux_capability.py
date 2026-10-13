@@ -6,9 +6,9 @@ import argparse
 import ctypes
 import json
 import os
-import platform
 import re
 import socket
+import sys
 from typing import Callable
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -36,6 +36,18 @@ def windows_processor_features(checker: Callable[[int], bool] | None = None) -> 
         "second_level_address_translation": checker(PF_SECOND_LEVEL_ADDRESS_TRANSLATION),
         "virtualization_firmware_enabled": checker(PF_VIRT_FIRMWARE_ENABLED),
     }
+
+
+def _safe_windows_metadata(get_version=None) -> dict:
+    provider = get_version or getattr(sys, "getwindowsversion", None)
+    if provider is None:
+        return {"os": "Windows"}
+    try:
+        version = provider()
+        release = f"{int(version.major)}.{int(version.minor)}.{int(version.build)}"
+    except (AttributeError, OSError, TypeError, ValueError):
+        return {"os": "Windows"}
+    return {"os": "Windows", "os_release": release}
 
 
 def _wsl_result(status: str, count: int | None, reason: str) -> dict:
@@ -106,6 +118,7 @@ def collect(
     feature_checker=None,
     wsl_opener=None,
     wsl_query_info=None,
+    windows_version_provider=None,
 ) -> dict:
     if not HOST.fullmatch(expected_host):
         raise ValueError("expected_host_invalid")
@@ -114,11 +127,11 @@ def collect(
     observed = socket.gethostname().strip()
     if observed.casefold() != expected_host.casefold():
         raise ValueError("host_mismatch")
-    if platform.system() != "Windows":
+    if os.name != "nt" or sys.platform != "win32":
         raise ValueError("windows_required")
     virtualization = windows_processor_features(feature_checker)
     wsl = registered_wsl_distribution_count(wsl_opener, wsl_query_info)
-    return {
+    result = {
         "schema_version": "1.1.0",
         "status": "diagnostic_collected",
         "host": observed,
@@ -126,9 +139,6 @@ def collect(
         "observed_source_sha": None,
         "source_verified": False,
         "source_provenance": "requested_only",
-        "os": "Windows",
-        "os_release": platform.release(),
-        "architecture": platform.machine(),
         "virtualization": virtualization,
         "wsl": wsl,
         "linux_kernel_executed": False,
@@ -142,6 +152,8 @@ def collect(
         "ready_for_linux_pilot": False,
         "decision_reason": "requires_authorized_source_and_linux_runtime_proof",
     }
+    result.update(_safe_windows_metadata(windows_version_provider))
+    return result
 
 
 def _safe_error_code(exc: ValueError) -> str:
