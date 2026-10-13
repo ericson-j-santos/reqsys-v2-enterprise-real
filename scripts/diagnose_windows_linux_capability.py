@@ -35,7 +35,7 @@ def windows_processor_features(checker: Callable[[int], bool] | None = None) -> 
     }
 
 
-def registered_wsl_distribution_count(opener=None) -> dict:
+def registered_wsl_distribution_count(opener=None, query_info=None) -> dict:
     if os.name != "nt" and opener is None:
         return {"status": "unavailable", "count": None, "names_collected": False}
     try:
@@ -49,8 +49,10 @@ def registered_wsl_distribution_count(opener=None) -> dict:
             )
         key = opener()
         try:
-            import winreg
-            count = int(winreg.QueryInfoKey(key)[0])
+            if query_info is None:
+                import winreg
+                query_info = winreg.QueryInfoKey
+            count = int(query_info(key)[0])
         finally:
             close = getattr(key, "Close", None)
             if close:
@@ -60,7 +62,7 @@ def registered_wsl_distribution_count(opener=None) -> dict:
         return {"status": "measured", "count": 0, "names_collected": False}
 
 
-def collect(*, expected_host: str, source_sha: str, feature_checker=None, wsl_opener=None) -> dict:
+def collect(*, expected_host: str, source_sha: str, feature_checker=None, wsl_opener=None, wsl_query_info=None) -> dict:
     if not HOST.fullmatch(expected_host):
         raise ValueError("expected_host_invalid")
     if not SHA40.fullmatch(source_sha):
@@ -71,7 +73,7 @@ def collect(*, expected_host: str, source_sha: str, feature_checker=None, wsl_op
     if platform.system() != "Windows":
         raise ValueError("windows_required")
     virtualization = windows_processor_features(feature_checker)
-    wsl = registered_wsl_distribution_count(wsl_opener)
+    wsl = registered_wsl_distribution_count(wsl_opener, wsl_query_info)
     return {
         "schema_version": "1.0.0",
         "status": "diagnostic_collected",
