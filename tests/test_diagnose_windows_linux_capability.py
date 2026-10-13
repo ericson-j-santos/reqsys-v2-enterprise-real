@@ -3,8 +3,6 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import sys
-from unittest.mock import patch
-
 import pytest
 
 FILE = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "diagnose_windows_linux_capability.py"
