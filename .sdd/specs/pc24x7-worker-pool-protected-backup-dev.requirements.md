@@ -37,13 +37,23 @@ GitHub e sem alterar serviço, fila, tokens ou variáveis do runtime.
 5. Após integração, comando de proprietário único
    `/reqsys run pc24x7-worker-pool-backup-restore-dev` via issue #1705,
    artefato privado só no host e relatório sanitizado com readback físico.
-6. Ensaio de restauração `:memory:` **não comprova** restauração em arquivo/
-   volume físico separado exigido por `engineering-worker-pool`. O resultado
-   `separate_file_restore_verified=false` e `cutover_ready=false` são
-   obrigatórios até operação física distinta, canário 1.4, rollback e E2E.
+6. Após a restauração `:memory:`, reabrir o backup cifrado pela conta do runner,
+   restaurar uma cópia SQLite em arquivo temporário exclusivo dentro da pasta
+   privada da mesma conta e verificar `integrity_check`, `foreign_key_check`,
+   hash, identidade e contagem das tasks pelo arquivo real em `mode=ro`. Remover
+   o arquivo temporário após fechar todas as conexões; falhar fechado se ocorrer
+   erro ou limpeza incompleta. Publicar `separate_file_restore_verified=true`
+   somente quando o teste físico passar, com `cutover_ready=false` até canário
+   1.4, rollback, E2E consumidor e autorização específica de atualização DEV.
 7. Ausência de evidência, custo extra, falta de acesso ou erro de permissão
    devem bloquear, sem fallback remoto/GUI ou retry cego.
 
 8. O módulo auxiliar de inventário é carregado somente pelo caminho fixo da
    worktree validada no SHA. O teste `python -I` positivo e o negativo de
    módulo ausente devem detectar o erro do run físico #38331728505.
+
+8. Testes novos devem comprovar restauração positiva em arquivo separado,
+   detecção negativa de corrupção dos bytes do arquivo, limpeza após falha,
+   ausência de snapshot quando a pasta privada não existe e replay sem segundo
+   arquivo de backup cifrado para a mesma correlação. Arquivo temporário
+   plaintext nunca pode ser publicado ou exposto em logs/artifacts.

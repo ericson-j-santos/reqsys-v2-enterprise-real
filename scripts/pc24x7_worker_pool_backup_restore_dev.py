@@ -19,6 +19,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from typing import Callable
 
 # Resolve this SHA-pinned sibling explicitly even with portable isolated Python.
@@ -147,6 +148,53 @@ def verify_restore(raw: bytes) -> dict:
         raise BackupBlocked("isolated_restore_unavailable") from None
 
 
+def _write_restore_copy(path: Path, raw: bytes) -> None:
+    """Create a single exclusive private file, without a shell or redirection."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def verify_file_restore(raw: bytes, root: Path, expected: dict) -> bool:
+    """Physically reopen a separate private SQLite copy, then remove it."""
+    if not root.is_dir() or root.is_symlink():
+        raise BackupBlocked("private_restore_root_invalid")
+    stage: Path | None = None
+    try:
+        with tempfile.TemporaryDirectory(dir=root, prefix="workerpool-restore-check-") as temporary:
+            stage = Path(temporary)
+            if stage.is_symlink():
+                raise BackupBlocked("restore_stage_redirected")
+            path = stage / "isolated-copy.db"
+            _write_restore_copy(path, raw)
+            if path.is_symlink() or path.stat().st_nlink != 1:
+                raise BackupBlocked("restore_file_redirected")
+            with path.open("rb") as stream:
+                disk_bytes = stream.read(MAX_BYTES + 1)
+            if hashlib.sha256(disk_bytes).hexdigest() != expected["sha256"]:
+                raise BackupBlocked("separate_restore_hash_mismatch")
+            if verify_restore(disk_bytes) != expected:
+                raise BackupBlocked("separate_restore_identity_mismatch")
+            connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=10)
+            try:
+                connection.execute("PRAGMA query_only=ON")
+                if connection.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+                    raise BackupBlocked("separate_restore_integrity_invalid")
+                if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise BackupBlocked("separate_restore_foreign_key_invalid")
+                if connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] != expected["task_rows"]:
+                    raise BackupBlocked("separate_restore_task_count_mismatch")
+            finally:
+                connection.close()
+        if stage.exists():
+            raise BackupBlocked("separate_restore_cleanup_missing")
+        return True
+    except (OSError, sqlite3.Error, OverflowError, ValueError) as exc:
+        raise BackupBlocked("separate_restore_io_blocked") from None
+
 def docker_backup(container_id: str) -> bytes:
     try:
         process = subprocess.run(
@@ -224,6 +272,7 @@ def snapshot(*, host: str, expected_sha: str, observed_sha: str,
     stored = (root / ("workerpool-" + correlation_id + ".dpapi")).read_bytes()
     if hashlib.sha256(stored).hexdigest() != cipher_sha or verify_restore(decrypt(stored)) != first:
         raise BackupBlocked("independent_encrypted_restore_mismatch")
+    separate_file_verified = verify_file_restore(decrypt(stored), root, first)
     return {
         "result": "WORKER_POOL_DEV_PROTECTED_BACKUP_VERIFIED", "host": HOST,
         "source_sha": expected_sha, "environment": "dev",
@@ -232,7 +281,9 @@ def snapshot(*, host: str, expected_sha: str, observed_sha: str,
         "backup_bytes": first["bytes"], "task_rows": first["task_rows"],
         "tasks_preserved": first["tasks_preserved"], "replayed": replay,
         "dpapi_user_scope": True, "encrypted_private_backup": True,
-        "isolated_memory_restore_verified": True, "separate_file_restore_verified": False,
+        "isolated_memory_restore_verified": True,
+        "separate_file_restore_verified": separate_file_verified,
+        "private_restore_temp_cleanup_verified": True,
         "cutover_ready": False, "live_database_modified": False,
         "claim_performed": False, "secrets_exposed": False, "production_touched": False,
     }
