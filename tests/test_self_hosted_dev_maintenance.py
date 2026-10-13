@@ -296,15 +296,20 @@ def test_invalid_marker_reconciler_blocks_before_legacy_mutation(tmp_path, monke
         module.execute(args)
 
 
-def test_workflow_distinguishes_read_only_maintenance_from_legacy_e2e():
+def test_workflow_distinguishes_read_only_maintenance_from_governed_real_e2e():
     raw = (ROOT / ".github" / "workflows" / "noteri-study-mode-dev-reconcile.yml").read_text(encoding="utf-8")
-    portable, legacy = raw.split("if ($e.runtime_provider -eq 'self_hosted_dev') {", 1)[1].split("} else {", 1)
-    assert "portable_maintenance_not_verified" in portable
-    assert "portable_maintenance_cannot_claim_usable" in portable
-    assert "portable_maintenance_cannot_claim_login" in portable
-    assert "api_readback_missing" not in portable
-    assert "api_readback_missing" in legacy
-    assert "ui_estudo_not_observed" in legacy
+    assert "if: github.event_name == 'workflow_dispatch'" in raw
+    assert "inputs.mode == 'public-static'" in raw
+    assert "Reconcile full DEV runtime and static frontend" in raw
+    assert "Independent public same-SHA smoke" in raw
+    assert "Require explicitly provisioned Microsoft test session" in raw
+    assert "NOTERI_DEV_MSAL_TEST_IDENTITY_NOT_PROVISIONED" in raw
+    assert "Bootstrap isolated and governed Desktop session" in raw
+    assert "SESSION_LAUNCH_OK" in raw
+    assert "command_gateway.py" in raw
+    assert "noteri_study_mode_pages_e2e.py" in raw
+    assert "GOVERNED_NOTERI_PAGES_E2E_FAILED" in raw
+    assert "STUDY_MODE_AUTHENTICATED_E2E_NOT_GOVERNED" not in raw
 
 
 def test_duplicate_marker_keys_are_rejected_even_with_identical_values(tmp_path, monkeypatch):
