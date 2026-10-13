@@ -15,7 +15,7 @@
     "tests": [
       "frontend/tests/e2e/global-search-published.spec.js"
     ],
-    "evidence_contract": "No workflow_dispatch, executar o Playwright anônimo contra o Pages DEV real independentemente da condição do runtime para obter captura apenas da tela pública; não transformar o teste anônimo em falso verde do gate geral. A validação do runtime PC24x7 mantém SHA exato obrigatório quando o escopo exigir, e qualquer divergência continua reprovando o workflow. O teste autenticado depende do êxito dos jobs validar-acessos e anonymous, além de MSAL delegada válida no origin correto e POST real /api/v1/auth/azure=200; exigir navegação, buscas, controle negativo e mobile, sem mocks nem segredos em artifacts."
+    "evidence_contract": "No workflow_dispatch, executar o Playwright anônimo contra o Pages DEV real independentemente da condição do runtime para obter captura apenas da tela pública; não transformar o teste anônimo em falso verde do gate geral. A validação do runtime PC24x7 mantém SHA exato obrigatório quando o escopo exigir, e qualquer divergência continua reprovando o workflow. O teste autenticado depende do êxito dos jobs validar-acessos e anonymous, além de MSAL delegada válida no origin correto e POST real /api/v1/auth/azure=200; exigir navegação, buscas, controle negativo e mobile, sem mocks nem segredos em artifacts. Após falha real no Pages DEV #38393919042, registrar somente flags públicos /api/v1/auth/config do mesmo navegador, origem HTTPS trycloudflare assinada e screenshot anônimo com inputs mascarados antes de qualquer asserção demo; persistir falha obrigatória enquanto demo_login_enabled não for literalmente false, sem simulação, bypass ou captura de tokens."
   },
   "controls": {
     "production_touched": false,
@@ -26,6 +26,9 @@
     "anonymous_browser_runs_despite_runtime_drift_on_dispatch": true,
     "runtime_sha_gate_must_remain_blocking": true,
     "authenticated_browser_requires_runtime_and_anonymous_success": true,
-    "anonymous_screenshot_only": true
+    "anonymous_screenshot_only": true,
+    "public_auth_flags_observed_without_secrets": true,
+    "anonymous_screenshot_masks_input_fields": true,
+    "demo_login_must_be_disabled_at_runtime": true
   }
 }
