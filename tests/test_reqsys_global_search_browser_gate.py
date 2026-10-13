@@ -75,3 +75,43 @@ def test_contract_rejects_browser_skipping_on_runtime_failure():
     )
     assert broken != current
     assert not _secure_contract(broken)
+
+def _public_auth_evidence_contract(text: str) -> bool:
+    try:
+        screenshot = text.index("await page.screenshot({")
+        flags = text.index("check: 'public_auth_flags'")
+        demo_assertion = text.index("expect(config?.demo_login_enabled).toBe(false)")
+    except ValueError:
+        return False
+    return (
+        screenshot < flags < demo_assertion
+        and "mask: [page.locator('.login-card input')]" in text
+        and "new URL(response.url()).pathname.endsWith('/api/v1/auth/config')" in text
+        and "expect(signedRuntimeOrigin).toBe(true)" in text
+        and "expect(config?.azure_enabled).toBe(true)" in text
+        and "await expect(page.getByRole('button', { name: /entrar \\(demo\\)/i })).toHaveCount(0)" in text
+    )
+
+
+def test_public_auth_flags_recorded_and_screenshot_masked_before_failure():
+    assert _public_auth_evidence_contract(SPEC.read_text(encoding='utf-8'))
+
+
+def test_public_auth_evidence_contract_detects_regressions():
+    original = SPEC.read_text(encoding='utf-8')
+    assert _public_auth_evidence_contract(original)
+    assert not _public_auth_evidence_contract(original.replace(
+        "expect(config?.demo_login_enabled).toBe(false)",
+        "expect(config?.demo_login_enabled).toBe(true)",
+        1,
+    ))
+    assert not _public_auth_evidence_contract(original.replace(
+        "mask: [page.locator('.login-card input')]",
+        "mask: []",
+        1,
+    ))
+    assert not _public_auth_evidence_contract(original.replace(
+        "await page.screenshot({",
+        "// screenshot removed",
+        1,
+    ))

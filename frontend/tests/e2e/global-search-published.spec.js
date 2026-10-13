@@ -44,14 +44,44 @@ test.describe('ReqSys Pages DEV — prova pública sem autenticação', () => {
   test.use({ storageState: cleanSession })
 
   test('carrega o login corporativo sem mostrar a lupa ou liberar login demo', async ({ page }, testInfo) => {
+    const authConfigResponsePromise = page.waitForResponse(response =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname.endsWith('/api/v1/auth/config'),
+    { timeout: 30_000 })
     const response = await page.goto(DEV_URL, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
     await expect(page.getByTestId('route-login')).toBeVisible({ timeout: 25_000 })
     await expect(page.getByRole('button', { name: 'Entrar com conta Microsoft' })).toBeVisible({ timeout: 25_000 })
+
+    // Capturar a pagina anonima mesmo se o controle negativo reprovar.
+    // A mascara impede publicar e-mail ou senha predefinidos em artefatos.
+    await page.screenshot({
+      path: testInfo.outputPath('public-login.png'),
+      fullPage: true,
+      mask: [page.locator('.login-card input')],
+      maskColor: '#000000',
+    })
+
+    const authResponse = await authConfigResponsePromise
+    const configPayload = await authResponse.json()
+    const config = configPayload?.data ?? configPayload
+    const authUrl = new URL(authResponse.url())
+    const signedRuntimeOrigin = authUrl.protocol === 'https:' && authUrl.hostname.endsWith('.trycloudflare.com')
+    // Evidencia somente sinalizadores publicos, nunca tokens/cookies/JSON completo.
+    console.info(JSON.stringify({
+      check: 'public_auth_flags',
+      http: authResponse.status(),
+      signed_runtime: signedRuntimeOrigin,
+      azure_enabled: typeof config?.azure_enabled === 'boolean' ? config.azure_enabled : 'invalid_type',
+      demo_login_enabled: typeof config?.demo_login_enabled === 'boolean' ? config.demo_login_enabled : 'invalid_type',
+    }))
+    expect(authResponse.status()).toBe(200)
+    expect(signedRuntimeOrigin).toBe(true)
+    expect(config?.azure_enabled).toBe(true)
+    expect(config?.demo_login_enabled).toBe(false)
     await expect(page.getByRole('button', { name: /entrar \(demo\)/i })).toHaveCount(0)
     await expect(page.getByTestId('global-search-trigger-desktop')).toHaveCount(0)
     expect(new URL(page.url()).pathname).toMatch(/^\/reqsys-v2-enterprise-real\/dev\/login$/)
-    await page.screenshot({ path: testInfo.outputPath('public-login.png'), fullPage: true })
   })
 
   test('entrega bundle publicado contendo os controles da lupa', async ({ request }) => {
