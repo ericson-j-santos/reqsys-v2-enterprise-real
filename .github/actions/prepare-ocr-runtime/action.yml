@@ -1,5 +1,5 @@
 name: Prepare OCR Runtime Package
-description: Prepara bundle privado do OCR com manifesto canônico por SHA imutável.
+description: Prepara duas builds limpas e byte-idênticas do OCR privado.
 
 inputs:
   app-id:
@@ -23,7 +23,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Ler lock imutável do OCR
+    - name: Ler locks imutáveis do OCR
       id: lock
       shell: bash
       run: |
@@ -56,22 +56,75 @@ runs:
           ocr-evidence-engine
         permission-contents: read
 
-    - name: Checkout OCR privado no SHA do lock
+    - name: Checkout limpo A do OCR no SHA do lock
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: ${{ steps.lock.outputs.repository }}
         ref: ${{ steps.lock.outputs.sha }}
         token: ${{ steps.app-token.outputs.token }}
-        path: .external/ocr-evidence-engine
+        path: .external/ocr-evidence-engine-a
         persist-credentials: false
 
-    - name: Gerar e verificar bundle canônico para o build
+    - name: Checkout limpo B do OCR no SHA do lock
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ steps.lock.outputs.repository }}
+        ref: ${{ steps.lock.outputs.sha }}
+        token: ${{ steps.app-token.outputs.token }}
+        path: .external/ocr-evidence-engine-b
+        persist-credentials: false
+
+    - name: Instalar toolchain de build fixada
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --disable-pip-version-check           pip==26.1.2 setuptools==80.9.0 wheel==0.45.1 packaging==25.0
+        python - <<'PY'
+        import importlib.metadata
+        import json
+        import sys
+        from pathlib import Path
+
+        expected = json.loads(Path("config/ocr-build-toolchain.json").read_text())
+        observed = {
+            "python": ".".join(map(str, sys.version_info[:3])),
+            **{name: importlib.metadata.version(name)
+               for name in ("pip", "setuptools", "wheel", "packaging")},
+        }
+        if observed != expected:
+            raise SystemExit(f"ocr_toolchain_mismatch:{observed}")
+        print("OCR_BUILD_TOOLCHAIN_OK " + json.dumps(observed, sort_keys=True))
+        PY
+
+    - name: Gerar duas builds independentes e comparar bytes
       id: package
       shell: bash
       run: |
         set -euo pipefail
-        python -m pip install --disable-pip-version-check packaging==25.0
-        python scripts/prepare_ocr_runtime_package.py
+        bundle_a="$RUNNER_TEMP/ocr-bundle-a"
+        python scripts/prepare_ocr_runtime_package.py           --source .external/ocr-evidence-engine-a           --output-dir "$bundle_a"
+        python scripts/prepare_ocr_runtime_package.py           --source .external/ocr-evidence-engine-b           --output-dir backend/vendor/ocr-evidence-engine           --compare-with "$bundle_a"
+
+        tampered="$RUNNER_TEMP/ocr-bundle-tampered"
+        cp -a backend/vendor/ocr-evidence-engine "$tampered"
+        printf '\n' >> "$tampered/MANIFEST.sha256"
+        set +e
+        python - <<'PY' "$bundle_a" "$tampered"
+        import sys
+        from pathlib import Path
+        from scripts.prepare_ocr_runtime_package import RuntimePackageError, compare_bundles
+
+        try:
+            compare_bundles(Path(sys.argv[1]), Path(sys.argv[2]))
+        except RuntimePackageError:
+            raise SystemExit(3)
+        raise SystemExit(0)
+        PY
+        negative_rc=$?
+        set -e
+        test "$negative_rc" -eq 3
+        echo "OCR_REPRODUCIBILITY_NEGATIVE_CONTROL_OK"
+
         python - <<'PY' >> "$GITHUB_OUTPUT"
         import json
         from pathlib import Path
