@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-worker-pool-candidate-canary-dev",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "issue": 2020,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "api_candidate": "1.4.0",
+    "legacy_api": "1.2.0",
+    "legacy_port": 8097,
+    "candidate_port": 18098,
+    "worker_sha": "9074b170d47a7d63a4e0ef6cee2d37282bbbace8",
+    "physical_canary_isolated": true,
+    "live_sqlite_modified": false,
+    "legacy_service_deployed": false,
+    "production_touched": false,
+    "cutover_ready": false
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-worker-pool-candidate-canary-dev.requirements.md",
+    "script": "scripts/pc24x7_worker_pool_candidate_canary_dev.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests": "tests/test_pc24x7_worker_pool_candidate_canary_dev.py"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_candidate_canary_dev.py",
+      "tests/test_pc24x7_worker_pool_backup_restore_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Literal owner command and immutable SHAs; Windows runner Session Launcher and Command Gateway; isolated Docker image/volume on loopback:18098 with real ReqSys consumer v1, synthetic idempotency, negative auth, independent SQL readback, legacy before/after, cleanup. Never authorize cutover: real backup import and rollback remain pending."
+  }
+}
