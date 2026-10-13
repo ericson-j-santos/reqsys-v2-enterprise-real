@@ -2,7 +2,7 @@
   "feature_name": "engineering-worker-pool-main-protection-automation",
   "project": "Engineering Control Plane",
   "created_at": "2026-09-24",
-  "updated_at": "2026-09-25",
+  "updated_at": "2026-10-12",
   "phase": "implementation",
   "increment_type": "gap_fix",
   "approvals": {
@@ -10,7 +10,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Protege engineering-worker-pool/main e habilita auto-merge por rota Risk3 fixa, idempotente e com readback independente, mantendo PC24x7 como primário e Noteri como fallback governado quando o Desktop não adquire o job.",
+  "description": "Proteger engineering-worker-pool/main por rota Risk3 fixa e idempotente, sem alterar a configuracao de auto-merge; PC24x7 primario, Noteri fallback sujeito aos mesmos gates.",
   "environment": "GitHub Actions / PC24x7 ou Noteri DEV / GitHub API",
   "production_enabled": false,
   "risk": {
@@ -32,7 +32,7 @@
     "Ambas as rotas passam por Session Launcher e Owner Risk3 Gateway com action/scope fixos.",
     "O check test do SHA atual deve estar verde antes da mutação.",
     "Branch protection exige PR, test strict, admins protegidos e bloqueia force-push/exclusão.",
-    "allow_auto_merge termina true e é comprovado por leitura independente.",
+    "allow_auto_merge permanece exatamente no valor anterior (true ou false); sem PATCH no repositório.",
     "SHA alvo permanece estável antes/depois e replay pode retornar ALREADY_COMPLIANT.",
     "Nenhum segredo, deploy, produção ou conteúdo da branch alvo é alterado."
   ],
@@ -40,6 +40,6 @@
     "tests": [
       "tests/test_engineering_worker_pool_branch_protection.py"
     ],
-    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; no Noteri, checkout imutável do run como session source; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
+    "evidence_contract": "Proteção main sem alterar auto-merge; check test SHA atual, PR e admins, force-push/deleção bloqueados, readback da proteção e do valor inicial/final de auto-merge; sem credenciais, produção ou deploy."
   }
 }

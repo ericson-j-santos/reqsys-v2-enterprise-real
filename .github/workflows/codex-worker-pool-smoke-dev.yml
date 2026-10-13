@@ -13,6 +13,8 @@ on:
           - restore
           - task-read
           - task-2547-read
+          - version-2547-read
+          - inventory-read
 
 permissions:
   contents: read
@@ -494,5 +496,327 @@ jobs:
         with:
           name: codex-worker-pool-task-2547-read-dev-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-task-2547-read-dev\evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  version-2547-read:
+    if: ${{ inputs.mode == 'version-2547-read' }}
+    name: Read fixed Worker Pool runtime version and task #2547 on Desktop DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
+      CORRELATION_ID: codex-worker-pool-version-2547-read-dev-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\codex-worker-pool-version-2547-read-dev\evidence.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          $observedHash = ([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($zip)))).Replace('-', '').ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
+            throw "portable_python_sha256_mismatch:$observedHash"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "codex-worker-pool-version-2547-read-dev",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Prove exact physical host through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\codex_worker_pool_version_2547_probe_dev.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--expected-sha", $env:ANCHOR_SHA
+          )
+          & "$env:REQSYS_PYTHON" $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized fixed-task evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "VERSION_PROBE_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if ($e.result -ne "WORKER_POOL_VERSION_PROBE_OK" -or
+              $e.task_id -ne "cwp-7d84018f3319356181ab9b47" -or
+              $e.request_id -ne "9a9783d5ac78199eacfd13c0" -or
+              $e.issue_number -ne 2547 -or
+              $e.upgrade_required -notin @($true,$false)) {
+            throw "VERSION_PROBE_IDENTITY_OR_RESULT_INVALID"
+          }
+          if ($e.source_sha -ne "${{ github.sha }}" -or $e.host -ne "DESKTOP-PDQK954") {
+            throw "VERSION_PROBE_SOURCE_OR_HOST_INVALID"
+          }
+          if ($e.snapshot_called -ne $false -or $e.runtime_mutated_by_probe -ne $false -or
+              $e.production_touched -ne $false -or $e.secrets_exposed -ne $false -or
+              $e.runtime_source_sha_attested -ne $false -or $e.deploy_executed -ne $false) {
+            throw "VERSION_PROBE_SAFETY_CONTRACT_FAILED"
+          }
+
+      - name: Upload sanitized fixed-task evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: codex-worker-pool-version-2547-read-dev-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-version-2547-read-dev\evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  inventory-read:
+    if: ${{ inputs.mode == 'inventory-read' }}
+    name: Inspect fixed Worker Pool SQLite and capacity on PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
+      CORRELATION_ID: pc24x7-worker-pool-inventory-dev-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\pc24x7-worker-pool-inventory-dev\evidence.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          $observedHash = ([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($zip)))).Replace('-', '').ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
+            throw "portable_python_sha256_mismatch:$observedHash"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "pc24x7-worker-pool-inventory-dev",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Prove exact physical host through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\pc24x7_worker_pool_inventory_dev.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--expected-sha", $env:ANCHOR_SHA,
+            "--correlation-id", $env:CORRELATION_ID,
+            "--confirm", "READ-WORKER-POOL-DEV-SQL-ONLY"
+          )
+          & "$env:REQSYS_PYTHON" $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Validate immutable SQLite inventory evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "INVENTORY_WORKTREE_MISSING" }
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "INVENTORY_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if ($e.result -ne "WORKER_POOL_PHYSICAL_INVENTORY_READ_OK" -or
+              $e.environment -ne "dev" -or $e.host -ne "DESKTOP-PDQK954" -or
+              $e.source_sha -ne $env:GITHUB_SHA -or
+              $e.correlation_id -ne $env:CORRELATION_ID -or
+              $e.container_image_id_sha256 -notmatch '^[0-9a-f]{64}$') {
+            throw "INVENTORY_IDENTITY_OR_IMAGE_MISMATCH"
+          }
+          if ($e.docker_inspect_read_only -ne $true -or $e.sql_mode_ro -ne $true -or
+              $e.production_touched -ne $false -or
+              $e.inventory.read_mode -ne "sqlite_mode_ro" -or
+              $e.inventory.db_quick_check -ne "ok" -or
+              $e.inventory.legacy_progress_column_present -ne $true) {
+            throw "INVENTORY_READ_ONLY_OR_DB_INVALID"
+          }
+          if ($e.inventory.claim_performed -ne $false -or
+              $e.inventory.snapshot_called -ne $false -or
+              $e.inventory.requeue_performed -ne $false -or
+              $e.inventory.runtime_mutated -ne $false -or
+              $e.inventory.secrets_exposed -ne $false) {
+            throw "INVENTORY_SAFETY_CONTRACT_FAILED"
+          }
+          $tasks = @($e.inventory.tasks)
+          if ($tasks.Count -ne 2 -or $tasks[0].task_id -ne "cwp-cdb85c31e3cc4e972f3094ab" -or
+              $tasks[1].task_id -ne "cwp-7d84018f3319356181ab9b47" -or
+              $tasks[0].issue_number -ne 2546 -or $tasks[1].issue_number -ne 2547) {
+            throw "INVENTORY_TASK_IDENTITY_INVALID"
+          }
+          if ($e.inventory.worker_count -lt 0 -or
+              $e.inventory.builders_registered -lt 0 -or
+              $e.inventory.validators_registered -lt 0) {
+            throw "INVENTORY_WORKER_COUNTS_INVALID"
+          }
+
+      - name: Upload sanitized readonly inventory
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pc24x7-worker-pool-inventory-dev-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\pc24x7-worker-pool-inventory-dev\evidence.json
           if-no-files-found: error
           retention-days: 30

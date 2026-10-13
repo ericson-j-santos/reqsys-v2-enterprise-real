@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 DEV read-only Worker Pool runtime version and task 2547 eligibility",
+  "increment_type": "hotfix",
+  "issue": 2547,
+  "origin_issue": 2547,
+  "created_at": "2026-10-12",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "target_host": "DESKTOP-PDQK954",
+    "task_id": "cwp-7d84018f3319356181ab9b47",
+    "loopback": "http://127.0.0.1:8097",
+    "api": [
+      "GET /health",
+      "GET /openapi.json",
+      "GET /v1/tasks/{task_id}",
+      "GET /v1/tasks/{task_id}/diagnostics"
+    ],
+    "legacy_mutating_snapshot_allowed": false,
+    "arbitrary_inputs_allowed": false,
+    "production_touched": false,
+    "deploy_executed": false,
+    "workflow_mutates_runtime": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_codex_worker_pool_version_2547_probe_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Physical SHA-pinned DEV probe through Session Launcher+Command Gateway, exact owner comment, bounded JSON, zero side effects, legacy 1.2 vs engineering 1.4 route presence; diagnostics sqlite_mode_ro only when present; never attest image SHA from API version. The script, workflow validator, and artifact uploader MUST use the identical relative path artifacts/codex-worker-pool-version-2547-read-dev/evidence.json; a regression test must check both static alignment and actual JSON persistence on disk, and the DEV physical rerun must upload independently verifiable SHA-bound evidence."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/codex-worker-pool-version-2547-read-dev.requirements.md",
+    "script": "scripts/codex_worker_pool_version_2547_probe_dev.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests": "tests/test_codex_worker_pool_version_2547_probe_dev.py"
+  }
+}
