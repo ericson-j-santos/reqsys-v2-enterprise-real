@@ -300,3 +300,102 @@ def test_untrusted_cli_valid_signature_does_not_become_an_allowlist():
     assert result["docker"]["provenance"]["authenticode_status"] == "valid"
     assert result["hml_provisioning_authorized"] is False
     runner.assert_not_called()
+
+def test_signed_official_cli_replaces_untrusted_path_without_running_wrapper():
+    from types import SimpleNamespace
+
+    official = r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+    untrusted = r"C:\Users\Example\docker.exe"
+    runner = Mock(side_effect=lambda argv, env: response_for(argv))
+    with (
+        patch.object(
+            subject.os, "lstat",
+            return_value=SimpleNamespace(st_size=40_000_000, st_file_attributes=0),
+        ),
+        patch.object(subject.os.path, "isfile", side_effect=lambda p: p == official),
+        patch.object(subject, "_win_authenticode_status", return_value="valid") as cert,
+        patch.object(
+            subject, "_untrusted_cli_provenance",
+            return_value={"status": "observed", "executable_launched": False},
+        ) as probe,
+    ):
+        first = subject.collect(
+            platform="nt", cli_path=untrusted, docker_runner=runner,
+            service_reader=services,
+        )
+        second = subject.collect(
+            platform="nt", cli_path=untrusted, docker_runner=runner,
+            service_reader=services,
+        )
+    assert first == second
+    assert first["docker"]["cli_selection"] == "signed_official_path"
+    assert first["docker"]["engine_verified"] is True
+    assert first["docker"]["engine_type"] == "linux"
+    assert first["hml_provisioning_authorized"] is False
+    assert runner.call_count == 8
+    assert cert.call_count == 2
+    assert probe.call_count == 2
+    assert all(call.args[0] == official for call in runner.call_args_list)
+
+
+def test_unsigned_official_cli_does_not_override_untrusted_path():
+    from types import SimpleNamespace
+
+    runner = Mock(side_effect=AssertionError("must not execute untrusted or unsigned CLI"))
+    with (
+        patch.object(subject.os, "lstat", return_value=SimpleNamespace(
+            st_size=40_000_000, st_file_attributes=0,
+        )),
+        patch.object(subject.os.path, "isfile", return_value=True),
+        patch.object(subject, "_win_authenticode_status", return_value="not_trusted"),
+        patch.object(subject, "_untrusted_cli_provenance", return_value={"status": "unavailable"}),
+    ):
+        result = subject.collect(
+            platform="nt", cli_path=r"C:\Users\Example\docker.exe",
+            docker_runner=runner, service_reader=services,
+        )
+    assert result["docker"]["engine_verified"] is False
+    assert result["docker"]["reason"] == "docker_cli_untrusted"
+    assert "cli_selection" not in result["docker"]
+    runner.assert_not_called()
+
+
+def test_reparse_official_cli_is_rejected_without_signature_verification():
+    from types import SimpleNamespace
+
+    runner = Mock(side_effect=AssertionError("no execution"))
+    signed = Mock(side_effect=AssertionError("reparse cannot be verified"))
+    with (
+        patch.object(subject.os, "lstat", return_value=SimpleNamespace(
+            st_size=40_000_000, st_file_attributes=0x400,
+        )),
+        patch.object(subject.os.path, "isfile", return_value=True),
+        patch.object(subject, "_win_authenticode_status", signed),
+        patch.object(subject, "_untrusted_cli_provenance", return_value={"status": "unavailable"}),
+    ):
+        result = subject.collect(
+            platform="nt", cli_path=r"C:\Users\Example\docker.exe",
+            docker_runner=runner, service_reader=services,
+        )
+    assert result["docker"]["reason"] == "docker_cli_untrusted"
+    assert result["hml_provisioning_authorized"] is False
+    signed.assert_not_called()
+    runner.assert_not_called()
+
+
+def test_missing_official_installation_remains_closed_even_when_path_cli_signed():
+    runner = Mock(side_effect=AssertionError("no execution"))
+    with (
+        patch.object(subject.os, "lstat", side_effect=FileNotFoundError("not installed")),
+        patch.object(subject, "_untrusted_cli_provenance", return_value={
+            "status": "observed", "authenticode_status": "valid",
+        }),
+    ):
+        result = subject.collect(
+            platform="nt", cli_path=r"C:\Users\Example\docker.exe",
+            docker_runner=runner, service_reader=services,
+        )
+    assert result["docker"]["reason"] == "docker_cli_untrusted"
+    assert result["docker"]["provenance"]["authenticode_status"] == "valid"
+    assert result["docker"]["engine_verified"] is False
+    runner.assert_not_called()
