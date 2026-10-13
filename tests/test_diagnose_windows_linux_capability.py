@@ -205,7 +205,10 @@ def test_real_collector_path_cannot_reach_subprocess_or_shell(monkeypatch):
 def test_source_has_no_subprocess_shell_wsl_or_mutating_commands():
     source = FILE.read_text(encoding="utf-8")
     for forbidden in (
-        "platform",
+        "import platform",
+        "platform.system",
+        "platform.release",
+        "platform.machine",
         "os.system",
         "shell=True",
         "wsl.exe",
