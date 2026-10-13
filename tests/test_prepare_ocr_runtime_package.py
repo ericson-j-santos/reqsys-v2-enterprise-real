@@ -146,3 +146,27 @@ def test_reproducibility_report_records_both_builds_and_negative_control(tmp_pat
     assert report["build_a"] == report["build_b"]
     assert report["byte_identical"] is True
     assert report["negative_control_detected"] is True
+
+
+def test_toolchain_evidence_path_must_be_outside_closed_bundle(tmp_path: Path):
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    bundle_link = tmp_path / "bundle-link"
+    bundle_link.symlink_to(bundle, target_is_directory=True)
+
+    rejected = [
+        bundle,
+        bundle / "toolchain.json",
+        bundle / ".." / "bundle" / "toolchain.json",
+        bundle_link / "toolchain.json",
+    ]
+    for evidence in rejected:
+        with pytest.raises(
+            module.RuntimePackageError,
+            match="ocr_toolchain_evidence_inside_bundle",
+        ):
+            module._validate_toolchain_evidence_path(bundle, evidence)
+
+    module._validate_toolchain_evidence_path(
+        bundle, tmp_path / "artifacts" / "toolchain.json"
+    )

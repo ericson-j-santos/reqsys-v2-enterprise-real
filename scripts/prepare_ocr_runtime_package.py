@@ -199,6 +199,18 @@ def reproducibility_report(
     }
 
 
+def _validate_toolchain_evidence_path(
+    output_dir: Path, toolchain_evidence_path: Path
+) -> None:
+    resolved_output = output_dir.resolve()
+    resolved_evidence = toolchain_evidence_path.resolve()
+    if (
+        resolved_evidence == resolved_output
+        or resolved_output in resolved_evidence.parents
+    ):
+        raise RuntimePackageError("ocr_toolchain_evidence_inside_bundle")
+
+
 def _write_toolchain_evidence(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -221,6 +233,7 @@ def prepare(
     source = source.resolve()
     if not source.is_dir():
         raise RuntimePackageError(f"ocr_source_missing:{source}")
+    _validate_toolchain_evidence_path(output_dir, toolchain_evidence_path)
 
     actual_sha = _git_head(source)
     expected_sha = str(lock["sha"])
