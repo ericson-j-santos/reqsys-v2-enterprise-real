@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Prepara o bundle OCR externo e valida a evidência canônica do provedor."""
+"""Prepara o bundle OCR externo e valida sua reprodutibilidade binária."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
+
+REPRODUCIBLE_FILES = ("MANIFEST.sha256", "SHA256SUMS")
 
 
 class RuntimePackageError(RuntimeError):
@@ -30,14 +36,50 @@ def _load_lock(path: Path) -> dict[str, Any]:
     return data
 
 
-def _git_head(source: Path) -> str:
+def _git(source: Path, *args: str) -> str:
     proc = subprocess.run(
-        ["git", "-C", str(source), "rev-parse", "HEAD"],
+        ["git", "-C", str(source), *args],
         check=True,
         capture_output=True,
         text=True,
     )
     return proc.stdout.strip()
+
+
+def _git_head(source: Path) -> str:
+    return _git(source, "rev-parse", "HEAD")
+
+
+def _git_commit_epoch(source: Path, expected_sha: str) -> str:
+    epoch = _git(source, "show", "-s", "--format=%ct", expected_sha)
+    if not re.fullmatch(r"[1-9][0-9]{8,}", epoch):
+        raise RuntimePackageError("ocr_source_date_epoch_invalid")
+    return epoch
+
+
+def _load_toolchain(path: Path) -> dict[str, str]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    required = {"python", "pip", "setuptools", "wheel", "packaging"}
+    missing = sorted(required - set(data))
+    if missing:
+        raise RuntimePackageError(f"ocr_toolchain_missing_fields:{','.join(missing)}")
+    expected_python = str(data["python"])
+    observed_python = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    if observed_python != expected_python:
+        raise RuntimePackageError(
+            f"ocr_toolchain_python_mismatch:expected={expected_python}:actual={observed_python}"
+        )
+    observed = {
+        name: importlib.metadata.version(name)
+        for name in ("pip", "setuptools", "wheel", "packaging")
+    }
+    for name, version in observed.items():
+        expected = str(data[name])
+        if version != expected:
+            raise RuntimePackageError(
+                f"ocr_toolchain_version_mismatch:{name}:expected={expected}:actual={version}"
+            )
+    return {"python": observed_python, **observed}
 
 
 def _normalize_package_name(value: str) -> str:
@@ -59,6 +101,7 @@ def _run_evidence(
     output_dir: Path,
     repository: str,
     sha: str,
+    env: dict[str, str],
 ) -> None:
     if command == "generate":
         args = [
@@ -84,14 +127,113 @@ def _run_evidence(
             "--expected-git-sha",
             sha,
         ]
-    subprocess.run(args, check=True)
+    subprocess.run(args, check=True, env=env)
 
 
-def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
+def _single_wheel(directory: Path) -> Path:
+    wheels = sorted(directory.glob("*.whl"))
+    if len(wheels) != 1:
+        raise RuntimePackageError(f"ocr_wheel_count_invalid:{len(wheels)}")
+    return wheels[0]
+
+
+def _zip_difference(first: Path, second: Path) -> str:
+    try:
+        with zipfile.ZipFile(first) as left, zipfile.ZipFile(second) as right:
+            left_names = sorted(left.namelist())
+            right_names = sorted(right.namelist())
+            if left_names != right_names:
+                return "zip_member_set"
+            for name in left_names:
+                if left.read(name) != right.read(name):
+                    return f"zip_member:{name}"
+            return "zip_container_metadata"
+    except zipfile.BadZipFile:
+        return "invalid_zip"
+
+
+def _bundle_hashes(directory: Path) -> dict[str, str]:
+    wheel = _single_wheel(directory)
+    hashes: dict[str, str] = {}
+    for name in (wheel.name, *REPRODUCIBLE_FILES):
+        path = directory / name
+        if not path.is_file():
+            raise RuntimePackageError(f"ocr_reproducibility_file_missing:{name}")
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
+def compare_bundles(first: Path, second: Path) -> dict[str, str]:
+    left_wheel = _single_wheel(first)
+    right_wheel = _single_wheel(second)
+    required = (left_wheel.name, *REPRODUCIBLE_FILES)
+    if right_wheel.name != left_wheel.name:
+        raise RuntimePackageError("ocr_reproducibility_wheel_filename_mismatch")
+    for name in required:
+        left = first / name
+        right = second / name
+        if not left.is_file() or not right.is_file():
+            raise RuntimePackageError(f"ocr_reproducibility_file_missing:{name}")
+        if left.read_bytes() != right.read_bytes():
+            detail = _zip_difference(left, right) if name.endswith(".whl") else "file_bytes"
+            raise RuntimePackageError(f"ocr_reproducibility_mismatch:{name}:{detail}")
+    return _bundle_hashes(first)
+
+
+def reproducibility_report(
+    first: Path,
+    second: Path,
+    source_sha: str,
+    toolchain: dict[str, str],
+    negative_control_detected: bool,
+) -> dict[str, Any]:
+    compare_bundles(first, second)
+    return {
+        "schema_version": "1.0",
+        "source_sha": source_sha,
+        "toolchain": toolchain,
+        "build_a": _bundle_hashes(first),
+        "build_b": _bundle_hashes(second),
+        "byte_identical": True,
+        "negative_control_detected": negative_control_detected,
+    }
+
+
+def _validate_toolchain_evidence_path(
+    output_dir: Path, toolchain_evidence_path: Path
+) -> None:
+    resolved_output = output_dir.resolve()
+    resolved_evidence = toolchain_evidence_path.resolve()
+    if (
+        resolved_evidence == resolved_output
+        or resolved_output in resolved_evidence.parents
+    ):
+        raise RuntimePackageError("ocr_toolchain_evidence_inside_bundle")
+
+
+def _write_toolchain_evidence(path: Path, record: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def prepare(
+    lock_path: Path,
+    source: Path,
+    output_dir: Path,
+    toolchain_path: Path = Path("config/ocr-build-toolchain.json"),
+    compare_with: Path | None = None,
+    toolchain_evidence_path: Path = Path("artifacts/ocr-build-toolchain.json"),
+) -> dict[str, str]:
     lock = _load_lock(lock_path)
+    toolchain = _load_toolchain(toolchain_path)
     source = source.resolve()
     if not source.is_dir():
         raise RuntimePackageError(f"ocr_source_missing:{source}")
+    _validate_toolchain_evidence_path(output_dir, toolchain_evidence_path)
 
     actual_sha = _git_head(source)
     expected_sha = str(lock["sha"])
@@ -99,6 +241,20 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
         raise RuntimePackageError(
             f"ocr_source_sha_mismatch:expected={expected_sha}:actual={actual_sha}"
         )
+    if _git(source, "status", "--porcelain"):
+        raise RuntimePackageError("ocr_source_not_clean")
+
+    source_date_epoch = _git_commit_epoch(source, expected_sha)
+    build_env = os.environ.copy()
+    build_env.update(
+        {
+            "SOURCE_DATE_EPOCH": source_date_epoch,
+            "PYTHONHASHSEED": "0",
+            "TZ": "UTC",
+            "LC_ALL": "C.UTF-8",
+            "LANG": "C.UTF-8",
+        }
+    )
 
     evidence_script = source / "scripts" / "ocr_distribution_evidence.py"
     if not evidence_script.is_file():
@@ -115,20 +271,24 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
                 "wheel",
                 "--disable-pip-version-check",
                 "--no-deps",
+                "--no-build-isolation",
                 "--wheel-dir",
                 str(wheel_dir),
                 str(source),
             ],
             check=True,
+            env=build_env,
         )
-        wheels = list(wheel_dir.glob("*.whl"))
-        if len(wheels) != 1:
-            raise RuntimePackageError(f"ocr_wheel_count_invalid:{len(wheels)}")
-        shutil.copy2(wheels[0], output_dir / wheels[0].name)
+        wheel = _single_wheel(wheel_dir)
+        shutil.copyfile(wheel, output_dir / wheel.name)
 
     repository = str(lock["repository"])
-    _run_evidence(evidence_script, "generate", output_dir, repository, expected_sha)
-    _run_evidence(evidence_script, "verify", output_dir, repository, expected_sha)
+    _run_evidence(
+        evidence_script, "generate", output_dir, repository, expected_sha, build_env
+    )
+    _run_evidence(
+        evidence_script, "verify", output_dir, repository, expected_sha, build_env
+    )
 
     provenance = json.loads(
         (output_dir / "provenance.json").read_text(encoding="utf-8")
@@ -151,6 +311,22 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
     if canonical != compatibility:
         raise RuntimePackageError("ocr_manifest_compatibility_mismatch")
 
+    build_record = {
+        "schema_version": "1.0",
+        "source_sha": expected_sha,
+        "source_date_epoch": source_date_epoch,
+        "pythonhashseed": "0",
+        "toolchain": toolchain,
+    }
+    _write_toolchain_evidence(toolchain_evidence_path, build_record)
+
+    if compare_with is not None:
+        hashes = compare_bundles(compare_with, output_dir)
+        print(
+            "OCR_REPRODUCIBLE_BUILDS_OK "
+            f"wheel_sha256={hashes[str(file_entry['filename'])]}"
+        )
+
     print(
         "OCR_RUNTIME_PACKAGE_READY "
         f"source_sha={expected_sha} version={package['version']} "
@@ -167,13 +343,23 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lock", default="config/ocr-engine-lock.json")
+    parser.add_argument("--toolchain", default="config/ocr-build-toolchain.json")
     parser.add_argument("--source", default=".external/ocr-evidence-engine")
+    parser.add_argument("--output-dir", default="backend/vendor/ocr-evidence-engine")
+    parser.add_argument("--compare-with", default="")
     parser.add_argument(
-        "--output-dir", default="backend/vendor/ocr-evidence-engine"
+        "--toolchain-evidence", default="artifacts/ocr-build-toolchain.json"
     )
     args = parser.parse_args()
     try:
-        prepare(Path(args.lock), Path(args.source), Path(args.output_dir))
+        prepare(
+            Path(args.lock),
+            Path(args.source),
+            Path(args.output_dir),
+            Path(args.toolchain),
+            Path(args.compare_with) if args.compare_with else None,
+            Path(args.toolchain_evidence),
+        )
         return 0
     except (
         RuntimePackageError,
