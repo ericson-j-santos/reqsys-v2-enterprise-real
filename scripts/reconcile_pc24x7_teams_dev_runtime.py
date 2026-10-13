@@ -376,9 +376,8 @@ def _recreate_api(
     child_env["TEAMS_BOT_APP_ID"] = app_id
     child_env["TEAMS_BOT_APP_TENANT_ID"] = expected_tenant_id
     child_env["TEAMS_BOT_SECRET"] = bot_secret
-    mutation_state = "not_attempted"
+    mutation_state = "attempted_unknown"
     try:
-        mutation_state = "attempted_unknown"
         result = _run(
             [
                 sys.executable,

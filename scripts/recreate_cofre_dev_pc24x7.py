@@ -389,9 +389,8 @@ def execute(args: argparse.Namespace) -> dict:
     )
     validate_rendered_public_auth(rendered.stdout)
 
-    mutation_state = "not_attempted"
+    mutation_state = "attempted_unknown"
     try:
-        mutation_state = "attempted_unknown"
         run(
             [*base, "up", "-d", "--no-deps", "--build", "--force-recreate", "api"],
             cwd=repo_root,
