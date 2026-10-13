@@ -11,3 +11,9 @@ Provide a bounded, read-only diagnostic for Windows virtualization metadata and 
 5. Emit sanitized JSON to stdout only and never write evidence files.
 6. Report systemd as unknown and Linux readiness as false until a separately authorized physical proof exists.
 7. Tests must fully mock host APIs and run on GitHub-hosted CI without touching physical runners.
+
+## Acceptance criteria
+- Exact host and source SHA mismatches fail closed.
+- Output contains only sanitized capability metadata and a distribution count.
+- WSL, Linux, systemd, services, Docker, network and installers are never invoked.
+- Physical readiness remains false without separately authorized runtime evidence.
