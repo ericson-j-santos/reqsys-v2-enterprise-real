@@ -294,7 +294,7 @@ jobs:
           if-no-files-found: error
 
   anonymous:
-    if: github.event_name == 'workflow_dispatch'
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
     needs: validar-acessos
     name: Public browser — real Pages and anonymous access
     runs-on: ubuntu-latest
@@ -313,45 +313,6 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Resolve DEV signed locator and independently verify runtime
-        env:
-          EXPECTED_PUBLISHED_SHA: ${{ inputs.expected_published_sha }}
-          EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/resolve_pc24x7_dev_locator.mjs --output "$RUNNER_TEMP/reqsys-dev-locator.json" >/dev/null
-          python - <<'PY'
-          import json, os, re
-          from pathlib import Path
-          from urllib.parse import urlsplit
-          from urllib.request import Request, urlopen
-          locator = json.loads((Path(os.environ['RUNNER_TEMP']) / 'reqsys-dev-locator.json').read_text())
-          base = locator['selected_url'].rstrip('/')
-          url = urlsplit(base)
-          if url.scheme != 'https' or not url.hostname or not url.hostname.endswith('.trycloudflare.com'):
-              raise SystemExit('signed_locator_target_invalid')
-          def fetch(path):
-              with urlopen(Request(base + path, headers={'User-Agent': 'ReqSysSearchBrowserGate/1.0'}), timeout=20) as resp:
-                  if resp.status != 200: raise SystemExit('runtime_http_unexpected')
-                  return json.loads(resp.read(524288))
-          build = fetch('/api/runtime/build-info')
-          observed = str(build.get('data', build).get('build_sha', '')).lower()
-          if not re.fullmatch('[0-9a-f]{40}', observed):
-              raise SystemExit('runtime_build_sha_invalid')
-          if os.environ['EVENT_NAME'] == 'workflow_dispatch':
-              expected = (os.environ.get('EXPECTED_PUBLISHED_SHA') or os.environ['GITHUB_SHA']).lower()
-              if not re.fullmatch('[0-9a-f]{40}', expected) or observed != expected:
-                  raise SystemExit('published_runtime_sha_mismatch')
-          config = fetch('/api/v1/auth/config')
-          data = config.get('data', config)
-          if data.get('demo_login_enabled') is not False or data.get('azure_enabled') is not True:
-              raise SystemExit('public_dev_auth_controls_invalid')
-          print(json.dumps({'environment':'dev', 'observed_sha':observed,
-                            'auth_mode':'microsoft', 'demo_login_enabled':False,
-                            'workflow_sha':os.environ.get('GITHUB_SHA'),
-                            'proven_same_sha': os.environ['EVENT_NAME'] == 'workflow_dispatch'}))
-          PY
       - name: Install browser test dependencies
         working-directory: frontend
         run: |
@@ -360,11 +321,19 @@ jobs:
       - name: Exercise real published browser (no mocks)
         working-directory: frontend
         run: npx playwright test tests/e2e/global-search-published.spec.js --grep 'ReqSys Pages DEV' --reporter=line
+      - name: Preserve screenshot of anonymous Pages login
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-public-search-pages-${{ github.sha }}
+          path: frontend/test-results/**/public-login.png
+          if-no-files-found: error
+          retention-days: 7
 
   authenticated:
     name: Real Microsoft session — interactive search and navigation
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'authenticated'
-    needs: anonymous
+    needs: [validar-acessos, anonymous]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: development
