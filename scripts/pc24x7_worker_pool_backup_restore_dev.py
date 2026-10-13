@@ -192,7 +192,7 @@ def verify_file_restore(raw: bytes, root: Path, expected: dict) -> bool:
         if stage.exists():
             raise BackupBlocked("separate_restore_cleanup_missing")
         return True
-    except (OSError, sqlite3.Error, OverflowError, ValueError) as exc:
+    except (OSError, sqlite3.Error, OverflowError, ValueError):
         raise BackupBlocked("separate_restore_io_blocked") from None
 
 def docker_backup(container_id: str) -> bytes:
