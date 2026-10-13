@@ -24,7 +24,9 @@ def windows_processor_features(checker: Callable[[int], bool] | None = None) -> 
             return {"status": "unavailable", "reason": "windows_required"}
         try:
             api = ctypes.WinDLL("kernel32", use_last_error=True)
-            checker = lambda feature: bool(api.IsProcessorFeaturePresent(feature))
+
+            def checker(feature: int) -> bool:
+                return bool(api.IsProcessorFeaturePresent(feature))
         except (OSError, AttributeError):
             return {"status": "unavailable", "reason": "windows_api_unavailable"}
     return {
@@ -41,12 +43,14 @@ def registered_wsl_distribution_count(opener=None, query_info=None) -> dict:
     try:
         if opener is None:
             import winreg
-            opener = lambda: winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Lxss",
-                0,
-                winreg.KEY_READ,
-            )
+
+            def opener():
+                return winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Lxss",
+                    0,
+                    winreg.KEY_READ,
+                )
         key = opener()
         try:
             if query_info is None:
