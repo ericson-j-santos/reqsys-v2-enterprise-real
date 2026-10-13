@@ -26,3 +26,10 @@ Comprovar o carregamento do frontend publicado no GitHub Pages /dev/ e, quando h
 11. O job autenticado depende **dos dois** jobs, `validar-acessos` e `anonymous`, aprovados na mesma run; qualquer falha, ausência ou cancelamento bloqueia sua execução, sem usar `always()` para contornar o SHA.
 12. A única imagem persistida deve ser `public-login.png` do navegador anônimo, gerada após comprovar login Microsoft visível, ausência de demo e de lupa protegida; não capturar sessão, cookie ou token autenticado.
 13. Incluir regressões preventivas para dependência entre jobs, execução anônima independente, limites dos artefatos e mecanismos fail-closed, com E2E público no maior escopo disponível e controle negativo.
+
+## Evidência de falha real do Pages DEV — 13/10/2026
+
+14. O run #38393919042 demonstrou botão `Entrar (demo)` visível na interface DEV pública. É falha bloqueante até demonstrar `demo_login_enabled=false` no backend realmente selecionado pelo locator assinado. Não inferir sucesso nem assumir que login demo funciona sem prova.
+15. Registrar HTTP e flags `azure_enabled`/`demo_login_enabled` da resposta real de `/api/v1/auth/config` observada no navegador, sem persistir payload completo, URLs sensíveis, tokens, cookies ou dados da sessão.
+16. Capturar `public-login.png` antes dos controles negativos e mascarar os inputs para que uma falha pública continue produzindo evidência visual sanitizada. A captura não concede aceite de autenticação.
+17. Manter o runtime `build_sha_mismatch` e o modo autenticado bloqueados até os respectivos gates terem êxito no mesmo SHA; nenhuma mutação física/deploy está autorizada por este incremento.
