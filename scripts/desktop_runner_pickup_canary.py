@@ -141,6 +141,7 @@ def execute(
     host: str | None = None,
     platform: str | None = None,
     capacity_probe: Callable[[], dict] | None = None,
+    runtime_probe: Callable[[], dict] | None = None,
 ) -> dict:
     if confirm != CONFIRM:
         raise CanaryError("confirmation_invalid")
@@ -184,6 +185,29 @@ def execute(
             "status": "unavailable",
             "reason": "capacity_probe_failed",
             "hml_provisioning_authorized": False,
+        }
+    # Independent, strictly read-only runtime inspection. An offline Docker
+    # engine must never cause a false-positive HML authorization.
+    try:
+        if runtime_probe is None:
+            from desktop_sql_hml_host_inventory_dev import collect as runtime_probe
+        runtime = runtime_probe()
+        if (
+            not isinstance(runtime, dict)
+            or runtime.get("status") not in {"measured", "partial", "unavailable"}
+            or runtime.get("hml_provisioning_authorized") is not False
+            or runtime.get("production_touched") is not False
+            or runtime.get("secrets_read") is not False
+        ):
+            raise CanaryError("runtime_proof_invalid")
+        evidence["sql_hml_host_inventory"] = runtime
+    except Exception:
+        evidence["sql_hml_host_inventory"] = {
+            "status": "unavailable",
+            "reason": "runtime_probe_failed",
+            "hml_provisioning_authorized": False,
+            "production_touched": False,
+            "secrets_read": False,
         }
     write_evidence(evidence_file, evidence)
     return evidence

@@ -1084,6 +1084,14 @@ jobs:
             throw "DESKTOP_IDENTITY_MISMATCH"
           }
           if ($e.sha -ne "${{ github.sha }}") { throw "SHA_MISMATCH" }
+          $runtime = $e.sql_hml_host_inventory
+          if ($null -eq $runtime -or $runtime.status -notin @('measured', 'partial', 'unavailable')) {
+            throw "HML_HOST_INVENTORY_MISSING"
+          }
+          if ($runtime.hml_provisioning_authorized -ne $false -or
+              $runtime.production_touched -ne $false -or $runtime.secrets_read -ne $false) {
+            throw "HML_HOST_INVENTORY_SAFETY_INVALID"
+          }
           if ($e.production_touched -or $e.secrets_read) { throw "SAFETY_INVARIANT_FAILED" }
 
       - name: Upload sanitized pickup evidence
