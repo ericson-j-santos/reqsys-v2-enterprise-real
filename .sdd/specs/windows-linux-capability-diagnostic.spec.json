@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Windows Linux capability diagnostic",
+  "increment_type": "diagnostic",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "traceability": {
+    "requirements": ".sdd/specs/windows-linux-capability-diagnostic.requirements.md",
+    "implementation": "scripts/diagnose_windows_linux_capability.py",
+    "tests": "tests/test_diagnose_windows_linux_capability.py"
+  },
+  "risk": {"production": false, "deploy": false, "secrets": false, "physical_execution": false},
+  "acceptance_criteria": [
+    "No subprocess, shell, platform fallback, WSL or service execution",
+    "Exact host and requested SHA format fail closed",
+    "Requested SHA remains unverified without independent provenance",
+    "Only sanitized virtualization flags, native Windows version metadata and current-executor HKCU WSL count",
+    "Only valid registry queries or an absent key can produce zero; failures return unknown or unavailable with null count",
+    "systemd_verified and ready_for_linux_pilot remain false"
+  ],
+  "sdd_gate": {
+    "tests": ["tests/test_diagnose_windows_linux_capability.py"]
+  }
+}
