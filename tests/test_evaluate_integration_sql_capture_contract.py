@@ -190,30 +190,118 @@ def test_direct_dsn_required_helper() -> None:
 # --- contrato do workflow ----------------------------------------------------
 
 
-def test_workflow_gates_the_legacy_secret_behind_the_mode() -> None:
+def test_workflow_resolves_explicit_mode_before_any_oidc_step() -> None:
     document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     steps = document["jobs"]["capture"]["steps"]
+    names = [str(step.get("name", "")) for step in steps]
+
+    resolver = names.index("Resolver modo e inicializar evidência sanitizada")
+    login = names.index("Login Azure OIDC com identidade reader Key Vault DEV")
+    capture = names.index("Capturar DSN sem expor nome ou valor")
+    locator = names.index("Validar procedure e contrato SQL")
+    assert resolver < login < capture < locator
+
     by_name = {str(step.get("name", "")): step for step in steps}
-
-    dsn_step = next(
-        step for name, step in by_name.items() if "Capturar DSN" in name
-    )
-    assert "steps.sql-mode.outputs.direct_dsn_required == 'true'" in dsn_step["if"]
-
-    locator_step = next(
-        step for name, step in by_name.items() if "Validar procedure" in name
-    )
-    assert locator_step["if"] == "steps.sql-mode.outputs.direct_dsn_required == 'true'"
-
-    gateway_step = next(
-        step for name, step in by_name.items() if "dispensa do DSN" in name
-    )
-    assert gateway_step["if"] == "steps.sql-mode.outputs.direct_dsn_required != 'true'"
-    assert GATEWAY_SOURCE_STATUS in gateway_step["run"]
+    assert "preflight_ready == 'true'" in by_name[names[login]]["if"]
+    assert "azure-login.outcome == 'success'" in by_name[names[capture]]["if"]
+    assert "key-vault.outputs.dsn_resolved == 'true'" in by_name[names[locator]]["if"]
 
 
-def test_workflow_defaults_to_direct_dsn_mode() -> None:
+def test_workflow_has_no_implicit_mode_or_retired_or_mutator_identity() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
 
     assert "INTEGRATION_E2E_SQL_VALIDATION_MODE" in raw
-    assert "|| 'direct_dsn'" in raw
+    assert "|| 'direct_dsn'" not in raw
+    assert "CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND" not in raw
+    assert "vars.CCP_AZURE_CLIENT_ID }}" not in raw
+    assert '"AZURE_CLIENT_ID_READER_BINDING": False' in raw
+
+
+def test_workflow_gateway_path_never_calls_azure_key_vault_or_sql() -> None:
+    document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = document["jobs"]["capture"]["steps"]
+    guarded = [
+        step
+        for step in steps
+        if any(
+            token in str(step.get("name", ""))
+            for token in ("Login Azure", "Capturar DSN", "Validar procedure")
+        )
+    ]
+
+    assert guarded
+    for step in guarded:
+        condition = str(step.get("if", ""))
+        assert "steps.sql-mode.outputs.direct_dsn_required == 'true'" in condition
+
+
+def test_workflow_always_materializes_and_publishes_sanitized_evidence() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    document = yaml.safe_load(raw)
+    steps = document["jobs"]["capture"]["steps"]
+    by_name = {str(step.get("name", "")): step for step in steps}
+
+    resolver = by_name["Resolver modo e inicializar evidência sanitizada"]
+    assert "source.json" in resolver["run"]
+    assert "sql_validation_mode_unconfigured" in resolver["run"]
+    assert "sql_validation_mode_invalid" in resolver["run"]
+    assert "oidc_configuration_missing" in resolver["run"]
+    assert "missing_configuration" in resolver["run"]
+    assert "secret_value_exposed" in resolver["run"]
+
+    consolidated = by_name["Gerar evidência consolidada sanitizada"]
+    published = by_name["Publicar evidência sanitizada"]
+    gate = by_name["Gate funcional obrigatório antes do verde"]
+    assert consolidated["if"] == "always()"
+    assert published["if"] == "always()"
+    assert gate["if"] == "always()"
+
+
+@pytest.mark.parametrize(
+    ("status", "source_category"),
+    [
+        ("oidc_configuration_missing", "azure_key_vault"),
+        ("oidc_login_failed", "azure_key_vault"),
+    ],
+)
+def test_direct_failures_preserve_origin_and_never_turn_green(
+    status: str, source_category: str
+) -> None:
+    report = evaluate(
+        mode="direct_dsn",
+        source={
+            "source": source_category,
+            "status": status,
+            "dsn_resolved": False,
+        },
+        locator=None,
+        **RUN_CONTEXT,
+    )
+
+    assert report["passed"] is False
+    assert report["source"] == source_category
+    assert report["source_status"] == status
+    assert "dsn_resolved" in report["failed_checks"]
+    assert "source_resolved" in report["failed_checks"]
+
+
+@pytest.mark.parametrize("mode", ["", "unknown"])
+def test_invalid_mode_preserves_configuration_category(mode: str) -> None:
+    report = evaluate(
+        mode=mode,
+        source={
+            "source": "configuration",
+            "status": (
+                "sql_validation_mode_unconfigured"
+                if not mode
+                else "sql_validation_mode_invalid"
+            ),
+            "dsn_resolved": False,
+        },
+        locator=None,
+        **RUN_CONTEXT,
+    )
+
+    assert report["passed"] is False
+    assert report["source"] == "configuration"
+    assert report["source_status"].startswith("sql_validation_mode_")
