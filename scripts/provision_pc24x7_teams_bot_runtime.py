@@ -12,6 +12,10 @@ from typing import Any
 
 CONFIRMATION = "REUSE-EXISTING-TEAMS-BOT-DEV"
 BOT_SECRET_NAME = "reqsys-teams-bot-dev-secret"
+PUBLIC_PROJECT = "wt-pc24x7-piloto"
+PUBLIC_API_PORT = "8210"
+PUBLIC_RUNTIME_PROFILE = "pc24x7-public-dev"
+LOCAL_DEMO_PROFILE = "teams-local-demo"
 
 
 class ProvisionError(RuntimeError):
@@ -118,11 +122,31 @@ def _parse_json_stdout(result: subprocess.CompletedProcess[str], label: str) -> 
     raise ProvisionError(f"{label}_json_missing")
 
 
+def _guard_demo_runtime_identity(args: argparse.Namespace) -> None:
+    is_public = (
+        args.runtime_profile == PUBLIC_RUNTIME_PROFILE
+        or args.compose_project == PUBLIC_PROJECT
+        or str(args.api_port) == PUBLIC_API_PORT
+    )
+    if is_public:
+        raise ProvisionError("public_runtime_demo_e2e_incompatible")
+    if (
+        args.runtime_profile != LOCAL_DEMO_PROFILE
+        or not args.compose_project
+        or not str(args.api_port).isdigit()
+    ):
+        raise ProvisionError("local_demo_runtime_identity_required")
+    # The current shared recreator is intentionally public-only. A distinct local
+    # recreator must be versioned before this legacy E2E can mutate a local stack.
+    raise ProvisionError("local_demo_recreator_not_configured")
+
+
 def execute(args: argparse.Namespace) -> dict[str, Any]:
     if args.confirm != CONFIRMATION:
         raise ProvisionError(f"confirmation_required:{CONFIRMATION}")
     if args.environment != "dev":
         raise ProvisionError("environment_must_be_dev")
+    _guard_demo_runtime_identity(args)
 
     runtime_root = args.runtime_repo_root.resolve()
     if not runtime_root.is_dir():
@@ -224,6 +248,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--environment", default="dev")
+    parser.add_argument("--runtime-profile", default=PUBLIC_RUNTIME_PROFILE)
+    parser.add_argument("--compose-project", default=PUBLIC_PROJECT)
+    parser.add_argument("--api-port", default=PUBLIC_API_PORT)
     parser.add_argument("--runtime-repo-root", type=Path, required=True)
     parser.add_argument("--expected-runtime-sha", required=True)
     parser.add_argument("--vault-name", required=True)

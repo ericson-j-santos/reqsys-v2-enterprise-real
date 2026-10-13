@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 public DEV authentication contract preservation",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_public_dev_auth_contract.py",
+      "tests/test_cofre_pc24x7_gitops.py",
+      "tests/test_reconcile_pc24x7_teams_dev_runtime.py",
+      "tests/test_provision_pc24x7_teams_bot_runtime.py"
+    ]
+  },
+  "traceability": {
+    "reference": "#2547: contrato de autenticação do ReqSys DEV público",
+    "gate_run": 38406526921,
+    "gate_job": 115327482792,
+    "implementation": [
+      "scripts/recreate_cofre_dev_pc24x7.py",
+      "scripts/reconcile_pc24x7_teams_dev_runtime.py",
+      "scripts/provision_pc24x7_teams_bot_runtime.py"
+    ],
+    "public_overlay": "docker-compose.pc24x7-public-dev.yml"
+  },
+  "constraints": {
+    "public_demo_login": false,
+    "local_demo_opt_in_preserved": true,
+    "runtime_mutation": false,
+    "credentials_changed": false,
+    "permissions_changed": false,
+    "production_touched": false
+  }
+}
