@@ -43,7 +43,7 @@ test.describe('ReqSys Pages DEV — prova pública sem autenticação', () => {
   test.skip(mode !== 'anonymous', 'Executado pelo job público dedicado.')
   test.use({ storageState: cleanSession })
 
-  test('carrega o login corporativo sem mostrar a lupa ou liberar login demo', async ({ page }) => {
+  test('carrega o login corporativo sem mostrar a lupa ou liberar login demo', async ({ page }, testInfo) => {
     const response = await page.goto(DEV_URL, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
     await expect(page.getByTestId('route-login')).toBeVisible({ timeout: 25_000 })
@@ -51,6 +51,7 @@ test.describe('ReqSys Pages DEV — prova pública sem autenticação', () => {
     await expect(page.getByRole('button', { name: /entrar \(demo\)/i })).toHaveCount(0)
     await expect(page.getByTestId('global-search-trigger-desktop')).toHaveCount(0)
     expect(new URL(page.url()).pathname).toMatch(/^\/reqsys-v2-enterprise-real\/dev\/login$/)
+    await page.screenshot({ path: testInfo.outputPath('public-login.png'), fullPage: true })
   })
 
   test('entrega bundle publicado contendo os controles da lupa', async ({ request }) => {

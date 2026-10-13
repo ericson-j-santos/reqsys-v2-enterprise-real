@@ -19,3 +19,10 @@ Comprovar o carregamento do frontend publicado no GitHub Pages /dev/ e, quando h
 - .github/workflows/validacao-acessos.yml
 - Run público independente vinculado a main implantada e ao bundle servido.
 - Run autenticado apenas quando houver sessão delegada Microsoft válida e autorizado seu uso.
+
+## Complemento de homologação — 13/10/2026
+
+10. No `workflow_dispatch`, executar o navegador anônimo mesmo se a validação do runtime falhar por `build_sha_mismatch`, para manter evidência independente do Pages; o workflow completo deve continuar reprovado enquanto o runtime estiver defasado.
+11. O job autenticado depende **dos dois** jobs, `validar-acessos` e `anonymous`, aprovados na mesma run; qualquer falha, ausência ou cancelamento bloqueia sua execução, sem usar `always()` para contornar o SHA.
+12. A única imagem persistida deve ser `public-login.png` do navegador anônimo, gerada após comprovar login Microsoft visível, ausência de demo e de lupa protegida; não capturar sessão, cookie ou token autenticado.
+13. Incluir regressões preventivas para dependência entre jobs, execução anônima independente, limites dos artefatos e mecanismos fail-closed, com E2E público no maior escopo disponível e controle negativo.
