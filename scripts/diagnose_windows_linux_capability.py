@@ -119,6 +119,7 @@ def collect(
     wsl_opener=None,
     wsl_query_info=None,
     windows_version_provider=None,
+    windows_identity=None,
 ) -> dict:
     if not HOST.fullmatch(expected_host):
         raise ValueError("expected_host_invalid")
@@ -127,7 +128,12 @@ def collect(
     observed = socket.gethostname().strip()
     if observed.casefold() != expected_host.casefold():
         raise ValueError("host_mismatch")
-    if os.name != "nt" or sys.platform != "win32":
+    on_windows = (
+        bool(windows_identity())
+        if windows_identity is not None
+        else os.name == "nt" and sys.platform == "win32"
+    )
+    if not on_windows:
         raise ValueError("windows_required")
     virtualization = windows_processor_features(feature_checker)
     wsl = registered_wsl_distribution_count(wsl_opener, wsl_query_info)
