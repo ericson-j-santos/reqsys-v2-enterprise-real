@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-worker-pool-protected-sqlite-backup-dev",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "issue": 2547,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "worker_pool": "legacy 1.2.0",
+    "database": "/data/codex-worker-pool.db",
+    "source_mode": "sqlite_read_only",
+    "physical_service_deploy": false,
+    "runtime_restart": false,
+    "production_touched": false,
+    "secrets_exposed": false,
+    "persistent_backup_cipher": "user-scope DPAPI",
+    "restore_medium": "independent SQLite memory",
+    "separate_file_restore_verified": false,
+    "cutover_ready": false
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-worker-pool-protected-backup-dev.requirements.md",
+    "script": "scripts/pc24x7_worker_pool_backup_restore_dev.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests": "tests/test_pc24x7_worker_pool_backup_restore_dev.py"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_backup_restore_dev.py",
+      "tests/test_pc24x7_worker_pool_inventory_dev.py",
+      "tests/test_pc24x7_worker_pool_inventory_workflow.py"
+    ],
+    "evidence_contract": "Encrypted private DPAPI SQLite online backup with WAL, restored in isolated :memory: and independently checked. Physical file/volume restore and 1.4 canary remain blocked; never set CUTOVER_READY."
+  }
+}
