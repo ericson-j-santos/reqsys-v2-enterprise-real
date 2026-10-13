@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import importlib.util
 import json
 import os
 import re
@@ -134,6 +135,20 @@ def host_capacity(
     }
 
 
+def _load_runtime_probe() -> Callable[[], dict]:
+    """Load the fixed sibling even when portable Python excludes script paths."""
+    module_path = Path(__file__).resolve().with_name("desktop_sql_hml_host_inventory_dev.py")
+    spec = importlib.util.spec_from_file_location("_reqsys_sql_hml_runtime", module_path)
+    if spec is None or spec.loader is None:
+        raise CanaryError("runtime_module_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    probe = getattr(module, "collect", None)
+    if not callable(probe):
+        raise CanaryError("runtime_module_invalid")
+    return probe
+
+
 def execute(
     *,
     confirm: str,
@@ -190,7 +205,7 @@ def execute(
     # engine must never cause a false-positive HML authorization.
     try:
         if runtime_probe is None:
-            from desktop_sql_hml_host_inventory_dev import collect as runtime_probe
+            runtime_probe = _load_runtime_probe()
         runtime = runtime_probe()
         if (
             not isinstance(runtime, dict)
