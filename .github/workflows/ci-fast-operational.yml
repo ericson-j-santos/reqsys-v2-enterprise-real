@@ -61,6 +61,7 @@ jobs:
             tests/test_auto_rerun_governed.py \
             tests/test_workflow_inventory_audit.py \
             tests/test_workflow_inventory_decision_gate.py \
+            tests/test_reqsys_global_search_browser_gate.py \
             -q
 
       - name: Validar workflow PR CI Watch
