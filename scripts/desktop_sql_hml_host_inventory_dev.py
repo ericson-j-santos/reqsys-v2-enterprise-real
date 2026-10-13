@@ -160,6 +160,28 @@ def _untrusted_cli_provenance(cli_path: str) -> dict:
         result["reason"] = "file_read_unavailable"
         return result
 
+def _signed_official_docker_cli() -> str | None:
+    """Select only a preapproved local installation with a trusted signature."""
+    candidates = (
+        r"C:\Program Files\Docker\Docker\resources\bin\docker.exe",
+        r"C:\ProgramData\DockerDesktop\version-bin\docker.exe",
+    )
+    for candidate in candidates:
+        try:
+            metadata = os.lstat(candidate)
+            if getattr(metadata, "st_file_attributes", 0) & 0x400:
+                continue
+            if not 1024 <= metadata.st_size <= 128 * 1024 * 1024:
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            if _win_authenticode_status(candidate) == "valid":
+                return candidate
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
 def _docker_env() -> dict[str, str]:
     # Explicit local npipe endpoints only. Never read an existing Docker context
     # or authentication config, and never accept DOCKER_HOST from an agent.
@@ -249,8 +271,13 @@ def _docker_summary(*, cli_path: str | None, runner: DockerRunner) -> dict:
         or not any(normalized.startswith(prefix) for prefix in trusted_prefixes)
     ):
         result["provenance"] = _untrusted_cli_provenance(cli_path)
-        result["reason"] = "docker_cli_untrusted"
-        return result
+        official = _signed_official_docker_cli()
+        if official is None:
+            result["reason"] = "docker_cli_untrusted"
+            return result
+        # Never use the untrusted PATH executable. Use only the fixed signed CLI.
+        cli_path = official
+        result["cli_selection"] = "signed_official_path"
     version: dict | None = None
     endpoint: str | None = None
     endpoint_kind: str | None = None
