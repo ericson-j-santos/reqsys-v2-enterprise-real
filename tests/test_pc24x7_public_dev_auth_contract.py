@@ -26,8 +26,9 @@ def test_public_overlay_is_last_and_sha_override_only_sets_github_sha(tmp_path: 
     )
     assert files[-1] == public
     source = (ROOT / "scripts" / "recreate_cofre_dev_pc24x7.py").read_text(encoding="utf-8")
-    assert 'f\'      GITHUB_SHA: "{args.expected_sha}"\'' in source
-    assert "ALLOW_DEMO_LOGIN" not in source.split("sha_override.write_text(", 1)[1].split("encoding=", 1)[0]
+    sha_block = source.split("sha_override.write_text(", 1)[1].split("encoding=", 1)[0]
+    assert "GITHUB_SHA" in sha_block
+    assert "ALLOW_DEMO_LOGIN" not in sha_block
 
 
 def test_rendered_public_contract_requires_strict_false() -> None:
@@ -110,7 +111,7 @@ def test_direct_auth_contract_requires_envelope_and_false(monkeypatch) -> None:
 def test_direct_auth_true_never_completes(monkeypatch) -> None:
     sequence = {"/api/runtime/build-info": {"build_sha": "a" * 40}, "/api/runtime/health": {"status": "healthy"}, "/v1/auth/config": {"demo_login_enabled": True}}
     monkeypatch.setattr(reconcile, "_probe_json", lambda path, **_kwargs: sequence[path])
-    ticks = iter([0.0, 100.0])
+    ticks = iter([0.0, 1.0, 100.0])
     monkeypatch.setattr(reconcile.time, "monotonic", lambda: next(ticks))
     monkeypatch.setattr(reconcile.time, "sleep", lambda _seconds: None)
     with pytest.raises(reconcile.ReconcileError, match="runtime_same_sha_timeout"):
@@ -126,14 +127,70 @@ def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path
     with pytest.raises(recreate.RecreateError, match="docker_remote_context_blocked"):
         recreate.validate_local_docker("container", cwd=tmp_path)
     with pytest.raises(recreate.RecreateError, match="public_dev_override_path_unsafe"):
-        recreate.validate_public_override(tmp_path, Path(r"\\server\share\docker-compose.pc24x7-public-dev.yml"))
+        recreate.validate_public_override(
+            tmp_path,
+            Path(r"\\server\share\docker-compose.pc24x7-public-dev.yml"),
+            "a" * 40,
+        )
 
 
 def test_recreate_uses_selected_inspection_and_sanitized_failure_contract() -> None:
     source = (ROOT / "scripts" / "recreate_cofre_dev_pc24x7.py").read_text(encoding="utf-8")
-    assert "{{json .State}}" in source
+    assert "{{json .State}}" not in source
     assert "{{json .Mounts}}" in source
     assert "{{json .Config.Env}}" not in source
+    assert '"docker", "exec", container, "printenv", name' in source
     assert '"mutation_performed"' in source
     assert '"validation_failed_after_mutation"' in source
     assert "compose_config_contract_invalid" in source
+
+
+
+def test_docker_environment_overrides_fail_before_inspection(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DOCKER_HOST", "npipe:////./pipe/docker_engine")
+    monkeypatch.setattr(
+        recreate,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("docker must not run")),
+    )
+    with pytest.raises(recreate.RecreateError, match="docker_environment_override_blocked"):
+        recreate.validate_local_docker(recreate.DEFAULT_CONTAINER, cwd=tmp_path)
+
+
+def test_auth_probe_disables_proxy_and_redirects(monkeypatch) -> None:
+    seen = {}
+
+    class Response:
+        status = 200
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def read(self, _limit):
+            return b'{"data":{"demo_login_enabled":false}}'
+
+    class Opener:
+        def open(self, request, timeout):
+            seen["url"] = request.full_url
+            seen["timeout"] = timeout
+            return Response()
+
+    def build_opener(*handlers):
+        seen["handlers"] = handlers
+        return Opener()
+
+    monkeypatch.setattr(recreate.urllib.request, "build_opener", build_opener)
+    assert recreate.probe_auth_config() is False
+    assert seen["url"].endswith("/v1/auth/config")
+    assert any(isinstance(item, recreate.urllib.request.ProxyHandler) for item in seen["handlers"])
+
+
+def test_public_path_rejects_traversal_before_metadata(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        recreate,
+        "_has_reparse_point",
+        lambda _path: (_ for _ in ()).throw(AssertionError("lstat must not run")),
+    )
+    candidate = Path(str(tmp_path / "safe") + r"\..\docker-compose.pc24x7-public-dev.yml")
+    with pytest.raises(recreate.RecreateError, match="public_dev_override_path_unsafe"):
+        recreate.validate_public_override(tmp_path, candidate, "a" * 40)

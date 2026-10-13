@@ -24,6 +24,9 @@ def _args(tmp_path: Path) -> argparse.Namespace:
         expected_runtime_sha="a" * 40,
         vault_name="kv-test",
         expected_tenant_id="tenant-test",
+        runtime_profile=provision.LOCAL_DEMO_PROFILE,
+        compose_project="teams-local-test",
+        api_port="9210",
         admin_override=admin,
         teams_override=teams,
         correlation_id="teams-bot-test",
@@ -57,8 +60,10 @@ def test_teams_bot_reuses_secret_without_exposing_it(monkeypatch, tmp_path: Path
     )
 
     seen_secret_values: list[str | None] = []
+    seen_commands: list[list[str]] = []
 
     def fake_run(command, *, cwd=None, env=None, timeout=120, sensitive=False):
+        seen_commands.append(command)
         seen_secret_values.append(None if env is None else env.get("TEAMS_BOT_SECRET"))
         if any("recreate_cofre_dev_pc24x7.py" in str(item) for item in command):
             return SimpleNamespace(stdout=json.dumps({"status": "passed"}), returncode=0)
@@ -82,6 +87,10 @@ def test_teams_bot_reuses_secret_without_exposing_it(monkeypatch, tmp_path: Path
     assert evidence["production_touched"] is False
     assert seen_secret_values[0] == "super-secret-test-value"
     assert seen_secret_values[1] == ""
+    recreate_command, e2e_command = seen_commands
+    assert recreate_command[recreate_command.index("--runtime-profile") + 1] == provision.LOCAL_DEMO_PROFILE
+    assert recreate_command[recreate_command.index("--project") + 1] == args.compose_project
+    assert e2e_command[e2e_command.index("--api-base") + 1] == "http://127.0.0.1:9210"
     assert "super-secret-test-value" not in args.evidence_file.read_text(encoding="utf-8")
 
 

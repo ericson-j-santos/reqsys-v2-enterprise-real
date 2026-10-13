@@ -136,9 +136,7 @@ def _guard_demo_runtime_identity(args: argparse.Namespace) -> None:
         or not str(args.api_port).isdigit()
     ):
         raise ProvisionError("local_demo_runtime_identity_required")
-    # The current shared recreator is intentionally public-only. A distinct local
-    # recreator must be versioned before this legacy E2E can mutate a local stack.
-    raise ProvisionError("local_demo_recreator_not_configured")
+    return None
 
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:
@@ -172,6 +170,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             str(runtime_root),
             "--expected-sha",
             args.expected_runtime_sha,
+            "--runtime-profile",
+            args.runtime_profile,
+            "--project",
+            args.compose_project,
+            "--container",
+            f"{args.compose_project}-api-1",
             "--admin-override",
             str(args.admin_override.resolve()),
             "--teams-override",
@@ -195,7 +199,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             sys.executable,
             str(runtime_root / "scripts" / "pc24x7_teams_ephemeral_e2e.py"),
             "--api-base",
-            "http://127.0.0.1:8210",
+            f"http://127.0.0.1:{args.api_port}",
             "--correlation-id",
             args.correlation_id,
             "--evidence-path",
@@ -271,8 +275,7 @@ def main() -> int:
             "schema_version": "1.0.0",
             "status": "blocked",
             "environment": "dev",
-            "reason": type(exc).__name__,
-            "detail": str(exc)[:300],
+            "error_code": str(exc) if isinstance(exc, ProvisionError) else "unexpected_error",
             "credential_rotated": False,
             "secret_value_exposed": False,
             "production_touched": False,

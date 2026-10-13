@@ -65,17 +65,24 @@ def test_execute_reconciles_then_recreates_and_verifies(monkeypatch, tmp_path: P
     runtime_root.mkdir()
     admin_override = tmp_path / "docker-compose.admin-dev.override.yml"
     admin_override.write_text("services: {}\n", encoding="utf-8")
+    public_override = runtime_root / reconcile.PUBLIC_OVERRIDE_NAME
+    public_override.write_text("services: {}\n", encoding="utf-8")
+    sequence: list[str] = []
+    recreate_args: list[object] = []
 
-    monkeypatch.setattr(reconcile, "_require_host", lambda: None)
+    monkeypatch.setattr(reconcile, "_require_host", lambda: sequence.append("host"))
     monkeypatch.setattr(
         reconcile,
         "_discover_runtime",
-        lambda: (runtime_root, admin_override, reconcile.EXPECTED_PROJECT),
+        lambda: (
+            sequence.append("discover")
+            or (runtime_root, admin_override, public_override, reconcile.EXPECTED_PROJECT)
+        ),
     )
     monkeypatch.setattr(
         reconcile,
         "_sync_runtime_repo",
-        lambda _root, expected: {
+        lambda _root, expected: sequence.append("sync") or {
             "before_sha": "b" * 40,
             "after_sha": expected,
             "origin_main_sha": expected,
@@ -84,23 +91,39 @@ def test_execute_reconciles_then_recreates_and_verifies(monkeypatch, tmp_path: P
     )
     monkeypatch.setattr(
         reconcile,
-        "_recreate_api",
-        lambda *_args, **_kwargs: {
+        "_validate_public_override",
+        lambda _root, candidate, expected: (
+            sequence.append("overlay_after_sync") or candidate
+        ),
+    )
+
+    def fake_recreate(*call_args, **_kwargs):
+        sequence.append("recreate")
+        recreate_args.extend(call_args)
+        return {
             "ok": True,
             "runtime_sha": args.expected_sha,
             "secret_value_observed": False,
             "production_touched": False,
-        },
-    )
+        }
+
+    monkeypatch.setattr(reconcile, "_recreate_api", fake_recreate)
     monkeypatch.setattr(
         reconcile,
         "_verify_runtime",
-        lambda expected: {"build_sha": expected, "health_status": "healthy"},
+        lambda expected: sequence.append("verify") or {
+            "build_sha": expected,
+            "health_status": "healthy",
+            "demo_login_enabled": False,
+            "auth_contract_consistent": True,
+        },
     )
 
     evidence = reconcile.execute(args)
 
     assert evidence["status"] == "ready"
+    assert sequence == ["host", "discover", "sync", "overlay_after_sync", "recreate", "verify"]
+    assert recreate_args[2] == public_override
     assert evidence["sync"]["after_sha"] == args.expected_sha
     assert evidence["runtime"]["build_sha"] == args.expected_sha
     assert evidence["secret_value_exposed"] is False
@@ -121,3 +144,14 @@ def test_source_uses_fast_forward_and_never_hard_reset() -> None:
     assert '"merge", "--ff-only", expected' in text
     assert "--untracked-files=no" in text
     assert 'reset", "--hard' not in text
+
+
+def test_docker_environment_override_blocks_before_commands(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DOCKER_CONTEXT", "remote")
+    monkeypatch.setattr(
+        reconcile,
+        "_run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("docker must not run")),
+    )
+    with pytest.raises(reconcile.ReconcileError, match="docker_environment_override_blocked"):
+        reconcile._require_local_docker(tmp_path)
