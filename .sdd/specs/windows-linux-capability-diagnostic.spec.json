@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Windows Linux capability diagnostic",
+  "increment_type": "diagnostic",
+  "status": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "risk": {"production": false, "deploy": false, "secrets": false, "physical_execution": false},
+  "tests": ["tests/test_diagnose_windows_linux_capability.py"],
+  "acceptance_criteria": [
+    "No subprocess, shell, WSL or service execution",
+    "Exact host and SHA fail closed",
+    "Only sanitized virtualization flags and WSL count",
+    "systemd_verified and ready_for_linux_pilot remain false"
+  ]
+}
