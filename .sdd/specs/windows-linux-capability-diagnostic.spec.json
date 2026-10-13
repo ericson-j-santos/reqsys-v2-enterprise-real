@@ -11,11 +11,11 @@
   },
   "risk": {"production": false, "deploy": false, "secrets": false, "physical_execution": false},
   "acceptance_criteria": [
-    "No subprocess, shell, WSL or service execution",
+    "No subprocess, shell, platform fallback, WSL or service execution",
     "Exact host and requested SHA format fail closed",
     "Requested SHA remains unverified without independent provenance",
-    "Only sanitized virtualization flags and current-executor HKCU WSL count",
-    "Registry access and query failures return unknown or unavailable with null count",
+    "Only sanitized virtualization flags, native Windows version metadata and current-executor HKCU WSL count",
+    "Only valid registry queries or an absent key can produce zero; failures return unknown or unavailable with null count",
     "systemd_verified and ready_for_linux_pilot remain false"
   ],
   "sdd_gate": {
