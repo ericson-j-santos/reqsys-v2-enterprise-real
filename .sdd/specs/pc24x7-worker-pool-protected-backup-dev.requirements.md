@@ -43,3 +43,7 @@ GitHub e sem alterar serviço, fila, tokens ou variáveis do runtime.
    obrigatórios até operação física distinta, canário 1.4, rollback e E2E.
 7. Ausência de evidência, custo extra, falta de acesso ou erro de permissão
    devem bloquear, sem fallback remoto/GUI ou retry cego.
+
+8. O módulo auxiliar de inventário é carregado somente pelo caminho fixo da
+   worktree validada no SHA. O teste `python -I` positivo e o negativo de
+   módulo ausente devem detectar o erro do run físico #38331728505.
