@@ -468,49 +468,47 @@ jobs:
             "--", "python", $script, "deploy-check",
             "--expected-sha", $env:ANCHOR_SHA
           )
-          $raw = @(& "$env:REQSYS_PYTHON" $gateway @args)
-          $gatewayExit = $LASTEXITCODE
-          if ($raw.Count -ne 1) { throw "DEPLOY_CHECK_GATEWAY_RECEIPT_MISSING" }
-          try { $g = $raw[0] | ConvertFrom-Json } catch { throw "DEPLOY_CHECK_GATEWAY_RECEIPT_INVALID" }
-          if ($g.correlation_id -ne $env:CORRELATION_ID -or
-              $g.before.head -ne $env:ANCHOR_SHA -or $g.after.head -ne $env:ANCHOR_SHA -or
-              $g.session_id -ne $env:SESSION_ID) {
-            throw "DEPLOY_CHECK_GATEWAY_IDENTITY_INVALID"
+          $streamId = "$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
+          $stdoutPath = Join-Path $env:RUNNER_TEMP "deploy-check-$streamId.stdout"
+          $stderrPath = Join-Path $env:RUNNER_TEMP "deploy-check-$streamId.stderr"
+          try {
+            $captureScript = Join-Path $env:TARGET_PATH "scripts\private_process_capture.py"
+            $captureWrapper = Join-Path $env:TARGET_PATH "scripts\run_deploy_check_gateway_capture.ps1"
+            & $captureWrapper -Python "$env:REQSYS_PYTHON" -CaptureScript $captureScript -Gateway $gateway -StdoutPath $stdoutPath -StderrPath $stderrPath -GatewayArgs $args
+            $gatewayExit = $LASTEXITCODE
+            $parser = Join-Path $env:TARGET_PATH "scripts\deploy_check_receipt.py"
+            $parserArgs = @(
+              "--gateway-exit-code", [string]$gatewayExit,
+              "--gateway-stdout-file", $stdoutPath,
+              "--gateway-stderr-file", $stderrPath,
+              "--expected-sha", $env:ANCHOR_SHA,
+              "--expected-correlation-id", $env:CORRELATION_ID,
+              "--expected-session-id", $env:SESSION_ID,
+              "--host", $env:COMPUTERNAME
+            )
+            $sanitized = @(& "$env:REQSYS_PYTHON" $parser @parserArgs)
+            $parserExit = $LASTEXITCODE
+            if ($sanitized.Count -ne 1) { throw "DEPLOY_CHECK_SANITIZED_RECEIPT_MISSING" }
+            try { $receipt = $sanitized[0] | ConvertFrom-Json } catch {
+              throw "DEPLOY_CHECK_SANITIZED_RECEIPT_INVALID"
+            }
+            $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+            [System.IO.File]::WriteAllText(
+              $path,
+              (($receipt | ConvertTo-Json -Depth 4) + "`n"),
+              [System.Text.UTF8Encoding]::new($false)
+            )
+            if ($parserExit -ne 0) {
+              throw "DEPLOY_CHECK_BLOCKED:$($receipt.reason_code)"
+            }
+          } finally {
+            foreach ($privatePath in @($stdoutPath, $stderrPath)) {
+              if (Test-Path -LiteralPath $privatePath) {
+                Remove-Item -LiteralPath $privatePath -Force
+              }
+            }
           }
-          try { $inner = $g.stdout | ConvertFrom-Json } catch { throw "DEPLOY_CHECK_RESULT_INVALID" }
-          $ok = ($gatewayExit -eq 0 -and $g.result -eq "ok" -and
-                 $inner.deploy_check_ok -eq $true -and $inner.database_ok -eq $true -and
-                 $inner.environment -eq "dev" -and $inner.project -eq "wt-pc24x7-piloto" -and
-                 $inner.runtime_sha -eq $env:ANCHOR_SHA)
-          $reason = "ok"
-          if (-not $ok) {
-            $reason = [string]$inner.category
-            if ($reason -notmatch '^[a-z][a-z0-9_]{1,79}$') { $reason = "invalid_result" }
-          }
-          $receipt = [ordered]@{
-            schema_version = "1.0.0"
-            result = $(if ($ok) { "REQSYS_DEV_DEPLOY_CHECK_OK" } else { "REQSYS_DEV_DEPLOY_CHECK_BLOCKED" })
-            reason_code = $reason
-            host = $env:COMPUTERNAME
-            environment = "dev"
-            source_sha = $env:ANCHOR_SHA
-            runtime_sha = $(if ($ok) { [string]$inner.runtime_sha } else { $null })
-            correlation_id = $env:CORRELATION_ID
-            issue_number = 2546
-            task_id = "cwp-cdb85c31e3cc4e972f3094ab"
-            database_ok = $ok
-            session_validated = $true
-            command_gateway_verified = $true
-            deploy_performed = $false
-            runtime_mutated = $false
-            task_claim_performed = $false
-            secrets_exposed = $false
-            production_touched = $false
-          }
-          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
-          [System.IO.File]::WriteAllText($path, (($receipt | ConvertTo-Json -Depth 4) + "`n"), [System.Text.UTF8Encoding]::new($false))
-          if (-not $ok) { throw "DEPLOY_CHECK_BLOCKED:$reason" }
 
       - name: Validate immutable sanitized DEV deploy-check receipt
         shell: powershell
@@ -527,7 +525,10 @@ jobs:
               $e.correlation_id -ne $env:CORRELATION_ID -or
               $e.issue_number -ne 2546 -or
               $e.task_id -ne "cwp-cdb85c31e3cc4e972f3094ab" -or
-              $e.database_ok -ne $true -or $e.session_validated -ne $true -or
+              $e.database_ok -ne $true -or $e.database_result -ne "passed" -or
+              $e.gateway_exit_code -ne 0 -or $e.gateway_result -ne "ok" -or
+              $e.command_exit_code -ne 0 -or $e.result_verified -ne $true -or
+              $e.session_validated -ne $true -or
               $e.command_gateway_verified -ne $true) {
             throw "DEPLOY_CHECK_EVIDENCE_INVALID"
           }

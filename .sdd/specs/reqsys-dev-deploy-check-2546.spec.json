@@ -28,7 +28,7 @@
       "tests/test_dev_runtime_recovery_executor.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Owner command #1705 → GitHub Actions fixed workflow → Session Launcher → Command Gateway → readonly dev_runtime_recovery.py deploy-check → sanitized SHA/host/SQLite evidence or explicit failure. Replay suppressed. No claims or runtime changes."
+    "evidence_contract": "Owner command #1705 → GitHub Actions fixed workflow → Session Launcher → Command Gateway → private stdout/stderr capture → typed sanitized parser over real Gateway envelopes (`ok`, `command_failed`, state-change blocks, pre-execution `blocked`) → explicit passed, failed or unverified receipt. Raw streams are never public and temporary files are removed. No claims or runtime changes."
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-deploy-check-2546.requirements.md",
@@ -36,6 +36,7 @@
     "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
     "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "pre_branch_agent_gate_run_id": 38297033941,
-    "tests": "tests/test_reqsys_dev_deploy_check_2546.py"
+    "tests": "tests/test_reqsys_dev_deploy_check_2546.py",
+    "diagnostic_receipt_parser": "scripts/deploy_check_receipt.py"
   }
 }
