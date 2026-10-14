@@ -47,6 +47,16 @@ def _govbi_timeout() -> float:
     return float(getattr(settings, 'govbi_timeout_seconds', DEFAULT_GOVBI_TIMEOUT_SECONDS) or DEFAULT_GOVBI_TIMEOUT_SECONDS)
 
 
+def _codigo_falha_govbi(exc: Exception) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return 'timeout_externo'
+    if isinstance(exc, (ValueError, TypeError)):
+        return 'resposta_externa_invalida'
+    if isinstance(exc, httpx.RequestError):
+        return 'falha_transporte_externo'
+    return 'falha_externa_controlada'
+
+
 def _normalizar_resposta(data: dict[str, Any], correlation_id: str) -> dict[str, Any]:
     resultado = data.get('resultado') if isinstance(data.get('resultado'), dict) else {}
     colunas = resultado.get('colunas') if isinstance(resultado.get('colunas'), list) else []
@@ -148,7 +158,11 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
     }
 
     try:
-        async with httpx.AsyncClient(timeout=_govbi_timeout()) as client:
+        async with httpx.AsyncClient(
+            timeout=_govbi_timeout(),
+            trust_env=False,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(url, json=payload.model_dump(), headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -174,9 +188,9 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
         logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
         return _fallback_governado(payload.pergunta, correlation_id, detalhe)
     except Exception as exc:  # noqa: BLE001 - fallback operacional controlado
-        detalhe = f'{type(exc).__name__}: {exc}'
-        logger.warning('govbi_proxy_fallback correlation_id=%s detalhe=%s', correlation_id, detalhe)
-        return _fallback_governado(payload.pergunta, correlation_id, detalhe)
+        codigo = _codigo_falha_govbi(exc)
+        logger.warning('govbi_proxy_fallback correlation_id=%s codigo=%s', correlation_id, codigo)
+        return _fallback_governado(payload.pergunta, correlation_id, codigo)
 
 
 @router.get('/health')
