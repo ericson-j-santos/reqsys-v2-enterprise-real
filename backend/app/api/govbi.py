@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
+from app.core.config import (\n    GovBIConfigurationError,\n    sanitize_govbi_base_url,\n    settings,\n    validate_govbi_base_url,\n)
 from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
@@ -183,8 +183,11 @@ def govbi_health():
 
     return ok({
         'service': 'govbi-proxy',
-        'status': 'ok' if configurado else 'bloqueado',
+        'status': 'configurado' if configurado else 'bloqueado',
         'external_base_url_configured': configurado,
+        'configuration_status': 'valida' if configurado else 'invalida',
+        'local_contract_status': 'valido',
+        'external_health_status': 'nao_verificada',
         'configuration_error': configuracao_erro,
         'timeout_seconds': _govbi_timeout(),
     })
@@ -209,7 +212,12 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
     try:
         base_url = _govbi_base_url()
         base_url_valida = True
-        base_url_detalhe = base_url
+        destino_sanitizado = sanitize_govbi_base_url(base_url)
+        base_url_detalhe = (
+            f'configuração válida; destino={destino_sanitizado}'
+            if destino_sanitizado
+            else 'configuração válida'
+        )
     except GovBIConfigurationError as exc:
         base_url_valida = False
         base_url_detalhe = str(exc)
@@ -258,6 +266,11 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
 
     return {
         'executadoEm': datetime.now(UTC).isoformat(),
+        'escopo': {
+            'configuracao': 'validada localmente',
+            'contrato_local': 'validado sem chamada externa',
+            'saude_externa': 'nao verificada por este endpoint',
+        },
         'total': total,
         'aprovados': aprovados,
         'reprovados': total - aprovados,
