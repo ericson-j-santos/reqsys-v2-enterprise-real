@@ -63,7 +63,10 @@ def test_workflow_uses_real_sanitizing_parser_and_fails_closed():
     expected = (
         'scripts\\deploy_check_receipt.py',
         '"--gateway-exit-code", [string]$gatewayExit',
-        '$raw | & "$env:REQSYS_PYTHON" $parser @parserArgs',
+        '1> $stdoutPath 2> $stderrPath',
+        '"--gateway-stderr-file", $stderrPath',
+        '$gatewayStdout | & "$env:REQSYS_PYTHON" $parser @parserArgs',
+        'Remove-Item -LiteralPath $privatePath -Force',
         'throw "DEPLOY_CHECK_BLOCKED:$($receipt.reason_code)"',
         'throw "DEPLOY_CHECK_EVIDENCE_MISSING"',
         'throw "DEPLOY_CHECK_EVIDENCE_INVALID"',
@@ -93,10 +96,13 @@ SHA = "a" * 40
 CTX = ReceiptContext(SHA, "corr-1", "session-1", "DESKTOP-PDQK954")
 
 
-def _gateway(inner, *, result="ok", command_exit_code=0, **overrides):
+def _gateway(inner, *, result="ok", command_exit_code=0, gateway_exit_code=None, **overrides):
+    if gateway_exit_code is None:
+        gateway_exit_code = command_exit_code
     value = {
         "result": result,
         "command_exit_code": command_exit_code,
+        "gateway_exit_code": gateway_exit_code,
         "correlation_id": CTX.correlation_id,
         "session_id": CTX.session_id,
         "before": {"head": SHA},
@@ -104,6 +110,18 @@ def _gateway(inner, *, result="ok", command_exit_code=0, **overrides):
         "stdout": json.dumps(inner, separators=(",", ":")),
         "stderr": "must-never-be-public",
         "token": "secret-must-never-be-public",
+    }
+    value.update(overrides)
+    return json.dumps(value)
+
+
+def _blocked_stderr(exit_code=2, **overrides):
+    value = {
+        "timestamp": "2026-10-14T03:08:55+00:00",
+        "correlation_id": CTX.correlation_id,
+        "result": "blocked",
+        "gateway_exit_code": exit_code,
+        "error": "private policy detail",
     }
     value.update(overrides)
     return json.dumps(value)
@@ -122,7 +140,7 @@ def _success_inner(**overrides):
 
 
 def test_parser_accepts_verified_success():
-    receipt, exit_code = build_receipt(_gateway(_success_inner()), 0, CTX)
+    receipt, exit_code = build_receipt(_gateway(_success_inner()), "", 0, CTX)
     assert exit_code == 0
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_OK"
     assert receipt["reason_code"] == "ok"
@@ -133,35 +151,48 @@ def test_parser_accepts_verified_success():
     assert receipt["result_verified"] is True
 
 
-def test_parser_preserves_allowlisted_categorized_error():
-    inner = {"ok": False, "category": "database_probe_failed", "database_ok": False}
+def test_parser_accepts_real_command_failed_envelope():
+    inner = {"ok": False, "category": "database_probe_failed"}
     receipt, exit_code = build_receipt(
-        _gateway(inner, result="blocked", command_exit_code=1),
+        _gateway(inner, result="command_failed", command_exit_code=1),
+        "",
         1,
         CTX,
     )
     assert exit_code == 1
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_FAILED"
     assert receipt["reason_code"] == "database_probe_failed"
-    assert receipt["database_ok"] is False
-    assert receipt["database_result"] == "failed"
+    assert receipt["database_ok"] is None
+    assert receipt["database_result"] == "unverified"
     assert receipt["runtime_sha"] is None
     assert receipt["result_verified"] is True
 
 
+def test_parser_sanitizes_real_pre_execution_blocked_stderr():
+    receipt, exit_code = build_receipt("", _blocked_stderr(), 2, CTX)
+    assert exit_code == 1
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
+    assert receipt["reason_code"] == "gateway_blocked"
+    assert receipt["gateway_result"] == "blocked"
+    assert receipt["command_exit_code"] is None
+    assert receipt["command_gateway_verified"] is False
+    assert "private policy detail" not in json.dumps(receipt)
+
+
 @pytest.mark.parametrize(
-    ("payload", "reason"),
+    ("stdout", "stderr", "reason"),
     [
-        ("", "gateway_receipt_invalid"),
-        ("null", "gateway_receipt_invalid"),
-        ("{", "gateway_receipt_invalid"),
-        (_gateway(_success_inner(), stdout=""), "inner_result_missing"),
-        (_gateway(_success_inner(), stdout="null"), "inner_result_invalid_type"),
-        (_gateway(_success_inner(), stdout="{"), "inner_result_invalid_json"),
+        ("", "", "gateway_receipt_invalid"),
+        ("null", "", "gateway_receipt_invalid"),
+        ("{", "", "gateway_receipt_invalid"),
+        (_gateway(_success_inner(), stdout=""), "", "inner_result_missing"),
+        (_gateway(_success_inner(), stdout="null"), "", "inner_result_invalid_type"),
+        (_gateway(_success_inner(), stdout="{"), "", "inner_result_invalid_json"),
+        ("unexpected", _blocked_stderr(), "gateway_stream_conflict"),
     ],
 )
-def test_parser_separates_missing_or_invalid_data_from_failure(payload, reason):
-    receipt, exit_code = build_receipt(payload, 0, CTX)
+def test_parser_separates_missing_or_invalid_data_from_failure(stdout, stderr, reason):
+    receipt, exit_code = build_receipt(stdout, stderr, 0 if not stderr else 2, CTX)
     assert exit_code == 1
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
     assert receipt["reason_code"] == reason
@@ -169,35 +200,115 @@ def test_parser_separates_missing_or_invalid_data_from_failure(payload, reason):
     assert receipt["result_verified"] is False
 
 
+@pytest.mark.parametrize("bad_result", [[], {}, None, 7, True])
+def test_parser_rejects_non_string_gateway_result_without_exception(bad_result):
+    receipt, exit_code = build_receipt(
+        _gateway(_success_inner(), result=bad_result),
+        "",
+        0,
+        CTX,
+    )
+    assert exit_code == 1
+    assert receipt["reason_code"] == "gateway_result_invalid"
+
+
+@pytest.mark.parametrize("bad_category", [[], {}, None, 7, True])
+def test_parser_rejects_non_string_category_without_exception(bad_category):
+    receipt, exit_code = build_receipt(
+        _gateway(
+            {"ok": False, "category": bad_category},
+            result="command_failed",
+            command_exit_code=1,
+        ),
+        "",
+        1,
+        CTX,
+    )
+    assert exit_code == 1
+    assert receipt["reason_code"] == "inner_error_category_invalid"
+    assert receipt["result_verified"] is False
+
+
 @pytest.mark.parametrize(
-    ("gateway_exit", "gateway_result", "command_exit"),
-    [(1, "ok", 0), (0, "blocked", 0), (0, "ok", 1)],
+    ("gateway_exit", "gateway_result", "command_exit", "embedded_exit"),
+    [
+        (1, "ok", 0, 0),
+        (0, "command_failed", 1, 1),
+        (1, "command_failed", 0, 0),
+        (22, "command_failed", 126, 125),
+    ],
 )
 def test_parser_rejects_divergent_exit_contract(
-    gateway_exit, gateway_result, command_exit
+    gateway_exit, gateway_result, command_exit, embedded_exit
 ):
     receipt, exit_code = build_receipt(
         _gateway(
-            _success_inner(),
+            {"ok": False, "category": "database_probe_failed"},
             result=gateway_result,
             command_exit_code=command_exit,
+            gateway_exit_code=embedded_exit,
         ),
+        "",
         gateway_exit,
         CTX,
     )
     assert exit_code == 1
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
     assert receipt["reason_code"] == "exit_result_mismatch"
+    assert receipt["result_verified"] is False
+
+
+@pytest.mark.parametrize("command_exit", [-1073741819, -9, 126, 999])
+def test_parser_preserves_unbounded_integer_command_exit(command_exit):
+    receipt, _ = build_receipt(
+        _gateway(
+            {"ok": False, "category": "command_failed"},
+            result="command_failed",
+            command_exit_code=command_exit,
+            gateway_exit_code=command_exit,
+        ),
+        "",
+        22,
+        CTX,
+    )
+    assert receipt["command_exit_code"] == command_exit
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_FAILED"
+
+
+@pytest.mark.parametrize("deploy_result", [None, "false", 0, 1, [], {}])
+def test_parser_requires_boolean_deploy_check_result(deploy_result):
+    receipt, _ = build_receipt(
+        _gateway(_success_inner(deploy_check_ok=deploy_result)),
+        "",
+        0,
+        CTX,
+    )
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
+    assert receipt["reason_code"] == "deploy_check_result_invalid"
+
+
+def test_parser_observed_false_deploy_check_is_functional_failure():
+    receipt, _ = build_receipt(
+        _gateway(_success_inner(deploy_check_ok=False)),
+        "",
+        0,
+        CTX,
+    )
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_FAILED"
+    assert receipt["reason_code"] == "deploy_check_failed"
+    assert receipt["result_verified"] is True
 
 
 def test_parser_rejects_sha_and_gateway_identity_divergence():
     sha_receipt, _ = build_receipt(
         _gateway(_success_inner(runtime_sha="b" * 40)),
+        "",
         0,
         CTX,
     )
     identity_receipt, _ = build_receipt(
         _gateway(_success_inner(), correlation_id="other"),
+        "",
         0,
         CTX,
     )
@@ -215,7 +326,7 @@ def test_parser_discards_sensitive_and_unallowlisted_fields():
         password="do-not-publish",
         category="attacker_controlled_reason",
     )
-    receipt, _ = build_receipt(_gateway(inner), 0, CTX)
+    receipt, _ = build_receipt(_gateway(inner), "", 0, CTX)
     encoded = json.dumps(receipt, sort_keys=True)
     assert set(receipt) == PUBLIC_KEYS
     for secret in (

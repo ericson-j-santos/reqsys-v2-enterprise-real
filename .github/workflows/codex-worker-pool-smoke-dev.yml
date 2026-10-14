@@ -468,31 +468,47 @@ jobs:
             "--", "python", $script, "deploy-check",
             "--expected-sha", $env:ANCHOR_SHA
           )
-          $raw = @(& "$env:REQSYS_PYTHON" $gateway @args)
-          $gatewayExit = $LASTEXITCODE
-          $parser = Join-Path $env:TARGET_PATH "scripts\deploy_check_receipt.py"
-          $parserArgs = @(
-            "--gateway-exit-code", [string]$gatewayExit,
-            "--expected-sha", $env:ANCHOR_SHA,
-            "--expected-correlation-id", $env:CORRELATION_ID,
-            "--expected-session-id", $env:SESSION_ID,
-            "--host", $env:COMPUTERNAME
-          )
-          $sanitized = @($raw | & "$env:REQSYS_PYTHON" $parser @parserArgs)
-          $parserExit = $LASTEXITCODE
-          if ($sanitized.Count -ne 1) { throw "DEPLOY_CHECK_SANITIZED_RECEIPT_MISSING" }
-          try { $receipt = $sanitized[0] | ConvertFrom-Json } catch {
-            throw "DEPLOY_CHECK_SANITIZED_RECEIPT_INVALID"
-          }
-          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
-          [System.IO.File]::WriteAllText(
-            $path,
-            (($receipt | ConvertTo-Json -Depth 4) + "`n"),
-            [System.Text.UTF8Encoding]::new($false)
-          )
-          if ($parserExit -ne 0) {
-            throw "DEPLOY_CHECK_BLOCKED:$($receipt.reason_code)"
+          $streamId = "$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
+          $stdoutPath = Join-Path $env:RUNNER_TEMP "deploy-check-$streamId.stdout"
+          $stderrPath = Join-Path $env:RUNNER_TEMP "deploy-check-$streamId.stderr"
+          try {
+            & "$env:REQSYS_PYTHON" $gateway @args 1> $stdoutPath 2> $stderrPath
+            $gatewayExit = $LASTEXITCODE
+            $parser = Join-Path $env:TARGET_PATH "scripts\deploy_check_receipt.py"
+            $parserArgs = @(
+              "--gateway-exit-code", [string]$gatewayExit,
+              "--gateway-stderr-file", $stderrPath,
+              "--expected-sha", $env:ANCHOR_SHA,
+              "--expected-correlation-id", $env:CORRELATION_ID,
+              "--expected-session-id", $env:SESSION_ID,
+              "--host", $env:COMPUTERNAME
+            )
+            $gatewayStdout = ""
+            if (Test-Path -LiteralPath $stdoutPath) {
+              $gatewayStdout = [System.IO.File]::ReadAllText($stdoutPath)
+            }
+            $sanitized = @($gatewayStdout | & "$env:REQSYS_PYTHON" $parser @parserArgs)
+            $parserExit = $LASTEXITCODE
+            if ($sanitized.Count -ne 1) { throw "DEPLOY_CHECK_SANITIZED_RECEIPT_MISSING" }
+            try { $receipt = $sanitized[0] | ConvertFrom-Json } catch {
+              throw "DEPLOY_CHECK_SANITIZED_RECEIPT_INVALID"
+            }
+            $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+            [System.IO.File]::WriteAllText(
+              $path,
+              (($receipt | ConvertTo-Json -Depth 4) + "`n"),
+              [System.Text.UTF8Encoding]::new($false)
+            )
+            if ($parserExit -ne 0) {
+              throw "DEPLOY_CHECK_BLOCKED:$($receipt.reason_code)"
+            }
+          } finally {
+            foreach ($privatePath in @($stdoutPath, $stderrPath)) {
+              if (Test-Path -LiteralPath $privatePath) {
+                Remove-Item -LiteralPath $privatePath -Force
+              }
+            }
           }
 
       - name: Validate immutable sanitized DEV deploy-check receipt

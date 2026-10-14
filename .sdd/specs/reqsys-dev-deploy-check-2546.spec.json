@@ -28,7 +28,7 @@
       "tests/test_dev_runtime_recovery_executor.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Owner command #1705 → GitHub Actions fixed workflow → Session Launcher → Command Gateway → read-only dev_runtime_recovery.py deploy-check → typed sanitized parser → explicit passed, failed or unverified receipt. Raw stdout/stderr is never public. Replay suppressed. No claims or runtime changes."
+    "evidence_contract": "Owner command #1705 → GitHub Actions fixed workflow → Session Launcher → Command Gateway → private stdout/stderr capture → typed sanitized parser over real Gateway envelopes (`ok`, `command_failed`, state-change blocks, pre-execution `blocked`) → explicit passed, failed or unverified receipt. Raw streams are never public and temporary files are removed. No claims or runtime changes."
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-deploy-check-2546.requirements.md",
