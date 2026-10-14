@@ -34,7 +34,7 @@ describe('govbiFuncionamento', () => {
     const client = {
       get: vi.fn(async (url) => {
         if (url === '/govbi/health') {
-          return { data: { data: { service: 'govbi-proxy', status: 'ok', timeout_seconds: 15 } } }
+          return { data: { data: { service: 'govbi-proxy', status: 'configurado', configuration_status: 'valida', local_contract_status: 'valido', external_health_status: 'nao_verificada', timeout_seconds: 15 } } }
         }
         if (url === '/govbi/funcionamento') {
           return {
@@ -79,11 +79,45 @@ describe('govbiFuncionamento', () => {
     expect(consolidado.completo).toBe(true)
   })
 
-  it('agrega local + API no funcionamento completo', async () => {
+
+  it('não confunde status legado ok com saúde externa comprovada', async () => {
     const client = {
       get: vi.fn(async (url) => {
         if (url === '/govbi/health') {
           return { data: { data: { service: 'govbi-proxy', status: 'ok', timeout_seconds: 15 } } }
+        }
+        return { data: { data: { completo: true, percentual: 100, aprovados: 5, total: 5 } } }
+      }),
+      post: vi.fn(async (url, body) => {
+        if (body?.pergunta === 'oi') {
+          const error = new Error('validation')
+          error.response = { status: 422 }
+          throw error
+        }
+        return {
+          data: {
+            statusFluxo: 'MODO_DEGRADADO',
+            correlationId: 'corr',
+            resultado: { colunas: [], linhas: [] },
+            explicacao: 'fallback governado; não comprova integração externa',
+            mascaramentoAplicado: true,
+          },
+        }
+      }),
+    }
+
+    const resultados = await executarTestesApiGovbi(client)
+    const health = resultados.find((item) => item.id === 'api-health')
+
+    expect(health.ok).toBe(false)
+    expect(health.detalhe).toBe('Resposta fora do contrato local')
+  })
+
+  it('agrega local + API no funcionamento completo', async () => {
+    const client = {
+      get: vi.fn(async (url) => {
+        if (url === '/govbi/health') {
+          return { data: { data: { service: 'govbi-proxy', status: 'configurado', configuration_status: 'valida', local_contract_status: 'valido', external_health_status: 'nao_verificada', timeout_seconds: 15 } } }
         }
         return {
           data: {
