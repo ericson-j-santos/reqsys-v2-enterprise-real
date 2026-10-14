@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from scripts.authorized_teams_e2e_admission import (
-    AdmissionError, COMMAND, WORKER_CANARY_COMMAND, decide,
+    AdmissionError, COMMAND, WORKER_CANARY_COMMAND, WORKER_RESTORE_COMMAND, decide,
 )
 
 SHA = "a" * 40
@@ -134,7 +134,7 @@ def test_worker_canary_cooldown_and_invalid_cases():
 
 def test_worker_canary_gateway_dispatched_once_after_admission():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    gate = "if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary'"
+    gate = "if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal'"
     assert raw.count(gate) == 2
     assert '--command "$COMMAND"' in raw
     assert 'physical_command_not_allowlisted' in raw
@@ -150,3 +150,30 @@ def test_nonowner_comment_record_cannot_suppress_authorized_dispatch():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert raw.count('.user.login == "ericson-j-santos"') >= 2
     assert raw.count('user_login: .user.login') >= 2
+
+
+def test_real_restore_admission_positive_duplicate_and_negative_controls():
+    """Regression: the workflow and parser must share the exact fixed command."""
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert f"github.event.comment.body == '{WORKER_RESTORE_COMMAND}'" in raw
+    assert f"'{WORKER_RESTORE_COMMAND}')" in raw
+    assert '--command "$COMMAND"' in raw
+    assert "steps.route.outputs.mode == 'restore-rehearsal'" in raw
+
+    comments = [_record(400, 0), _record(401, 2)]
+    first = decide(_event(400, command=WORKER_RESTORE_COMMAND), comments,
+                   expected_sha=SHA, command=WORKER_RESTORE_COMMAND)
+    duplicate = decide(_event(401, 2, command=WORKER_RESTORE_COMMAND), comments,
+                       expected_sha=SHA, command=WORKER_RESTORE_COMMAND)
+    assert first["admitted"] is True
+    assert duplicate["admitted"] is False
+    assert duplicate["canonical_comment_id"] == 400
+    assert decide(_event(402, 121, command=WORKER_RESTORE_COMMAND),
+                  [_record(400, 0), _record(402, 121)],
+                  expected_sha=SHA, command=WORKER_RESTORE_COMMAND)["admitted"] is True
+    with pytest.raises(AdmissionError, match="command_not_allowlisted"):
+        decide(_event(400, command=WORKER_CANARY_COMMAND), [_record(400, 0)],
+               expected_sha=SHA, command=WORKER_RESTORE_COMMAND)
+    with pytest.raises(AdmissionError, match="physical_command_not_allowlisted"):
+        decide(_event(400, command="/reqsys run arbitrary"), [_record(400, 0)],
+               expected_sha=SHA, command="/reqsys run arbitrary")
