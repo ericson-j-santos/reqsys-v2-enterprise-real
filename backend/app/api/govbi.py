@@ -4,7 +4,6 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from app.core.envelope import ok
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -15,6 +14,7 @@ from app.core.config import (
     validate_govbi_base_url,
     validate_govbi_timeout,
 )
+from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
