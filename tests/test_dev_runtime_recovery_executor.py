@@ -632,7 +632,7 @@ def test_deploy_check_sql_timeout(root):
 def test_deploy_check_sha_mismatch_is_bounded(root):
     runner = Fake(root)
     ticks = [0]
-    with pytest.raises(RecoveryError, match="deploy_readiness_timeout"):
+    with pytest.raises(RecoveryError, match="^deploy_readiness_sha_mismatch$"):
         deploy_check(
             "6" * 40,
             runner,
@@ -645,6 +645,102 @@ def test_deploy_check_sha_mismatch_is_bounded(root):
             sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
         )
     assert ticks[0] == 2
+    assert_read_only(runner)
+
+
+
+
+@pytest.mark.parametrize(
+    ("upstream_error", "expected_category"),
+    [
+        ("live_probe_unavailable:private-url", "deploy_readiness_probe_unavailable"),
+        ("live_readiness_invalid:secret-content", "deploy_readiness_unhealthy"),
+        ("unrecognized_error:password=hidden", "deploy_readiness_unknown"),
+    ],
+)
+def test_deploy_check_timeout_preserves_allowlisted_reason(
+    root, upstream_error, expected_category
+):
+    runner = Fake(root)
+    ticks = [0]
+
+    def unavailable():
+        raise RecoveryError(upstream_error)
+
+    with pytest.raises(RecoveryError, match=f"^{expected_category}$") as exc:
+        deploy_check(
+            OLD, runner, root, identity_probe=unavailable, hostname=HOST,
+            wait_timeout=2, wait_interval=1,
+            clock=lambda: ticks[0],
+            sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
+        )
+    assert ticks[0] == 2
+    assert "password=" not in str(exc.value)
+    assert "private-url" not in str(exc.value)
+    assert_read_only(runner)
+
+
+@pytest.mark.parametrize(
+    ("upstream_error", "expected_category"),
+    [
+        ("host_identity_refused", "deploy_readiness_scope_invalid"),
+        ("live_probe_source_unavailable", "deploy_readiness_probe_invalid"),
+    ],
+)
+def test_deploy_check_static_readiness_failure_fails_fast(
+    root, upstream_error, expected_category
+):
+    runner = Fake(root)
+    ticks = [0]
+
+    def unavailable():
+        raise RecoveryError(upstream_error)
+
+    with pytest.raises(RecoveryError, match=f"^{expected_category}$"):
+        deploy_check(
+            OLD, runner, root, identity_probe=unavailable, hostname=HOST,
+            wait_timeout=90, wait_interval=1,
+            clock=lambda: ticks[0],
+            sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
+        )
+    assert ticks[0] == 0
+    assert_read_only(runner)
+
+
+def test_deploy_check_docker_container_unavailable_is_typed(root):
+    runner = Fake(root, fail="docker ps")
+    ticks = [0]
+    with pytest.raises(RecoveryError, match="^deploy_readiness_container_unavailable$"):
+        deploy_check(
+            OLD, runner, root, identity_probe=lambda: OLD, hostname=HOST,
+            wait_timeout=2, wait_interval=1,
+            clock=lambda: ticks[0],
+            sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
+        )
+    assert ticks[0] == 2
+    assert_read_only(runner)
+
+
+def test_deploy_check_recovers_from_transient_probe_failure(root):
+    runner = Fake(root)
+    ticks = [0]
+    attempts = [0]
+
+    def temporary_unavailability():
+        attempts[0] += 1
+        if attempts[0] == 1:
+            raise RecoveryError("live_probe_unavailable:private-detail")
+        return OLD
+
+    result = deploy_check(
+        OLD, runner, root, identity_probe=temporary_unavailability, hostname=HOST,
+        wait_timeout=3, wait_interval=1,
+        clock=lambda: ticks[0],
+        sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
+    )
+    assert result["deploy_check_ok"] is True
+    assert result["runtime_sha"] == OLD
+    assert attempts[0] == 2 and ticks[0] == 1
     assert_read_only(runner)
 
 

@@ -496,6 +496,7 @@ def deploy_check(
             wait_interval,
             clock,
             sleeper,
+            diagnose_timeout=True,
         )
     except RecoveryError as exc:
         if str(exc) == "readiness_timeout":
@@ -520,6 +521,31 @@ def restored(runner, manifest, root):
             raise RecoveryError("restored_image_mismatch")
 
 
+_DEV_READINESS_REASON_MAP = {
+    "command_failed": "container_unavailable",
+    "container_cardinality": "container_unavailable",
+    "invalid_container_metadata": "container_unavailable",
+    "invalid_image_id": "container_unavailable",
+    "invalid_metadata": "container_unavailable",
+    "host_identity_refused": "scope_invalid",
+    "runtime_root_invalid": "scope_invalid",
+    "compose_identity_mismatch": "scope_invalid",
+    "working_dir_mismatch": "scope_invalid",
+    "live_probe_source_unavailable": "probe_invalid",
+    "live_probe_loader_unavailable": "probe_invalid",
+    "live_probe_contract_invalid": "probe_invalid",
+    "live_probe_unavailable": "probe_unavailable",
+    "live_identity_invalid": "unhealthy",
+    "live_readiness_invalid": "unhealthy",
+    "live_liveness_invalid": "unhealthy",
+}
+
+
+def _dev_readiness_reason(error: RecoveryError) -> str:
+    """Return only a fixed category, never exception details or host paths."""
+    return _DEV_READINESS_REASON_MAP.get(str(error).split(":", 1)[0], "unknown")
+
+
 def wait_live(
     runner,
     expected_sha,
@@ -530,16 +556,27 @@ def wait_live(
     interval,
     clock,
     sleeper,
+    diagnose_timeout=False,
 ):
     deadline = clock() + timeout
+    last_reason = "unknown"
+    observed_sha_mismatch = False
     while True:
         try:
             live = live_guard(runner, root, identity_probe, hostname)
             if live["runtime_sha"] == expected_sha:
                 return live
-        except RecoveryError:
-            pass
+            if diagnose_timeout:
+                observed_sha_mismatch = True
+        except RecoveryError as exc:
+            if diagnose_timeout:
+                last_reason = _dev_readiness_reason(exc)
+                if last_reason in {"scope_invalid", "probe_invalid"}:
+                    raise RecoveryError(f"deploy_readiness_{last_reason}") from None
         if clock() >= deadline:
+            if diagnose_timeout:
+                category = "sha_mismatch" if observed_sha_mismatch else last_reason
+                raise RecoveryError(f"deploy_readiness_{category}")
             raise RecoveryError("readiness_timeout")
         sleeper(interval)
 
