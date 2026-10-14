@@ -8,7 +8,12 @@ from typing import Any
 
 import httpx
 
-from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url, validate_govbi_timeout
+from app.core.config import (
+    GovBIConfigurationError,
+    settings,
+    validate_govbi_base_url,
+    validate_govbi_timeout,
+)
 from app.schemas.monitoramento_operacional import (
     ItemMonitorado,
     MonitoramentoOperacional,
