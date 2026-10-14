@@ -7,12 +7,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from app.core.config import (
-    GovBIConfigurationError,
-    settings,
-    validate_govbi_base_url,
-    validate_govbi_timeout,
-)
 from app.schemas.monitoramento_operacional import (
     ItemMonitorado,
     MonitoramentoOperacional,
@@ -21,6 +15,13 @@ from app.schemas.monitoramento_operacional import (
 )
 from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs
 from app.services.connection_broker import listar_conectores, resumo_conectores
+
+from app.core.config import (
+    GovBIConfigurationError,
+    settings,
+    validate_govbi_base_url,
+    validate_govbi_timeout,
+)
 
 GOVBI_HEALTH_MAX_BYTES = 8192
 GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS = 5.0
