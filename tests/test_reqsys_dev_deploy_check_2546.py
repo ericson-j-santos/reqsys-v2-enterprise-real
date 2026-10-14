@@ -1,5 +1,7 @@
 """Fixed read-only DEV deploy check — issue #2546."""
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -338,3 +340,60 @@ def test_parser_discards_sensitive_and_unallowlisted_fields():
         "attacker_controlled_reason",
     ):
         assert secret not in encoded
+
+
+
+def _cli_args(stderr_path):
+    return [
+        sys.executable,
+        str(PARSER),
+        "--gateway-exit-code",
+        "0",
+        "--gateway-stderr-file",
+        str(stderr_path),
+        "--expected-sha",
+        SHA,
+        "--expected-correlation-id",
+        CTX.correlation_id,
+        "--expected-session-id",
+        CTX.session_id,
+        "--host",
+        CTX.host,
+    ]
+
+
+def test_cli_sanitizes_post_execution_stdout(tmp_path):
+    stderr_path = tmp_path / "gateway.stderr"
+    stderr_path.write_text("", encoding="utf-8")
+    completed = subprocess.run(
+        _cli_args(stderr_path),
+        input=_gateway(_success_inner()),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = json.loads(completed.stdout)
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_OK"
+    assert set(receipt) == PUBLIC_KEYS
+
+
+def test_cli_sanitizes_utf16_pre_execution_stderr(tmp_path):
+    stderr_path = tmp_path / "gateway.stderr"
+    stderr_path.write_text(_blocked_stderr(), encoding="utf-16")
+    args = _cli_args(stderr_path)
+    args[args.index("--gateway-exit-code") + 1] = "2"
+    completed = subprocess.run(
+        args,
+        input="",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = json.loads(completed.stdout)
+    assert completed.returncode == 1
+    assert completed.stderr == ""
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
+    assert receipt["reason_code"] == "gateway_blocked"
+    assert "private policy detail" not in completed.stdout
