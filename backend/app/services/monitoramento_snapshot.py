@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +17,9 @@ from app.schemas.monitoramento_operacional import (
 )
 from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs
 from app.services.connection_broker import listar_conectores, resumo_conectores
+
+GOVBI_HEALTH_MAX_BYTES = 8192
+GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS = 5.0
 
 
 def _govbi_base_url() -> str:
@@ -110,19 +115,52 @@ def _estado_govbi() -> tuple[str, dict[str, Any]]:
         'saude_externa': 'indisponivel',
     }
     try:
+        total_timeout = min(_govbi_timeout(), GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS)
+        timeout = httpx.Timeout(
+            total_timeout,
+            connect=total_timeout,
+            read=min(total_timeout, 0.5),
+            write=total_timeout,
+            pool=total_timeout,
+        )
+        deadline = time.monotonic() + total_timeout
         with httpx.Client(
-            timeout=min(_govbi_timeout(), 5.0),
+            timeout=timeout,
             follow_redirects=False,
+            trust_env=False,
         ) as client:
-            response = client.get(f'{base_url}/actuator/health')
-        detalhes['http_status'] = response.status_code
-        if response.status_code != 200:
-            detalhes['motivo'] = 'status_http_inesperado'
-            return 'vermelho', detalhes
+            with client.stream('GET', f'{base_url}/actuator/health') as response:
+                detalhes['http_status'] = response.status_code
+                if response.status_code != 200:
+                    detalhes['motivo'] = 'status_http_inesperado'
+                    return 'vermelho', detalhes
 
+                content_length = response.headers.get('content-length')
+                if content_length is not None:
+                    try:
+                        if int(content_length) > GOVBI_HEALTH_MAX_BYTES:
+                            detalhes['motivo'] = 'resposta_excede_limite'
+                            return 'vermelho', detalhes
+                    except ValueError:
+                        detalhes['motivo'] = 'content_length_invalido'
+                        return 'vermelho', detalhes
+
+                body = bytearray()
+                for chunk in response.iter_bytes():
+                    if time.monotonic() > deadline:
+                        detalhes['motivo'] = 'tempo_total_excedido'
+                        return 'vermelho', detalhes
+                    body.extend(chunk)
+                    if len(body) > GOVBI_HEALTH_MAX_BYTES:
+                        detalhes['motivo'] = 'resposta_excede_limite'
+                        return 'vermelho', detalhes
+
+        if time.monotonic() > deadline:
+            detalhes['motivo'] = 'tempo_total_excedido'
+            return 'vermelho', detalhes
         try:
-            payload = response.json()
-        except ValueError:
+            payload = json.loads(bytes(body))
+        except (json.JSONDecodeError, UnicodeDecodeError):
             detalhes['motivo'] = 'resposta_json_invalida'
             return 'vermelho', detalhes
 
