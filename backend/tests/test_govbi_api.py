@@ -1,18 +1,23 @@
 from unittest.mock import patch
 
+import app.api.govbi as govbi
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import GovBIConfigurationError, validate_govbi_base_url
+from app.core.config import (
+    GovBIConfigurationError,
+    sanitize_govbi_base_url,
+    validate_govbi_base_url,
+)
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
 def _govbi_base_url_aprovada(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
 def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(monkeypatch):
@@ -38,7 +43,6 @@ def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(mon
             )
             raise httpx.HTTPStatusError('bad request', request=request, response=response)
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComErroNegocio)
 
@@ -62,8 +66,10 @@ def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(mon
 
 def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha(monkeypatch):
     class ClientComFalha:
+        init_kwargs = None
+
         def __init__(self, *args, **kwargs):
-            pass
+            type(self).init_kwargs = kwargs
 
         async def __aenter__(self):
             return self
@@ -72,9 +78,8 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
             return False
 
         async def post(self, *args, **kwargs):
-            raise RuntimeError('falha simulada')
+            raise RuntimeError('https://usuario:segredo@proxy.example/token')
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComFalha)
 
@@ -95,6 +100,10 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
     assert data['correlationId'] == 'test-correlation-id'
     assert data['resultado']['colunas'] == ['item', 'valor', 'status']
     assert data['mascaramentoAplicado'] is True
+    assert data['resultado']['linhas'][1]['valor'] == 'falha_externa_controlada'
+    assert 'segredo' not in response.text
+    assert ClientComFalha.init_kwargs['trust_env'] is False
+    assert ClientComFalha.init_kwargs['follow_redirects'] is False
 
 
 def test_govbi_perguntas_valida_payload_minimo():
@@ -102,6 +111,36 @@ def test_govbi_perguntas_valida_payload_minimo():
     response = client.post('/api/govbi/perguntas', json={'pergunta': 'oi'})
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    'correlation_id',
+    [
+        'corr-valid-123',
+        'REQSYS.govbi:request_01',
+        'a' * 128,
+    ],
+)
+def test_govbi_preserva_correlation_id_valido(correlation_id):
+    assert govbi._correlation_id(f'  {correlation_id}  ') == correlation_id
+
+
+@pytest.mark.parametrize(
+    'correlation_id_invalido',
+    [
+        'corr\\r\\nlinha-forjada',
+        'corr\\x00controle',
+        'ç-fora-do-contrato',
+        'a' * 129,
+    ],
+)
+def test_govbi_regenera_correlation_id_invalido(correlation_id_invalido):
+    correlation_id = govbi._correlation_id(correlation_id_invalido)
+
+    assert correlation_id.startswith('govbi-')
+    assert correlation_id != correlation_id_invalido.strip()
+    assert '\\r' not in correlation_id
+    assert '\\n' not in correlation_id
 
 
 def test_govbi_health_retorna_envelope_operacional():
@@ -112,7 +151,10 @@ def test_govbi_health_retorna_envelope_operacional():
     payload = response.json()
     assert payload['success'] is True
     assert payload['data']['service'] == 'govbi-proxy'
-    assert payload['data']['status'] == 'ok'
+    assert payload['data']['status'] == 'configurado'
+    assert payload['data']['configuration_status'] == 'valida'
+    assert payload['data']['local_contract_status'] == 'valido'
+    assert payload['data']['external_health_status'] == 'nao_verificada'
 
 
 def test_govbi_funcionamento_retorna_cem_por_cento():
@@ -125,6 +167,9 @@ def test_govbi_funcionamento_retorna_cem_por_cento():
     assert dados['completo'] is True
     assert dados['percentual'] == 100
     assert dados['aprovados'] == dados['total']
+    assert dados['escopo']['configuracao'] == 'validada localmente'
+    assert dados['escopo']['contrato_local'] == 'validado sem chamada externa'
+    assert dados['escopo']['saude_externa'] == 'nao verificada por este endpoint'
     assert len(dados['resultados']) >= 5
 
 
@@ -151,7 +196,6 @@ def test_govbi_perguntas_normaliza_resposta_externa_com_sucesso(monkeypatch):
                 },
             )
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComSucesso)
 
@@ -185,7 +229,6 @@ def test_govbi_perguntas_http_400_sem_json_cai_em_fallback(monkeypatch):
             response = httpx.Response(400, request=request, content=b'corpo-invalido')
             raise httpx.HTTPStatusError('bad request', request=request, response=response)
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientCom400SemJson)
 
@@ -216,7 +259,6 @@ def test_govbi_perguntas_resposta_nao_dict_cai_em_fallback(monkeypatch):
             request = httpx.Request('POST', 'https://govbi.example/api/v1/perguntas')
             return httpx.Response(200, request=request, json=['nao', 'dict'])
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComJsonLista)
 
@@ -245,7 +287,6 @@ def test_validacao_govbi_rejeita_hosts_fly(base_url):
 
 
 def test_govbi_perguntas_sem_url_explicita_retorna_503(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', '')
     with patch.object(govbi.httpx, 'AsyncClient') as async_client:
@@ -261,7 +302,6 @@ def test_govbi_perguntas_sem_url_explicita_retorna_503(monkeypatch):
 
 
 def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.fly.dev')
     response = TestClient(app).get('/api/govbi/health')
@@ -271,3 +311,123 @@ def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
     assert data['status'] == 'bloqueado'
     assert data['external_base_url_configured'] is False
     assert data['configuration_error'] == 'GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.'
+
+
+@pytest.mark.parametrize(
+    'base_url',
+    [
+        'https://usuario:segredo@govbi.example',
+        'https://govbi.example?token=segredo',
+        'https://govbi.example/#segredo',
+        'https://govbi.example/token-segredo',
+    ],
+)
+def test_validacao_govbi_rejeita_componentes_sensiveis_sem_refletir_valor(base_url):
+    with pytest.raises(GovBIConfigurationError) as exc_info:
+        validate_govbi_base_url(base_url)
+
+    assert 'segredo' not in str(exc_info.value)
+    assert sanitize_govbi_base_url(base_url) is None
+
+
+def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
+
+    sensitive_url = 'https://usuario:segredo@govbi.example?token=oculto'
+    monkeypatch.setattr(govbi.settings, 'govbi_base_url', sensitive_url)
+
+    client = TestClient(app)
+    health = client.get('/api/govbi/health')
+    funcionamento = client.get('/api/govbi/funcionamento')
+
+    assert health.status_code == 200
+    assert funcionamento.status_code == 200
+    assert health.json()['data']['configuration_status'] == 'invalida'
+    assert funcionamento.json()['data']['completo'] is False
+    assert funcionamento.json()['data']['escopo']['configuracao'] == 'invalida'
+    assert sensitive_url not in health.text
+    assert sensitive_url not in funcionamento.text
+    assert 'segredo' not in health.text
+    assert 'segredo' not in funcionamento.text
+
+
+def test_govbi_health_bloqueia_host_fora_da_allowlist_sem_probe(monkeypatch):
+
+    monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://destino-interno.example')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
+
+    with patch.object(govbi.httpx, 'AsyncClient') as async_client:
+        response = TestClient(app).post(
+            '/api/govbi/perguntas',
+            json={'pergunta': 'Consulta bloqueada por allowlist'},
+        )
+
+    assert response.status_code == 503
+    assert 'destino-interno' not in response.text
+    async_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    'base_url',
+    [
+        'https://govbi.example:abc',
+        'https://govbi.example:99999',
+        'https://[::1',
+    ],
+)
+def test_validacao_govbi_rejeita_porta_ou_host_malformado(base_url):
+    with pytest.raises(GovBIConfigurationError):
+        validate_govbi_base_url(base_url, allowed_hosts='govbi.example')
+
+    assert sanitize_govbi_base_url(base_url, allowed_hosts='govbi.example') is None
+
+
+def test_validacao_govbi_nao_normaliza_porta_zero_para_padrao():
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
+        validate_govbi_base_url(
+            'https://govbi.example:0',
+            allowed_hosts='govbi.example:443',
+        )
+    assert sanitize_govbi_base_url(
+        'https://govbi.example:0',
+        allowed_hosts='https://govbi.example:443',
+    ) is None
+
+
+@pytest.mark.parametrize('timeout_invalido', [float('nan'), float('inf'), float('-inf'), 0.0, -1.0])
+def test_govbi_api_bloqueia_timeout_invalido_sem_io(monkeypatch, timeout_invalido):
+
+    monkeypatch.setattr(govbi.settings, 'govbi_timeout_seconds', timeout_invalido)
+    client = TestClient(app)
+    with patch.object(govbi.httpx, 'AsyncClient') as async_client:
+        health = client.get('/api/govbi/health')
+        perguntas = client.post('/api/govbi/perguntas', json={'pergunta': 'Consulta bloqueada'})
+        funcionamento = client.get('/api/govbi/funcionamento')
+
+    assert health.status_code == 200
+    assert health.json()['data']['configuration_status'] == 'invalida'
+    assert health.json()['data']['timeout_seconds'] is None
+    assert perguntas.status_code == 503
+    assert funcionamento.status_code == 200
+    assert funcionamento.json()['data']['completo'] is False
+    async_client.assert_not_called()
+
+
+def test_validacao_govbi_aceita_porta_explicita_somente_na_origem_aprovada():
+    assert validate_govbi_base_url(
+        'http://govbi.example:8080',
+        allowed_hosts='govbi.example:8080',
+    ) == 'http://govbi.example:8080'
+    assert validate_govbi_base_url(
+        'https://govbi.example:443',
+        allowed_hosts='govbi.example',
+    ) == 'https://govbi.example:443'
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
+        validate_govbi_base_url(
+            'http://govbi.example:8080',
+            allowed_hosts='govbi.example',
+        )
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
+        validate_govbi_base_url(
+            'http://govbi.example:8081',
+            allowed_hosts='govbi.example:8080',
+        )
