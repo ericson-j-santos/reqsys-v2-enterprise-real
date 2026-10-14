@@ -214,12 +214,17 @@ export async function executarTestesApiGovbi(client) {
     )
     const camposObrigatorios = ['statusFluxo', 'correlationId', 'resultado', 'explicacao', 'mascaramentoAplicado']
     const faltando = camposObrigatorios.filter((campo) => !(campo in data))
-    const ok = faltando.length === 0
+    const contratoValido = faltando.length === 0
+    const saudeExternaComprovada = contratoValido && data.statusFluxo !== 'MODO_DEGRADADO'
     resultados.push(criarResultado(
       'api-contrato-perguntas',
-      'Contrato POST /perguntas',
-      ok,
-      ok ? data.statusFluxo : `Campos ausentes: ${faltando.join(', ')}`,
+      'Contrato POST /perguntas e resultado externo',
+      saudeExternaComprovada,
+      !contratoValido
+        ? `Campos ausentes: ${faltando.join(', ')}`
+        : data.statusFluxo === 'MODO_DEGRADADO'
+          ? 'Contrato local válido; resultado externo degradado e não comprovado'
+          : data.statusFluxo,
       'api',
     ))
   } catch (error) {
