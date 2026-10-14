@@ -40,15 +40,23 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
     if not candidate:
         raise GovBIConfigurationError('GOVBI_BASE_URL deve ser configurada explicitamente.')
 
-    parsed = urlsplit(candidate)
-    if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+    try:
+        parsed = urlsplit(candidate)
+        hostname_raw = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise GovBIConfigurationError('GOVBI_BASE_URL contém host ou porta inválida.') from exc
+    if parsed.scheme not in {'http', 'https'} or not hostname_raw:
         raise GovBIConfigurationError('GOVBI_BASE_URL deve ser uma URL HTTP(S) absoluta.')
     if parsed.username is not None or parsed.password is not None:
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter credenciais.')
     if parsed.path not in {'', '/'} or parsed.query or parsed.fragment:
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter path, query ou fragmento.')
 
-    hostname = parsed.hostname.lower().rstrip('.')
+    hostname = hostname_raw.lower().rstrip('.')
+    default_port = 443 if parsed.scheme == 'https' else 80
+    if port is not None and port != default_port:
+        raise GovBIConfigurationError('GOVBI_BASE_URL deve usar a porta padrão do protocolo.')
     if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
     if allowed_hosts is not None:
@@ -70,14 +78,18 @@ def sanitize_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
 
     try:
         candidate = validate_govbi_base_url(value, allowed_hosts=allowed_hosts)
-    except GovBIConfigurationError:
+    except (GovBIConfigurationError, ValueError):
         return None
 
-    parsed = urlsplit(candidate)
+    try:
+        parsed = urlsplit(candidate)
+        port_value = parsed.port
+    except ValueError:
+        return None
     hostname = parsed.hostname or ''
     if ':' in hostname and not hostname.startswith('['):
         hostname = f'[{hostname}]'
-    port = f':{parsed.port}' if parsed.port is not None else ''
+    port = f':{port_value}' if port_value is not None else ''
     return f'{parsed.scheme}://{hostname}{port}'
 
 
