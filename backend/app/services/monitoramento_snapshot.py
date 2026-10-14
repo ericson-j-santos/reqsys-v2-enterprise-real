@@ -91,22 +91,47 @@ def _estado_govbi() -> tuple[str, dict[str, Any]]:
         base_url = _govbi_base_url()
     except GovBIConfigurationError as exc:
         return 'bloqueado', {
-            'base_url': None,
             'fonte': 'configuracao',
             'modo': 'bloqueado',
+            'configuracao': 'invalida',
+            'contrato_local': 'nao_avaliado',
+            'saude_externa': 'nao_avaliada',
             'motivo': str(exc),
         }
 
-    detalhes: dict[str, Any] = {'base_url': base_url, 'fonte': 'probe-http'}
+    detalhes: dict[str, Any] = {
+        'fonte': 'probe-http',
+        'modo': 'live',
+        'configuracao': 'valida',
+        'contrato_local': 'GET /actuator/health; HTTP 200; JSON status=UP',
+        'saude_externa': 'indisponivel',
+    }
     try:
-        with httpx.Client(timeout=min(_govbi_timeout(), 5.0)) as client:
-            response = client.get(f'{base_url}/health')
+        with httpx.Client(
+            timeout=min(_govbi_timeout(), 5.0),
+            follow_redirects=False,
+        ) as client:
+            response = client.get(f'{base_url}/actuator/health')
         detalhes['http_status'] = response.status_code
-        if response.status_code < 500:
-            return 'verde', detalhes
-        return 'amarelo', detalhes
-    except Exception as exc:  # noqa: BLE001 - sinal operacional
-        detalhes['erro'] = f'{type(exc).__name__}'
+        if response.status_code != 200:
+            detalhes['motivo'] = 'status_http_inesperado'
+            return 'vermelho', detalhes
+
+        try:
+            payload = response.json()
+        except ValueError:
+            detalhes['motivo'] = 'resposta_json_invalida'
+            return 'vermelho', detalhes
+
+        if not isinstance(payload, dict) or payload.get('status') != 'UP':
+            detalhes['motivo'] = 'contrato_health_invalido'
+            return 'vermelho', detalhes
+
+        detalhes['saude_externa'] = 'saudavel'
+        return 'verde', detalhes
+    except Exception as exc:  # noqa: BLE001 - sinal operacional sanitizado
+        detalhes['erro'] = type(exc).__name__
+        detalhes['motivo'] = 'probe_indisponivel'
         return 'vermelho', detalhes
 
 
