@@ -2,10 +2,9 @@ import math
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from app.core.secrets import get_secret
 from pydantic import Field
 from pydantic_settings import BaseSettings
-
-from app.core.secrets import get_secret
 
 # Carrega o .env do diretório pai (raiz do projeto) se existir
 _env_file = Path(__file__).resolve().parents[3] / '.env'
