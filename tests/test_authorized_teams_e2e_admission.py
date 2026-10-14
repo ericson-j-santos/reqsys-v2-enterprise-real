@@ -1,13 +1,20 @@
 """No-external-effects tests for the authorized Teams E2E admission gate."""
 from __future__ import annotations
 
+import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from scripts.authorized_teams_e2e_admission import (
-    AdmissionError, COMMAND, WORKER_CANARY_COMMAND, decide,
+    AdmissionError,
+    COMMAND,
+    WORKER_CANARY_COMMAND,
+    WORKER_RESTORE_COMMAND,
+    decide,
+    main,
 )
 
 SHA = "a" * 40
@@ -150,3 +157,92 @@ def test_nonowner_comment_record_cannot_suppress_authorized_dispatch():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert raw.count('.user.login == "ericson-j-santos"') >= 2
     assert raw.count('user_login: .user.login') >= 2
+
+
+def test_worker_restore_is_admitted_once_and_replay_is_suppressed():
+    """The physical restore command is allowed, but never admitted twice."""
+    commands = [_record(100, 0), _record(101, 18)]
+    first = decide(
+        _event(100, command=WORKER_RESTORE_COMMAND),
+        commands,
+        expected_sha=SHA,
+        command=WORKER_RESTORE_COMMAND,
+    )
+    later = decide(
+        _event(101, 18, command=WORKER_RESTORE_COMMAND),
+        list(reversed(commands)),
+        expected_sha=SHA,
+        command=WORKER_RESTORE_COMMAND,
+    )
+    assert first["status"] == "admitted"
+    assert first["admitted"] is True
+    assert first["canonical_comment_id"] == 100
+    assert later["status"] == "duplicate_suppressed"
+    assert later["admitted"] is False
+    assert later["canonical_comment_id"] == 100
+    assert later["expected_sha"] == SHA
+
+
+def test_worker_restore_cli_accepts_only_fixed_owner_command(tmp_path, monkeypatch):
+    """Prevent a mismatch between the workflow allowlist and argparse choices."""
+    event = tmp_path / "event.json"
+    comments = tmp_path / "comments.jsonl"
+    output = tmp_path / "output.txt"
+    event.write_text(json.dumps(_event(100, command=WORKER_RESTORE_COMMAND)), encoding="utf-8")
+    comments.write_text(json.dumps(_record(100, 0)) + "\n", encoding="utf-8")
+    options = [
+        "authorized_teams_e2e_admission.py",
+        "--event-file", str(event),
+        "--comments-file", str(comments),
+        "--expected-sha", SHA,
+        "--command", WORKER_RESTORE_COMMAND,
+        "--github-output", str(output),
+    ]
+    monkeypatch.setattr(sys, "argv", options)
+    assert main() == 0
+    assert output.read_text(encoding="utf-8").splitlines() == [
+        "admitted=true",
+        "canonical_comment_id=100",
+        "window_seconds=120",
+    ]
+    # A second processing of the same event is deterministic and has no other side effects.
+    output.unlink()
+    assert main() == 0
+    assert output.read_text(encoding="utf-8").splitlines()[0] == "admitted=true"
+    # Unknown command fails at the CLI boundary, with no dispatch receipt.
+    output.unlink()
+    monkeypatch.setattr(sys, "argv", [*options[:-3], "/reqsys run arbitrary", *options[-2:]])
+    with pytest.raises(SystemExit) as rejected:
+        main()
+    assert rejected.value.code == 2
+    assert not output.exists()
+
+
+def test_worker_restore_rejects_invalid_identity_and_incomplete_readback():
+    with pytest.raises(AdmissionError, match="comment_author_not_allowlisted"):
+        decide(
+            _event(100, command=WORKER_RESTORE_COMMAND, user="intruder"),
+            [_record(100, 0)], expected_sha=SHA,
+            command=WORKER_RESTORE_COMMAND,
+        )
+    with pytest.raises(AdmissionError, match="current_comment_not_uniquely_read_back"):
+        decide(
+            _event(101, 18, command=WORKER_RESTORE_COMMAND),
+            [_record(100, 0)], expected_sha=SHA,
+            command=WORKER_RESTORE_COMMAND,
+        )
+    with pytest.raises(AdmissionError, match="command_not_allowlisted"):
+        decide(
+            _event(100, command=WORKER_CANARY_COMMAND),
+            [_record(100, 0)], expected_sha=SHA,
+            command=WORKER_RESTORE_COMMAND,
+        )
+
+
+def test_worker_restore_gateway_and_validator_allowlists_are_consistent():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert f"github.event.comment.body == '{WORKER_RESTORE_COMMAND}'" in raw
+    assert f"'{WORKER_RESTORE_COMMAND}')" in raw
+    assert 'mode=\'restore-rehearsal\'' in raw
+    assert 'steps.route.outputs.mode == \'restore-rehearsal\'' in raw
+    assert '--command "$COMMAND"' in raw

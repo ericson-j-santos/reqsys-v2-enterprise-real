@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-workerpool-real-restore-admission",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "issue": 2020,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "issue_number": 1705,
+    "command": "/reqsys run pc24x7-worker-pool-real-restore-dev",
+    "gateway_workflow": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "runtime_touched": false,
+    "production_touched": false,
+    "cutover_ready": false
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-workerpool-real-restore-admission.requirements.md",
+    "script": "scripts/authorized_teams_e2e_admission.py",
+    "tests": "tests/test_authorized_teams_e2e_admission.py"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_authorized_teams_e2e_admission.py"
+    ],
+    "evidence_contract": "Argparse and admission guard accept only the exact owner command; wrong author/command and incomplete readback fail closed, same event replay stays stable, and duplicate owner comments within 120 seconds suppress extra dispatch."
+  }
+}
