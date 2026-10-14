@@ -48,8 +48,7 @@ def test_physical_job_exercises_existing_dev_readonly_command():
         'Join-Path $env:TARGET_PATH "scripts\\dev_runtime_recovery.py"',
         '"python", $script, "deploy-check"',
         '"--expected-sha", $env:ANCHOR_SHA',
-        "REQSYS_DEV_DEPLOY_CHECK_OK",
-        "REQSYS_DEV_DEPLOY_CHECK_BLOCKED",
+        "scripts\\deploy_check_receipt.py",
         TASK_ID,
     )
     for item in required:
