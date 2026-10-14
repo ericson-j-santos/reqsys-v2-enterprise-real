@@ -4,9 +4,24 @@ import {
   executarFuncionamentoGovbi,
   executarTestesApiGovbi,
   executarTestesLocaisGovbi,
+  statusGovbiComprovaExecucao,
 } from './govbiFuncionamento'
 
 describe('govbiFuncionamento', () => {
+  it.each(['ERRO', 'BLOQUEADA', 'PENDENTE_APROVACAO', 'MODO_DEGRADADO', null, undefined, '', 'DESCONHECIDO'])(
+    'não promove status externo não conclusivo: %s',
+    (statusFluxo) => {
+      expect(statusGovbiComprovaExecucao(statusFluxo)).toBe(false)
+    },
+  )
+
+  it.each(['EXECUTADA', 'CONCLUIDO'])(
+    'aceita apenas status positivo conhecido: %s',
+    (statusFluxo) => {
+      expect(statusGovbiComprovaExecucao(statusFluxo)).toBe(true)
+    },
+  )
+
   it('executa testes locais com 100% de aprovação', () => {
     const resultados = executarTestesLocaisGovbi()
     const consolidado = consolidarResultadosFuncionamento(resultados)
