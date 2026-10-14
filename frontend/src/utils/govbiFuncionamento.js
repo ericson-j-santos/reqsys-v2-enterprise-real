@@ -130,6 +130,10 @@ export function executarTestesLocaisGovbi() {
   ]
 }
 
+export function statusGovbiComprovaExecucao(statusFluxo) {
+  return statusFluxo === 'EXECUTADA' || statusFluxo === 'CONCLUIDO'
+}
+
 export async function executarTestesApiGovbi(client) {
   const resultados = []
 
@@ -215,7 +219,7 @@ export async function executarTestesApiGovbi(client) {
     const camposObrigatorios = ['statusFluxo', 'correlationId', 'resultado', 'explicacao', 'mascaramentoAplicado']
     const faltando = camposObrigatorios.filter((campo) => !(campo in data))
     const contratoValido = faltando.length === 0
-    const saudeExternaComprovada = contratoValido && data.statusFluxo !== 'MODO_DEGRADADO'
+    const saudeExternaComprovada = contratoValido && statusGovbiComprovaExecucao(data.statusFluxo)
     resultados.push(criarResultado(
       'api-contrato-perguntas',
       'Contrato POST /perguntas e resultado externo',
