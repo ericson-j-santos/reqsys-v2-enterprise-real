@@ -69,6 +69,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Quarantine legacy public-static without governed backup and rollback
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        run: |
+          # Fail before OIDC, Git worktree sync, Docker Compose, or locator mutation.
+          throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'
+
       - name: Require explicitly provisioned Microsoft test session
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
         shell: powershell
