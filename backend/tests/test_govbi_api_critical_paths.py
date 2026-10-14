@@ -45,7 +45,10 @@ def test_govbi_health_endpoint():
     assert response.status_code == 200
     data = response.json()['data']
     assert data['service'] == 'govbi-proxy'
-    assert data['status'] == 'ok'
+    assert data['status'] == 'configurado'
+    assert data['configuration_status'] == 'valida'
+    assert data['local_contract_status'] == 'valido'
+    assert data['external_health_status'] == 'nao_verificada'
     assert data['timeout_seconds'] > 0
 
 
