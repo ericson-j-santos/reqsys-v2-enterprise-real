@@ -18,7 +18,10 @@ from app.services.connection_broker import listar_conectores, resumo_conectores
 
 
 def _govbi_base_url() -> str:
-    return validate_govbi_base_url(getattr(settings, 'govbi_base_url', ''))
+    return validate_govbi_base_url(
+        getattr(settings, 'govbi_base_url', ''),
+        allowed_hosts=getattr(settings, 'govbi_allowed_hosts', ''),
+    )
 
 
 def _govbi_timeout() -> float:
