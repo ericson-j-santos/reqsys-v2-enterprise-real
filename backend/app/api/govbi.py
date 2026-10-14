@@ -253,7 +253,14 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
     except GovBIConfigurationError as exc:
         base_url_valida = False
         base_url_detalhe = str(exc)
-    timeout = _govbi_timeout()
+    try:
+        timeout = _govbi_timeout()
+        timeout_valido = True
+        timeout_detalhe = f'{timeout}s'
+    except GovBIConfigurationError as exc:
+        timeout = None
+        timeout_valido = False
+        timeout_detalhe = str(exc)
     fallback = _fallback_governado('teste funcionamento', 'govbi-func-backend', 'simulado')
 
     resultados = [
@@ -266,8 +273,8 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
         _resultado_funcionamento(
             'config-timeout',
             'Timeout do proxy configurado',
-            timeout > 0,
-            f'{timeout}s',
+            timeout_valido,
+            timeout_detalhe,
         ),
         _resultado_funcionamento(
             'contrato-fallback',
