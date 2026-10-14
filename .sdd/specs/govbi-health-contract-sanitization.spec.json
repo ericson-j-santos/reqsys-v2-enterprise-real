@@ -1,0 +1,35 @@
+{
+  "feature_name": "govbi-health-contract-sanitization",
+  "project": "ReqSys v2 Enterprise — GovBI IA",
+  "created_at": "2026-10-14",
+  "updated_at": "2026-10-14",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige falso positivo de saúde GovBI, restringe o destino HTTP por allowlist e separa configuração, contrato local e saúde externa.",
+  "scope": "backend-dev-no-runtime-probe",
+  "traceability": {
+    "implementation": [
+      "backend/app/core/config.py",
+      "backend/app/services/monitoramento_snapshot.py",
+      "backend/app/api/govbi.py"
+    ],
+    "tests": [
+      "backend/tests/test_monitoramento_snapshot_critical_paths.py",
+      "backend/tests/test_govbi_api.py",
+      "backend/tests/test_govbi_api_critical_paths.py"
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_monitoramento_snapshot_critical_paths.py",
+      "backend/tests/test_govbi_api.py",
+      "backend/tests/test_govbi_api_critical_paths.py"
+    ],
+    "evidence_contract": "Vincular ao SHA atual; exigir 200+status UP para verde; negativos 401/404/5xx/timeout/payload inválido; URL sensível e host fora da allowlist sem I/O nem reflexão. Evidência é unitária/CI, não E2E externo."
+  },
+  "production_touched": false
+}
