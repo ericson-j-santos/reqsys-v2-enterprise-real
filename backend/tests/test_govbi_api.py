@@ -67,8 +67,10 @@ def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(mon
 
 def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha(monkeypatch):
     class ClientComFalha:
+        init_kwargs = None
+
         def __init__(self, *args, **kwargs):
-            pass
+            type(self).init_kwargs = kwargs
 
         async def __aenter__(self):
             return self
@@ -77,7 +79,7 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
             return False
 
         async def post(self, *args, **kwargs):
-            raise RuntimeError('falha simulada')
+            raise RuntimeError('https://usuario:segredo@proxy.example/token')
 
     import app.api.govbi as govbi
 
@@ -100,6 +102,10 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
     assert data['correlationId'] == 'test-correlation-id'
     assert data['resultado']['colunas'] == ['item', 'valor', 'status']
     assert data['mascaramentoAplicado'] is True
+    assert data['resultado']['linhas'][1]['valor'] == 'falha_externa_controlada'
+    assert 'segredo' not in response.text
+    assert ClientComFalha.init_kwargs['trust_env'] is False
+    assert ClientComFalha.init_kwargs['follow_redirects'] is False
 
 
 def test_govbi_perguntas_valida_payload_minimo():
@@ -336,3 +342,31 @@ def test_govbi_health_bloqueia_host_fora_da_allowlist_sem_probe(monkeypatch):
     assert response.status_code == 503
     assert 'destino-interno' not in response.text
     async_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    'base_url',
+    [
+        'https://govbi.example:abc',
+        'https://govbi.example:99999',
+        'https://[::1',
+        'https://govbi.example:8443',
+    ],
+)
+def test_validacao_govbi_rejeita_porta_ou_host_malformado(base_url):
+    with pytest.raises(GovBIConfigurationError):
+        validate_govbi_base_url(base_url, allowed_hosts='govbi.example')
+
+    assert sanitize_govbi_base_url(base_url, allowed_hosts='govbi.example') is None
+
+
+def test_validacao_govbi_aceita_somente_porta_padrao_aprovada():
+    assert validate_govbi_base_url(
+        'https://govbi.example:443',
+        allowed_hosts='govbi.example',
+    ) == 'https://govbi.example:443'
+    with pytest.raises(GovBIConfigurationError, match='porta padrão'):
+        validate_govbi_base_url(
+            'https://govbi.example:8443',
+            allowed_hosts='govbi.example',
+        )
