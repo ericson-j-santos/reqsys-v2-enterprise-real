@@ -4,7 +4,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import (\n    GovBIConfigurationError,\n    sanitize_govbi_base_url,\n    validate_govbi_base_url,\n)
+from app.core.config import (
+    GovBIConfigurationError,
+    sanitize_govbi_base_url,
+    validate_govbi_base_url,
+)
 from app.main import app
 
 
