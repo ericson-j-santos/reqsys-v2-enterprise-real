@@ -195,6 +195,149 @@ def verify_file_restore(raw: bytes, root: Path, expected: dict) -> bool:
     except (OSError, sqlite3.Error, OverflowError, ValueError):
         raise BackupBlocked("separate_restore_io_blocked") from None
 
+
+# Docker volume restore is opt-in and uses the trusted running coordinator image.
+# Plaintext is transferred solely as stdin to a disposable network-isolated container.
+SQL_VOLUME_SEED = r"""
+import hashlib, os, sys
+raw = sys.stdin.buffer.read(67108865)
+if not 100 <= len(raw) <= 67108864 or raw[:16] != b"SQLite format 3\x00":
+    raise SystemExit(2)
+path = "/data/workerpool-restore.db"
+fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+with os.fdopen(fd, "wb") as output:
+    output.write(raw)
+    output.flush()
+    os.fsync(output.fileno())
+sys.stdout.write(hashlib.sha256(raw).hexdigest())
+"""
+
+SQL_VOLUME_READBACK = r"""
+import hashlib, json, sqlite3
+from pathlib import Path
+path = Path("/data/workerpool-restore.db")
+if not path.is_file() or path.is_symlink() or not 100 <= path.stat().st_size <= 67108864:
+    raise SystemExit(2)
+raw = path.read_bytes()
+if raw[:16] != b"SQLite format 3\x00":
+    raise SystemExit(3)
+db = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=10)
+try:
+    db.execute("PRAGMA query_only=ON")
+    if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+        raise SystemExit(4)
+    if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise SystemExit(5)
+    expected = ("cwp-cdb85c31e3cc4e972f3094ab", "cwp-7d84018f3319356181ab9b47")
+    rows = db.execute("SELECT task_id,issue_number FROM tasks WHERE task_id IN (?,?) ORDER BY issue_number", expected).fetchall()
+    if rows != [(expected[0],2546),(expected[1],2547)]:
+        raise SystemExit(6)
+    total = db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+finally:
+    db.close()
+print(json.dumps({"sha256": hashlib.sha256(raw).hexdigest(),
+                  "bytes": len(raw), "task_rows": total, "tasks_preserved": len(rows)}, sort_keys=True))
+"""
+
+
+def _volume_docker(argv: list[str], data: bytes | None = None,
+                   *, can_fail: bool = False) -> tuple[int, bytes]:
+    """Never return stderr or private data; no shell, network or arbitrary path."""
+    try:
+        result = subprocess.run(["docker", *argv], input=data, check=False,
+                                capture_output=True, timeout=65)
+    except (OSError, subprocess.SubprocessError):
+        raise BackupBlocked("isolated_volume_docker_unavailable") from None
+    if len(result.stdout) > 8192 or (result.returncode != 0 and not can_fail):
+        raise BackupBlocked("isolated_volume_docker_blocked")
+    return result.returncode, result.stdout
+
+
+def verify_volume_restore(raw: bytes, image: str, correlation_id: str,
+                          expected: dict, *, docker: Callable[..., tuple[int, bytes]] = _volume_docker) -> dict:
+    """Verify live SQLite snapshot in an owned disposable Docker volume only."""
+    volume_prefix = "pc24x7-worker-pool-backup-restore-dev-"
+    if (not correlation_id.startswith(volume_prefix)
+            or not re.fullmatch(r"[0-9]{6,18}-[1-9][0-9]?", correlation_id[len(volume_prefix):])
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", image)
+            or verify_restore(raw) != expected):
+        raise BackupBlocked("isolated_volume_identity_invalid")
+    volume = "workerpool-restore-" + correlation_id[len(volume_prefix):]
+    label = "com.reqsys.workerpool.restore=" + correlation_id
+    created = False
+    result: dict | None = None
+    try:
+        status, _ = docker(["volume", "inspect", volume], can_fail=True)
+        if status == 0:
+            raise BackupBlocked("isolated_volume_collision")
+        _, output = docker(["volume", "create", "--label", label, volume])
+        created = True
+        if output.decode("ascii", errors="replace").strip() != volume:
+            raise BackupBlocked("isolated_volume_create_invalid")
+        _, output = docker(["volume", "inspect", volume])
+        try:
+            records = json.loads(output)
+        except (ValueError, TypeError):
+            raise BackupBlocked("isolated_volume_inspect_invalid") from None
+        if (not isinstance(records, list) or len(records) != 1
+                or records[0].get("Name") != volume
+                or records[0].get("Driver") != "local"
+                or (records[0].get("Labels") or {}).get("com.reqsys.workerpool.restore") != correlation_id):
+            raise BackupBlocked("isolated_volume_ownership_invalid")
+
+        base = ["run", "--rm", "--network", "none", "--read-only", "--user", "reqsys",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                "--pids-limit", "64", "--memory", "256m"]
+        def helper(code: str, *, readonly: bool, payload: bytes | None = None,
+                   can_fail: bool = False) -> tuple[int, bytes]:
+            mount = f"type=volume,src={volume},dst=/data" + (",readonly" if readonly else "")
+            return docker([*base, "--mount", mount, image, "python", "-B", "-c", code],
+                          data=payload, can_fail=can_fail)
+
+        _, seeded = helper(SQL_VOLUME_SEED, readonly=False, payload=raw)
+        if seeded.decode("ascii", errors="replace").strip() != expected["sha256"]:
+            raise BackupBlocked("isolated_volume_seed_mismatch")
+        _, check = helper(SQL_VOLUME_READBACK, readonly=True)
+        try:
+            details = json.loads(check)
+        except (ValueError, TypeError):
+            raise BackupBlocked("isolated_volume_readback_invalid") from None
+        if details != {"sha256": expected["sha256"], "bytes": expected["bytes"],
+                       "task_rows": expected["task_rows"], "tasks_preserved": 2}:
+            raise BackupBlocked("isolated_volume_content_mismatch")
+
+        replay_status, _ = helper(SQL_VOLUME_SEED, readonly=False, payload=raw, can_fail=True)
+        if replay_status == 0:
+            raise BackupBlocked("isolated_volume_replay_not_rejected")
+        _, repeat = helper(SQL_VOLUME_READBACK, readonly=True)
+        if json.loads(repeat) != details:
+            raise BackupBlocked("isolated_volume_replay_changed_copy")
+        result = {"volume_restore_verified": True, "volume_replay_negative_verified": True,
+                  "volume_plain_sha256": expected["sha256"]}
+    finally:
+        if created:
+            # Only remove our own labelled volume; never prune arbitrary volumes.
+            try:
+                _, current = docker(["volume", "inspect", volume])
+                records = json.loads(current)
+                owner_ok = (isinstance(records, list) and len(records) == 1
+                            and records[0].get("Name") == volume
+                            and (records[0].get("Labels") or {}).get("com.reqsys.workerpool.restore") == correlation_id)
+                if not owner_ok:
+                    raise BackupBlocked("isolated_volume_cleanup_owner_mismatch")
+                docker(["volume", "rm", volume])
+                _, listing = docker(["volume", "ls", "--filter", f"name=^{volume}$",
+                                     "--format", "{{.Name}}"])
+                if listing.strip():
+                    raise BackupBlocked("isolated_volume_cleanup_unverified")
+            except (ValueError, TypeError):
+                raise BackupBlocked("isolated_volume_cleanup_unverified") from None
+    if result is None:
+        raise BackupBlocked("isolated_volume_result_missing")
+    result["volume_cleanup_verified"] = True
+    return result
+
+
 def docker_backup(container_id: str) -> bytes:
     try:
         process = subprocess.run(
@@ -255,7 +398,8 @@ def save_cipher(root: Path, key: str, cipher: bytes, sha: str,
 def snapshot(*, host: str, expected_sha: str, observed_sha: str,
              correlation_id: str, confirm: str, run_text: Callable[[list[str]], str],
              run_binary: Callable[[str], bytes], encrypt: Callable[[bytes], bytes],
-             decrypt: Callable[[bytes], bytes], root: Path) -> dict:
+             decrypt: Callable[[bytes], bytes], root: Path,
+             volume_restore: Callable[[bytes, str, str, dict], dict] | None = None) -> dict:
     if (host.upper() != HOST or confirm != CONFIRM or not SHA40.fullmatch(expected_sha)
             or observed_sha != expected_sha or not CORRELATION.fullmatch(correlation_id)):
         raise BackupBlocked("host_sha_or_confirmation_invalid")
@@ -273,6 +417,13 @@ def snapshot(*, host: str, expected_sha: str, observed_sha: str,
     if hashlib.sha256(stored).hexdigest() != cipher_sha or verify_restore(decrypt(stored)) != first:
         raise BackupBlocked("independent_encrypted_restore_mismatch")
     separate_file_verified = verify_file_restore(decrypt(stored), root, first)
+    volume_result = (volume_restore(decrypt(stored), image, correlation_id, first)
+                     if volume_restore is not None else {})
+    if volume_restore is not None and (volume_result.get("volume_restore_verified") is not True
+            or volume_result.get("volume_replay_negative_verified") is not True
+            or volume_result.get("volume_cleanup_verified") is not True
+            or volume_result.get("volume_plain_sha256") != first["sha256"]):
+        raise BackupBlocked("isolated_volume_evidence_invalid")
     return {
         "result": "WORKER_POOL_DEV_PROTECTED_BACKUP_VERIFIED", "host": HOST,
         "source_sha": expected_sha, "environment": "dev",
@@ -284,6 +435,11 @@ def snapshot(*, host: str, expected_sha: str, observed_sha: str,
         "isolated_memory_restore_verified": True,
         "separate_file_restore_verified": separate_file_verified,
         "private_restore_temp_cleanup_verified": True,
+        "separate_volume_restore_verified": volume_result.get("volume_restore_verified", False),
+        "volume_cleanup_verified": volume_result.get("volume_cleanup_verified", False),
+        "volume_replay_negative_verified": volume_result.get("volume_replay_negative_verified", False),
+        "real_backup_imported_into_worker14": False,
+        "rollback_rehearsal_passed": False,
         "cutover_ready": False, "live_database_modified": False,
         "claim_performed": False, "secrets_exposed": False, "production_touched": False,
     }
@@ -302,6 +458,7 @@ def main() -> int:
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--confirm", required=True)
+    parser.add_argument("--verify-volume", action="store_true")
     args = parser.parse_args()
     try:
         if os.name != "nt" or socket.gethostname().upper() != HOST:
@@ -312,7 +469,8 @@ def main() -> int:
             observed_sha=head_sha(), correlation_id=args.correlation_id,
             confirm=args.confirm, run_text=inventory._docker,
             run_binary=docker_backup, encrypt=lambda b: dpapi(b, encrypt=True),
-            decrypt=lambda b: dpapi(b, encrypt=False), root=root)
+            decrypt=lambda b: dpapi(b, encrypt=False), root=root,
+            volume_restore=verify_volume_restore if args.verify_volume else None)
         code = 0
     except BackupBlocked as e:
         result = {"result": "WORKER_POOL_DEV_PROTECTED_BACKUP_BLOCKED", "reason": str(e),

@@ -248,3 +248,160 @@ def test_separate_restore_happens_after_encrypted_copy_readback(tmp_path: Path, 
     assert restored == [first["backup_plain_sha256"]]
     assert first["separate_file_restore_verified"] is True
     assert not list((tmp_path / "private").glob("workerpool-restore-check-*"))
+
+
+def test_volume_mode_runs_only_after_private_cipher_and_file_restore(tmp_path: Path):
+    db = seed(tmp_path)
+    called = []
+    def verified(raw: bytes, image: str, correlation: str, expected: dict) -> dict:
+        assert next((tmp_path / "private").glob("*.dpapi")).exists()
+        assert expected["sha256"] == module.verify_restore(raw)["sha256"]
+        assert image == "sha256:" + "a"*64
+        called.append(correlation)
+        return {"volume_restore_verified": True, "volume_replay_negative_verified": True,
+                "volume_cleanup_verified": True, "volume_plain_sha256": expected["sha256"]}
+    result, _ = invoke(tmp_path, db, volume_restore=verified)
+    assert called == ["workerpool-backup-test"]
+    assert result["separate_volume_restore_verified"] is True
+    assert result["volume_cleanup_verified"] is True
+    assert result["volume_replay_negative_verified"] is True
+    assert result["real_backup_imported_into_worker14"] is False
+    assert result["rollback_rehearsal_passed"] is False
+    assert result["cutover_ready"] is False
+
+
+def test_volume_mode_rejects_incomplete_receipt(tmp_path: Path):
+    db = seed(tmp_path)
+    with pytest.raises(module.BackupBlocked, match="isolated_volume_evidence_invalid"):
+        invoke(tmp_path, db, volume_restore=lambda *args: {"volume_restore_verified": True})
+    assert len(list((tmp_path / "private").glob("*.dpapi"))) == 1
+
+
+def test_volume_restore_rejects_untrusted_host_or_corrupt_bytes_before_docker(tmp_path: Path):
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    reference = module.verify_restore(raw)
+    called = []
+    def reject(*a, **kw):
+        called.append(True)
+        raise AssertionError("Docker must not run")
+    for image, correlation, data in (
+        ("sha256:" + "0"*63, "pc24x7-worker-pool-backup-restore-dev-123456-1", raw),
+        ("sha256:" + "a"*64, "../escape", raw),
+        ("sha256:" + "a"*64, "pc24x7-worker-pool-backup-restore-dev-123456-1", raw[:-1]),
+    ):
+        with pytest.raises(module.BackupBlocked, match="isolated_volume_identity_invalid"):
+            module.verify_volume_restore(data, image, correlation, reference, docker=reject)
+    assert called == []
+
+
+def test_volume_restore_safely_seeds_checks_replay_and_removes_owned_volume(tmp_path: Path):
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    ref = module.verify_restore(raw)
+    corr = "pc24x7-worker-pool-backup-restore-dev-123456-1"
+    name = "workerpool-restore-123456-1"
+    image = "sha256:" + "a"*64
+    label = {"com.reqsys.workerpool.restore": corr}
+    details = {"sha256": ref["sha256"], "bytes": ref["bytes"],
+               "task_rows": ref["task_rows"], "tasks_preserved": 2}
+    present = False
+    seeded = False
+    seed_count = 0
+    commands = []
+    def docker(argv, data=None, *, can_fail=False):
+        nonlocal present, seeded, seed_count
+        commands.append((argv[:], bool(data)))
+        if argv[:2] == ["volume", "inspect"]:
+            if not present:
+                return 1, b""
+            return 0, json.dumps([{"Name": name, "Driver": "local", "Labels": label}]).encode()
+        if argv[:2] == ["volume", "create"]:
+            present = True
+            return 0, (name+"\n").encode()
+        if argv[:2] == ["volume", "rm"]:
+            present = False
+            return 0, name.encode()
+        if argv[:2] == ["volume", "ls"]:
+            return 0, (name if present else "").encode()
+        if argv[0] == "run":
+            assert "--network" in argv and "none" in argv
+            assert "--cap-drop" in argv and "ALL" in argv
+            assert "--read-only" in argv and "reqsys" in argv
+            assert "--mount" in argv and image in argv
+            if argv[-1] == module.SQL_VOLUME_SEED:
+                seed_count += 1
+                if seeded:
+                    return 2, b""
+                assert data == raw
+                seeded = True
+                return 0, ref["sha256"].encode()
+            assert argv[-1] == module.SQL_VOLUME_READBACK
+            assert seeded
+            assert data is None
+            return 0, json.dumps(details).encode()
+        raise AssertionError(argv)
+    actual = module.verify_volume_restore(raw, image, corr, ref, docker=docker)
+    assert actual == {"volume_restore_verified": True, "volume_cleanup_verified": True,
+                      "volume_replay_negative_verified": True, "volume_plain_sha256": ref["sha256"]}
+    assert seed_count == 2 and not present
+    assert sum(c[0][:2] == ["volume", "rm"] for c in commands) == 1
+
+
+def test_volume_restore_rejects_owned_volume_collision_without_removal(tmp_path: Path):
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    ref = module.verify_restore(raw)
+    calls = []
+    def docker(argv, data=None, *, can_fail=False):
+        calls.append(argv)
+        assert argv[:2] == ["volume", "inspect"]
+        return 0, b"[]"
+    with pytest.raises(module.BackupBlocked, match="isolated_volume_collision"):
+        module.verify_volume_restore(raw, "sha256:"+"a"*64,
+                                     "pc24x7-worker-pool-backup-restore-dev-123456-1",
+                                     ref, docker=docker)
+    assert len(calls) == 1
+
+
+def test_volume_restore_declares_cleanup_failure_if_volume_ownership_changes(tmp_path: Path):
+    db = seed(tmp_path)
+    raw = captured_backup(db)
+    ref = module.verify_restore(raw)
+    corr = "pc24x7-worker-pool-backup-restore-dev-123456-1"
+    saw_create = False
+    removed = False
+    def docker(argv, data=None, *, can_fail=False):
+        nonlocal saw_create, removed
+        if argv[:2] == ["volume", "inspect"]:
+            if not saw_create:
+                return 1, b""
+            return 0, json.dumps([{"Name": "workerpool-restore-123456-1",
+                                    "Driver": "local",
+                                    "Labels": {"com.reqsys.workerpool.restore": "MISMATCH"}}]).encode()
+        if argv[:2] == ["volume", "create"]:
+            saw_create = True
+            return 0, b"workerpool-restore-123456-1"
+        if argv[:2] == ["volume", "rm"]:
+            removed = True
+        raise AssertionError(argv)
+    with pytest.raises(module.BackupBlocked, match="isolated_volume_cleanup_owner_mismatch"):
+        module.verify_volume_restore(raw, "sha256:"+"a"*64, corr, ref, docker=docker)
+    assert not removed
+
+
+def test_volume_workflow_has_exact_dev_only_dispatch_and_required_negative_flags():
+    workflow = (ROOT/".github/workflows/codex-worker-pool-smoke-dev.yml").read_text(encoding="utf-8")
+    gateway = (ROOT/".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    block = workflow.split("\n  backup-restore:\n", 1)[1].split("\n  candidate-canary:\n", 1)[0]
+    assert "backup-volume-restore" in workflow
+    assert "VOLUME_RESTORE_ENABLED" in block
+    assert "--verify-volume" in block
+    assert "separate_volume_restore_verified" in block
+    assert "volume_cleanup_verified" in block
+    assert "volume_replay_negative_verified" in block
+    assert "real_backup_imported_into_worker14" in block
+    assert "rollback_rehearsal_passed" in block
+    assert "pc24x7-worker-pool-backup-volume-restore-dev" in gateway
+    assert "mode='backup-volume-restore'" in gateway
+    assert "-f mode=backup-volume-restore" in gateway
