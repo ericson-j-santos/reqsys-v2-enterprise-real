@@ -475,3 +475,24 @@ def test_receipt_parser_accepts_cli_runtime_error_categories(reason):
     assert receipt["result_verified"] is True
     assert receipt["runtime_sha"] is None
     assert receipt["database_result"] == "unverified"
+
+
+@pytest.mark.parametrize("category", [
+    "live_probe_source_unavailable",
+    "live_probe_loader_unavailable",
+    "live_probe_contract_invalid",
+])
+def test_parser_accepts_fixed_sibling_probe_errors(category):
+    receipt, exit_code = build_receipt(
+        _gateway(
+            {"ok": False, "category": category},
+            result="command_failed", command_exit_code=1,
+        ),
+        "", 1, CTX,
+    )
+    assert exit_code == 1
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_FAILED"
+    assert receipt["reason_code"] == category
+    assert receipt["result_verified"] is True
+    assert receipt["database_result"] == "unverified"
+    assert receipt["runtime_sha"] is None

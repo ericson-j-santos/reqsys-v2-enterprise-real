@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -740,3 +741,47 @@ def test_deploy_check_cli_positive_emits_existing_success_contract(
     result = capsys.readouterr()
     assert result.err == ""
     assert json.loads(result.out)["runtime_sha"] == OLD
+
+
+def test_deploy_check_direct_probe_loads_fixed_sibling_not_import_shadow(monkeypatch):
+    shadow = ModuleType("probe_pc24x7_dev_runtime_identity")
+    shadow.ProbeError = RuntimeError
+    shadow.run = lambda _: "invalid shadow"
+    monkeypatch.setitem(sys.modules, shadow.__name__, shadow)
+    monkeypatch.setattr(recovery, "__package__", None)
+    probe_error, run = recovery._load_identity_probe()
+    assert probe_error.__name__ == "ProbeError"
+    assert run.__module__ == "_reqsys_fixed_pc24x7_probe"
+    assert run is not shadow.run
+    second_error, second_run = recovery._load_identity_probe()
+    assert second_error.__name__ == probe_error.__name__
+    assert second_run.__module__ == run.__module__
+
+
+def test_deploy_check_direct_probe_validates_runtime_without_sys_path(monkeypatch, tmp_path):
+    script = tmp_path / "dev_runtime_recovery.py"
+    probe = tmp_path / "probe_pc24x7_dev_runtime_identity.py"
+    probe.write_text(
+        "class ProbeError(RuntimeError): pass\n"
+        + f"def run(_): return {runtime_result()!r}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(recovery, "__package__", None)
+    monkeypatch.setattr(recovery, "__file__", str(script))
+    assert recovery.observe_identity() == OLD
+
+
+def test_deploy_check_direct_probe_missing_sibling_fails_closed(monkeypatch, tmp_path):
+    monkeypatch.setattr(recovery, "__package__", None)
+    monkeypatch.setattr(recovery, "__file__", str(tmp_path / "dev_runtime_recovery.py"))
+    with pytest.raises(RecoveryError, match="^live_probe_source_unavailable$"):
+        recovery._load_identity_probe()
+
+
+def test_deploy_check_direct_probe_malformed_sibling_fails_closed(monkeypatch, tmp_path):
+    probe = tmp_path / "probe_pc24x7_dev_runtime_identity.py"
+    probe.write_text("ProbeError = object\nrun = None\n", encoding="utf-8")
+    monkeypatch.setattr(recovery, "__package__", None)
+    monkeypatch.setattr(recovery, "__file__", str(tmp_path / "dev_runtime_recovery.py"))
+    with pytest.raises(RecoveryError, match="^live_probe_contract_invalid$"):
+        recovery._load_identity_probe()
