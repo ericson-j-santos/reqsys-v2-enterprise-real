@@ -1,7 +1,10 @@
 """Testes de caminhos críticos — snapshot operacional de monitoramento."""
 
+import asyncio
+import gzip
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from app.schemas.monitoramento_operacional import ItemMonitorado
@@ -11,6 +14,37 @@ from app.services import monitoramento_snapshot as snapshot
 @pytest.fixture(autouse=True)
 def _govbi_base_url_aprovada(monkeypatch):
     monkeypatch.setattr(snapshot.settings, 'govbi_base_url', 'https://govbi.example')
+    monkeypatch.setattr(snapshot.settings, 'govbi_allowed_hosts', 'govbi.example')
+
+
+class _StreamContext:
+    def __init__(self, response):
+        self.response = response
+
+    async def __aenter__(self):
+        return self.response
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.response.aclose()
+        return False
+
+
+class _AsyncClient:
+    def __init__(self, response):
+        self.response = response
+        self.stream = MagicMock(return_value=_StreamContext(response))
+        self.closed = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self.closed = True
+        return False
+
+
+def _stream_client(response):
+    return _AsyncClient(response)
 
 
 def test_classificar_estado_geral_lista_vazia():
@@ -44,18 +78,21 @@ def test_resolver_modo_coleta():
     assert snapshot._resolver_modo_coleta({'a': {'modo': 'preview'}}) == 'preview'
 
 
-@patch('app.services.monitoramento_snapshot.httpx.Client')
-def test_estado_govbi_amarelo_quando_5xx(mock_client_cls):
-    mock_response = MagicMock(status_code=503)
-    mock_client = MagicMock()
-    mock_client.__enter__.return_value = mock_client
-    mock_client.get.return_value = mock_response
+@pytest.mark.parametrize('status_code', [401, 404, 503])
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_vermelho_quando_http_nao_comprova_saude(mock_client_cls, status_code):
+    mock_client = _stream_client(httpx.Response(status_code))
     mock_client_cls.return_value = mock_client
 
     estado, detalhes = snapshot._estado_govbi()
 
-    assert estado == 'amarelo'
-    assert detalhes['http_status'] == 503
+    assert estado == 'vermelho'
+    assert detalhes['http_status'] == status_code
+    assert detalhes['saude_externa'] == 'indisponivel'
+    assert detalhes['motivo'] == 'status_http_inesperado'
+    mock_client.stream.assert_called_once_with('GET', 'https://govbi.example/actuator/health', headers={'Accept-Encoding': 'identity'})
+    assert mock_client_cls.call_args.kwargs['follow_redirects'] is False
+    assert mock_client_cls.call_args.kwargs['trust_env'] is False
 
 
 @patch('app.services.monitoramento_snapshot.resumo_conectores')
@@ -97,21 +134,131 @@ def test_estado_ci_preview_quando_api_falha(_mock_client):
     assert 'erro' in detalhes
 
 
-@patch('app.services.monitoramento_snapshot.httpx.Client')
-def test_estado_govbi_verde_quando_health_ok(mock_client_cls):
-    mock_response = MagicMock(status_code=200)
-    mock_client = MagicMock()
-    mock_client.__enter__.return_value = mock_client
-    mock_client.get.return_value = mock_response
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_verde_quando_actuator_confirma_up(mock_client_cls):
+    mock_client = _stream_client(httpx.Response(200, stream=httpx.ByteStream(b'{"status":"UP"}')))
     mock_client_cls.return_value = mock_client
 
     estado, detalhes = snapshot._estado_govbi()
 
     assert estado == 'verde'
     assert detalhes['http_status'] == 200
+    assert detalhes['configuracao'] == 'valida'
+    assert detalhes['saude_externa'] == 'saudavel'
+    mock_client.stream.assert_called_once_with('GET', 'https://govbi.example/actuator/health', headers={'Accept-Encoding': 'identity'})
 
 
-@patch('app.services.monitoramento_snapshot.httpx.Client', side_effect=RuntimeError('timeout'))
+@pytest.mark.parametrize(
+    ('response', 'motivo'),
+    [
+        (httpx.Response(200, stream=httpx.ByteStream(b'not-json')), 'resposta_json_invalida'),
+        (httpx.Response(200, stream=httpx.ByteStream(b'{"status":"DOWN"}')), 'contrato_health_invalido'),
+        (httpx.Response(200, stream=httpx.ByteStream(b'["UP"]')), 'contrato_health_invalido'),
+    ],
+)
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_rejeita_resposta_200_fora_do_contrato(mock_client_cls, response, motivo):
+    mock_client = _stream_client(response)
+    mock_client_cls.return_value = mock_client
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['saude_externa'] == 'indisponivel'
+    assert detalhes['motivo'] == motivo
+
+
+
+
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_rejeita_corpo_oversized_e_fecha_stream(mock_client_cls):
+    response = httpx.Response(200, stream=httpx.ByteStream(b'x' * (snapshot.GOVBI_HEALTH_MAX_BYTES + 1)))
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'resposta_excede_limite'
+    assert response.is_closed is True
+
+
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_rejeita_content_length_oversized_sem_ler_corpo(mock_client_cls):
+    response = httpx.Response(
+        200,
+        headers={'content-length': str(snapshot.GOVBI_HEALTH_MAX_BYTES + 1)},
+        content=b'{}',
+    )
+    response.aiter_raw = MagicMock(side_effect=AssertionError('corpo não deve ser lido'))
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'resposta_excede_limite'
+    response.aiter_raw.assert_not_called()
+    assert response.is_closed is True
+
+
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_rejeita_content_encoding_comprimido_antes_da_leitura(mock_client_cls):
+    response = httpx.Response(
+        200,
+        headers={'content-encoding': 'gzip'},
+        content=gzip.compress(b'{"status":"UP"}'),
+    )
+    response.aiter_raw = MagicMock(side_effect=AssertionError('corpo comprimido não deve ser lido'))
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'content_encoding_nao_permitido'
+    response.aiter_raw.assert_not_called()
+    assert response.is_closed is True
+
+
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
+def test_estado_govbi_cancela_stream_gotejante_no_limite_total(mock_client_cls, monkeypatch):
+    class RespostaGotejante:
+        status_code = 200
+        headers = {}
+        fechada = False
+
+        async def aiter_raw(self):
+            while True:
+                await asyncio.sleep(0.01)
+                yield b'{'
+
+        async def aclose(self):
+            self.fechada = True
+
+    response = RespostaGotejante()
+    client = _stream_client(response)
+    mock_client_cls.return_value = client
+    monkeypatch.setattr(snapshot, 'GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS', 0.05)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'tempo_total_excedido'
+    assert response.fechada is True
+    assert client.closed is True
+
+
+@pytest.mark.parametrize('timeout_invalido', [float('nan'), float('inf'), float('-inf'), 0.0, -1.0])
+def test_estado_govbi_bloqueia_timeout_nao_finito_ou_nao_positivo(monkeypatch, timeout_invalido):
+    monkeypatch.setattr(snapshot.settings, 'govbi_timeout_seconds', timeout_invalido)
+    with patch('app.services.monitoramento_snapshot.httpx.AsyncClient') as client:
+        estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'bloqueado'
+    assert detalhes['configuracao'] == 'invalida'
+    assert detalhes['saude_externa'] == 'nao_avaliada'
+    client.assert_not_called()
+
+
+@patch('app.services.monitoramento_snapshot.httpx.AsyncClient', side_effect=RuntimeError('timeout'))
 def test_estado_govbi_vermelho_quando_probe_falha(_mock_client):
     estado, detalhes = snapshot._estado_govbi()
     assert estado == 'vermelho'
@@ -121,13 +268,15 @@ def test_estado_govbi_vermelho_quando_probe_falha(_mock_client):
 @pytest.mark.parametrize('base_url', ['', 'https://govbi.fly.dev', 'https://govbi.fly.io'])
 def test_estado_govbi_bloqueado_sem_url_aprovada(monkeypatch, base_url):
     monkeypatch.setattr(snapshot.settings, 'govbi_base_url', base_url)
-    with patch('app.services.monitoramento_snapshot.httpx.Client') as client:
+    with patch('app.services.monitoramento_snapshot.httpx.AsyncClient') as client:
         estado, detalhes = snapshot._estado_govbi()
 
     assert estado == 'bloqueado'
     assert detalhes['fonte'] == 'configuracao'
     assert detalhes['modo'] == 'bloqueado'
-    assert detalhes['base_url'] is None
+    assert detalhes['configuracao'] == 'invalida'
+    assert detalhes['saude_externa'] == 'nao_avaliada'
+    assert 'base_url' not in detalhes
     client.assert_not_called()
 
 

@@ -130,18 +130,28 @@ export function executarTestesLocaisGovbi() {
   ]
 }
 
+export function statusGovbiComprovaExecucao(statusFluxo) {
+  return statusFluxo === 'EXECUTADA' || statusFluxo === 'CONCLUIDO'
+}
+
 export async function executarTestesApiGovbi(client) {
   const resultados = []
 
   try {
     const { data } = await client.get('/govbi/health')
     const payload = data?.data ?? data
-    const ok = payload?.service === 'govbi-proxy' && payload?.status === 'ok'
+    const ok = payload?.service === 'govbi-proxy'
+      && payload?.status === 'configurado'
+      && payload?.configuration_status === 'valida'
+      && payload?.local_contract_status === 'valido'
+      && payload?.external_health_status === 'nao_verificada'
     resultados.push(criarResultado(
       'api-health',
-      'Health do proxy GovBI',
+      'Configuração e contrato local do proxy GovBI',
       ok,
-      ok ? `timeout=${payload.timeout_seconds}s` : 'Resposta fora do contrato',
+      ok
+        ? `configuração válida; contrato local válido; saúde externa não verificada; timeout=${payload.timeout_seconds}s`
+        : 'Resposta fora do contrato local',
       'api',
     ))
   } catch (error) {
@@ -208,12 +218,17 @@ export async function executarTestesApiGovbi(client) {
     )
     const camposObrigatorios = ['statusFluxo', 'correlationId', 'resultado', 'explicacao', 'mascaramentoAplicado']
     const faltando = camposObrigatorios.filter((campo) => !(campo in data))
-    const ok = faltando.length === 0
+    const contratoValido = faltando.length === 0
+    const saudeExternaComprovada = contratoValido && statusGovbiComprovaExecucao(data.statusFluxo)
     resultados.push(criarResultado(
       'api-contrato-perguntas',
-      'Contrato POST /perguntas',
-      ok,
-      ok ? data.statusFluxo : `Campos ausentes: ${faltando.join(', ')}`,
+      'Contrato POST /perguntas e resultado externo',
+      saudeExternaComprovada,
+      !contratoValido
+        ? `Campos ausentes: ${faltando.join(', ')}`
+        : data.statusFluxo === 'MODO_DEGRADADO'
+          ? 'Contrato local válido; resultado externo degradado e não comprovado'
+          : data.statusFluxo,
       'api',
     ))
   } catch (error) {

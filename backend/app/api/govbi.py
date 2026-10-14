@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -7,13 +8,20 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
+from app.core.config import (
+    GovBIConfigurationError,
+    sanitize_govbi_base_url,
+    settings,
+    validate_govbi_base_url,
+    validate_govbi_timeout,
+)
 from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
 
 DEFAULT_GOVBI_TIMEOUT_SECONDS = 15.0
+CORRELATION_ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')
 
 
 class GovBIPerguntaRequest(BaseModel):
@@ -28,15 +36,34 @@ class GovBIResultado(BaseModel):
 
 
 def _correlation_id(header_value: str | None) -> str:
-    return header_value.strip() if header_value and header_value.strip() else f'govbi-{uuid4()}'
+    candidate = header_value.strip() if header_value else ''
+    if CORRELATION_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return f'govbi-{uuid4()}'
 
 
 def _govbi_base_url() -> str:
-    return validate_govbi_base_url(getattr(settings, 'govbi_base_url', ''))
+    return validate_govbi_base_url(
+        getattr(settings, 'govbi_base_url', ''),
+        allowed_hosts=getattr(settings, 'govbi_allowed_hosts', ''),
+    )
 
 
 def _govbi_timeout() -> float:
-    return float(getattr(settings, 'govbi_timeout_seconds', DEFAULT_GOVBI_TIMEOUT_SECONDS) or DEFAULT_GOVBI_TIMEOUT_SECONDS)
+    return validate_govbi_timeout(
+        getattr(settings, 'govbi_timeout_seconds', DEFAULT_GOVBI_TIMEOUT_SECONDS),
+        default=DEFAULT_GOVBI_TIMEOUT_SECONDS,
+    )
+
+
+def _codigo_falha_govbi(exc: Exception) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return 'timeout_externo'
+    if isinstance(exc, (ValueError, TypeError)):
+        return 'resposta_externa_invalida'
+    if isinstance(exc, httpx.RequestError):
+        return 'falha_transporte_externo'
+    return 'falha_externa_controlada'
 
 
 def _normalizar_resposta(data: dict[str, Any], correlation_id: str) -> dict[str, Any]:
@@ -124,6 +151,7 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
     correlation_id = _correlation_id(x_correlation_id)
     try:
         base_url = _govbi_base_url()
+        timeout = _govbi_timeout()
     except GovBIConfigurationError:
         logger.error('govbi_configuracao_bloqueada')
         raise HTTPException(
@@ -140,7 +168,11 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
     }
 
     try:
-        async with httpx.AsyncClient(timeout=_govbi_timeout()) as client:
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            trust_env=False,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(url, json=payload.model_dump(), headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -166,27 +198,32 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
         logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
         return _fallback_governado(payload.pergunta, correlation_id, detalhe)
     except Exception as exc:  # noqa: BLE001 - fallback operacional controlado
-        detalhe = f'{type(exc).__name__}: {exc}'
-        logger.warning('govbi_proxy_fallback correlation_id=%s detalhe=%s', correlation_id, detalhe)
-        return _fallback_governado(payload.pergunta, correlation_id, detalhe)
+        codigo = _codigo_falha_govbi(exc)
+        logger.warning('govbi_proxy_fallback correlation_id=%s codigo=%s', correlation_id, codigo)
+        return _fallback_governado(payload.pergunta, correlation_id, codigo)
 
 
 @router.get('/health')
 def govbi_health():
     try:
         _govbi_base_url()
+        timeout = _govbi_timeout()
         configurado = True
         configuracao_erro = None
     except GovBIConfigurationError as exc:
+        timeout = None
         configurado = False
         configuracao_erro = str(exc)
 
     return ok({
         'service': 'govbi-proxy',
-        'status': 'ok' if configurado else 'bloqueado',
+        'status': 'configurado' if configurado else 'bloqueado',
         'external_base_url_configured': configurado,
+        'configuration_status': 'valida' if configurado else 'invalida',
+        'local_contract_status': 'valido',
+        'external_health_status': 'nao_verificada',
         'configuration_error': configuracao_erro,
-        'timeout_seconds': _govbi_timeout(),
+        'timeout_seconds': timeout,
     })
 
 
@@ -209,11 +246,25 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
     try:
         base_url = _govbi_base_url()
         base_url_valida = True
-        base_url_detalhe = base_url
+        destino_sanitizado = sanitize_govbi_base_url(
+            base_url,
+            allowed_hosts=getattr(settings, 'govbi_allowed_hosts', ''),
+        )
+        base_url_detalhe = (
+            f'configuração válida; destino={destino_sanitizado}'
+            if destino_sanitizado
+            else 'configuração válida'
+        )
     except GovBIConfigurationError as exc:
         base_url_valida = False
         base_url_detalhe = str(exc)
-    timeout = _govbi_timeout()
+    try:
+        timeout = _govbi_timeout()
+        timeout_valido = True
+        timeout_detalhe = f'{timeout}s'
+    except GovBIConfigurationError as exc:
+        timeout_valido = False
+        timeout_detalhe = str(exc)
     fallback = _fallback_governado('teste funcionamento', 'govbi-func-backend', 'simulado')
 
     resultados = [
@@ -226,8 +277,8 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
         _resultado_funcionamento(
             'config-timeout',
             'Timeout do proxy configurado',
-            timeout > 0,
-            f'{timeout}s',
+            timeout_valido,
+            timeout_detalhe,
         ),
         _resultado_funcionamento(
             'contrato-fallback',
@@ -258,6 +309,11 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
 
     return {
         'executadoEm': datetime.now(UTC).isoformat(),
+        'escopo': {
+            'configuracao': 'validada localmente' if base_url_valida else 'invalida',
+            'contrato_local': 'validado sem chamada externa',
+            'saude_externa': 'nao verificada por este endpoint',
+        },
         'total': total,
         'aprovados': aprovados,
         'reprovados': total - aprovados,

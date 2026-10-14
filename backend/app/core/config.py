@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -33,22 +34,76 @@ class GovBIConfigurationError(ValueError):
     """Indica configuração insegura ou ausente da integração GovBI."""
 
 
-def validate_govbi_base_url(value: str | None) -> str:
-    """Valida a URL explícita do GovBI e bloqueia o provedor Fly retirado."""
+def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = None) -> str:
+    """Valida a URL explícita do GovBI sem aceitar componentes sensíveis."""
 
     candidate = (value or '').strip().rstrip('/')
     if not candidate:
         raise GovBIConfigurationError('GOVBI_BASE_URL deve ser configurada explicitamente.')
 
-    parsed = urlsplit(candidate)
-    if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+    try:
+        parsed = urlsplit(candidate)
+        hostname_raw = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise GovBIConfigurationError('GOVBI_BASE_URL contém host ou porta inválida.') from exc
+    if parsed.scheme not in {'http', 'https'} or not hostname_raw:
         raise GovBIConfigurationError('GOVBI_BASE_URL deve ser uma URL HTTP(S) absoluta.')
+    if parsed.username is not None or parsed.password is not None:
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter credenciais.')
+    if parsed.path not in {'', '/'} or parsed.query or parsed.fragment:
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter path, query ou fragmento.')
 
-    hostname = parsed.hostname.lower().rstrip('.')
+    hostname = hostname_raw.lower().rstrip('.')
     if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
+    if allowed_hosts is not None:
+        allowlist = {entry.strip().lower() for entry in allowed_hosts.split(',') if entry.strip()}
+        if not allowlist:
+            raise GovBIConfigurationError('GOVBI_ALLOWED_HOSTS deve declarar ao menos uma origem.')
+
+        default_port = 443 if parsed.scheme == 'https' else 80
+        effective_port = default_port if port is None else port
+        authority_host = f'[{hostname}]' if ':' in hostname else hostname
+        approved_origins = {f'{authority_host}:{effective_port}', f'{parsed.scheme}://{authority_host}:{effective_port}'}
+        legacy_default_host = port in {None, default_port} and hostname in allowlist
+        if not legacy_default_host and not approved_origins.intersection(allowlist):
+            raise GovBIConfigurationError('Origem de GOVBI_BASE_URL não está na allowlist.')
 
     return candidate
+
+
+def validate_govbi_timeout(value: object, *, default: float = 15.0) -> float:
+    """Exige timeout numérico, finito e estritamente positivo."""
+
+    candidate = default if value is None or value == '' else value
+    try:
+        timeout = float(candidate)
+    except (TypeError, ValueError) as exc:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.') from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.')
+    return timeout
+
+
+def sanitize_govbi_base_url(value: str | None, *, allowed_hosts: str | None = None) -> str | None:
+    """Retorna somente destino já validado; entradas inválidas nunca são refletidas."""
+
+    try:
+        candidate = validate_govbi_base_url(value, allowed_hosts=allowed_hosts)
+    except (GovBIConfigurationError, ValueError):
+        return None
+
+    try:
+        parsed = urlsplit(candidate)
+        port_value = parsed.port
+    except ValueError:
+        return None
+    hostname = parsed.hostname or ''
+    if ':' in hostname and not hostname.startswith('['):
+        hostname = f'[{hostname}]'
+    port = f':{port_value}' if port_value is not None else ''
+    return f'{parsed.scheme}://{hostname}{port}'
 
 
 class Settings(BaseSettings):
@@ -75,6 +130,7 @@ class Settings(BaseSettings):
 
     # Integração GovBI IA — proxy governado backend
     govbi_base_url: str = Field(default_factory=lambda: get_secret('GOVBI_BASE_URL', '') or '')
+    govbi_allowed_hosts: str = Field(default_factory=lambda: get_secret('GOVBI_ALLOWED_HOSTS', '') or '')
     govbi_timeout_seconds: float = Field(default_factory=lambda: float(get_secret('GOVBI_TIMEOUT_SECONDS', '15') or '15'))
 
     # RAG governado — LlamaIndex-ready com fallback offline auditável
