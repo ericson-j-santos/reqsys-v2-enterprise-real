@@ -73,7 +73,6 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
     return candidate
 
 
-
 def validate_govbi_timeout(value: object, *, default: float = 15.0) -> float:
     """Exige timeout numérico, finito e estritamente positivo."""
 
@@ -85,6 +84,7 @@ def validate_govbi_timeout(value: object, *, default: float = 15.0) -> float:
     if not math.isfinite(timeout) or timeout <= 0:
         raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.')
     return timeout
+
 
 def sanitize_govbi_base_url(value: str | None, *, allowed_hosts: str | None = None) -> str | None:
     """Retorna somente destino já validado; entradas inválidas nunca são refletidas."""
