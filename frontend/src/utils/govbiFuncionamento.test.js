@@ -30,7 +30,7 @@ describe('govbiFuncionamento', () => {
     expect(consolidado.completo).toBe(false)
   })
 
-  it('executa testes de API com cliente mockado', async () => {
+  it('não promove fallback degradado mesmo com configuração e contrato local válidos', async () => {
     const client = {
       get: vi.fn(async (url) => {
         if (url === '/govbi/health') {
@@ -74,9 +74,13 @@ describe('govbiFuncionamento', () => {
     const api = await executarTestesApiGovbi(client)
     const consolidado = consolidarResultadosFuncionamento(api)
 
+    const resultadoExterno = api.find((item) => item.id === 'api-contrato-perguntas')
+
     expect(api).toHaveLength(4)
-    expect(consolidado.percentual).toBe(100)
-    expect(consolidado.completo).toBe(true)
+    expect(resultadoExterno.ok).toBe(false)
+    expect(resultadoExterno.detalhe).toContain('degradado e não comprovado')
+    expect(consolidado.percentual).toBeLessThan(100)
+    expect(consolidado.completo).toBe(false)
   })
 
 
