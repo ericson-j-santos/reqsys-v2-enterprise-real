@@ -49,6 +49,8 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter path, query ou fragmento.')
 
     hostname = parsed.hostname.lower().rstrip('.')
+    if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
     if allowed_hosts is not None:
         allowlist = {
             host.strip().lower().rstrip('.')
@@ -59,8 +61,6 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
             raise GovBIConfigurationError('GOVBI_ALLOWED_HOSTS deve declarar ao menos um host.')
         if hostname not in allowlist:
             raise GovBIConfigurationError('Host de GOVBI_BASE_URL não está na allowlist.')
-    if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
-        raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
 
     return candidate
 
