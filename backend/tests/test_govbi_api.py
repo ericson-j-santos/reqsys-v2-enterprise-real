@@ -17,6 +17,7 @@ def _govbi_base_url_aprovada(monkeypatch):
     import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
 def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(monkeypatch):
@@ -289,6 +290,7 @@ def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
         'https://usuario:segredo@govbi.example',
         'https://govbi.example?token=segredo',
         'https://govbi.example/#segredo',
+        'https://govbi.example/token-segredo',
     ],
 )
 def test_validacao_govbi_rejeita_componentes_sensiveis_sem_refletir_valor(base_url):
@@ -317,3 +319,20 @@ def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
     assert sensitive_url not in funcionamento.text
     assert 'segredo' not in health.text
     assert 'segredo' not in funcionamento.text
+
+
+def test_govbi_health_bloqueia_host_fora_da_allowlist_sem_probe(monkeypatch):
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://destino-interno.example')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
+
+    with patch.object(govbi.httpx, 'AsyncClient') as async_client:
+        response = TestClient(app).post(
+            '/api/govbi/perguntas',
+            json={'pergunta': 'Consulta bloqueada por allowlist'},
+        )
+
+    assert response.status_code == 503
+    assert 'destino-interno' not in response.text
+    async_client.assert_not_called()
