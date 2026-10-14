@@ -3,7 +3,7 @@
 ## Contexto
 Dois comentários de proprietário distintos podem gerar dois despachos físicos para o mesmo modo. Ocorreu no Teams DEV e no canário Worker Pool #38487141475, seguido por um segundo run #38487187632 cancelado. A concorrência por ID de comentário evita perda de eventos mas não deduplica o alvo.
 
-## Aceite
+## Critérios de aceite
 1. O controle de 120 segundos se aplica **somente** aos comandos fixos `/reqsys run pc24x7-teams-e2e-dev` e `/reqsys run pc24x7-worker-pool-candidate-canary-dev`.
 2. O ID canônico mais antigo é admitido; o comentário posterior dentro da janela é suprimido **antes** de despachar um novo workflow, mesmo quando os gateways executam em ordem inversa.
 3. Ler somente comentários **do proprietário** e do comando literal na issue #1705 com paginação; exigir readback único de ID, timestamp UTC, autor e SHA principal válido; comentários não autorizados e API ausente/inconsistente falham fechado. Um comentário de terceiro não pode suprimir comando legítimo.
