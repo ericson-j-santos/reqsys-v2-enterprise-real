@@ -136,12 +136,18 @@ export async function executarTestesApiGovbi(client) {
   try {
     const { data } = await client.get('/govbi/health')
     const payload = data?.data ?? data
-    const ok = payload?.service === 'govbi-proxy' && payload?.status === 'ok'
+    const ok = payload?.service === 'govbi-proxy'
+      && payload?.status === 'configurado'
+      && payload?.configuration_status === 'valida'
+      && payload?.local_contract_status === 'valido'
+      && payload?.external_health_status === 'nao_verificada'
     resultados.push(criarResultado(
       'api-health',
-      'Health do proxy GovBI',
+      'Configuração e contrato local do proxy GovBI',
       ok,
-      ok ? `timeout=${payload.timeout_seconds}s` : 'Resposta fora do contrato',
+      ok
+        ? `configuração válida; contrato local válido; saúde externa não verificada; timeout=${payload.timeout_seconds}s`
+        : 'Resposta fora do contrato local',
       'api',
     ))
   } catch (error) {
