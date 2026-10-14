@@ -569,8 +569,8 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
     inventory_step = raw[inventory:blockade]
     guard_step = raw[blockade:azure]
     return all((
-        "if: github.event_name == 'workflow_dispatch'" in rules_step,
-        "if: github.event_name == 'workflow_dispatch'" in session_step,
+        "if: github.event_name == 'workflow_dispatch'\n        uses:" in rules_step,
+        "if: github.event_name == 'workflow_dispatch'\n        id: session" in session_step,
         "session_launcher.py" in session_step,
         "--require-runner-version-preflight" in session_step,
         "'--expected-head', '${{ github.sha }}'" in inventory_step,
