@@ -440,7 +440,7 @@ def test_cli_fails_closed_when_stream_is_missing(tmp_path):
 def test_cli_fails_closed_on_invalid_stream_encoding(tmp_path):
     stdout_path = tmp_path / "gateway.stdout"
     stderr_path = tmp_path / "gateway.stderr"
-    stdout_path.write_bytes(b"\\xff")
+    stdout_path.write_bytes(b"\xff")
     stderr_path.write_text("", encoding="utf-8")
     completed = subprocess.run(
         _cli_args(stdout_path, stderr_path),
