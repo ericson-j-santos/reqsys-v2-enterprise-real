@@ -292,7 +292,7 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
     return {
         'executadoEm': datetime.now(UTC).isoformat(),
         'escopo': {
-            'configuracao': 'validada localmente',
+            'configuracao': 'validada localmente' if base_url_valida else 'invalida',
             'contrato_local': 'validado sem chamada externa',
             'saude_externa': 'nao verificada por este endpoint',
         },
