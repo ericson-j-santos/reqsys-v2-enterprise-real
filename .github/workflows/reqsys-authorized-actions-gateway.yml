@@ -50,6 +50,7 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-worker-pool-backup-restore-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-worker-pool-backup-volume-restore-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-worker-pool-candidate-canary-dev' ||
+        github.event.comment.body == '/reqsys run pc24x7-worker-pool-real-restore-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
@@ -198,6 +199,10 @@ jobs:
               target='codex-worker-pool-smoke-dev.yml'
               mode='candidate-canary'
               ;;
+            '/reqsys run pc24x7-worker-pool-real-restore-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='restore-rehearsal'
+              ;;
             '/reqsys run codex-worker-pool-handoff-e2e-dev')
               target='codex-worker-pool-handoff.yml'
               mode='work-e2e'
@@ -331,7 +336,7 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout immutable physical E2E admission code
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary'
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ steps.main.outputs.sha }}
@@ -340,7 +345,7 @@ jobs:
 
       - name: Admit one Teams or Worker Pool canary per short comment window
         id: teams_admission
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary'
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -355,6 +360,9 @@ jobs:
               ;;
             '/reqsys run pc24x7-worker-pool-candidate-canary-dev')
               selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-candidate-canary-dev" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
+              ;;
+            '/reqsys run pc24x7-worker-pool-real-restore-dev')
+              selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-real-restore-dev" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
               ;;
             *) echo 'physical_command_not_allowlisted' >&2; exit 2 ;;
           esac
@@ -520,6 +528,11 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=candidate-canary)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore-rehearsal" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=restore-rehearsal)"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml" ]; then
             test "$TARGET_MODE" = "work-e2e" || { echo 'worker_pool_handoff_mode_not_allowlisted' >&2; exit 3; }
             request_id="$(python -c 'import hashlib, os; raw=(os.environ["GITHUB_REPOSITORY"]+":2020:main").encode("utf-8"); print(hashlib.sha256(raw).hexdigest()[:24])')"

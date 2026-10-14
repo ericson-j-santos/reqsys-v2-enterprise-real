@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-worker-pool-real-restore-rehearsal-dev",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "issue": 2020,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "worker_sha": "e9f2627938a9e4d741d1d50796a72f69b35f547f",
+    "candidate_api": "1.4.0",
+    "rollback_api": "1.2.0",
+    "active_service_restarted": false,
+    "active_database_modified": false,
+    "legacy_port": 8097,
+    "restored_candidate_port": 18098,
+    "isolated_rollback_port": 18099,
+    "cutover_ready": false
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-worker-pool-real-restore-rehearsal-dev.requirements.md",
+    "script": "scripts/pc24x7_worker_pool_real_restore_rehearsal_dev.py",
+    "tests": "tests/test_pc24x7_worker_pool_real_restore_rehearsal_dev.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_real_restore_rehearsal_dev.py",
+      "tests/test_pc24x7_worker_pool_backup_restore_dev.py",
+      "tests/test_pc24x7_worker_pool_candidate_canary_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Real DPAPI-protected Online Backup of physically validated legacy SQLite; independent restoration to exclusively labeled disposable Docker volume via stdin, candidate 1.4 GET-only authenticated contract/diagnostics and negative auth, row digest checked without publishing user data, stop only owned candidate and start legacy 1.2 on same isolated copy with independent state readback, verify original service unchanged; cleanup fail-closed, no claim, no live DB mutation, cutover_ready=false."
+  }
+}
