@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import os
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
+from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url, validate_govbi_timeout
 from app.schemas.monitoramento_operacional import (
     ItemMonitorado,
     MonitoramentoOperacional,
@@ -31,13 +30,7 @@ def _govbi_base_url() -> str:
 
 
 def _govbi_timeout() -> float:
-    try:
-        timeout = float(getattr(settings, 'govbi_timeout_seconds', 15.0))
-    except (TypeError, ValueError) as exc:
-        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.') from exc
-    if not math.isfinite(timeout) or timeout <= 0:
-        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.')
-    return timeout
+    return validate_govbi_timeout(getattr(settings, 'govbi_timeout_seconds', 15.0))
 
 
 def classificar_estado_geral(itens: list[ItemMonitorado]) -> str:
