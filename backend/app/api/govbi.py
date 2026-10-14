@@ -7,7 +7,12 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.config import (\n    GovBIConfigurationError,\n    sanitize_govbi_base_url,\n    settings,\n    validate_govbi_base_url,\n)
+from app.core.config import (
+    GovBIConfigurationError,
+    sanitize_govbi_base_url,
+    settings,
+    validate_govbi_base_url,
+)
 from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
