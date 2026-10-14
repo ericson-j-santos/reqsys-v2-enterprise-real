@@ -30,7 +30,8 @@ def main(argv: list[str] | None = None) -> int:
             args.stdout_path.write_bytes(b"")
             args.stderr_path.write_bytes(b"")
         except OSError:
-            pass
+            # The child already failed; keep private streams and paths out of logs.
+            return 125
         return 125
 
 
