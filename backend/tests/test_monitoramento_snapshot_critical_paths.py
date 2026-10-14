@@ -15,6 +15,25 @@ def _govbi_base_url_aprovada(monkeypatch):
     monkeypatch.setattr(snapshot.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
+class _StreamContext:
+    def __init__(self, response):
+        self.response = response
+
+    def __enter__(self):
+        return self.response
+
+    def __exit__(self, exc_type, exc, tb):
+        self.response.close()
+        return False
+
+
+def _stream_client(response):
+    client = MagicMock()
+    client.__enter__.return_value = client
+    client.stream.return_value = _StreamContext(response)
+    return client
+
+
 def test_classificar_estado_geral_lista_vazia():
     assert snapshot.classificar_estado_geral([]) == 'desconhecido'
 
@@ -49,9 +68,7 @@ def test_resolver_modo_coleta():
 @pytest.mark.parametrize('status_code', [401, 404, 503])
 @patch('app.services.monitoramento_snapshot.httpx.Client')
 def test_estado_govbi_vermelho_quando_http_nao_comprova_saude(mock_client_cls, status_code):
-    mock_client = MagicMock()
-    mock_client.__enter__.return_value = mock_client
-    mock_client.get.return_value = httpx.Response(status_code)
+    mock_client = _stream_client(httpx.Response(status_code))
     mock_client_cls.return_value = mock_client
 
     estado, detalhes = snapshot._estado_govbi()
@@ -60,8 +77,9 @@ def test_estado_govbi_vermelho_quando_http_nao_comprova_saude(mock_client_cls, s
     assert detalhes['http_status'] == status_code
     assert detalhes['saude_externa'] == 'indisponivel'
     assert detalhes['motivo'] == 'status_http_inesperado'
-    mock_client.get.assert_called_once_with('https://govbi.example/actuator/health')
+    mock_client.stream.assert_called_once_with('GET', 'https://govbi.example/actuator/health')
     assert mock_client_cls.call_args.kwargs['follow_redirects'] is False
+    assert mock_client_cls.call_args.kwargs['trust_env'] is False
 
 
 @patch('app.services.monitoramento_snapshot.resumo_conectores')
@@ -105,9 +123,7 @@ def test_estado_ci_preview_quando_api_falha(_mock_client):
 
 @patch('app.services.monitoramento_snapshot.httpx.Client')
 def test_estado_govbi_verde_quando_actuator_confirma_up(mock_client_cls):
-    mock_client = MagicMock()
-    mock_client.__enter__.return_value = mock_client
-    mock_client.get.return_value = httpx.Response(200, json={'status': 'UP'})
+    mock_client = _stream_client(httpx.Response(200, json={'status': 'UP'}))
     mock_client_cls.return_value = mock_client
 
     estado, detalhes = snapshot._estado_govbi()
@@ -116,7 +132,7 @@ def test_estado_govbi_verde_quando_actuator_confirma_up(mock_client_cls):
     assert detalhes['http_status'] == 200
     assert detalhes['configuracao'] == 'valida'
     assert detalhes['saude_externa'] == 'saudavel'
-    mock_client.get.assert_called_once_with('https://govbi.example/actuator/health')
+    mock_client.stream.assert_called_once_with('GET', 'https://govbi.example/actuator/health')
 
 
 @pytest.mark.parametrize(
@@ -129,9 +145,7 @@ def test_estado_govbi_verde_quando_actuator_confirma_up(mock_client_cls):
 )
 @patch('app.services.monitoramento_snapshot.httpx.Client')
 def test_estado_govbi_rejeita_resposta_200_fora_do_contrato(mock_client_cls, response, motivo):
-    mock_client = MagicMock()
-    mock_client.__enter__.return_value = mock_client
-    mock_client.get.return_value = response
+    mock_client = _stream_client(response)
     mock_client_cls.return_value = mock_client
 
     estado, detalhes = snapshot._estado_govbi()
@@ -139,6 +153,51 @@ def test_estado_govbi_rejeita_resposta_200_fora_do_contrato(mock_client_cls, res
     assert estado == 'vermelho'
     assert detalhes['saude_externa'] == 'indisponivel'
     assert detalhes['motivo'] == motivo
+
+
+
+
+@patch('app.services.monitoramento_snapshot.httpx.Client')
+def test_estado_govbi_rejeita_corpo_oversized_e_fecha_stream(mock_client_cls):
+    response = httpx.Response(200, content=b'x' * (snapshot.GOVBI_HEALTH_MAX_BYTES + 1))
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'resposta_excede_limite'
+    assert response.is_closed is True
+
+
+@patch('app.services.monitoramento_snapshot.httpx.Client')
+def test_estado_govbi_rejeita_content_length_oversized_sem_ler_corpo(mock_client_cls):
+    response = httpx.Response(
+        200,
+        headers={'content-length': str(snapshot.GOVBI_HEALTH_MAX_BYTES + 1)},
+        content=b'{}',
+    )
+    response.iter_bytes = MagicMock(side_effect=AssertionError('corpo não deve ser lido'))
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'resposta_excede_limite'
+    response.iter_bytes.assert_not_called()
+    assert response.is_closed is True
+
+
+@patch('app.services.monitoramento_snapshot.time.monotonic', side_effect=[100.0, 106.0])
+@patch('app.services.monitoramento_snapshot.httpx.Client')
+def test_estado_govbi_aplica_limite_total_real(mock_client_cls, _monotonic):
+    response = httpx.Response(200, json={'status': 'UP'})
+    mock_client_cls.return_value = _stream_client(response)
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'vermelho'
+    assert detalhes['motivo'] == 'tempo_total_excedido'
+    assert response.is_closed is True
 
 
 @patch('app.services.monitoramento_snapshot.httpx.Client', side_effect=RuntimeError('timeout'))
