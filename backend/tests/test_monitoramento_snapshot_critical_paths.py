@@ -12,6 +12,7 @@ from app.services import monitoramento_snapshot as snapshot
 @pytest.fixture(autouse=True)
 def _govbi_base_url_aprovada(monkeypatch):
     monkeypatch.setattr(snapshot.settings, 'govbi_base_url', 'https://govbi.example')
+    monkeypatch.setattr(snapshot.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
 def test_classificar_estado_geral_lista_vazia():
