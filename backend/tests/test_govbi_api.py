@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import app.api.govbi as govbi
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +15,6 @@ from app.main import app
 
 @pytest.fixture(autouse=True)
 def _govbi_base_url_aprovada(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
     monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
@@ -43,7 +43,6 @@ def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(mon
             )
             raise httpx.HTTPStatusError('bad request', request=request, response=response)
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComErroNegocio)
 
@@ -81,7 +80,6 @@ def test_govbi_perguntas_retorna_fallback_governado_quando_servico_externo_falha
         async def post(self, *args, **kwargs):
             raise RuntimeError('https://usuario:segredo@proxy.example/token')
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComFalha)
 
@@ -124,9 +122,7 @@ def test_govbi_perguntas_valida_payload_minimo():
     ],
 )
 def test_govbi_preserva_correlation_id_valido(correlation_id):
-    from app.api.govbi import _correlation_id
-
-    assert _correlation_id(f'  {correlation_id}  ') == correlation_id
+    assert govbi._correlation_id(f'  {correlation_id}  ') == correlation_id
 
 
 @pytest.mark.parametrize(
@@ -139,9 +135,7 @@ def test_govbi_preserva_correlation_id_valido(correlation_id):
     ],
 )
 def test_govbi_regenera_correlation_id_invalido(correlation_id_invalido):
-    from app.api.govbi import _correlation_id
-
-    correlation_id = _correlation_id(correlation_id_invalido)
+    correlation_id = govbi._correlation_id(correlation_id_invalido)
 
     assert correlation_id.startswith('govbi-')
     assert correlation_id != correlation_id_invalido.strip()
@@ -202,7 +196,6 @@ def test_govbi_perguntas_normaliza_resposta_externa_com_sucesso(monkeypatch):
                 },
             )
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComSucesso)
 
@@ -236,7 +229,6 @@ def test_govbi_perguntas_http_400_sem_json_cai_em_fallback(monkeypatch):
             response = httpx.Response(400, request=request, content=b'corpo-invalido')
             raise httpx.HTTPStatusError('bad request', request=request, response=response)
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientCom400SemJson)
 
@@ -267,7 +259,6 @@ def test_govbi_perguntas_resposta_nao_dict_cai_em_fallback(monkeypatch):
             request = httpx.Request('POST', 'https://govbi.example/api/v1/perguntas')
             return httpx.Response(200, request=request, json=['nao', 'dict'])
 
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.httpx, 'AsyncClient', ClientComJsonLista)
 
@@ -296,7 +287,6 @@ def test_validacao_govbi_rejeita_hosts_fly(base_url):
 
 
 def test_govbi_perguntas_sem_url_explicita_retorna_503(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', '')
     with patch.object(govbi.httpx, 'AsyncClient') as async_client:
@@ -312,7 +302,6 @@ def test_govbi_perguntas_sem_url_explicita_retorna_503(monkeypatch):
 
 
 def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.fly.dev')
     response = TestClient(app).get('/api/govbi/health')
@@ -342,7 +331,6 @@ def test_validacao_govbi_rejeita_componentes_sensiveis_sem_refletir_valor(base_u
 
 
 def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
-    import app.api.govbi as govbi
 
     sensitive_url = 'https://usuario:segredo@govbi.example?token=oculto'
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', sensitive_url)
@@ -363,7 +351,6 @@ def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
 
 
 def test_govbi_health_bloqueia_host_fora_da_allowlist_sem_probe(monkeypatch):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://destino-interno.example')
     monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
@@ -408,7 +395,6 @@ def test_validacao_govbi_nao_normaliza_porta_zero_para_padrao():
 
 @pytest.mark.parametrize('timeout_invalido', [float('nan'), float('inf'), float('-inf'), 0.0, -1.0])
 def test_govbi_api_bloqueia_timeout_invalido_sem_io(monkeypatch, timeout_invalido):
-    import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_timeout_seconds', timeout_invalido)
     client = TestClient(app)
