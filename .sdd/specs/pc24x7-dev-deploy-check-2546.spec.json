@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-dev-deploy-check-2546",
+  "phase": "implementation",
+  "increment_type": "hotfix",
+  "issue": 2546,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "command_issue": 1705,
+    "command": "/reqsys run pc24x7-dev-deploy-check",
+    "original_request_id": "4f6f18810783cdc6872f04f1",
+    "original_task_id": "cwp-cdb85c31e3cc4e972f3094ab",
+    "read_only": true,
+    "deploy_executed": false,
+    "cutover_ready": false
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-dev-deploy-check-2546.requirements.md",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "admission": "scripts/authorized_teams_e2e_admission.py"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_dev_deploy_check_dispatch.py",
+      "tests/test_authorized_teams_e2e_admission.py",
+      "tests/test_dev_runtime_recovery_executor.py",
+      "tests/test_pc24x7_worker_pool_inventory_workflow.py"
+    ],
+    "evidence_contract": "Owner exact command, deduplicated 120s GitHub admission, immutable main SHA, physical PC24x7 Session Launcher plus Command Gateway risk1, existing dev_runtime_recovery.py deploy-check only, endpoint health + SHA and database SELECT1; SHA-bound independent sanitized receipt; fail closed, no deploy/claim/restart/cutover."
+  }
+}
