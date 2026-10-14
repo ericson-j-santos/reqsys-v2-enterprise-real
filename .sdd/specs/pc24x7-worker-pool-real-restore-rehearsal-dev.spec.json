@@ -34,8 +34,9 @@
       "tests/test_pc24x7_worker_pool_real_restore_rehearsal_dev.py",
       "tests/test_pc24x7_worker_pool_backup_restore_dev.py",
       "tests/test_pc24x7_worker_pool_candidate_canary_dev.py",
-      "tests/test_reqsys_authorized_actions_gateway.py"
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_authorized_teams_e2e_admission.py"
     ],
-    "evidence_contract": "Real DPAPI-protected Online Backup of physically validated legacy SQLite; independent restoration to exclusively labeled disposable Docker volume via stdin, candidate 1.4 GET-only authenticated contract/diagnostics and negative auth, row digest checked without publishing user data, stop only owned candidate and start legacy 1.2 on same isolated copy with independent state readback, verify original service unchanged; cleanup fail-closed, no claim, no live DB mutation, cutover_ready=false."
+    "evidence_contract": "Real DPAPI-protected Online Backup of physically validated legacy SQLite; independent restoration to exclusively labeled disposable Docker volume via stdin, candidate 1.4 GET-only authenticated contract/diagnostics and negative auth, row digest checked without publishing user data, stop only owned candidate and start legacy 1.2 on same isolated copy with independent state readback, verify original service unchanged; cleanup fail-closed, no claim, no live DB mutation, cutover_ready=false. Owner fixed command must pass matching workflow/parser allowlists and anti-duplicate checks; negative command rejection required."
   }
 }

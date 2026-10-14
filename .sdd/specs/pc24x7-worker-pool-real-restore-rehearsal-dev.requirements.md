@@ -24,3 +24,10 @@ Comprovar compatibilidade física de um SQLite **capturado por Online Backup** d
 
 ## Critério de aceite e bloqueio
 O ensaio só está concluído com prova física de 1.4 e 1.2 na cópia privada, tasks idênticas após cada fase, nenhum recurso temporário remanescente e legado original inalterado. Sem essas provas, usar `RESTORE_REHEARSAL_BLOCKED`. Nunca definir `CUTOVER_READY` por este teste.
+
+## Regressão do contrato de admissão do comando físico (P0)
+
+- O parser versionado \`scripts/authorized_teams_e2e_admission.py\` deve aceitar o comando literal \`/reqsys run pc24x7-worker-pool-real-restore-dev\` já mapeado no Gateway, sem introduzir parâmetros livres ou capacidade de execução arbitrária.
+- Reutilizar o controle de identidade do owner, Issue #1705, SHA, \`comment_id\` e janela anti-duplicidade de 120 segundos. Um único comando deve ser admitido; replay dentro da janela deve ser suprimido; comando não allowlisted ou registro incompleto deve falhar fechado.
+- \`tests/test_authorized_teams_e2e_admission.py\` deve cobrir contrato entre workflow e parser, cenário positivo, duplicado, fora da janela e comando indevido. Uma nova emissão física somente após \`READY_FOR_PR=passed\`, CI e integração governada.
+- Falha anterior: Gateway #38496349534 rejeitou o argumento antes do despacho. Escopo exclusivamente DEV isolado, sem cutover, secrets ou produção.
