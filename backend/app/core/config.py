@@ -54,21 +54,20 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter path, query ou fragmento.')
 
     hostname = hostname_raw.lower().rstrip('.')
-    default_port = 443 if parsed.scheme == 'https' else 80
-    if port is not None and port != default_port:
-        raise GovBIConfigurationError('GOVBI_BASE_URL deve usar a porta padrão do protocolo.')
     if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
     if allowed_hosts is not None:
-        allowlist = {
-            host.strip().lower().rstrip('.')
-            for host in allowed_hosts.split(',')
-            if host.strip()
-        }
+        allowlist = {entry.strip().lower() for entry in allowed_hosts.split(',') if entry.strip()}
         if not allowlist:
-            raise GovBIConfigurationError('GOVBI_ALLOWED_HOSTS deve declarar ao menos um host.')
-        if hostname not in allowlist:
-            raise GovBIConfigurationError('Host de GOVBI_BASE_URL não está na allowlist.')
+            raise GovBIConfigurationError('GOVBI_ALLOWED_HOSTS deve declarar ao menos uma origem.')
+
+        default_port = 443 if parsed.scheme == 'https' else 80
+        effective_port = port or default_port
+        authority_host = f'[{hostname}]' if ':' in hostname else hostname
+        approved_origins = {f'{authority_host}:{effective_port}', f'{parsed.scheme}://{authority_host}:{effective_port}'}
+        legacy_default_host = port in {None, default_port} and hostname in allowlist
+        if not legacy_default_host and not approved_origins.intersection(allowlist):
+            raise GovBIConfigurationError('Origem de GOVBI_BASE_URL não está na allowlist.')
 
     return candidate
 
