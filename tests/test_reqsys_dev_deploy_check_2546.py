@@ -65,9 +65,11 @@ def test_workflow_uses_real_sanitizing_parser_and_fails_closed():
     expected = (
         'scripts\\deploy_check_receipt.py',
         '"--gateway-exit-code", [string]$gatewayExit',
-        '1> $stdoutPath 2> $stderrPath',
+        'scripts\\run_deploy_check_gateway_capture.ps1',
+        'scripts\\private_process_capture.py',
+        '"--gateway-stdout-file", $stdoutPath',
         '"--gateway-stderr-file", $stderrPath',
-        '$gatewayStdout | & "$env:REQSYS_PYTHON" $parser @parserArgs',
+        '$sanitized = @(& "$env:REQSYS_PYTHON" $parser @parserArgs)',
         'Remove-Item -LiteralPath $privatePath -Force',
         'throw "DEPLOY_CHECK_BLOCKED:$($receipt.reason_code)"',
         'throw "DEPLOY_CHECK_EVIDENCE_MISSING"',
@@ -83,6 +85,7 @@ def test_workflow_uses_real_sanitizing_parser_and_fails_closed():
         assert item in block
     assert '[System.Text.UTF8Encoding]::new($false)' in block
     assert '$g.stdout | ConvertFrom-Json' not in block
+    assert '1> $stdoutPath 2> $stderrPath' not in block
 
 
 def test_existing_script_still_checks_runtime_and_sqlite():
@@ -117,7 +120,7 @@ def _gateway(inner, *, result="ok", command_exit_code=0, gateway_exit_code=None,
     return json.dumps(value)
 
 
-def _blocked_stderr(exit_code=2, **overrides):
+def _blocked_stderr(exit_code=20, **overrides):
     value = {
         "timestamp": "2026-10-14T03:08:55+00:00",
         "correlation_id": CTX.correlation_id,
@@ -171,7 +174,7 @@ def test_parser_accepts_real_command_failed_envelope():
 
 
 def test_parser_sanitizes_real_pre_execution_blocked_stderr():
-    receipt, exit_code = build_receipt("", _blocked_stderr(), 2, CTX)
+    receipt, exit_code = build_receipt("", _blocked_stderr(), 20, CTX)
     assert exit_code == 1
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
     assert receipt["reason_code"] == "gateway_blocked"
@@ -194,7 +197,7 @@ def test_parser_sanitizes_real_pre_execution_blocked_stderr():
     ],
 )
 def test_parser_separates_missing_or_invalid_data_from_failure(stdout, stderr, reason):
-    receipt, exit_code = build_receipt(stdout, stderr, 0 if not stderr else 2, CTX)
+    receipt, exit_code = build_receipt(stdout, stderr, 0 if not stderr else 20, CTX)
     assert exit_code == 1
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
     assert receipt["reason_code"] == reason
@@ -343,12 +346,14 @@ def test_parser_discards_sensitive_and_unallowlisted_fields():
 
 
 
-def _cli_args(stderr_path):
+def _cli_args(stdout_path, stderr_path):
     return [
         sys.executable,
         str(PARSER),
         "--gateway-exit-code",
         "0",
+        "--gateway-stdout-file",
+        str(stdout_path),
         "--gateway-stderr-file",
         str(stderr_path),
         "--expected-sha",
@@ -363,11 +368,12 @@ def _cli_args(stderr_path):
 
 
 def test_cli_sanitizes_post_execution_stdout(tmp_path):
+    stdout_path = tmp_path / "gateway.stdout"
     stderr_path = tmp_path / "gateway.stderr"
+    stdout_path.write_text(_gateway(_success_inner()), encoding="utf-8")
     stderr_path.write_text("", encoding="utf-8")
     completed = subprocess.run(
-        _cli_args(stderr_path),
-        input=_gateway(_success_inner()),
+        _cli_args(stdout_path, stderr_path),
         capture_output=True,
         text=True,
         check=False,
@@ -380,13 +386,14 @@ def test_cli_sanitizes_post_execution_stdout(tmp_path):
 
 
 def test_cli_sanitizes_utf16_pre_execution_stderr(tmp_path):
+    stdout_path = tmp_path / "gateway.stdout"
     stderr_path = tmp_path / "gateway.stderr"
+    stdout_path.write_text("", encoding="utf-8")
     stderr_path.write_text(_blocked_stderr(), encoding="utf-16")
-    args = _cli_args(stderr_path)
-    args[args.index("--gateway-exit-code") + 1] = "2"
+    args = _cli_args(stdout_path, stderr_path)
+    args[args.index("--gateway-exit-code") + 1] = "20"
     completed = subprocess.run(
         args,
-        input="",
         capture_output=True,
         text=True,
         check=False,
@@ -397,3 +404,50 @@ def test_cli_sanitizes_utf16_pre_execution_stderr(tmp_path):
     assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
     assert receipt["reason_code"] == "gateway_blocked"
     assert "private policy detail" not in completed.stdout
+
+
+@pytest.mark.parametrize("inner_ok", [None, True, 0, 1, "false", [], {}])
+def test_command_failed_requires_strict_false_inner_ok(inner_ok):
+    receipt, _ = build_receipt(
+        _gateway(
+            {"ok": inner_ok, "category": "database_probe_failed"},
+            result="command_failed",
+            command_exit_code=1,
+        ),
+        "",
+        1,
+        CTX,
+    )
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED"
+    assert receipt["reason_code"] == "inner_error_contract_invalid"
+
+
+def test_cli_fails_closed_when_stream_is_missing(tmp_path):
+    stdout_path = tmp_path / "missing.stdout"
+    stderr_path = tmp_path / "gateway.stderr"
+    stderr_path.write_text("", encoding="utf-8")
+    completed = subprocess.run(
+        _cli_args(stdout_path, stderr_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = json.loads(completed.stdout)
+    assert completed.returncode == 1
+    assert receipt["reason_code"] == "gateway_stream_unavailable"
+
+
+def test_cli_fails_closed_on_invalid_stream_encoding(tmp_path):
+    stdout_path = tmp_path / "gateway.stdout"
+    stderr_path = tmp_path / "gateway.stderr"
+    stdout_path.write_bytes(b"\\xff")
+    stderr_path.write_text("", encoding="utf-8")
+    completed = subprocess.run(
+        _cli_args(stdout_path, stderr_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = json.loads(completed.stdout)
+    assert completed.returncode == 1
+    assert receipt["reason_code"] == "gateway_stream_encoding_invalid"

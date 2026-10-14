@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -104,7 +103,7 @@ def _read_redirected_text(path: Path) -> str:
     raw = path.read_bytes()
     if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
         return raw.decode("utf-16")
-    return raw.decode("utf-8-sig", errors="replace")
+    return raw.decode("utf-8-sig")
 
 
 def _json_object(value: Any) -> dict[str, Any] | None:
@@ -349,6 +348,12 @@ def build_receipt(
 
     if gateway_result == "command_failed":
         category = inner.get("category")
+        if inner.get("ok") is not False:
+            return _finish(
+                receipt,
+                "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED",
+                "inner_error_contract_invalid",
+            )
         if isinstance(category, str) and category in INNER_ERROR_CATEGORIES:
             receipt["result_verified"] = True
             return _finish(
@@ -415,6 +420,7 @@ def build_receipt(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gateway-exit-code", required=True, type=int)
+    parser.add_argument("--gateway-stdout-file", required=True, type=Path)
     parser.add_argument("--gateway-stderr-file", required=True, type=Path)
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--expected-correlation-id", required=True)
@@ -431,15 +437,27 @@ def main(argv: list[str] | None = None) -> int:
         host=args.host,
     )
     try:
+        stdout_text = _read_redirected_text(args.gateway_stdout_file)
         stderr_text = _read_redirected_text(args.gateway_stderr_file)
+    except UnicodeDecodeError:
+        receipt, exit_code = _finish(
+            _base_receipt(context, _external_exit_code(args.gateway_exit_code)),
+            "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED",
+            "gateway_stream_encoding_invalid",
+        )
     except OSError:
-        stderr_text = ""
-    receipt, exit_code = build_receipt(
-        sys.stdin.read(),
-        stderr_text,
-        args.gateway_exit_code,
-        context,
-    )
+        receipt, exit_code = _finish(
+            _base_receipt(context, _external_exit_code(args.gateway_exit_code)),
+            "REQSYS_DEV_DEPLOY_CHECK_UNVERIFIED",
+            "gateway_stream_unavailable",
+        )
+    else:
+        receipt, exit_code = build_receipt(
+            stdout_text,
+            stderr_text,
+            args.gateway_exit_code,
+            context,
+        )
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return exit_code
 
