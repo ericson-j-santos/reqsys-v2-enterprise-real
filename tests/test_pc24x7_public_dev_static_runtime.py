@@ -545,9 +545,93 @@ def test_public_static_workflow_fails_closed_before_oidc_or_deploy() -> None:
     deploy = raw.index("Reconcile full DEV runtime and static frontend")
     locator = raw.index("Reconcile public tunnels and publish signed locator")
     assert guard < azure < deploy < locator
-    before = raw[guard:raw.index("- name: Require explicitly provisioned Microsoft test session")]
+    before = raw[guard:raw.index("- name: Validate public static reconciler syntax")]
     assert "inputs.mode == 'public-static'" in before
     assert (
         "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'"
         in before
     )
+
+
+def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
+    """Prevent any public-static mutator running before governed inventory."""
+    rules = raw.find("      - name: Checkout immutable rules for governed Desktop session")
+    session = raw.find("      - name: Bootstrap isolated and governed Desktop session")
+    inventory = raw.find("      - name: Inventory public DEV through governed Gateway (read-only)")
+    blockade = raw.find("      - name: Quarantine legacy public-static without governed backup and rollback")
+    azure = raw.find("      - name: Login Azure by OIDC for DEV credential reuse")
+    deploy = raw.find("      - name: Reconcile full DEV runtime and static frontend")
+    locator = raw.find("      - name: Reconcile public tunnels and publish signed locator")
+    if not (0 <= rules < session < inventory < blockade < azure < deploy < locator):
+        return False
+    rules_step = raw[rules:session]
+    session_step = raw[session:inventory]
+    inventory_step = raw[inventory:blockade]
+    guard_step = raw[blockade:azure]
+    return all((
+        "if: github.event_name == 'workflow_dispatch'\n        uses:" in rules_step,
+        "if: github.event_name == 'workflow_dispatch'\n        id: session" in session_step,
+        "session_launcher.py" in session_step,
+        "--require-runner-version-preflight" in session_step,
+        "'--expected-head', '${{ github.sha }}'" in inventory_step,
+        "'--risk', '1'" in inventory_step,
+        "'--stdout-only'" in inventory_step,
+        "'--', $env:GATEWAY_PYTHON, '-B', $probe" in inventory_step,
+        "state_changed -ne $false" in inventory_step,
+        "session_id -ne $env:SESSION_ID" in inventory_step,
+        "inventory_collected = $true" in inventory_step,
+        "backup_verified = $false" in inventory_step,
+        "rollback_rehearsal_verified = $false" in inventory_step,
+        "if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'" in guard_step,
+        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'" in guard_step,
+        "always()" not in guard_step,
+    ))
+
+
+def test_public_dev_release_collects_only_governed_inventory_before_quarantine():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert _public_dev_governed_inventory_guard_active(raw)
+    inventory = raw.index("Inventory public DEV through governed Gateway (read-only)")
+    blockade = raw.index("Quarantine legacy public-static")
+    assert inventory < blockade < raw.index("Login Azure by OIDC")
+    assert blockade < raw.index("Reconcile full DEV runtime")
+    assert blockade < raw.index("pc24x7_public_dev_tunnel.py --apply")
+
+
+def test_public_dev_governed_inventory_security_control_detects_bypass():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert _public_dev_governed_inventory_guard_active(raw)
+    without_quarantine = raw.replace(
+        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'",
+        "Write-Host 'unsafe bypass'",
+        1,
+    )
+    assert not _public_dev_governed_inventory_guard_active(without_quarantine)
+    without_gateway = raw.replace("'--risk', '1'", "'--risk', '2'", 1)
+    assert not _public_dev_governed_inventory_guard_active(without_gateway)
+    without_session = raw.replace(
+        "if: github.event_name == 'workflow_dispatch'\n        id: session",
+        "if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'\n        id: session",
+        1,
+    )
+    assert not _public_dev_governed_inventory_guard_active(without_session)
+
+
+def test_public_dev_read_only_receipt_never_claims_backup_or_deploy():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    start = raw.index("      - name: Inventory public DEV through governed Gateway (read-only)")
+    end = raw.index("      - name: Quarantine legacy public-static")
+    step = raw[start:end]
+    for value in (
+        "status = 'preflight_only'",
+        "runtime_sha_verified = $false",
+        "database_result = 'unverified'",
+        "backup_verified = $false",
+        "rollback_rehearsal_verified = $false",
+        "deployment_performed = $false",
+        "runtime_mutated = $false",
+        "production_touched = $false",
+    ):
+        assert value in step
+    assert "New-Item -ItemType Directory" in step
+    assert "TEAMS_BOT_SECRET" not in step

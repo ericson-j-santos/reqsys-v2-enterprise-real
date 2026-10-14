@@ -52,3 +52,9 @@ Critério para remover a quarentena (incremento distinto, sem bypass):
 - autorização explícita do owner para deploy DEV e E2E físico posterior.
 
 Este incremento não executa backup físico, restore, Docker Compose ou deploy.
+
+## Primeiro incremento após a quarentena — inventário governado read-only
+
+O modo `public-static` passa a utilizar Session Launcher/Command Gateway da mesma forma que o `study-mode`, com checkout da regra fixada, preflight de versão do runner, SHA exato, reserva de worktree, sessão e inspeção somente leitura por `scripts/diagnose_pc24x7_public_dev.py --stdout-only` (`python -B`, risco 1). A coleta do inventário comprova apenas metadados permitidos do Docker DEV e produz um receipt público sanitizado sem o JSON bruto do host. A quarentena anterior permanece obrigatória **depois** do inventário e **antes** de OIDC, Compose, publicação do locator ou aplicação de configuração. Se o inventário falhar, a execução também falha fechada. Não há backup físico nesta fase.
+
+A remoção futura da quarentena dependerá de implementação e prova independente de backup PostgreSQL real, restauração em cópia isolada, imagens api/frontend/nginx para rollback, controle de concorrência, autorização Risk 3 específica de host e DEV, cenário negativo e E2E same-SHA. Os testes estruturais detectam bypass da quarentena, desativação da sessão e elevação indevida de risco da leitura. Referência de continuidade: issue #2546, run físico #38613970486.

@@ -56,7 +56,7 @@ jobs:
     environment: development
     env:
       RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
-      CORRELATION_ID: noteri-study-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      CORRELATION_ID: pc24x7-dev-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
@@ -68,13 +68,6 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
-
-      - name: Quarantine legacy public-static without governed backup and rollback
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
-        shell: powershell
-        run: |
-          # Fail before OIDC, Git worktree sync, Docker Compose, or locator mutation.
-          throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'
 
       - name: Require explicitly provisioned Microsoft test session
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
@@ -88,8 +81,8 @@ jobs:
           }
           Write-Host 'DEV test credential present; signature, expiration and role will be validated without logging credentials.'
 
-      - name: Checkout immutable rules for study-mode
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
+      - name: Checkout immutable rules for governed Desktop session
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
@@ -99,7 +92,7 @@ jobs:
           persist-credentials: false
 
       - name: Bootstrap isolated and governed Desktop session
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
+        if: github.event_name == 'workflow_dispatch'
         id: session
         shell: powershell
         env:
@@ -126,9 +119,11 @@ jobs:
           Add-Content -LiteralPath (Join-Path $temp 'python312._pth') -Value $rulesScripts
           $launcher = Join-Path $rulesScripts 'session_launcher.py'
           $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $sessionPrefix = 'noteri-msal-e2e'
+          if ('${{ inputs.mode }}' -eq 'public-static') { $sessionPrefix = 'pc24x7-public-inventory' }
           $parameters = @(
             '--policy', $policy, '--repo', $env:GITHUB_WORKSPACE,
-            '--session-prefix', 'noteri-msal-e2e',
+            '--session-prefix', $sessionPrefix,
             '--correlation-id', $env:CORRELATION_ID,
             '--expected-head', '${{ github.sha }}',
             '--sync-ref', 'origin/main',
@@ -144,6 +139,83 @@ jobs:
           "target_path=$($session.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($session.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "gateway_python=$python" | Add-Content $env:GITHUB_OUTPUT
+
+      # Existing quarantine remains mandatory: this path collects only
+      # read-only DEV inventory. No Key Vault, Docker Compose up or locator change.
+      - name: Inventory public DEV through governed Gateway (read-only)
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SESSION_ID) -or
+              [string]::IsNullOrWhiteSpace($env:TARGET_PATH) -or
+              [string]::IsNullOrWhiteSpace($env:GATEWAY_PYTHON)) {
+            throw 'PUBLIC_DEV_SESSION_MISSING'
+          }
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') { throw 'PUBLIC_DEV_HOST_MISMATCH' }
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $probe = Join-Path $env:TARGET_PATH 'scripts\diagnose_pc24x7_public_dev.py'
+          $argv = @(
+            '--policy', $policy, '--correlation-id', $env:CORRELATION_ID,
+            'run', '--cwd', $env:TARGET_PATH, '--session-id', $env:SESSION_ID,
+            '--risk', '1', '--timeout', '120', '--expected-head', '${{ github.sha }}',
+            '--', $env:GATEWAY_PYTHON, '-B', $probe, '--environment', 'dev',
+            '--expected-sha', '${{ github.sha }}', '--stdout-only'
+          )
+          $raw = & $env:GATEWAY_PYTHON $gateway @argv
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_INVENTORY_GATEWAY_BLOCKED' }
+          try { $gate = @($raw)[-1] | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_GATEWAY_RECEIPT_INVALID' }
+          if ($gate.result -ne 'ok' -or $gate.command_exit_code -ne 0 -or
+              $gate.state_changed -ne $false -or $gate.session_id -ne $env:SESSION_ID) {
+            throw 'PUBLIC_DEV_INVENTORY_GATEWAY_NOT_VERIFIED'
+          }
+          try { $inventory = $gate.stdout | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_INVENTORY_INVALID' }
+          if ($inventory.status -ne 'diagnostic_collected' -or
+              $inventory.environment -ne 'dev' -or
+              $inventory.expected_sha -ne '${{ github.sha }}' -or
+              $inventory.runtime_mutated -ne $false -or
+              $inventory.production_touched -ne $false -or
+              $inventory.runtime_sha_verified -ne $false -or
+              $inventory.runtime_readiness_verified -ne $false) {
+            throw 'PUBLIC_DEV_INVENTORY_CONTRACT_INVALID'
+          }
+          # Never upload raw Docker metadata, stdout/stderr, paths or credentials.
+          $receipt = [ordered]@{
+            status = 'preflight_only'
+            reason_code = 'cutover_backup_rollback_risk3_not_attested'
+            host = 'DESKTOP-PDQK954'
+            environment = 'dev'
+            source_sha = '${{ github.sha }}'
+            correlation_id = $env:CORRELATION_ID
+            session_validated = $true
+            command_gateway_verified = $true
+            inventory_collected = $true
+            runtime_sha_verified = $false
+            database_result = 'unverified'
+            backup_verified = $false
+            rollback_rehearsal_verified = $false
+            deployment_performed = $false
+            runtime_mutated = $false
+            production_touched = $false
+          }
+          $output = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
+          [System.IO.File]::WriteAllText(
+            $output, (($receipt | ConvertTo-Json -Depth 4) + [Environment]::NewLine),
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+      - name: Quarantine legacy public-static without governed backup and rollback
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        run: |
+          # Fail AFTER read-only inventory and BEFORE Azure OIDC, Compose or locator.
+          throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'
 
       - name: Validate public static reconciler syntax
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'

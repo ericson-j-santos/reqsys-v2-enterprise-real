@@ -16,7 +16,7 @@
       "tests/test_pc24x7_dev_runtime_supervisor.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "DEV somente; fast-forward; api/frontend/nginx; build_sha same-SHA; frontend estático; /@vite/client 404; health/readiness/build-info 200; smoke público independente; sem produção ou segredo. Rota public-static legada fica explicitamente bloqueada antes do OIDC/Compose/locator e também no executável sem backup PostgreSQL e rollback governado atestados; teste negativo obrigatorio."
+    "evidence_contract": "DEV somente; fast-forward; api/frontend/nginx; build_sha same-SHA; frontend estático; /@vite/client 404; health/readiness/build-info 200; smoke público independente; sem produção ou segredo. Rota public-static legada fica explicitamente bloqueada antes do OIDC/Compose/locator e também no executável sem backup PostgreSQL e rollback governado atestados; teste negativo obrigatorio. Inventário público DEV governado somente leitura antes do bloqueio de cutover; não comprova backup/rollback nem autoriza deploy."
   },
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-public-dev-static-runtime.requirements.md",
