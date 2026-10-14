@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -62,7 +63,7 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
             raise GovBIConfigurationError('GOVBI_ALLOWED_HOSTS deve declarar ao menos uma origem.')
 
         default_port = 443 if parsed.scheme == 'https' else 80
-        effective_port = port or default_port
+        effective_port = default_port if port is None else port
         authority_host = f'[{hostname}]' if ':' in hostname else hostname
         approved_origins = {f'{authority_host}:{effective_port}', f'{parsed.scheme}://{authority_host}:{effective_port}'}
         legacy_default_host = port in {None, default_port} and hostname in allowlist
@@ -71,6 +72,19 @@ def validate_govbi_base_url(value: str | None, *, allowed_hosts: str | None = No
 
     return candidate
 
+
+
+def validate_govbi_timeout(value: object, *, default: float = 15.0) -> float:
+    """Exige timeout numérico, finito e estritamente positivo."""
+
+    candidate = default if value is None or value == '' else value
+    try:
+        timeout = float(candidate)
+    except (TypeError, ValueError) as exc:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.') from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.')
+    return timeout
 
 def sanitize_govbi_base_url(value: str | None, *, allowed_hosts: str | None = None) -> str | None:
     """Retorna somente destino já validado; entradas inválidas nunca são refletidas."""
