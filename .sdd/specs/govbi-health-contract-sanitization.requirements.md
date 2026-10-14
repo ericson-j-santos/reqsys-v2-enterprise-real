@@ -10,12 +10,12 @@ O snapshot operacional consultava `/health` e classificava qualquer HTTP abaixo 
 2. Estado verde exige simultaneamente HTTP 200, objeto JSON e `status == "UP"`.
 3. HTTP 401, 404, 5xx, timeout, JSON inválido e payload fora do contrato não podem resultar em verde.
 4. `GOVBI_BASE_URL` rejeita userinfo, path, query e fragmento; nenhum erro ou resposta reflete o valor rejeitado.
-5. Todo acesso HTTP GovBI exige host exato presente em `GOVBI_ALLOWED_HOSTS`; allowlist ausente ou divergente falha antes de I/O. A mesma pré-condição bloqueia `/perguntas` até preparação operacional explícita.
+5. Todo acesso HTTP GovBI exige origem aprovada em `GOVBI_ALLOWED_HOSTS`; portas não padrão, inclusive `8080` do contrato Spring/Compose, só são aceitas como `host:porta` (ou origem normalizada) explicitamente declarada. Allowlist ausente ou divergente falha antes de I/O e a mesma pré-condição bloqueia `/perguntas`.
 6. `/api/govbi/health` relata configuração e contrato local sem alegar saúde externa não verificada.
 7. `/api/govbi/funcionamento` identifica seu escopo local e exibe, no máximo, origem sanitizada sem credenciais/path/query.
-8. Clientes HTTP ignoram proxies/credenciais do ambiente (`trust_env=False`), não seguem redirects e o probe health limita corpo e tempo total observado, fechando o stream em falha.
-9. Testes automatizados cobrem sucesso, 401, 404, 5xx, timeout/inatividade, tempo total, corpo excessivo, resposta inválida, URL/porta malformada, URL sensível, proxy ambiente e host fora da allowlist.
-10. Frontend aceita `configurado` somente com configuração e contrato local válidos e saúde externa `nao_verificada`; fallback/degradação nunca é prova funcional.
+8. Clientes HTTP ignoram proxies/credenciais do ambiente (`trust_env=False`), não seguem redirects e o probe health usa cancelamento assíncrono sobre DNS/conexão/headers/body, timeout finito positivo, fechamento do stream e teto de bytes brutos antes de cópia/descompressão. Solicita `Accept-Encoding: identity` e rejeita `Content-Encoding` diferente de identidade antes da leitura.
+9. Testes automatizados cobrem sucesso, 401, 404, 5xx, timeout/inatividade, transporte gotejante cancelado, timeout NaN/infinito/não positivo, corpo bruto excessivo, conteúdo comprimido rejeitado, resposta inválida, URL/porta malformada, URL sensível, proxy ambiente e origem fora da allowlist.
+10. Frontend aceita `configurado` somente como configuração e contrato local válidos, mantendo saúde externa `nao_verificada`; resposta `MODO_DEGRADADO` nunca produz percentual 100 nem `completo=true` no consolidado.
 11. Mocks unitários não são apresentados como E2E ou prova do runtime real.
 
 ## Limites
@@ -23,3 +23,7 @@ O snapshot operacional consultava `/health` e classificava qualquer HTTP abaixo 
 Sem chamada a LLM, banco ou runtime GovBI real; sem POST de diagnóstico, redirects, deploy, reinício, credencial, mudança no repositório `govbi-ia` ou merge.
 
 A allowlist reduz o destino configurável, mas não é isolamento SSRF completo: a confiança continua dependendo da configuração do hostname/porta, resolução DNS e controle do runtime aprovado. Destinos privados PC24x7 continuam possíveis quando explicitamente aprovados na allowlist; nenhuma configuração é ativada por este incremento.
+
+## Pré-validação e migração operacional
+
+Antes de ativar a mudança, inventariar a origem GovBI efetiva. Para o contrato Spring/Compose atual, declarar explicitamente `govbi-host:8080` (ou `http://govbi-host:8080`) em `GOVBI_ALLOWED_HOSTS`; uma entrada legada somente com hostname continua válida apenas para a porta padrão do protocolo. Validar DNS, rota e porta no ambiente aprovado antes de alterar configuração real. Esta PR não modifica variáveis nem executa migração.
