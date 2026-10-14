@@ -190,6 +190,7 @@ def _estado_govbi() -> tuple[str, dict[str, Any]]:
         detalhes['motivo'] = 'probe_indisponivel'
         return 'vermelho', detalhes
 
+
 def _estado_ci() -> tuple[str, dict[str, Any]]:
     token = os.getenv('GITHUB_TOKEN') or os.getenv('REQSYS_GITHUB_TOKEN')
     repo = os.getenv('REQSYS_GITHUB_REPO') or os.getenv('GITHUB_REPOSITORY')
