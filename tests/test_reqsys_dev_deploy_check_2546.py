@@ -11,6 +11,7 @@ from scripts.deploy_check_receipt import PUBLIC_KEYS, ReceiptContext, build_rece
 ROOT = Path(__file__).resolve().parents[1]
 GW = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
 WF = ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml"
+CI = ROOT / ".github/workflows/ci.yml"
 CHECK = ROOT / "scripts/dev_runtime_recovery.py"
 PARSER = ROOT / "scripts/deploy_check_receipt.py"
 COMMAND = "/reqsys run pc24x7-dev-deploy-check"
@@ -48,7 +49,7 @@ def test_physical_job_exercises_existing_dev_readonly_command():
         "--require-runner-version-preflight",
         "--expected-head",
         'Join-Path $env:TARGET_PATH "scripts\\dev_runtime_recovery.py"',
-        '"python", $script, "deploy-check"',
+        '"--", "$env:REQSYS_PYTHON", $script, "deploy-check"',
         '"--expected-sha", $env:ANCHOR_SHA',
         "scripts\\deploy_check_receipt.py",
         TASK_ID,
@@ -85,8 +86,21 @@ def test_workflow_uses_real_sanitizing_parser_and_fails_closed():
         assert item in block
     assert '[System.Text.UTF8Encoding]::new($false)' in block
     assert '$g.stdout | ConvertFrom-Json' not in block
+    assert '"--", "python", $script, "deploy-check"' not in block
     assert '1> $stdoutPath 2> $stderrPath' not in block
 
+
+
+
+def test_hosted_windows_ci_reproduces_pinned_embedded_python_contract():
+    raw = CI.read_text(encoding="utf-8")
+    assert "Deploy-check Wrapper (Windows PowerShell 5.1)" in raw
+    assert "python-3.12.10-embed-amd64.zip" in raw
+    assert "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in raw
+    assert "python312._pth" in raw
+    assert "tests\\test_deploy_check_wrapper_windows.ps1" in raw
+    assert "-EmbeddedPythonPath" in raw
+    assert "f6ccb143a581e28650e9b640226f9ef671d469f2" in raw
 
 def test_existing_script_still_checks_runtime_and_sqlite():
     script = CHECK.read_text(encoding="utf-8")

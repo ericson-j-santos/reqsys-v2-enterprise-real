@@ -1,5 +1,10 @@
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)][string]$PythonPath)
+param(
+    [Parameter(Mandatory = $true)][string]$PythonPath,
+    [Parameter(Mandatory = $true)][string]$EmbeddedPythonPath,
+    [Parameter(Mandatory = $true)][string]$GatewayPath,
+    [Parameter(Mandatory = $true)][string]$GatewayPolicyPath
+)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -46,4 +51,61 @@ foreach ($case in $cases) {
     finally {
         Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
+}
+
+
+$embeddedFixture = Join-Path $root "tests\fixtures\verify_deploy_check_embedded_python.py"
+$recovery = Join-Path $root "scripts\dev_runtime_recovery.py"
+$missingRoot = Join-Path $env:RUNNER_TEMP "reqsys-embedded-probe-missing"
+New-Item -ItemType Directory -Force -Path $missingRoot | Out-Null
+$missingRecovery = Join-Path $missingRoot "dev_runtime_recovery.py"
+Copy-Item -LiteralPath $recovery -Destination $missingRecovery -Force
+
+function Invoke-EmbeddedContract {
+    param(
+        [string]$Mode,
+        [string]$RecoveryScript,
+        [string]$ExpectedCategory
+    )
+    $stdoutPath = Join-Path $env:RUNNER_TEMP "embedded-$Mode.stdout"
+    $stderrPath = Join-Path $env:RUNNER_TEMP "embedded-$Mode.stderr"
+    try {
+        $command = @(
+            "--stdout-path", $stdoutPath,
+            "--stderr-path", $stderrPath,
+            "--", $EmbeddedPythonPath, $embeddedFixture,
+            "--mode", $Mode,
+            "--recovery-script", $RecoveryScript
+        )
+        if ($Mode -eq "gateway-validation") {
+            $command += @(
+                "--gateway-script", $GatewayPath,
+                "--policy", $GatewayPolicyPath,
+                "--interpreter", $EmbeddedPythonPath
+            )
+        }
+        & $PythonPath $capture @command
+        if ($LASTEXITCODE -ne 0) { throw "embedded contract failed: $Mode" }
+        if (([System.IO.File]::ReadAllBytes($stderrPath)).Length -ne 0) {
+            throw "embedded contract emitted stderr: $Mode"
+        }
+        $lines = @([System.IO.File]::ReadAllLines($stdoutPath))
+        if ($lines.Count -ne 1) { throw "embedded contract output count invalid: $Mode" }
+        $result = $lines[0] | ConvertFrom-Json
+        if ($result.ok -ne $true -or $result.category -ne $ExpectedCategory) {
+            throw "embedded contract result invalid: $Mode"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+try {
+    Invoke-EmbeddedContract "probe-success" $recovery "embedded_probe_resolved"
+    Invoke-EmbeddedContract "probe-missing" $missingRecovery "embedded_probe_missing_fail_closed"
+    Invoke-EmbeddedContract "gateway-validation" $recovery "gateway_accepts_pinned_python"
+}
+finally {
+    Remove-Item -LiteralPath $missingRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
