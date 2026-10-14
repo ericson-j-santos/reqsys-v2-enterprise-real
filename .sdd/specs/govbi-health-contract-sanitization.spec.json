@@ -20,14 +20,16 @@
     "tests": [
       "backend/tests/test_monitoramento_snapshot_critical_paths.py",
       "backend/tests/test_govbi_api.py",
-      "backend/tests/test_govbi_api_critical_paths.py"
+      "backend/tests/test_govbi_api_critical_paths.py",
+      "frontend/src/utils/govbiFuncionamento.test.js"
     ]
   },
   "sdd_gate": {
     "tests": [
       "backend/tests/test_monitoramento_snapshot_critical_paths.py",
       "backend/tests/test_govbi_api.py",
-      "backend/tests/test_govbi_api_critical_paths.py"
+      "backend/tests/test_govbi_api_critical_paths.py",
+      "frontend/src/utils/govbiFuncionamento.test.js"
     ],
     "evidence_contract": "Vincular ao SHA atual; exigir 200+status UP para verde; negativos 401/404/5xx/timeout/payload inválido; URL sensível e host fora da allowlist sem I/O nem reflexão. Evidência é unitária/CI, não E2E externo."
   },
