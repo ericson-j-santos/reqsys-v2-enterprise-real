@@ -57,3 +57,13 @@ GitHub e sem alterar serviço, fila, tokens ou variáveis do runtime.
    ausência de snapshot quando a pasta privada não existe e replay sem segundo
    arquivo de backup cifrado para a mesma correlação. Arquivo temporário
    plaintext nunca pode ser publicado ou exposto em logs/artifacts.
+
+## Incremento DEV: restore verificado em Docker volume isolado
+
+1. Reutilizar `backup-restore` com o modo adicional `backup-volume-restore`, acionado apenas pelo comando literal `/reqsys run pc24x7-worker-pool-backup-volume-restore-dev` da issue #1705. O modo antigo não deve executar Docker-volume restore automaticamente.
+2. Depois de criar e reabrir a cópia DPAPI e validar o restore em arquivo temporário, transferir o SQLite **somente por stdin local** para um contêiner descartável, sem rede, privilégio, shell, mounts do legado ou token, com volume novo identificado pela correlação e imagem SHA-256 real do coordenador já verificado.
+3. Reabrir o SQLite a partir do volume em contêiner separado com `mode=ro`, comparar SHA-256, `integrity_check`, `foreign_key_check` e identidades das tasks #2546/#2547; repetir a importação deve falhar em `O_EXCL` sem modificar a cópia.
+4. O volume descartável deve ser removido apenas quando `Name` e label de propriedade corresponderem à correlação. Falha de limpeza bloqueia resultado; não usar `docker prune`, Compose, volume vivo, `GET /v1/snapshot` ou fallback remoto/GUI.
+5. Nenhum byte plaintext do banco, token, caminho privado ou dado de tarefa deve ir para logs, GitHub ou artefatos. Apenas recibo sanitizado com `separate_volume_restore_verified`, `volume_cleanup_verified`, `volume_replay_negative_verified` e flags negativas de cutover.
+6. Validar sintaxe, testes positivos/negativos/replay/colisão/owner drift, SDD, Pre-PR e E2E físico no SHA de merge antes de declarar o incremento concluído.
+7. **Não** considerar a imagem legada de leitura como execução da API 1.4 com dados reais; `real_backup_imported_into_worker14=false`, `rollback_rehearsal_passed=false`, `cutover_ready=false` e nenhum Builder/Validator registrado permanecem bloqueios.
