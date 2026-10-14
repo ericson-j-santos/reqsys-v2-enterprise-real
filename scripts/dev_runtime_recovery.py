@@ -14,6 +14,7 @@ import subprocess
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path, PurePath
 from typing import Protocol
 
@@ -195,13 +196,32 @@ def inspect_container(runner, cid, service, root):
     return item, labels
 
 
+def _load_identity_probe():
+    """Load only the attested sibling when running the standalone CLI."""
+    if __package__ == "scripts":
+        from scripts import probe_pc24x7_dev_runtime_identity as probe
+    else:
+        source = Path(__file__).with_name("probe_pc24x7_dev_runtime_identity.py")
+        if source.is_symlink() or not source.is_file():
+            raise RecoveryError("live_probe_source_unavailable")
+        spec = spec_from_file_location("_reqsys_fixed_pc24x7_probe", source)
+        if spec is None or spec.loader is None:
+            raise RecoveryError("live_probe_loader_unavailable")
+        probe = module_from_spec(spec)
+        spec.loader.exec_module(probe)
+    probe_error = getattr(probe, "ProbeError", None)
+    run = getattr(probe, "run", None)
+    if (
+        not isinstance(probe_error, type)
+        or not issubclass(probe_error, Exception)
+        or not callable(run)
+    ):
+        raise RecoveryError("live_probe_contract_invalid")
+    return probe_error, run
+
+
 def observe_identity():
-    try:
-        from scripts.probe_pc24x7_dev_runtime_identity import ProbeError, run
-    except ModuleNotFoundError as exc:
-        if exc.name not in {"scripts", "scripts.probe_pc24x7_dev_runtime_identity"}:
-            raise
-        from probe_pc24x7_dev_runtime_identity import ProbeError, run
+    ProbeError, run = _load_identity_probe()
     try:
         result = run("0" * 40)
     except ProbeError as exc:

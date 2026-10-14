@@ -38,3 +38,7 @@ O Gateway executou a operação somente leitura no SHA `faf9e995337bc2c28ee5b0b8
 9. O parser público deve reconhecer as seis novas categorias exatas, mantendo `FAILED` para erro comprovado e `UNVERIFIED` quando não houver envelope consistente.
 10. Testar cenários positivos, negativos, timeout, idempotência e regressão, e cumprir Pre-PR/CI/GMQ no SHA final. Um novo E2E físico só pode ser acionado após uma alteração material integrada.
 11. Nenhum restart, deploy, alteração do SQLite ativo, segredo, claim, requeue, HML/STG ou PROD faz parte desta correção.
+
+## Continuidade do bloqueio físico — 14/10/2026
+
+No run físico #38599160248, a CLI retornou `runtime_dependency_missing` em DEV. O módulo versionado `scripts/probe_pc24x7_dev_runtime_identity.py` existe no SHA integrado, mas o nome exato que falhou e o `sys.path` do interpretador físico não foram atestados. A correção deve eliminar a dependência de importação por nome no modo CLI, carregando exclusivamente o arquivo irmão do worktree validado, sem ampliar `PYTHONPATH` nem a allowlist do Gateway. O caminho importado como pacote durante testes continua compatível. Fonte ausente, loader inválido e contrato incompleto falham com códigos tipados e sem revelar caminhos. Validar positivo, negativo, sombreamento de módulo, repetição, regressão, CI e readback após merge. Novo teste físico somente após mudança material comprovada; sem deploy/restart/cutover ou consumo das tasks #2546/#2547.
