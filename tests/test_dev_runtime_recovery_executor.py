@@ -741,6 +741,8 @@ def test_deploy_check_cli_positive_emits_existing_success_contract(
     result = capsys.readouterr()
     assert result.err == ""
     assert json.loads(result.out)["runtime_sha"] == OLD
+
+
 def test_deploy_check_direct_probe_loads_fixed_sibling_not_import_shadow(monkeypatch):
     shadow = ModuleType("probe_pc24x7_dev_runtime_identity")
     shadow.ProbeError = RuntimeError

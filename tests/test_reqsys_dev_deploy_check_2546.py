@@ -476,6 +476,7 @@ def test_receipt_parser_accepts_cli_runtime_error_categories(reason):
     assert receipt["runtime_sha"] is None
     assert receipt["database_result"] == "unverified"
 
+
 @pytest.mark.parametrize("category", [
     "live_probe_source_unavailable",
     "live_probe_loader_unavailable",
