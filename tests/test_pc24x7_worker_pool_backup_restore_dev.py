@@ -325,6 +325,7 @@ def test_volume_restore_safely_seeds_checks_replay_and_removes_owned_volume(tmp_
         if argv[:2] == ["volume", "ls"]:
             return 0, (name if present else "").encode()
         if argv[0] == "run":
+            assert ("--interactive" in argv) is (data is not None)
             assert "--network" in argv and "none" in argv
             assert "--cap-drop" in argv and "ALL" in argv
             assert "--read-only" in argv and "reqsys" in argv
@@ -397,6 +398,7 @@ def test_volume_workflow_has_exact_dev_only_dispatch_and_required_negative_flags
     assert "backup-volume-restore" in workflow
     assert "VOLUME_RESTORE_ENABLED" in block
     assert "--verify-volume" in block
+    assert "VOLUME_GATEWAY_TIMEOUT" in block
     assert "separate_volume_restore_verified" in block
     assert "volume_cleanup_verified" in block
     assert "volume_replay_negative_verified" in block

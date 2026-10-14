@@ -291,7 +291,9 @@ def verify_volume_restore(raw: bytes, image: str, correlation_id: str,
         def helper(code: str, *, readonly: bool, payload: bytes | None = None,
                    can_fail: bool = False) -> tuple[int, bytes]:
             mount = f"type=volume,src={volume},dst=/data" + (",readonly" if readonly else "")
-            return docker([*base, "--mount", mount, image, "python", "-B", "-c", code],
+            # Docker needs interactive stdin for binary SQLite transfer; no stdin for readback.
+            stdin_flags = ["--interactive"] if payload is not None else []
+            return docker([*base, *stdin_flags, "--mount", mount, image, "python", "-B", "-c", code],
                           data=payload, can_fail=can_fail)
 
         _, seeded = helper(SQL_VOLUME_SEED, readonly=False, payload=raw)

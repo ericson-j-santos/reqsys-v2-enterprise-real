@@ -926,6 +926,7 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\pc24x7_worker_pool_backup_restore_dev.py"
+          $VOLUME_GATEWAY_TIMEOUT = if ($env:VOLUME_RESTORE_ENABLED -eq "true") { "180" } else { "60" }
           $args = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
@@ -933,7 +934,7 @@ jobs:
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
             "--risk", "2",
-            "--timeout", "60",
+            "--timeout", $VOLUME_GATEWAY_TIMEOUT,
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $script,
