@@ -17,3 +17,12 @@ Issue ReqSys #2546 / incidente #1532. Tarefa persistida `cwp-cdb85c31e3cc4e972f3
 Pre-PR no HEAD exato, testes positivos/negativos/idempotência e CI de PR em HEAD atual; merge somente governado e revalidado. Após integração, emitir um comando literal único e conferir artefato físico, digest, CRC e leitura independente. Não marcar #2546 `CONCLUÍDO` sem execução real da tarefa por Builder e Validator.
 
 O `NativeOneShotExecutor` integrado ao `engineering-worker-pool/main@b68e60e62ab8676a390f4ba46b256c85c4a7645b` fornece a coordenação, mas não instala handlers de produto. A instalação do Worker Pool 1.4 ativo, o adaptador efetivo do Builder/Validator e o cutover DEV ainda têm gates separados. Esta PR entrega o primeiro comando de diagnóstico de produto e NÃO consome artificialmente a tarefa da fila.
+
+## Critérios de aceite
+
+1. O comentário aceito deve corresponder exatamente ao comando fixo do owner na issue #1705; mensagem indevida e replay dentro da janela devem ser rejeitados.
+2. O checkout, o Session Launcher e o Command Gateway devem confirmar host DEV, sessão íntegra e `github.sha` corrente antes de executar somente `deploy-check`.
+3. O resultado positivo requer `runtime_sha` exato, ambiente DEV, contêineres válidos e `SELECT 1` aprovado; ausência ou divergência gera resultado bloqueado, nunca verde.
+4. A execução deve produzir recibo sanitizado e evidência independente, incluindo erros categorizados quando o Gateway chegou a executar.
+5. Nunca efetuar restart, deploy, claim/requeue, alteração de banco vivo, exposição de segredo ou ação em HML/STG/PROD.
+6. Antes da PR: `READY_FOR_PR=passed` no HEAD final. Após o merge: teste físico no SHA integrado e readback independente; a task só encerra após Builder/Validator reais.
