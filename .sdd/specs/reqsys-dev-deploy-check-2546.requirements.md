@@ -26,3 +26,15 @@ O `NativeOneShotExecutor` integrado ao `engineering-worker-pool/main@b68e60e62ab
 4. A execução deve produzir recibo sanitizado e evidência independente, incluindo erros categorizados quando o Gateway chegou a executar.
 5. Nunca efetuar restart, deploy, claim/requeue, alteração de banco vivo, exposição de segredo ou ação em HML/STG/PROD.
 6. Antes da PR: `READY_FOR_PR=passed` no HEAD final. Após o merge: teste físico no SHA integrado e readback independente; a task só encerra após Builder/Validator reais.
+
+## Diagnóstico posterior ao ensaio físico #38577878951
+
+O Gateway executou a operação somente leitura no SHA `faf9e995337bc2c28ee5b0b8bb30ce8545e5d3c1`, mas o subprocesso retornou código 1 sem emitir JSON. O recibo sanitizado `11901346670` classificou o resultado como `inner_result_missing`; a causa física permanece indeterminada.
+
+### Critérios adicionais — saída JSON em erros esperados
+
+7. Apenas no modo `deploy-check`, exceções conhecidas de arquivo, permissão, importação, OSError, timeout e payload malformado devem ser convertidas em códigos de categoria fixa, sem mensagens, paths ou traceback.
+8. Preservar os modos de captura, preparação, validação e rollback e não suprimir seus erros por este incremento.
+9. O parser público deve reconhecer as seis novas categorias exatas, mantendo `FAILED` para erro comprovado e `UNVERIFIED` quando não houver envelope consistente.
+10. Testar cenários positivos, negativos, timeout, idempotência e regressão, e cumprir Pre-PR/CI/GMQ no SHA final. Um novo E2E físico só pode ser acionado após uma alteração material integrada.
+11. Nenhum restart, deploy, alteração do SQLite ativo, segredo, claim, requeue, HML/STG ou PROD faz parte desta correção.

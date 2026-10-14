@@ -613,6 +613,20 @@ def save(path, value):
     )
 
 
+def _deploy_check_cli_error_category(exc: Exception) -> str:
+    """Return an allowlisted diagnostic code, never a raw exception message."""
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "runtime_subprocess_timeout"
+    if isinstance(exc, PermissionError):
+        return "runtime_permission_denied"
+    if isinstance(exc, FileNotFoundError):
+        return "runtime_file_missing"
+    if isinstance(exc, ImportError):
+        return "runtime_dependency_missing"
+    if isinstance(exc, OSError):
+        return "runtime_os_error"
+    return "runtime_payload_invalid"
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -626,7 +640,13 @@ def main():
     runner = SubprocessRunner()
     try:
         if a.mode == "deploy-check":
-            out = deploy_check(a.expected_sha, runner)
+            try:
+                out = deploy_check(a.expected_sha, runner)
+            except (
+                OSError, ImportError, KeyError, TypeError, ValueError,
+                AttributeError, IndexError, subprocess.TimeoutExpired,
+            ) as exc:
+                raise RecoveryError(_deploy_check_cli_error_category(exc)) from None
         elif a.manifest is None:
             raise RecoveryError("manifest_required")
         elif a.mode == "capture":

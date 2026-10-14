@@ -37,6 +37,12 @@ INNER_ERROR_CATEGORIES: Final = frozenset(
         "live_probe_unavailable",
         "live_readiness_invalid",
         "runtime_root_invalid",
+        "runtime_dependency_missing",
+        "runtime_file_missing",
+        "runtime_os_error",
+        "runtime_payload_invalid",
+        "runtime_permission_denied",
+        "runtime_subprocess_timeout",
         "working_dir_mismatch",
     }
 )
