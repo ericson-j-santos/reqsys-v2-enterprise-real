@@ -21,7 +21,7 @@ router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
 
 DEFAULT_GOVBI_TIMEOUT_SECONDS = 15.0
-CORRELATION_ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}
+CORRELATION_ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')
 
 class GovBIPerguntaRequest(BaseModel):
     pergunta: str = Field(..., min_length=3, max_length=2000)
