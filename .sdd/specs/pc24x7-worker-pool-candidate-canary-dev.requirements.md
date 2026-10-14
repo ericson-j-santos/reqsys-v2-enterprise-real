@@ -12,7 +12,7 @@ implementação dedicada 1.4.0, sem trocar ou reiniciar a API legada 1.2.
   `candidate-canary`; não criar workflow paralelo nem novo serviço permanente.
 - Usar GitHub Actions no host exato DESKTOP-PDQK954; checkout ReqSys no
   `github.sha`, checkout do Worker Pool dedicado no SHA fixo
-  `9074b170d47a7d63a4e0ef6cee2d37282bbbace8`, regras
+  `e9f2627938a9e4d741d1d50796a72f69b35f547f`, regras
   `f6ccb143a581e28650e9b640226f9ef671d469f2`.
 - Exigir Session Launcher com preflight do runner e `SESSION_LAUNCH_OK`,
   worktree reservado e Command Gateway com `expected_head` atual.
@@ -31,6 +31,9 @@ implementação dedicada 1.4.0, sem trocar ou reiniciar a API legada 1.2.
 - Confirmar que o legado mantém identidade/estado; remover todos os
   recursos do canário. Falhas de limpeza, host, SHA ou contrato bloqueiam
   o resultado sem retry cego.
+- A revisão física de SHA deve manter o checkout do workflow, o preflight
+  do script e o spec SDD no mesmo Worker Pool SHA imutável. O teste de
+  contrato deve rejeitar divergência de SHA antes de consumir o runner.
 - Artifact GitHub conterá **somente JSON sanitizado**, com
   `cutover_ready=false`, `real_backup_imported_into_candidate=false`,
   `rollback_rehearsal_passed=false`. Não elevar essas flags por CI verde.

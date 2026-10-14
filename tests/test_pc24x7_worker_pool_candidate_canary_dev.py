@@ -219,3 +219,13 @@ def test_isolation_distinguishes_data_mount_token_flags_and_source(tmp_path):
         with pytest.raises(module.CanaryBlocked, match="^" + reason + "$"):
             module.candidate_identity(receipt, image=image, name=name,
                                       volume=name, token_file=token)
+
+def test_candidate_sha_pin_is_consistent_with_physical_precondition():
+    """Avoid a costly physical canary with divergent worker source identities."""
+    import re
+
+    workflow = (ROOT / ".github/workflows/codex-worker-pool-smoke-dev.yml").read_text(encoding="utf-8")
+    candidate_job = workflow.split("\n  candidate-canary:\n", 1)[1]
+    pinned = re.findall(r"(?m)^      WORKER_POOL_SHA: ([0-9a-f]{40})$", candidate_job)
+    assert pinned == [module.WORKER_SHA]
+    assert module.SHA40.fullmatch(module.WORKER_SHA) is not None
