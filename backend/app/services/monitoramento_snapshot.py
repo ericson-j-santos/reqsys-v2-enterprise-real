@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import math
 import os
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -30,7 +31,13 @@ def _govbi_base_url() -> str:
 
 
 def _govbi_timeout() -> float:
-    return float(getattr(settings, 'govbi_timeout_seconds', 15.0) or 15.0)
+    try:
+        timeout = float(getattr(settings, 'govbi_timeout_seconds', 15.0))
+    except (TypeError, ValueError) as exc:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.') from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise GovBIConfigurationError('GOVBI_TIMEOUT_SECONDS deve ser finito e positivo.')
+    return timeout
 
 
 def classificar_estado_geral(itens: list[ItemMonitorado]) -> str:
@@ -94,9 +101,74 @@ def _estado_conectores() -> tuple[str, dict[str, Any]]:
     return 'desconhecido', resumo
 
 
+async def _probe_govbi(
+    base_url: str,
+    detalhes: dict[str, Any],
+    total_timeout: float,
+) -> tuple[str, dict[str, Any]]:
+    timeout = httpx.Timeout(
+        total_timeout,
+        connect=total_timeout,
+        read=min(total_timeout, 0.5),
+        write=total_timeout,
+        pool=total_timeout,
+    )
+    async with asyncio.timeout(total_timeout):
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
+            async with client.stream(
+                'GET',
+                f'{base_url}/actuator/health',
+                headers={'Accept-Encoding': 'identity'},
+            ) as response:
+                detalhes['http_status'] = response.status_code
+                if response.status_code != 200:
+                    detalhes['motivo'] = 'status_http_inesperado'
+                    return 'vermelho', detalhes
+
+                content_encoding = response.headers.get('content-encoding', 'identity').strip().lower()
+                if content_encoding not in {'', 'identity'}:
+                    detalhes['motivo'] = 'content_encoding_nao_permitido'
+                    return 'vermelho', detalhes
+
+                content_length = response.headers.get('content-length')
+                if content_length is not None:
+                    try:
+                        if int(content_length) > GOVBI_HEALTH_MAX_BYTES:
+                            detalhes['motivo'] = 'resposta_excede_limite'
+                            return 'vermelho', detalhes
+                    except ValueError:
+                        detalhes['motivo'] = 'content_length_invalido'
+                        return 'vermelho', detalhes
+
+                body = bytearray()
+                async for chunk in response.aiter_raw():
+                    if len(body) + len(chunk) > GOVBI_HEALTH_MAX_BYTES:
+                        detalhes['motivo'] = 'resposta_excede_limite'
+                        return 'vermelho', detalhes
+                    body.extend(chunk)
+
+    try:
+        payload = json.loads(bytes(body))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        detalhes['motivo'] = 'resposta_json_invalida'
+        return 'vermelho', detalhes
+
+    if not isinstance(payload, dict) or payload.get('status') != 'UP':
+        detalhes['motivo'] = 'contrato_health_invalido'
+        return 'vermelho', detalhes
+
+    detalhes['saude_externa'] = 'saudavel'
+    return 'verde', detalhes
+
+
 def _estado_govbi() -> tuple[str, dict[str, Any]]:
     try:
         base_url = _govbi_base_url()
+        total_timeout = min(_govbi_timeout(), GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS)
     except GovBIConfigurationError as exc:
         return 'bloqueado', {
             'fonte': 'configuracao',
@@ -115,66 +187,15 @@ def _estado_govbi() -> tuple[str, dict[str, Any]]:
         'saude_externa': 'indisponivel',
     }
     try:
-        total_timeout = min(_govbi_timeout(), GOVBI_HEALTH_TOTAL_TIMEOUT_SECONDS)
-        timeout = httpx.Timeout(
-            total_timeout,
-            connect=total_timeout,
-            read=min(total_timeout, 0.5),
-            write=total_timeout,
-            pool=total_timeout,
-        )
-        deadline = time.monotonic() + total_timeout
-        with httpx.Client(
-            timeout=timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as client:
-            with client.stream('GET', f'{base_url}/actuator/health') as response:
-                detalhes['http_status'] = response.status_code
-                if response.status_code != 200:
-                    detalhes['motivo'] = 'status_http_inesperado'
-                    return 'vermelho', detalhes
-
-                content_length = response.headers.get('content-length')
-                if content_length is not None:
-                    try:
-                        if int(content_length) > GOVBI_HEALTH_MAX_BYTES:
-                            detalhes['motivo'] = 'resposta_excede_limite'
-                            return 'vermelho', detalhes
-                    except ValueError:
-                        detalhes['motivo'] = 'content_length_invalido'
-                        return 'vermelho', detalhes
-
-                body = bytearray()
-                for chunk in response.iter_bytes():
-                    if time.monotonic() > deadline:
-                        detalhes['motivo'] = 'tempo_total_excedido'
-                        return 'vermelho', detalhes
-                    body.extend(chunk)
-                    if len(body) > GOVBI_HEALTH_MAX_BYTES:
-                        detalhes['motivo'] = 'resposta_excede_limite'
-                        return 'vermelho', detalhes
-
-        if time.monotonic() > deadline:
-            detalhes['motivo'] = 'tempo_total_excedido'
-            return 'vermelho', detalhes
-        try:
-            payload = json.loads(bytes(body))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            detalhes['motivo'] = 'resposta_json_invalida'
-            return 'vermelho', detalhes
-
-        if not isinstance(payload, dict) or payload.get('status') != 'UP':
-            detalhes['motivo'] = 'contrato_health_invalido'
-            return 'vermelho', detalhes
-
-        detalhes['saude_externa'] = 'saudavel'
-        return 'verde', detalhes
+        return asyncio.run(_probe_govbi(base_url, detalhes, total_timeout))
+    except TimeoutError:
+        detalhes['erro'] = 'TimeoutError'
+        detalhes['motivo'] = 'tempo_total_excedido'
+        return 'vermelho', detalhes
     except Exception as exc:  # noqa: BLE001 - sinal operacional sanitizado
         detalhes['erro'] = type(exc).__name__
         detalhes['motivo'] = 'probe_indisponivel'
         return 'vermelho', detalhes
-
 
 def _estado_ci() -> tuple[str, dict[str, Any]]:
     token = os.getenv('GITHUB_TOKEN') or os.getenv('REQSYS_GITHUB_TOKEN')
