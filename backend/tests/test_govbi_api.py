@@ -4,7 +4,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import GovBIConfigurationError, validate_govbi_base_url
+from app.core.config import (\n    GovBIConfigurationError,\n    sanitize_govbi_base_url,\n    validate_govbi_base_url,\n)
 from app.main import app
 
 
@@ -112,7 +112,10 @@ def test_govbi_health_retorna_envelope_operacional():
     payload = response.json()
     assert payload['success'] is True
     assert payload['data']['service'] == 'govbi-proxy'
-    assert payload['data']['status'] == 'ok'
+    assert payload['data']['status'] == 'configurado'
+    assert payload['data']['configuration_status'] == 'valida'
+    assert payload['data']['local_contract_status'] == 'valido'
+    assert payload['data']['external_health_status'] == 'nao_verificada'
 
 
 def test_govbi_funcionamento_retorna_cem_por_cento():
@@ -125,6 +128,9 @@ def test_govbi_funcionamento_retorna_cem_por_cento():
     assert dados['completo'] is True
     assert dados['percentual'] == 100
     assert dados['aprovados'] == dados['total']
+    assert dados['escopo']['configuracao'] == 'validada localmente'
+    assert dados['escopo']['contrato_local'] == 'validado sem chamada externa'
+    assert dados['escopo']['saude_externa'] == 'nao verificada por este endpoint'
     assert len(dados['resultados']) >= 5
 
 
@@ -271,3 +277,39 @@ def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
     assert data['status'] == 'bloqueado'
     assert data['external_base_url_configured'] is False
     assert data['configuration_error'] == 'GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.'
+
+
+@pytest.mark.parametrize(
+    'base_url',
+    [
+        'https://usuario:segredo@govbi.example',
+        'https://govbi.example?token=segredo',
+        'https://govbi.example/#segredo',
+    ],
+)
+def test_validacao_govbi_rejeita_componentes_sensiveis_sem_refletir_valor(base_url):
+    with pytest.raises(GovBIConfigurationError) as exc_info:
+        validate_govbi_base_url(base_url)
+
+    assert 'segredo' not in str(exc_info.value)
+    assert sanitize_govbi_base_url(base_url) is None
+
+
+def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
+    import app.api.govbi as govbi
+
+    sensitive_url = 'https://usuario:segredo@govbi.example?token=oculto'
+    monkeypatch.setattr(govbi.settings, 'govbi_base_url', sensitive_url)
+
+    client = TestClient(app)
+    health = client.get('/api/govbi/health')
+    funcionamento = client.get('/api/govbi/funcionamento')
+
+    assert health.status_code == 200
+    assert funcionamento.status_code == 200
+    assert health.json()['data']['configuration_status'] == 'invalida'
+    assert funcionamento.json()['data']['completo'] is False
+    assert sensitive_url not in health.text
+    assert sensitive_url not in funcionamento.text
+    assert 'segredo' not in health.text
+    assert 'segredo' not in funcionamento.text
