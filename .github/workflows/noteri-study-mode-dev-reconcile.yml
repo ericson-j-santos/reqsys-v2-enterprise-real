@@ -184,7 +184,7 @@ jobs:
               $inventory.runtime_readiness_verified -ne $false) {
             throw 'PUBLIC_DEV_INVENTORY_CONTRACT_INVALID'
           }
-          # Never upload raw Docker metadata, stdout/stderr, paths or secrets.
+          # Never upload raw Docker metadata, stdout/stderr, paths or credentials.
           $receipt = [ordered]@{
             status = 'preflight_only'
             reason_code = 'cutover_backup_rollback_risk3_not_attested'
