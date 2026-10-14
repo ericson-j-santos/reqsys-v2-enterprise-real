@@ -16,6 +16,7 @@ on:
           - version-2547-read
           - inventory-read
           - backup-restore
+          - backup-volume-restore
           - candidate-canary
           - restore-rehearsal
 
@@ -825,7 +826,7 @@ jobs:
           retention-days: 30
 
   backup-restore:
-    if: ${{ inputs.mode == 'backup-restore' }}
+    if: ${{ inputs.mode == 'backup-restore' || inputs.mode == 'backup-volume-restore' }}
     name: Protected Worker Pool SQLite backup and isolated restore on PC24x7 DEV
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 5
@@ -834,6 +835,7 @@ jobs:
       RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
       CORRELATION_ID: pc24x7-worker-pool-backup-restore-dev-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\pc24x7-worker-pool-backup-restore-dev\evidence.json
+      VOLUME_RESTORE_ENABLED: ${{ inputs.mode == 'backup-volume-restore' }}
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -925,6 +927,7 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\pc24x7_worker_pool_backup_restore_dev.py"
+          $VOLUME_GATEWAY_TIMEOUT = if ($env:VOLUME_RESTORE_ENABLED -eq "true") { "180" } else { "60" }
           $args = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
@@ -932,7 +935,7 @@ jobs:
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
             "--risk", "2",
-            "--timeout", "60",
+            "--timeout", $VOLUME_GATEWAY_TIMEOUT,
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $script,
@@ -940,6 +943,7 @@ jobs:
             "--correlation-id", $env:CORRELATION_ID,
             "--confirm", "BACKUP-WORKER-POOL-DEV-ISOLATED"
           )
+          if ($env:VOLUME_RESTORE_ENABLED -eq "true") { $args += "--verify-volume" }
           & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
@@ -974,6 +978,14 @@ jobs:
               $e.claim_performed -ne $false -or $e.secrets_exposed -ne $false -or
               $e.production_touched -ne $false) {
             throw "BACKUP_SECURITY_CONTRACT_FAILED"
+          }
+          if ($env:VOLUME_RESTORE_ENABLED -eq "true" -and
+              ($e.separate_volume_restore_verified -ne $true -or
+               $e.volume_cleanup_verified -ne $true -or
+               $e.volume_replay_negative_verified -ne $true -or
+               $e.real_backup_imported_into_worker14 -ne $false -or
+               $e.rollback_rehearsal_passed -ne $false)) {
+            throw "BACKUP_VOLUME_SECURITY_CONTRACT_FAILED"
           }
 
       - name: Upload sanitized protected backup receipt
