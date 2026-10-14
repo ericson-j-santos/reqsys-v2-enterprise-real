@@ -321,6 +321,7 @@ def test_govbi_endpoints_nao_expoem_url_com_credenciais(monkeypatch):
     assert funcionamento.status_code == 200
     assert health.json()['data']['configuration_status'] == 'invalida'
     assert funcionamento.json()['data']['completo'] is False
+    assert funcionamento.json()['data']['escopo']['configuracao'] == 'invalida'
     assert sensitive_url not in health.text
     assert sensitive_url not in funcionamento.text
     assert 'segredo' not in health.text
