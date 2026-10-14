@@ -49,3 +49,12 @@ No run físico #38599160248, a CLI retornou `runtime_dependency_missing` em DEV.
 12. O subprocesso governado deve receber o caminho absoluto de `REQSYS_PYTHON`, já preparado e validado pelo workflow, em vez de resolver `python` por PATH ou cwd.
 13. O teste hospedado em Windows deve usar o ZIP embeddable 3.12.10 com hash fixado e seu `python312._pth` real para comprovar: carga do probe irmão sem PYTHONPATH, falha fechada quando o arquivo irmão não existe e aceitação do caminho absoluto pela política/Gateway fixados.
 14. Nenhuma allowlist, permissão, deploy, instalação no host físico ou despacho DEV adicional integra esta correção.
+
+## Diagnóstico diferenciado de prontidão — 14/10/2026
+
+O run físico #38608094816, com as correções de importação e Python pinado integradas no SHA `8e6c7858a8509262092efe4b884d732eb5a9c39c`, ainda retornou `deploy_readiness_timeout`. O artifact `11915947726` foi verificado por SHA-256 e CRC, e confirma banco/SHA runtime não verificados. A função `wait_live` absorve erros de identidade/Compose, disponibilidade e SHA diferente antes de emitir esse timeout, impedindo identificar a causa física.
+
+15. Preservar `wait_live` genérico utilizado em rollback; ativar códigos diferenciados **somente** no modo `deploy-check`, sem mudanças físicas.
+16. Classificar somente códigos fixos e sanitizados em `deploy_readiness_sha_mismatch`, `deploy_readiness_probe_unavailable`, `deploy_readiness_unhealthy`, `deploy_readiness_container_unavailable`, `deploy_readiness_scope_invalid`, `deploy_readiness_probe_invalid` ou `deploy_readiness_unknown`. Nunca refletir conteúdo de exceções, URLs, caminhos nem secrets.
+17. Falha de escopo ou contrato local é não recuperável dentro desta execução e deve falhar imediatamente. Falha transitória de probe e SHA divergente preservam tentativa limitada; retorno ao SHA correto permite sucesso.
+18. Regressões devem comprovar cada família de erro, controle negativo, sigilo, recuperação transitória, timeout bounded, não mutação e contrato do recibo. O CI precisa executar esses testes. Após merge e verificação de SHA, apenas uma nova leitura física autorizada; não inferir recuperação pelo CI.
