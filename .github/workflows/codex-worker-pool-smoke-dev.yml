@@ -992,7 +992,7 @@ jobs:
     env:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
-      WORKER_POOL_SHA: 9074b170d47a7d63a4e0ef6cee2d37282bbbace8
+      WORKER_POOL_SHA: e9f2627938a9e4d741d1d50796a72f69b35f547f
       CORRELATION_ID: pc24x7-workerpool-canary-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\pc24x7-worker-pool-candidate-canary-dev\evidence.json
     steps:

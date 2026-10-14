@@ -36,7 +36,7 @@ _spec.loader.exec_module(inventory)
 
 HOST = "DESKTOP-PDQK954"
 RULES_SHA = "f6ccb143a581e28650e9b640226f9ef671d469f2"
-WORKER_SHA = "9074b170d47a7d63a4e0ef6cee2d37282bbbace8"
+WORKER_SHA = "e9f2627938a9e4d741d1d50796a72f69b35f547f"
 CONFIRM = "CANARY-WORKER-POOL-DEV-ISOLATED"
 REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 URL = "http://127.0.0.1:18098"

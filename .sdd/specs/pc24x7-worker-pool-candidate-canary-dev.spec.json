@@ -16,7 +16,7 @@
     "legacy_api": "1.2.0",
     "legacy_port": 8097,
     "candidate_port": 18098,
-    "worker_sha": "9074b170d47a7d63a4e0ef6cee2d37282bbbace8",
+    "worker_sha": "e9f2627938a9e4d741d1d50796a72f69b35f547f",
     "physical_canary_isolated": true,
     "live_sqlite_modified": false,
     "legacy_service_deployed": false,
