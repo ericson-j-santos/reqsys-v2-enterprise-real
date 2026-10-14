@@ -351,7 +351,6 @@ def test_govbi_health_bloqueia_host_fora_da_allowlist_sem_probe(monkeypatch):
         'https://govbi.example:abc',
         'https://govbi.example:99999',
         'https://[::1',
-        'https://govbi.example:8443',
     ],
 )
 def test_validacao_govbi_rejeita_porta_ou_host_malformado(base_url):
@@ -361,13 +360,22 @@ def test_validacao_govbi_rejeita_porta_ou_host_malformado(base_url):
     assert sanitize_govbi_base_url(base_url, allowed_hosts='govbi.example') is None
 
 
-def test_validacao_govbi_aceita_somente_porta_padrao_aprovada():
+def test_validacao_govbi_aceita_porta_explicita_somente_na_origem_aprovada():
+    assert validate_govbi_base_url(
+        'http://govbi.example:8080',
+        allowed_hosts='govbi.example:8080',
+    ) == 'http://govbi.example:8080'
     assert validate_govbi_base_url(
         'https://govbi.example:443',
         allowed_hosts='govbi.example',
     ) == 'https://govbi.example:443'
-    with pytest.raises(GovBIConfigurationError, match='porta padrão'):
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
         validate_govbi_base_url(
-            'https://govbi.example:8443',
+            'http://govbi.example:8080',
             allowed_hosts='govbi.example',
+        )
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
+        validate_govbi_base_url(
+            'http://govbi.example:8081',
+            allowed_hosts='govbi.example:8080',
         )
