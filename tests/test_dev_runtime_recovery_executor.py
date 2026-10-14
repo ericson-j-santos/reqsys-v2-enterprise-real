@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -684,3 +685,58 @@ def test_phase_failures_sanitized(root, phase):
             p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
         )
     assert "password" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        (FileNotFoundError("DETAIL_NOT_PUBLIC"), "runtime_file_missing"),
+        (PermissionError("DETAIL_NOT_PUBLIC"), "runtime_permission_denied"),
+        (ImportError("DETAIL_NOT_PUBLIC"), "runtime_dependency_missing"),
+        (OSError("DETAIL_NOT_PUBLIC"), "runtime_os_error"),
+        (KeyError("DETAIL_NOT_PUBLIC"), "runtime_payload_invalid"),
+        (TypeError("DETAIL_NOT_PUBLIC"), "runtime_payload_invalid"),
+        (ValueError("DETAIL_NOT_PUBLIC"), "runtime_payload_invalid"),
+        (AttributeError("DETAIL_NOT_PUBLIC"), "runtime_payload_invalid"),
+        (IndexError("DETAIL_NOT_PUBLIC"), "runtime_payload_invalid"),
+        (subprocess.TimeoutExpired(["DETAIL_NOT_PUBLIC"], 3),
+         "runtime_subprocess_timeout"),
+    ],
+)
+def test_deploy_check_cli_sanitizes_expected_runtime_errors(
+    failure, reason, monkeypatch, capsys
+):
+    def failed_check(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(recovery, "deploy_check", failed_check)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["dev_runtime_recovery.py", "deploy-check", "--expected-sha", OLD],
+    )
+    assert recovery.main() == 1
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert len(out.out.strip().splitlines()) == 1
+    assert json.loads(out.out) == {"ok": False, "category": reason}
+    assert "DETAIL_NOT_PUBLIC" not in out.out + out.err
+
+
+def test_deploy_check_cli_positive_emits_existing_success_contract(
+    monkeypatch, capsys
+):
+    def succeeded(*_args, **_kwargs):
+        return {
+            "deploy_check_ok": True, "environment": "dev",
+            "project": PROJECT, "runtime_sha": OLD, "database_ok": True,
+        }
+
+    monkeypatch.setattr(recovery, "deploy_check", succeeded)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["dev_runtime_recovery.py", "deploy-check", "--expected-sha", OLD],
+    )
+    assert recovery.main() == 0
+    result = capsys.readouterr()
+    assert result.err == ""
+    assert json.loads(result.out)["runtime_sha"] == OLD

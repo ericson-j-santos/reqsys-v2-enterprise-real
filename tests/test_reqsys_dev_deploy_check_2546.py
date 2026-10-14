@@ -451,3 +451,27 @@ def test_cli_fails_closed_on_invalid_stream_encoding(tmp_path):
     receipt = json.loads(completed.stdout)
     assert completed.returncode == 1
     assert receipt["reason_code"] == "gateway_stream_encoding_invalid"
+
+
+@pytest.mark.parametrize("reason", [
+    "runtime_dependency_missing",
+    "runtime_file_missing",
+    "runtime_os_error",
+    "runtime_payload_invalid",
+    "runtime_permission_denied",
+    "runtime_subprocess_timeout",
+])
+def test_receipt_parser_accepts_cli_runtime_error_categories(reason):
+    receipt, exit_code = build_receipt(
+        _gateway(
+            {"ok": False, "category": reason},
+            result="command_failed", command_exit_code=1,
+        ),
+        "", 1, CTX,
+    )
+    assert exit_code == 1
+    assert receipt["result"] == "REQSYS_DEV_DEPLOY_CHECK_FAILED"
+    assert receipt["reason_code"] == reason
+    assert receipt["result_verified"] is True
+    assert receipt["runtime_sha"] is None
+    assert receipt["database_result"] == "unverified"
