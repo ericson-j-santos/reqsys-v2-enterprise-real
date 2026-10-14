@@ -465,7 +465,7 @@ jobs:
             "--session-id", $env:SESSION_ID,
             "--risk", "2", "--timeout", "150",
             "--expected-head", $env:ANCHOR_SHA,
-            "--", "python", $script, "deploy-check",
+            "--", "$env:REQSYS_PYTHON", $script, "deploy-check",
             "--expected-sha", $env:ANCHOR_SHA
           )
           $streamId = "$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
