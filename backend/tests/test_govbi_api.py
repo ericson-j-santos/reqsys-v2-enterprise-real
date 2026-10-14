@@ -360,6 +360,38 @@ def test_validacao_govbi_rejeita_porta_ou_host_malformado(base_url):
     assert sanitize_govbi_base_url(base_url, allowed_hosts='govbi.example') is None
 
 
+def test_validacao_govbi_nao_normaliza_porta_zero_para_padrao():
+    with pytest.raises(GovBIConfigurationError, match='Origem'):
+        validate_govbi_base_url(
+            'https://govbi.example:0',
+            allowed_hosts='govbi.example:443',
+        )
+    assert sanitize_govbi_base_url(
+        'https://govbi.example:0',
+        allowed_hosts='https://govbi.example:443',
+    ) is None
+
+
+@pytest.mark.parametrize('timeout_invalido', [float('nan'), float('inf'), float('-inf'), 0.0, -1.0])
+def test_govbi_api_bloqueia_timeout_invalido_sem_io(monkeypatch, timeout_invalido):
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.settings, 'govbi_timeout_seconds', timeout_invalido)
+    client = TestClient(app)
+    with patch.object(govbi.httpx, 'AsyncClient') as async_client:
+        health = client.get('/api/govbi/health')
+        perguntas = client.post('/api/govbi/perguntas', json={'pergunta': 'Consulta bloqueada'})
+        funcionamento = client.get('/api/govbi/funcionamento')
+
+    assert health.status_code == 200
+    assert health.json()['data']['configuration_status'] == 'invalida'
+    assert health.json()['data']['timeout_seconds'] is None
+    assert perguntas.status_code == 503
+    assert funcionamento.status_code == 200
+    assert funcionamento.json()['data']['completo'] is False
+    async_client.assert_not_called()
+
+
 def test_validacao_govbi_aceita_porta_explicita_somente_na_origem_aprovada():
     assert validate_govbi_base_url(
         'http://govbi.example:8080',
