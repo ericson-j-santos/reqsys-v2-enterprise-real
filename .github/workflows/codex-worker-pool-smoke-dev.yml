@@ -12,6 +12,7 @@ on:
           - smoke
           - restore
           - task-read
+          - deploy-check
           - task-2547-read
           - version-2547-read
           - inventory-read
@@ -350,6 +351,196 @@ jobs:
         with:
           name: codex-worker-pool-task-read-dev-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-task-read-dev\evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-check:
+    if: ${{ inputs.mode == 'deploy-check' }}
+    name: Verify fixed ReqSys DEV deploy-check #2546 #2546 on Desktop DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
+      CORRELATION_ID: reqsys-dev-deploy-check-2546-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\reqsys-dev-deploy-check-2546\evidence.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          $observedHash = ([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($zip)))).Replace('-', '').ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
+            throw "portable_python_sha256_mismatch:$observedHash"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "reqsys-dev-deploy-check-2546",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Execute fixed DEV deploy-check and create sanitized receipt
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954" -or $env:ANCHOR_SHA -ne $env:GITHUB_SHA) {
+            throw "DEPLOY_CHECK_HOST_OR_SHA_INVALID"
+          }
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\dev_runtime_recovery.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run", "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2", "--timeout", "150",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--", "python", $script, "deploy-check",
+            "--expected-sha", $env:ANCHOR_SHA
+          )
+          $raw = @(& "$env:REQSYS_PYTHON" $gateway @args)
+          $gatewayExit = $LASTEXITCODE
+          if ($raw.Count -ne 1) { throw "DEPLOY_CHECK_GATEWAY_RECEIPT_MISSING" }
+          try { $g = $raw[0] | ConvertFrom-Json } catch { throw "DEPLOY_CHECK_GATEWAY_RECEIPT_INVALID" }
+          if ($g.correlation_id -ne $env:CORRELATION_ID -or
+              $g.before.head -ne $env:ANCHOR_SHA -or $g.after.head -ne $env:ANCHOR_SHA -or
+              $g.session_id -ne $env:SESSION_ID) {
+            throw "DEPLOY_CHECK_GATEWAY_IDENTITY_INVALID"
+          }
+          try { $inner = $g.stdout | ConvertFrom-Json } catch { throw "DEPLOY_CHECK_RESULT_INVALID" }
+          $ok = ($gatewayExit -eq 0 -and $g.result -eq "ok" -and
+                 $inner.deploy_check_ok -eq $true -and $inner.database_ok -eq $true -and
+                 $inner.environment -eq "dev" -and $inner.project -eq "wt-pc24x7-piloto" -and
+                 $inner.runtime_sha -eq $env:ANCHOR_SHA)
+          $reason = "ok"
+          if (-not $ok) {
+            $reason = [string]$inner.category
+            if ($reason -notmatch '^[a-z][a-z0-9_]{1,79}$') { $reason = "invalid_result" }
+          }
+          $receipt = [ordered]@{
+            schema_version = "1.0.0"
+            result = $(if ($ok) { "REQSYS_DEV_DEPLOY_CHECK_OK" } else { "REQSYS_DEV_DEPLOY_CHECK_BLOCKED" })
+            reason_code = $reason
+            host = $env:COMPUTERNAME
+            environment = "dev"
+            source_sha = $env:ANCHOR_SHA
+            runtime_sha = $(if ($ok) { [string]$inner.runtime_sha } else { $null })
+            correlation_id = $env:CORRELATION_ID
+            issue_number = 2546
+            task_id = "cwp-cdb85c31e3cc4e972f3094ab"
+            database_ok = $ok
+            session_validated = $true
+            command_gateway_verified = $true
+            deploy_performed = $false
+            runtime_mutated = $false
+            task_claim_performed = $false
+            secrets_exposed = $false
+            production_touched = $false
+          }
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+          [System.IO.File]::WriteAllText($path, (($receipt | ConvertTo-Json -Depth 4) + "`n"), [System.Text.UTF8Encoding]::new($false))
+          if (-not $ok) { throw "DEPLOY_CHECK_BLOCKED:$reason" }
+
+      - name: Validate immutable sanitized DEV deploy-check receipt
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "DEPLOY_CHECK_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if ($e.result -ne "REQSYS_DEV_DEPLOY_CHECK_OK" -or
+              $e.environment -ne "dev" -or $e.host -ne "DESKTOP-PDQK954" -or
+              $e.source_sha -ne $env:GITHUB_SHA -or $e.runtime_sha -ne $env:GITHUB_SHA -or
+              $e.correlation_id -ne $env:CORRELATION_ID -or
+              $e.issue_number -ne 2546 -or
+              $e.task_id -ne "cwp-cdb85c31e3cc4e972f3094ab" -or
+              $e.database_ok -ne $true -or $e.session_validated -ne $true -or
+              $e.command_gateway_verified -ne $true) {
+            throw "DEPLOY_CHECK_EVIDENCE_INVALID"
+          }
+          foreach ($key in @("deploy_performed","runtime_mutated","task_claim_performed","secrets_exposed","production_touched")) {
+            if ($e.$key -ne $false) { throw "DEPLOY_CHECK_SAFETY_INVALID" }
+          }
+
+      - name: Upload sanitized DEV deploy-check receipt
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-deploy-check-2546-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\reqsys-dev-deploy-check-2546\evidence.json
           if-no-files-found: error
           retention-days: 30
 

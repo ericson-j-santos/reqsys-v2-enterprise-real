@@ -16,7 +16,8 @@ from typing import Any
 COMMAND = "/reqsys run pc24x7-teams-e2e-dev"
 WORKER_CANARY_COMMAND = "/reqsys run pc24x7-worker-pool-candidate-canary-dev"
 WORKER_RESTORE_COMMAND = "/reqsys run pc24x7-worker-pool-real-restore-dev"
-ALLOWLISTED_COMMANDS = (COMMAND, WORKER_CANARY_COMMAND, WORKER_RESTORE_COMMAND)
+DEV_DEPLOY_CHECK_COMMAND = "/reqsys run pc24x7-dev-deploy-check"
+ALLOWLISTED_COMMANDS = (COMMAND, WORKER_CANARY_COMMAND, WORKER_RESTORE_COMMAND, DEV_DEPLOY_CHECK_COMMAND)
 ISSUE_NUMBER = 1705
 OWNER_LOGIN = "ericson-j-santos"
 DUPLICATE_WINDOW_SECONDS = 120

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "reqsys-dev-deploy-check-2546",
+  "increment_type": "hotfix",
+  "phase": "implementation",
+  "issue": 2546,
+  "origin_issue": 1532,
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "scope": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "task_id": "cwp-cdb85c31e3cc4e972f3094ab",
+    "request_id": "4f6f18810783cdc6872f04f1",
+    "fixed_command": "/reqsys run pc24x7-dev-deploy-check",
+    "expected_sha_source": "github.sha",
+    "deploy_executed": false,
+    "cutover_ready": false,
+    "production_touched": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_dev_deploy_check_2546.py",
+      "tests/test_authorized_teams_e2e_admission.py",
+      "tests/test_dev_runtime_recovery_executor.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Owner command #1705 → GitHub Actions fixed workflow → Session Launcher → Command Gateway → readonly dev_runtime_recovery.py deploy-check → sanitized SHA/host/SQLite evidence or explicit failure. Replay suppressed. No claims or runtime changes."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/reqsys-dev-deploy-check-2546.requirements.md",
+    "script": "scripts/dev_runtime_recovery.py",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "pre_branch_agent_gate_run_id": 38297033941,
+    "tests": "tests/test_reqsys_dev_deploy_check_2546.py"
+  }
+}
