@@ -12,6 +12,7 @@ from app.core.config import (
     sanitize_govbi_base_url,
     settings,
     validate_govbi_base_url,
+    validate_govbi_timeout,
 )
 from app.core.envelope import ok
 
@@ -44,7 +45,10 @@ def _govbi_base_url() -> str:
 
 
 def _govbi_timeout() -> float:
-    return float(getattr(settings, 'govbi_timeout_seconds', DEFAULT_GOVBI_TIMEOUT_SECONDS) or DEFAULT_GOVBI_TIMEOUT_SECONDS)
+    return validate_govbi_timeout(
+        getattr(settings, 'govbi_timeout_seconds', DEFAULT_GOVBI_TIMEOUT_SECONDS),
+        default=DEFAULT_GOVBI_TIMEOUT_SECONDS,
+    )
 
 
 def _codigo_falha_govbi(exc: Exception) -> str:
@@ -142,6 +146,7 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
     correlation_id = _correlation_id(x_correlation_id)
     try:
         base_url = _govbi_base_url()
+        timeout = _govbi_timeout()
     except GovBIConfigurationError:
         logger.error('govbi_configuracao_bloqueada')
         raise HTTPException(
@@ -159,7 +164,7 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 
     try:
         async with httpx.AsyncClient(
-            timeout=_govbi_timeout(),
+            timeout=timeout,
             trust_env=False,
             follow_redirects=False,
         ) as client:
@@ -197,9 +202,11 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 def govbi_health():
     try:
         _govbi_base_url()
+        timeout = _govbi_timeout()
         configurado = True
         configuracao_erro = None
     except GovBIConfigurationError as exc:
+        timeout = None
         configurado = False
         configuracao_erro = str(exc)
 
@@ -211,7 +218,7 @@ def govbi_health():
         'local_contract_status': 'valido',
         'external_health_status': 'nao_verificada',
         'configuration_error': configuracao_erro,
-        'timeout_seconds': _govbi_timeout(),
+        'timeout_seconds': timeout,
     })
 
 
