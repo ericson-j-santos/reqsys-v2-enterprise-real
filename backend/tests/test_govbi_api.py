@@ -115,6 +115,40 @@ def test_govbi_perguntas_valida_payload_minimo():
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    'correlation_id',
+    [
+        'corr-valid-123',
+        'REQSYS.govbi:request_01',
+        'a' * 128,
+    ],
+)
+def test_govbi_preserva_correlation_id_valido(correlation_id):
+    from app.api.govbi import _correlation_id
+
+    assert _correlation_id(f'  {correlation_id}  ') == correlation_id
+
+
+@pytest.mark.parametrize(
+    'correlation_id_invalido',
+    [
+        'corr\\r\\nlinha-forjada',
+        'corr\\x00controle',
+        'ç-fora-do-contrato',
+        'a' * 129,
+    ],
+)
+def test_govbi_regenera_correlation_id_invalido(correlation_id_invalido):
+    from app.api.govbi import _correlation_id
+
+    correlation_id = _correlation_id(correlation_id_invalido)
+
+    assert correlation_id.startswith('govbi-')
+    assert correlation_id != correlation_id_invalido.strip()
+    assert '\\r' not in correlation_id
+    assert '\\n' not in correlation_id
+
+
 def test_govbi_health_retorna_envelope_operacional():
     client = TestClient(app)
     response = client.get('/api/govbi/health')
