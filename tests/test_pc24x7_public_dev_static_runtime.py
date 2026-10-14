@@ -477,3 +477,77 @@ def test_study_mode_loader_falls_back_on_explicit_import_error(monkeypatch):
         runpy.run_path(str(ROOT / "scripts/noteri_study_mode_dev_reconcile.py"), run_name="__main__")
     assert caught.value.code == 0
 
+
+
+def test_legacy_public_static_reconcile_blocks_before_any_runtime_mutation(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    module = _load()
+    monkeypatch.setattr(
+        module.portable_dev, "verify_if_active", lambda _sha: None,
+    )
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("live runtime must remain untouched")
+
+    monkeypatch.setattr(module, "_discover_runtime", forbidden)
+    monkeypatch.setattr(module, "_prepare_governed_runtime_repo", forbidden)
+    monkeypatch.setattr(module, "_recreate_public_stack", forbidden)
+    monkeypatch.setattr(module, "_verify", forbidden)
+    args = SimpleNamespace(
+        confirm=module.CONFIRMATION, environment="dev",
+        expected_sha="a" * 40, vault_name="kv-placeholder",
+        expected_tenant_id="tenant-placeholder",
+        correlation_id="reqsys2546-prevent-unsafe-dev-cutover",
+        evidence_file=tmp_path / "evidence.json",
+    )
+    with pytest.raises(
+        module.ReconcileError,
+        match="^legacy_dev_backup_and_rollback_not_verified$",
+    ):
+        module.execute(args)
+    assert not args.evidence_file.exists()
+
+
+def test_existing_verified_portable_dev_remains_read_only(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    module = _load()
+    monkeypatch.setattr(
+        module.portable_dev, "verify_if_active",
+        lambda _sha: {"local_runtime_contract_ready": True},
+    )
+    monkeypatch.setattr(
+        module, "_discover_runtime",
+        lambda: pytest.fail("legacy Docker must not be discovered"),
+    )
+    args = SimpleNamespace(
+        confirm=module.CONFIRMATION, environment="dev",
+        expected_sha="a" * 40, correlation_id="reqsys2546-portable-readonly",
+        evidence_file=tmp_path / "evidence.json",
+    )
+    observed = module.execute(args)
+    assert observed["legacy_reconciliation_deferred"] is True
+    assert observed["credentials_reused"] is False
+    assert observed["local_runtime_contract_ready"] is True
+    assert args.evidence_file.exists()
+    assert __import__("json").loads(
+        args.evidence_file.read_text(encoding="utf-8")
+    ) == observed
+
+
+def test_public_static_workflow_fails_closed_before_oidc_or_deploy() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    guard = raw.index(
+        "Quarantine legacy public-static without governed backup and rollback"
+    )
+    azure = raw.index("Login Azure by OIDC for DEV credential reuse")
+    deploy = raw.index("Reconcile full DEV runtime and static frontend")
+    locator = raw.index("Reconcile public tunnels and publish signed locator")
+    assert guard < azure < deploy < locator
+    before = raw[guard:raw.index("- name: Require explicitly provisioned Microsoft test session")]
+    assert "inputs.mode == 'public-static'" in before
+    assert (
+        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'"
+        in before
+    )

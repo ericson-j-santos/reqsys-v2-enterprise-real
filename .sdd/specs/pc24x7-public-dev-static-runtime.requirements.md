@@ -30,3 +30,25 @@ Eliminar a abertura extremamente lenta do ReqSys DEV público e impedir falso ve
 - Um asset publicado retorna HTTP 200 por leitura externa independente.
 - Locator é republicado somente após todos os critérios locais e públicos.
 - Repetição no mesmo SHA permanece idempotente e não cria stack paralela.
+
+
+## Contenção da rota legada sem rollback atestado — 14/10/2026
+
+O E2E físico #38613970486 no SHA `920e90f1ce4725db31177e01baaca182a2ef4800`
+identificou `deploy_readiness_sha_mismatch`, sem provar a versão instalada nem a
+prontidão do PostgreSQL. O modo `public-static` anterior podia executar Compose
+e publicação do locator sem Session Launcher/Command Gateway e sem confirmação
+de backup/rollback independente. A prevenção imediata bloqueia esse modo
+**antes do OIDC, Compose e locator** e também bloqueia a função Python de
+reconciliação legada quando não existe um runtime portátil já verificado.
+
+Critério para remover a quarentena (incremento distinto, sem bypass):
+- sessão `SESSION_LAUNCH_OK` e Gateway fixados no mesmo SHA;
+- inventário de host/Compose/projeto/volumes e digest das imagens anteriores;
+- backup PostgreSQL protegido e restauração isolada com prova de conteúdo,
+  contagens, esquema e sequências, sem modificar a origem;
+- rollback de api/frontend/nginx ensaiado inclusive com API candidata indisponível;
+- CI detectando falta de qualquer prova, concorrência, replay e SHA divergente;
+- autorização explícita do owner para deploy DEV e E2E físico posterior.
+
+Este incremento não executa backup físico, restore, Docker Compose ou deploy.

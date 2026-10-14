@@ -50,3 +50,17 @@ O teste físico de mesma Activity e o ACK visual de Action.Submit continuam
 pendentes. Este incremento não cria replay nem envia mensagem Teams.
 
 
+
+
+## Quarentena de publicação após diagnóstico `deploy_readiness_sha_mismatch`
+
+O run [#38613970486](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/38613970486)
+confirmou que o SHA físico não corresponde ao SHA integrado, mas não confirmou
+o SHA físico exato nem o banco. Não repetir o mesmo diagnóstico como reparo.
+
+Até existirem sessão/Gateway governados, backup PostgreSQL restaurado em cópia
+isolada e ensaio de rollback real de api/frontend/nginx, o modo `public-static`
+falha explicitamente e o reconciliador Python recusa o caminho legado. A
+consulta read-only do runtime portátil já atestado continua preservada.
+A recuperação física, incluindo eventual deploy DEV, permanece um incremento
+separado que exige autorização e E2E no mesmo SHA.

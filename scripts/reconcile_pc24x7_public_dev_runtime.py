@@ -626,6 +626,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
         return evidence
+    # Legacy public-static Compose mutation is quarantined until a same-run,
+    # governed PostgreSQL backup, isolated restore and image rollback have
+    # been attested. A successful read-only portable runtime check is still
+    # allowed above. The old path must never infer cutover authorization.
+    raise ReconcileError("legacy_dev_backup_and_rollback_not_verified")
+
     if not args.vault_name.strip():
         raise ReconcileError("vault_name_missing")
     if not args.expected_tenant_id.strip():
