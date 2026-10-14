@@ -24,7 +24,7 @@
       "tests/test_authorized_teams_e2e_admission.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Verificar 2 comandos exatos, readback API paginada, janela 120s, ordem inversa, negativos, controles não afetados e gate em SHA atual. Não despachar dois canários físicos para testar o guard."
+    "evidence_contract": "Verificar 2 comandos exatos, readback API paginada, janela 120s, ordem inversa, negativos, controles não afetados e gate em SHA atual. Não despachar dois canários físicos para testar o guard. Registros paginados exigem user_login=owner; comentário de terceiro e ausência de author fail-closed."
   },
   "production_touched": false
 }

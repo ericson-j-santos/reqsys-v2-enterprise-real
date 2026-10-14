@@ -80,6 +80,8 @@ def decide(
         if type(candidate_id) is not int or candidate_id <= 0:
             raise AdmissionError("comment_record_id_invalid")
         candidate_at = _timestamp(candidate.get("created_at"))
+        if candidate.get("user_login") != OWNER_LOGIN:
+            raise AdmissionError("comment_record_author_invalid")
         if candidate_id == event_id:
             seen_current += 1
             if candidate_at != event_at:

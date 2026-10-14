@@ -28,8 +28,8 @@ def _event(comment_id: int, seconds: int = 0, *, command: str = COMMAND, user: s
     }
 
 
-def _record(comment_id: int, seconds: int):
-    return {"id": comment_id, "created_at": _instant(seconds)}
+def _record(comment_id: int, seconds: int, *, user: str = "ericson-j-santos"):
+    return {"id": comment_id, "created_at": _instant(seconds), "user_login": user}
 
 
 def test_first_comment_is_admitted_without_effect():
@@ -140,3 +140,13 @@ def test_worker_canary_gateway_dispatched_once_after_admission():
     assert 'physical_command_not_allowlisted' in raw
     assert 'if: steps.teams_admission.outputs.admitted != ' + "'false'" in raw
     assert 'group: reqsys-authorized-actions-gateway-' in raw
+
+
+def test_nonowner_comment_record_cannot_suppress_authorized_dispatch():
+    with pytest.raises(AdmissionError, match="comment_record_author_invalid"):
+        decide(_event(101, 18, command=WORKER_CANARY_COMMAND),
+               [_record(100, 0, user="intruder"), _record(101, 18)],
+               expected_sha=SHA, command=WORKER_CANARY_COMMAND)
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert raw.count('.user.login == "ericson-j-santos"') >= 2
+    assert raw.count('user_login: .user.login') >= 2

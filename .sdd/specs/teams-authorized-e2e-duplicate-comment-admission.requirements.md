@@ -6,7 +6,7 @@ Dois comentários de proprietário distintos podem gerar dois despachos físicos
 ## Aceite
 1. O controle de 120 segundos se aplica **somente** aos comandos fixos `/reqsys run pc24x7-teams-e2e-dev` e `/reqsys run pc24x7-worker-pool-candidate-canary-dev`.
 2. O ID canônico mais antigo é admitido; o comentário posterior dentro da janela é suprimido **antes** de despachar um novo workflow, mesmo quando os gateways executam em ordem inversa.
-3. Ler todos os comentários relevantes da issue #1705 com paginação; exigir readback único do próprio ID/timestamp e SHA principal válido; API ausente/inconsistente falha fechado.
+3. Ler somente comentários **do proprietário** e do comando literal na issue #1705 com paginação; exigir readback único de ID, timestamp UTC, autor e SHA principal válido; comentários não autorizados e API ausente/inconsistente falham fechado. Um comentário de terceiro não pode suprimir comando legítimo.
 4. Preservar `github.event.comment.id` no grupo de concorrência, `cancel-in-progress=false`, allowlist do ator, issue e destino. Não cancelar o run canônico nem mudar outros comandos.
 5. A duplicata deve produzir artifact sanitizado com `duplicate_suppressed`, ID de comentário canônico e SHA esperado; sem token ou dados físicos.
 6. Testes: positivo, duplicata reversa, janela expirada, comando trocado, entrada arbitrária e readback incompleto. Manter regressão Teams e bloqueio do canário quando nenhum gate válido existir.

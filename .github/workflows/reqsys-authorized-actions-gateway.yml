@@ -346,10 +346,10 @@ jobs:
           comments_file="$RUNNER_TEMP/physical-e2e-comments-$GITHUB_RUN_ID.jsonl"
           case "$COMMAND" in
             '/reqsys run pc24x7-teams-e2e-dev')
-              selector='.[] | select(.body == "/reqsys run pc24x7-teams-e2e-dev") | {id: .id, created_at: .created_at}'
+              selector='.[] | select(.body == "/reqsys run pc24x7-teams-e2e-dev" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
               ;;
             '/reqsys run pc24x7-worker-pool-candidate-canary-dev')
-              selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-candidate-canary-dev") | {id: .id, created_at: .created_at}'
+              selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-candidate-canary-dev" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
               ;;
             *) echo 'physical_command_not_allowlisted' >&2; exit 2 ;;
           esac
