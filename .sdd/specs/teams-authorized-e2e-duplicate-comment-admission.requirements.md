@@ -1,36 +1,17 @@
-# Admissão idempotente dos comandos Teams E2E DEV
+# Admissão governada de dois comandos físicos DEV
 
-## Problema observado
-Dois comentários autorizados distintos na issue #1705, separados por poucos segundos,
-originaram dois gateways e dois E2Es físicos no mesmo SHA (runs 37950807854 e
-37950812177), embora a concorrência por comment.id tenha operado corretamente.
-O gate não deve cancelar comentários distintos e não deve usar o texto do comentário
-como concurrency group, conforme regra anterior.
+## Contexto
+Dois comentários de proprietário distintos podem gerar dois despachos físicos para o mesmo modo. Ocorreu no Teams DEV e no canário Worker Pool #38487141475, seguido por um segundo run #38487187632 cancelado. A concorrência por ID de comentário evita perda de eventos mas não deduplica o alvo.
 
 ## Critérios de aceite
-1. Somente o comando exato `/reqsys run pc24x7-teams-e2e-dev` recebe a
-   admissão contra duplicatas; demais comandos preservam o comportamento vigente.
-2. Dois comentários idênticos criados dentro de 120 segundos: o comentário de
-   menor ID (anterior e autorizado) permanece admitido, e o posterior não dispara
-   outro workflow, mesmo se os gateways executarem em ordem invertida.
-3. A verificação usa comentários completos de #1705, faz readback obrigatório do
-   próprio comment.id/timestamp e falha fechado se a API estiver indisponível,
-   truncada ou inconsistir; não confiar em cache ou checks antigos.
-4. Comentário autorizado repetido após o intervalo pode ser admitido
-   novamente; o intervalo é um cooldown e não uma proibição permanente.
-5. A concorrência por ID imutável e `cancel-in-progress: false` permanecem
-   inalterados. Nenhum run físico deve ser cancelado pelo controle de duplicidade.
-6. A duplicata suprimida é registrada em artifact sanitizado com ID do
-   comentário canônico, SHA esperado e status `duplicate_suppressed`;
-   não registrar conteúdo dos comentários, tokens nem IDs privados do Teams.
-7. Validar casos positivos, duplicação, ordem invertida, cooldown,
-   entrada não autorizada e API/readback incompleto, além de executar
-   os gates da PR no SHA exato.
-8. A medida previne duplo despacho por dois comentários próximos. Não substitui
-   o replay real do mesmo `activity.id` no webhook nem prova a idempotência
-   de mensagens Teams; esta permanece requisito separado da issue #1532.
+1. O controle de 120 segundos se aplica **somente** aos comandos fixos `/reqsys run pc24x7-teams-e2e-dev` e `/reqsys run pc24x7-worker-pool-candidate-canary-dev`.
+2. O ID canônico mais antigo é admitido; o comentário posterior dentro da janela é suprimido **antes** de despachar um novo workflow, mesmo quando os gateways executam em ordem inversa.
+3. Ler somente comentários **do proprietário** e do comando literal na issue #1705 com paginação; exigir readback único de ID, timestamp UTC, autor e SHA principal válido; comentários não autorizados e API ausente/inconsistente falham fechado. Um comentário de terceiro não pode suprimir comando legítimo.
+4. Preservar `github.event.comment.id` no grupo de concorrência, `cancel-in-progress=false`, allowlist do ator, issue e destino. Não cancelar o run canônico nem mudar outros comandos.
+5. A duplicata deve produzir artifact sanitizado com `duplicate_suppressed`, ID de comentário canônico e SHA esperado; sem token ou dados físicos.
+6. Testes: positivo, duplicata reversa, janela expirada, comando trocado, entrada arbitrária e readback incompleto. Manter regressão Teams e bloqueio do canário quando nenhum gate válido existir.
+7. Pre-PR, SDD, Security, CI e readback na revisão exata precedem merge. Não gerar dois canários reais para demonstrar duplicidade.
+8. Esta proteção é janela temporal, não deduplicação durável por `source_sha`. Uma reexecução após a janela depende de nova pré-condição material comprovada.
 
-## Segurança e limite
-Somente DEV. Sem segredos, deploy, promoção, produção, força de push ou
-alterações em branch protegida. O checkout usa SHA exato da main e credenciais
-persistentes desativadas.
+## Limites
+Somente DEV; nenhum deploy, troca da API legada, read/write de SQLite vivo, claim, requeue, segredo, produção, HML/STG ou alteração de permissões.
