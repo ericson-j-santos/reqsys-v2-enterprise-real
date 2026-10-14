@@ -142,6 +142,15 @@ def test_binary_import_rejects_digest_before_docker_and_never_logs_bytes():
         with pytest.raises(module.RehearsalBlocked, match="backup_digest_invalid"):
             module.docker_binary(["run", "--rm"], raw, "f" * 64)
 
+def test_import_requires_interactive_stdin_and_no_network():
+    raw = fixture()
+    source_sha = hashlib.sha256(raw).hexdigest()
+    with patch.object(module.subprocess, "run", side_effect=AssertionError("must not run")):
+        with pytest.raises(module.RehearsalBlocked, match="isolated_import_args_invalid"):
+            module.docker_binary(["run", "--rm", "--network", "none"], raw, source_sha)
+        with pytest.raises(module.RehearsalBlocked, match="isolated_import_args_invalid"):
+            module.docker_binary(["run", "--rm", "--interactive", "--network", "host"], raw, source_sha)
+
 
 def test_claim_and_external_url_banned_before_any_request():
     with patch.object(module, "build_opener", side_effect=AssertionError("external request")):

@@ -150,6 +150,9 @@ def fingerprint(raw: bytes) -> dict:
 def docker_binary(arguments: list[str], raw: bytes, expected: str) -> None:
     require(100 <= len(raw) <= backup.MAX_BYTES
             and hashlib.sha256(raw).hexdigest() == expected, "backup_digest_invalid")
+    require(arguments[:5] == ["run", "--rm", "--interactive", "--network", "none"]
+            and "--mount" in arguments and "--read-only" in arguments
+            and "--cap-drop" in arguments, "isolated_import_args_invalid")
     try:
         process = subprocess.run(["docker", *arguments], input=raw,
                                  capture_output=True, timeout=40, check=False)
@@ -366,7 +369,8 @@ def rehearse(*, source_sha: str, worker_sha: str, correlation: str,
                 "candidate_image_not_attested")
         docker("volume", "create", "--label",
                "com.reqsys.workerpool.restore=" + correlation, volume)
-        arguments = ["run", "--rm", "--network", "none", "--user", "reqsys",
+        arguments = ["run", "--rm", "--interactive", "--network", "none",
+                     "--user", "reqsys",
                      "--read-only", "--cap-drop", "ALL",
                      "--security-opt", "no-new-privileges",
                      "--mount", f"type=volume,src={volume},dst=/data",
