@@ -44,6 +44,7 @@ jobs:
         github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-task-2546-read-dev' ||
+        github.event.comment.body == '/reqsys run pc24x7-dev-deploy-check' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-task-2547-read-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-version-2547-read-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-worker-pool-inventory-dev' ||
@@ -174,6 +175,10 @@ jobs:
             '/reqsys run codex-worker-pool-task-2546-read-dev')
               target='codex-worker-pool-smoke-dev.yml'
               mode='task-read'
+              ;;
+            '/reqsys run pc24x7-dev-deploy-check')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='deploy-check'
               ;;
             '/reqsys run codex-worker-pool-task-2547-read-dev')
               target='codex-worker-pool-smoke-dev.yml'
@@ -336,7 +341,7 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout immutable physical E2E admission code
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal'
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal' || steps.route.outputs.mode == 'deploy-check'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ steps.main.outputs.sha }}
@@ -345,7 +350,7 @@ jobs:
 
       - name: Admit one Teams or Worker Pool canary per short comment window
         id: teams_admission
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal'
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary' || steps.route.outputs.mode == 'restore-rehearsal' || steps.route.outputs.mode == 'deploy-check'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -363,6 +368,9 @@ jobs:
               ;;
             '/reqsys run pc24x7-worker-pool-real-restore-dev')
               selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-real-restore-dev" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
+              ;;
+            '/reqsys run pc24x7-dev-deploy-check')
+              selector='.[] | select(.body == "/reqsys run pc24x7-dev-deploy-check" and .user.login == "ericson-j-santos") | {id: .id, created_at: .created_at, user_login: .user.login}'
               ;;
             *) echo 'physical_command_not_allowlisted' >&2; exit 2 ;;
           esac
@@ -498,6 +506,11 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=task-read)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "deploy-check" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=deploy-check)"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "task-2547-read" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
