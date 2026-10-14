@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Corrige falso positivo de saúde GovBI, restringe o destino HTTP por allowlist e separa configuração, contrato local e saúde externa.",
+  "description": "Corrige falso positivo de saúde GovBI, restringe a origem HTTP (host+porta) por allowlist e separa configuração, contrato local e saúde externa.",
   "scope": "backend-dev-no-runtime-probe",
   "traceability": {
     "implementation": [
@@ -31,7 +31,7 @@
       "backend/tests/test_govbi_api_critical_paths.py",
       "frontend/src/utils/govbiFuncionamento.test.js"
     ],
-    "evidence_contract": "Vincular ao SHA atual; exigir 200+status UP para verde; negativos 401/404/5xx/timeout/payload inválido; URL sensível e host fora da allowlist sem I/O nem reflexão. Evidência é unitária/CI, não E2E externo."
+    "evidence_contract": "Vincular ao SHA atual; exigir 200+status UP para verde; negativos 401/404/5xx/timeout total cancelável/payload inválido ou excessivo/content-encoding; URL sensível e origem host+porta fora da allowlist sem I/O nem reflexão; fallback degradado não resulta em funcionamento completo. Evidência é unitária/CI, não E2E externo."
   },
   "production_touched": false
 }
