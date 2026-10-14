@@ -61,9 +61,12 @@ STAGE = r"""
 import hashlib, os, sqlite3, sys
 from pathlib import Path
 raw = sys.stdin.buffer.read(67108865)
-assert 100 <= len(raw) <= 67108864
-assert raw[:16] == b"SQLite format 3\x00"
-assert hashlib.sha256(raw).hexdigest() == os.environ["EXPECTED_DB_SHA256"]
+if not 100 <= len(raw) <= 67108864:
+    raise SystemExit("raw_size_invalid")
+if raw[:16] != b"SQLite format 3\x00":
+    raise SystemExit("db_header_invalid")
+if hashlib.sha256(raw).hexdigest() != os.environ["EXPECTED_DB_SHA256"]:
+    raise SystemExit("db_digest_invalid")
 target = Path("/data/codex-worker-pool.db")
 with target.open("xb") as dst:
     dst.write(raw)
@@ -72,8 +75,10 @@ with target.open("xb") as dst:
 db = sqlite3.connect(target.as_uri() + "?mode=ro", uri=True)
 try:
     db.execute("PRAGMA query_only=ON")
-    assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-    assert db.execute("PRAGMA foreign_key_check").fetchone() is None
+    if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+        raise SystemExit("db_integrity_invalid")
+    if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise SystemExit("db_foreign_key_invalid")
 finally:
     db.close()
 print("ISOLATED_DB_STAGED")
@@ -86,8 +91,10 @@ p = Path("/data/codex-worker-pool.db")
 db = sqlite3.connect(p.as_uri() + "?mode=ro", uri=True)
 try:
     db.execute("PRAGMA query_only=ON")
-    assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-    assert db.execute("PRAGMA foreign_key_check").fetchone() is None
+    if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+        raise SystemExit("db_integrity_invalid")
+    if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise SystemExit("db_foreign_key_invalid")
     rows = db.execute(""" + repr(IDENTITY_SQL) + r""").fetchall()
     workers = db.execute("SELECT COUNT(*) FROM workers").fetchone()[0]
     schema = [x[0] for x in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
