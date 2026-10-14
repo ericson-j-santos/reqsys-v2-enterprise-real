@@ -502,7 +502,7 @@ def test_receipt_parser_accepts_cli_runtime_error_categories(reason):
 ])
 def test_receipt_parser_classifies_readiness_failures_without_details(category):
     receipt, exit_code = build_receipt(
-        _gateway({"ok": False, "category": category, "stderr": "secret"},
+        _gateway({"ok": False, "category": category, "stderr": "private-credential-marker-2546"},
                  result="command_failed", command_exit_code=1),
         "", 1, CTX,
     )
@@ -512,7 +512,7 @@ def test_receipt_parser_classifies_readiness_failures_without_details(category):
     assert receipt["result_verified"] is True
     assert receipt["runtime_sha"] is None
     assert receipt["database_result"] == "unverified"
-    assert "secret" not in json.dumps(receipt)
+    assert "private-credential-marker-2546" not in json.dumps(receipt)
 
 
 @pytest.mark.parametrize("category", [
