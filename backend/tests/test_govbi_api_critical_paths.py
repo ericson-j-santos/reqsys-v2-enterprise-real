@@ -13,6 +13,7 @@ from app.main import app
 @pytest.fixture(autouse=True)
 def _govbi_base_url_aprovada(monkeypatch):
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
 def test_correlation_id_gera_quando_ausente():
