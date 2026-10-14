@@ -17,7 +17,7 @@ def _govbi_base_url_aprovada(monkeypatch):
     import app.api.govbi as govbi
 
     monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
-    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example,govbi.fly.dev,govbi.fly.io')
+    monkeypatch.setattr(govbi.settings, 'govbi_allowed_hosts', 'govbi.example')
 
 
 def test_govbi_perguntas_retorna_erro_negocio_quando_servico_externo_rejeita(monkeypatch):
