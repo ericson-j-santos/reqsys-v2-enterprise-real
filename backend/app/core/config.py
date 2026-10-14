@@ -34,7 +34,7 @@ class GovBIConfigurationError(ValueError):
 
 
 def validate_govbi_base_url(value: str | None) -> str:
-    """Valida a URL explícita do GovBI e bloqueia o provedor Fly retirado."""
+    """Valida a URL explícita do GovBI sem aceitar componentes sensíveis."""
 
     candidate = (value or '').strip().rstrip('/')
     if not candidate:
@@ -43,12 +43,33 @@ def validate_govbi_base_url(value: str | None) -> str:
     parsed = urlsplit(candidate)
     if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
         raise GovBIConfigurationError('GOVBI_BASE_URL deve ser uma URL HTTP(S) absoluta.')
+    if parsed.username is not None or parsed.password is not None:
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter credenciais.')
+    if parsed.query or parsed.fragment:
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode conter query ou fragmento.')
 
     hostname = parsed.hostname.lower().rstrip('.')
     if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
         raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
 
     return candidate
+
+
+def sanitize_govbi_base_url(value: str | None) -> str | None:
+    """Retorna somente destino já validado; entradas inválidas nunca são refletidas."""
+
+    try:
+        candidate = validate_govbi_base_url(value)
+    except GovBIConfigurationError:
+        return None
+
+    parsed = urlsplit(candidate)
+    hostname = parsed.hostname or ''
+    if ':' in hostname and not hostname.startswith('['):
+        hostname = f'[{hostname}]'
+    port = f':{parsed.port}' if parsed.port is not None else ''
+    path = parsed.path.rstrip('/')
+    return f'{parsed.scheme}://{hostname}{port}{path}'
 
 
 class Settings(BaseSettings):
