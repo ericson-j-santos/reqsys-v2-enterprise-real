@@ -246,6 +246,18 @@ def test_estado_govbi_cancela_stream_gotejante_no_limite_total(mock_client_cls, 
     assert client.closed is True
 
 
+@pytest.mark.parametrize('timeout_invalido', [float('nan'), float('inf'), float('-inf'), 0.0, -1.0])
+def test_estado_govbi_bloqueia_timeout_nao_finito_ou_nao_positivo(monkeypatch, timeout_invalido):
+    monkeypatch.setattr(snapshot.settings, 'govbi_timeout_seconds', timeout_invalido)
+    with patch('app.services.monitoramento_snapshot.httpx.AsyncClient') as client:
+        estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'bloqueado'
+    assert detalhes['configuracao'] == 'invalida'
+    assert detalhes['saude_externa'] == 'nao_avaliada'
+    client.assert_not_called()
+
+
 @patch('app.services.monitoramento_snapshot.httpx.AsyncClient', side_effect=RuntimeError('timeout'))
 def test_estado_govbi_vermelho_quando_probe_falha(_mock_client):
     estado, detalhes = snapshot._estado_govbi()
