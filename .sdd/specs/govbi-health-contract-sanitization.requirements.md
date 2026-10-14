@@ -15,7 +15,7 @@ O snapshot operacional consultava `/health` e classificava qualquer HTTP abaixo 
 7. `/api/govbi/funcionamento` identifica seu escopo local e exibe, no máximo, origem sanitizada sem credenciais/path/query.
 8. Clientes HTTP ignoram proxies/credenciais do ambiente (`trust_env=False`), não seguem redirects e o probe health usa cancelamento assíncrono sobre DNS/conexão/headers/body, timeout finito positivo, fechamento do stream e teto de bytes brutos antes de cópia/descompressão. Solicita `Accept-Encoding: identity` e rejeita `Content-Encoding` diferente de identidade antes da leitura.
 9. Testes automatizados cobrem sucesso, 401, 404, 5xx, timeout/inatividade, transporte gotejante cancelado, timeout NaN/infinito/não positivo, corpo bruto excessivo, conteúdo comprimido rejeitado, resposta inválida, URL/porta malformada, URL sensível, proxy ambiente e origem fora da allowlist.
-10. Frontend aceita `configurado` somente como configuração e contrato local válidos, mantendo saúde externa `nao_verificada`; resposta `MODO_DEGRADADO` nunca produz percentual 100 nem `completo=true` no consolidado.
+10. Frontend aceita `configurado` somente como configuração e contrato local válidos, mantendo saúde externa `nao_verificada`; apenas `EXECUTADA` (contrato Java) e `CONCLUIDO` (normalização legada ReqSys) comprovam execução positiva. `ERRO`, `BLOQUEADA`, `PENDENTE_APROVACAO`, `MODO_DEGRADADO`, nulo ou desconhecido nunca produzem percentual 100 nem `completo=true`.
 11. Mocks unitários não são apresentados como E2E ou prova do runtime real.
 
 ## Limites
