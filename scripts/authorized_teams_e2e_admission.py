@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 COMMAND = "/reqsys run pc24x7-teams-e2e-dev"
+WORKER_CANARY_COMMAND = "/reqsys run pc24x7-worker-pool-candidate-canary-dev"
+ALLOWLISTED_COMMANDS = (COMMAND, WORKER_CANARY_COMMAND)
 ISSUE_NUMBER = 1705
 OWNER_LOGIN = "ericson-j-santos"
 DUPLICATE_WINDOW_SECONDS = 120
@@ -41,11 +43,14 @@ def decide(
     *,
     expected_sha: str,
     window_seconds: int = DUPLICATE_WINDOW_SECONDS,
+    command: str = COMMAND,
 ) -> dict[str, Any]:
     if not re.fullmatch(r"[0-9a-f]{40}", expected_sha):
         raise AdmissionError("expected_main_sha_invalid")
     if not isinstance(window_seconds, int) or window_seconds <= 0:
         raise AdmissionError("duplicate_window_invalid")
+    if command not in ALLOWLISTED_COMMANDS:
+        raise AdmissionError("physical_command_not_allowlisted")
     if event.get("action") != "created":
         raise AdmissionError("unexpected_issue_event_action")
     issue = event.get("issue")
@@ -57,7 +62,7 @@ def decide(
     author = comment.get("user")
     if not isinstance(author, dict) or author.get("login") != OWNER_LOGIN:
         raise AdmissionError("comment_author_not_allowlisted")
-    if comment.get("body") != COMMAND:
+    if comment.get("body") != command:
         raise AdmissionError("command_not_allowlisted")
     event_id = comment.get("id")
     if type(event_id) is not int or event_id <= 0:
@@ -103,6 +108,7 @@ def main() -> int:
     parser.add_argument("--event-file", required=True, type=Path)
     parser.add_argument("--comments-file", required=True, type=Path)
     parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--command", choices=ALLOWLISTED_COMMANDS, default=COMMAND)
     parser.add_argument("--github-output", required=True, type=Path)
     args = parser.parse_args()
     try:
@@ -111,7 +117,7 @@ def main() -> int:
             json.loads(line) for line in args.comments_file.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        result = decide(event, comments, expected_sha=args.expected_sha)
+        result = decide(event, comments, expected_sha=args.expected_sha, command=args.command)
     except (AdmissionError, OSError, TypeError, json.JSONDecodeError) as exc:
         # Never log raw comment bodies, request payloads, or provider values.
         reason = str(exc) if isinstance(exc, AdmissionError) else "admission_evidence_unavailable"

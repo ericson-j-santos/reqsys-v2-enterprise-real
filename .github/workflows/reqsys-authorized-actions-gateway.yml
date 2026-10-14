@@ -325,31 +325,41 @@ jobs:
           test -n "$sha"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout immutable Teams E2E admission code
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml'
+      - name: Checkout immutable physical E2E admission code
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ steps.main.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Admit one Teams E2E command per short comment window
+      - name: Admit one Teams or Worker Pool canary per short comment window
         id: teams_admission
-        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml'
+        if: steps.route.outputs.target == 'pc24x7-teams-ephemeral-e2e.yml' || steps.route.outputs.mode == 'candidate-canary'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          COMMAND: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          comments_file="$RUNNER_TEMP/teams-e2e-comments-$GITHUB_RUN_ID.jsonl"
+          comments_file="$RUNNER_TEMP/physical-e2e-comments-$GITHUB_RUN_ID.jsonl"
+          case "$COMMAND" in
+            '/reqsys run pc24x7-teams-e2e-dev')
+              selector='.[] | select(.body == "/reqsys run pc24x7-teams-e2e-dev") | {id: .id, created_at: .created_at}'
+              ;;
+            '/reqsys run pc24x7-worker-pool-candidate-canary-dev')
+              selector='.[] | select(.body == "/reqsys run pc24x7-worker-pool-candidate-canary-dev") | {id: .id, created_at: .created_at}'
+              ;;
+            *) echo 'physical_command_not_allowlisted' >&2; exit 2 ;;
+          esac
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/1705/comments?per_page=100" \
-            --jq '.[] | select(.body == "/reqsys run pc24x7-teams-e2e-dev") | {id: .id, created_at: .created_at}' \
-            > "$comments_file"
+            --jq "$selector" > "$comments_file"
           python scripts/authorized_teams_e2e_admission.py \
             --event-file "$GITHUB_EVENT_PATH" \
             --comments-file "$comments_file" \
             --expected-sha "$EXPECTED_SHA" \
+            --command "$COMMAND" \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Resolve exact PR #2144 workload SHA
