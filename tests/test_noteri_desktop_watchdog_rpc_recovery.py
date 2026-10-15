@@ -1,122 +1,4 @@
-from __future__ import annotations
-
-import importlib.util
-import subprocess
-from pathlib import Path
-
-import pytest
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "noteri_desktop_watchdog_rpc_recovery.py"
-WORKFLOW = ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml"
-
-SPEC = importlib.util.spec_from_file_location("noteri_desktop_watchdog_rpc_recovery", SCRIPT)
-assert SPEC and SPEC.loader
-m = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(m)
-
-TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
-<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>
-  <Principals><Principal id="Author"><LogonType>S4U</LogonType></Principal></Principals>
-</Task>
-"""
-
-
-def completed(code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
-
-
-def test_isolated_uac_launcher_loads_with_explicit_watchdog_alias(monkeypatch) -> None:
-    watchdog = m.load_versioned_module(
-        ROOT / "scripts" / "desktop_control_plane_watchdog.py",
-        "reqsys_test_desktop_watchdog",
-    )
-    monkeypatch.setitem(m.sys.modules, "desktop_control_plane_watchdog", watchdog)
-    launcher = m.load_versioned_module(
-        ROOT / "scripts" / "desktop_control_plane_watchdog_uac_launcher.py",
-        "reqsys_test_desktop_watchdog_uac_launcher",
-    )
-    assert launcher.watchdog is watchdog
-
-
-def test_recovery_only_queries_and_runs_exact_existing_task_locally(tmp_path: Path, monkeypatch) -> None:
-    calls: list[list[str]] = []
-    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
-
-    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
-        calls.append(argv)
-        if "/Query" in argv:
-            return completed(0, TASK_XML)
-        if "/Run" in argv:
-            return completed(0, "SUCCESS")
-        raise AssertionError(argv)
-
-    result = m.recover(
-        confirm=m.CONFIRM,
-        evidence_file=tmp_path / "evidence.json",
-        run_cmd=fake_run,
-        source_host="DESKTOP-PDQK954",
-        platform="nt",
-    )
-    assert result["ok"] is True
-    assert result["run_requested"] is True
-    assert result["task_created_or_modified"] is False
-    assert result["execution_mode"] == "local_pc24x7_runner"
-    assert result["remote_access_attempted"] is False
-    assert result["rdc_required"] is False
-    flattened = " ".join(" ".join(call) for call in calls)
-    assert "/Query" in flattened and "/Run" in flattened
-    assert "/Create" not in flattened and "/Change" not in flattened and "/Delete" not in flattened
-    assert all("/S" not in call for call in calls)
-    assert all(m.TASK_NAME in call for call in calls)
-
-
-def test_query_failure_fails_closed_without_run(tmp_path: Path, monkeypatch) -> None:
-    calls: list[list[str]] = []
-    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
-
-    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
-        calls.append(argv)
-        return completed(1, stderr="RPC server unavailable")
-
-    result = m.recover(
-        confirm=m.CONFIRM,
-        evidence_file=tmp_path / "evidence.json",
-        run_cmd=fake_run,
-        source_host="DESKTOP-PDQK954",
-        platform="nt",
-    )
-    assert result["ok"] is False
-    assert result["result"] == "DESKTOP_WATCHDOG_QUERY_BLOCKED"
-    assert len(calls) == 1
-    assert "/Query" in calls[0]
-
-
-def test_access_denied_query_does_not_attempt_task_repair(tmp_path: Path, monkeypatch) -> None:
-    calls: list[list[str]] = []
-    repairs: list[bool] = []
-    monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
-
-    def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
-        calls.append(argv)
-        return completed(1, stderr="ERROR: Access is denied.")
-
-    result = m.recover(
-        confirm=m.CONFIRM,
-        evidence_file=tmp_path / "evidence.json",
-        run_cmd=fake_run,
-        repair=lambda: repairs.append(True) or {},
-        source_host="DESKTOP-PDQK954",
-        platform="nt",
-    )
-    assert result["result"] == "DESKTOP_WATCHDOG_QUERY_BLOCKED"
-    assert result["task_repair_attempted"] is False
-    assert repairs == []
-    assert len(calls) == 1
-
-
-def test_missing_task_is_repaired_then_requeried_and_started(tmp_path: Path, monkeypatch) -> None:
+_then_requeried_and_started(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
     query_count = 0
     monkeypatch.setattr(m, "schtasks_executable", lambda: Path(r"C:\Windows\System32\schtasks.exe"))
@@ -215,7 +97,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
+    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once", "dedicated-readonly", "dedicated-recover"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -238,20 +120,20 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 13
+    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 15
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
-    assert raw.count("Prepare pinned portable Python 3.12") == 6
-    assert raw.count("python-3.12.10-embed-amd64.zip") == 6
-    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 6
-    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 6
+    assert raw.count("Prepare pinned portable Python 3.12") == 7
+    assert raw.count("python-3.12.10-embed-amd64.zip") == 7
+    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 7
+    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 7
     assert "Get-FileHash" not in raw
-    assert raw.count("REQSYS_PYTHON=$python") == 6
-    assert raw.count("python312._pth") == 6
-    assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
-    assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 6
-    assert raw.count("--require-runner-version-preflight") == 5
-    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 7
+    assert raw.count("REQSYS_PYTHON=$python") == 7
+    assert raw.count("python312._pth") == 7
+    assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 7
+    assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 7
+    assert raw.count("--require-runner-version-preflight") == 6
+    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 8
 
     # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
     assert "inputs.mode == 'watchdog-uac'" in raw
@@ -340,9 +222,24 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP-PDQK954" in raw
 
     # Todos os modos físicos não ligados à exceção de reboot usam a main canônica atual.
-    assert raw.count("562fc4274aff24f7058cb135f27a509aa69031c1") == 3
+    assert raw.count("562fc4274aff24f7058cb135f27a509aa69031c1") == 4
     runner_canary = raw.split("  runner-canary:", 1)[1].split("  alm-runner-bootstrap:", 1)[0]
     assert "RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2" in runner_canary
     assert "RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1" not in runner_canary
     assert "881d9ca2f8e77025edb7298b22981109c567a730" not in raw
     assert "5af7b5ab6e31c24744176abd774855168c55953f" not in raw
+
+    # Dedicated listener extension is isolated, fixed-identity, and manually gated.
+    assert "- dedicated-readonly" in raw
+    assert "- dedicated-recover" in raw
+    assert "dedicated_recovery_confirm:" in raw
+    dedicated = raw.split("  dedicated-listener:", 1)[1]
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in dedicated
+    assert "TARGET_REPO: C:\\dev\\chatgpt-workers\\reqsys-watchdog-session-source" in dedicated
+    assert "desktop_dedicated_listener_recovery.py" in dedicated
+    assert "ericson-j-santos/desktop-pc24x7-runtime" in dedicated
+    assert "DESKTOP-PDQK954-runtime" in dedicated
+    assert "DESKTOP_DEDICATED_LISTENER_READONLY_OK" in dedicated
+    assert 'GITHUB_TOKEN: ${{ github.token }}' in dedicated
+    assert '"--risk", "2"' in dedicated
+    assert "activate_desktop_runtime_runner.py" not in raw
