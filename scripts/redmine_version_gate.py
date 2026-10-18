@@ -5,15 +5,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+# Security Advisories revalidado em 2026-10-18: #44467 e #44468.
+# 6.0 permanece mantida upstream, mas não possui correção homologada desses
+# avisos. Não confundir bloqueio de integração com fim de suporte (EOL).
+# Fonte: https://www.redmine.org/projects/redmine/wiki/Security_Advisories
 SUPPORTED_MINIMUMS: dict[tuple[int, int], tuple[int, int, int]] = {
-    (6, 0): (6, 0, 11),
-    (6, 1): (6, 1, 4),
-    (7, 0): (7, 0, 1),
+    (6, 1): (6, 1, 5),
+    (7, 0): (7, 0, 2),
 }
+SERIES_WITHOUT_SECURITY_FIX = frozenset({(6, 0)})
 
 _VERSION_RE = re.compile(
-    r"^\s*(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"(?:[-+.\s].*)?\s*$"
+    r"^\s*(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)"
+    r"(?:\.stable(?:\.[0-9]+)?)?\s*$"
 )
 
 
@@ -34,12 +38,12 @@ class RedmineVersionDecision:
 
 
 def parse_redmine_version(value: str) -> tuple[int, int, int]:
-    """Converte uma versão declarada, aceitando sufixos como '.stable'."""
-    match = _VERSION_RE.fullmatch(value or "")
+    """Aceita release ou '.stable[.revisão]'; rejeita versões de desenvolvimento."""
+    match = _VERSION_RE.fullmatch(value) if isinstance(value, str) else None
     if not match:
         raise RedmineVersionError(
             "Versão Redmine inválida; informe no formato MAJOR.MINOR.PATCH "
-            "(ex.: 7.0.1)."
+            "(ex.: 6.1.5); somente release ou sufixo .stable[.revisão]."
         )
     return (
         int(match.group("major")),
@@ -57,6 +61,14 @@ def evaluate_redmine_version(value: str) -> RedmineVersionDecision:
         return RedmineVersionDecision(
             status="blocked",
             reason="redmine_version_eol",
+            version=version,
+            minimum=None,
+        )
+
+    if (major, minor) in SERIES_WITHOUT_SECURITY_FIX:
+        return RedmineVersionDecision(
+            status="blocked",
+            reason="redmine_version_sem_correcao_homologada",
             version=version,
             minimum=None,
         )
