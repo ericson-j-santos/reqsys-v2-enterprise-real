@@ -27,6 +27,7 @@ class ProvisioningError(RuntimeError):
 DEFAULT_MIRROR_NAME = "reqsys-github-mirror"
 FORBIDDEN_MIRROR_USER_IDS = {41625052}
 MINIMUM_PUSH_ACCESS_LEVEL = 30
+MAINTAINER_ACCESS_LEVEL = 40
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,7 @@ class GitLabClient:
         headers = {
             "PRIVATE-TOKEN": self.config.token,
             "Accept": "application/json",
-            "User-Agent": "reqsys-gitlab-governance-provisioner/1.1",
+            "User-Agent": "reqsys-gitlab-governance-provisioner/1.2",
         }
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
@@ -156,13 +157,87 @@ def ensure_protected_branch(client: GitLabClient, config: Config) -> dict[str, A
         "allow_force_push": False,
     }
     if status == 200:
+        if not isinstance(current, dict):
+            raise ProvisioningError("Protected branch payload is invalid")
+
+        push_entries = _push_allowances(current)
+        merge_entries = _merge_allowances(current)
+        push_developer = _entries_at_level(push_entries, MINIMUM_PUSH_ACCESS_LEVEL)
+        merge_developer = _entries_at_level(merge_entries, MINIMUM_PUSH_ACCESS_LEVEL)
+
+        if push_developer and not _has_access_level(push_entries, MAINTAINER_ACCESS_LEVEL):
+            raise ProvisioningError(
+                "Refusing to remove Developer push without Maintainer fallback"
+            )
+        if merge_developer and not _has_access_level(merge_entries, MAINTAINER_ACCESS_LEVEL):
+            raise ProvisioningError(
+                "Refusing to remove Developer merge without Maintainer fallback"
+            )
+
         force_push = bool(current.get("allow_force_push", False))
-        if not force_push:
+        if not force_push and not push_developer and not merge_developer:
             return {"control": "protected_branch", "status": "unchanged"}
+
+        reasons: list[str] = []
+        if force_push:
+            reasons.append("disable_force_push")
+        if push_developer:
+            reasons.append("remove_generic_developer_push")
+        if merge_developer:
+            reasons.append("remove_generic_developer_merge")
+
         if config.dry_run:
-            return {"control": "protected_branch", "status": "would_update"}
-        client.request("PATCH", path, {"allow_force_push": False})
-        return {"control": "protected_branch", "status": "updated"}
+            return {
+                "control": "protected_branch",
+                "status": "would_update",
+                "reason": ",".join(reasons),
+                "developer_push_records": len(push_developer),
+                "developer_merge_records": len(merge_developer),
+            }
+
+        payload: dict[str, Any] = {"allow_force_push": False}
+        if push_developer:
+            payload["allowed_to_push"] = _destroy_access_levels(push_developer)
+        if merge_developer:
+            payload["allowed_to_merge"] = _destroy_access_levels(merge_developer)
+        client.request("PATCH", path, payload)
+
+        verify_status, verified = client.request("GET", path)
+        if verify_status != 200 or not isinstance(verified, dict):
+            raise ProvisioningError("Could not re-read protected branch after hardening")
+        if bool(verified.get("allow_force_push", False)):
+            raise ProvisioningError("Protected branch postcondition failed: force_push_enabled")
+
+        verified_push = _push_allowances(verified)
+        verified_merge = _merge_allowances(verified)
+        if _entries_at_level(verified_push, MINIMUM_PUSH_ACCESS_LEVEL):
+            raise ProvisioningError(
+                "Protected branch postcondition failed: generic_developer_push_present"
+            )
+        if _entries_at_level(verified_merge, MINIMUM_PUSH_ACCESS_LEVEL):
+            raise ProvisioningError(
+                "Protected branch postcondition failed: generic_developer_merge_present"
+            )
+        if push_developer and not _has_access_level(
+            verified_push, MAINTAINER_ACCESS_LEVEL
+        ):
+            raise ProvisioningError(
+                "Protected branch postcondition failed: maintainer_push_fallback_missing"
+            )
+        if merge_developer and not _has_access_level(
+            verified_merge, MAINTAINER_ACCESS_LEVEL
+        ):
+            raise ProvisioningError(
+                "Protected branch postcondition failed: maintainer_merge_fallback_missing"
+            )
+
+        return {
+            "control": "protected_branch",
+            "status": "updated",
+            "verified": True,
+            "removed_developer_push_records": len(push_developer),
+            "removed_developer_merge_records": len(merge_developer),
+        }
 
     if config.dry_run:
         return {"control": "protected_branch", "status": "would_create"}
@@ -190,6 +265,36 @@ def _push_allowances(branch: dict[str, Any]) -> list[dict[str, Any]]:
     return [entry for entry in entries if isinstance(entry, dict)]
 
 
+def _merge_allowances(branch: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = branch.get("merge_access_levels") or []
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _entries_at_level(
+    entries: list[dict[str, Any]], access_level: int
+) -> list[dict[str, Any]]:
+    return [entry for entry in entries if entry.get("access_level") == access_level]
+
+
+def _has_access_level(entries: list[dict[str, Any]], access_level: int) -> bool:
+    return any(entry.get("access_level") == access_level for entry in entries)
+
+
+def _destroy_access_levels(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    removals: list[dict[str, Any]] = []
+    for entry in entries:
+        record_id = entry.get("id")
+        access_level = entry.get("access_level")
+        if not isinstance(record_id, int) or not isinstance(access_level, int):
+            raise ProvisioningError(
+                "Protected branch access-level record is missing numeric id/access_level"
+            )
+        removals.append(
+            {"id": record_id, "access_level": access_level, "_destroy": True}
+        )
+    return removals
+
+
 def _validate_mirror_branch_state(
     branch: dict[str, Any],
     *,
@@ -202,7 +307,9 @@ def _validate_mirror_branch_state(
     current_entries = _push_allowances(branch)
     current_keys = {key for entry in current_entries if (key := _allowance_key(entry))}
 
-    if ("user_id", target_user_id) not in current_keys:
+    exact_user = ("user_id", target_user_id) in current_keys
+    maintainer_role = ("access_level", MAINTAINER_ACCESS_LEVEL) in current_keys
+    if not exact_user and not maintainer_role:
         return False, "target_user_missing"
 
     forbidden = sorted(
@@ -225,12 +332,11 @@ def _validate_mirror_branch_state(
 def ensure_mirror_push_allowance(
     client: GitLabClient, config: Config
 ) -> dict[str, Any]:
-    """Grant only the configured mirror identity explicit push access to main.
+    """Validate the configured mirror identity without self-elevating it.
 
-    Existing allowances are preserved. The function fails closed when identity
-    correlation is ambiguous, generic Developer push is present, the legacy
-    mirror identity is still allowed, force-push is enabled, or the post-write
-    read does not prove the requested state.
+    GitLab Free does not support selecting individual users in protected-branch
+    push rules. An existing Maintainer role allowance is therefore accepted as a
+    documented fallback, but never misreported as exact least-privilege access.
     """
     if config.mirror_user_id is None:
         return {
@@ -268,11 +374,13 @@ def ensure_mirror_push_allowance(
     branch_status, current = client.request("GET", branch_path, allow_status={404})
     if branch_status != 200 or not isinstance(current, dict):
         raise ProvisioningError(
-            f"Protected branch {config.default_branch!r} must exist before granting mirror access"
+            f"Protected branch {config.default_branch!r} must exist before validating mirror access"
         )
 
     current_entries = _push_allowances(current)
-    current_keys = {key for entry in current_entries if (key := _allowance_key(entry))}
+    current_keys = {
+        key for entry in current_entries if (key := _allowance_key(entry))
+    }
 
     forbidden = sorted(
         user_id
@@ -284,54 +392,90 @@ def ensure_mirror_push_allowance(
             "Legacy mirror identity is still allowed to push: "
             + ", ".join(map(str, forbidden))
         )
+
     if ("access_level", MINIMUM_PUSH_ACCESS_LEVEL) in current_keys:
+        if config.dry_run:
+            return {
+                "control": "mirror_push_allowance",
+                "status": "would_validate_after_branch_hardening",
+                "user_id": target_user_id,
+                "reason": "generic_developer_push_planned_for_removal",
+            }
         raise ProvisioningError(
-            "Generic Developer push allowance is present; refusing to broaden or mask access"
+            "Generic Developer push allowance remains after protected-branch hardening"
         )
-
-    target_present = ("user_id", target_user_id) in current_keys
-    force_push = bool(current.get("allow_force_push", False))
-
-    if target_present and not force_push:
-        return {
-            "control": "mirror_push_allowance",
-            "status": "unchanged",
-            "user_id": target_user_id,
-        }
-
-    if config.dry_run:
-        return {
-            "control": "mirror_push_allowance",
-            "status": "would_update",
-            "user_id": target_user_id,
-            "reason": (
-                "disable_force_push" if target_present else "add_explicit_user_allowance"
-            ),
-        }
-
-    payload: dict[str, Any] = {"allow_force_push": False}
-    if not target_present:
-        payload["allowed_to_push"] = [{"user_id": target_user_id}]
-    client.request("PATCH", branch_path, payload)
-
-    verify_status, verified = client.request("GET", branch_path)
-    if verify_status != 200 or not isinstance(verified, dict):
-        raise ProvisioningError("Could not re-read protected branch after mirror grant")
 
     valid, reason = _validate_mirror_branch_state(
-        verified,
+        current,
         target_user_id=target_user_id,
-        previous_allowances=current_keys,
     )
     if not valid:
+        if reason == "target_user_missing":
+            return {
+                "control": "mirror_push_allowance",
+                "status": "manual_required",
+                "reason": (
+                    "No exact-user or Maintainer role push allowance exists; "
+                    "automatic self-elevation is disabled"
+                ),
+                "user_id": target_user_id,
+            }
         raise ProvisioningError(
-            f"Mirror push allowance postcondition failed: {reason}"
+            f"Mirror push allowance validation failed: {reason}"
         )
 
+    exact_user = ("user_id", target_user_id) in current_keys
+    grant_mode = "exact_user" if exact_user else "maintainer_role_fallback"
     return {
         "control": "mirror_push_allowance",
-        "status": "updated",
+        "status": "unchanged",
         "user_id": target_user_id,
+        "grant_mode": grant_mode,
+        "least_privilege_exact_identity": exact_user,
+        "verified": True,
+    }
+
+
+def ensure_project_merge_policy(
+    client: GitLabClient, config: Config
+) -> dict[str, Any]:
+    """Require successful pipelines and reject skipped pipelines for merge."""
+    path = client.project_path()
+    status, current = client.request("GET", path)
+    if status != 200 or not isinstance(current, dict):
+        raise ProvisioningError("Could not read project merge policy")
+
+    pipeline_required = current.get("only_allow_merge_if_pipeline_succeeds") is True
+    skipped_rejected = current.get("allow_merge_on_skipped_pipeline") is False
+    if pipeline_required and skipped_rejected:
+        return {"control": "project_merge_policy", "status": "unchanged"}
+
+    desired = {
+        "only_allow_merge_if_pipeline_succeeds": True,
+        "allow_merge_on_skipped_pipeline": False,
+    }
+    if config.dry_run:
+        return {
+            "control": "project_merge_policy",
+            "status": "would_update",
+            "reason": "require_success_and_reject_skipped_pipeline",
+        }
+
+    client.request("PUT", path, desired)
+    verify_status, verified = client.request("GET", path)
+    if verify_status != 200 or not isinstance(verified, dict):
+        raise ProvisioningError("Could not re-read project merge policy")
+    if verified.get("only_allow_merge_if_pipeline_succeeds") is not True:
+        raise ProvisioningError(
+            "Project merge policy postcondition failed: pipeline_success_not_required"
+        )
+    if verified.get("allow_merge_on_skipped_pipeline") is not False:
+        raise ProvisioningError(
+            "Project merge policy postcondition failed: skipped_pipeline_still_allowed"
+        )
+    return {
+        "control": "project_merge_policy",
+        "status": "updated",
         "verified": True,
     }
 
@@ -404,7 +548,7 @@ def ensure_variable(
 def build_report(config: Config, actions: list[dict[str, Any]]) -> dict[str, Any]:
     blocking = [item for item in actions if item["status"] == "manual_required"]
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_id": config.project_id,
         "default_branch": config.default_branch,
@@ -445,6 +589,7 @@ def main() -> int:
         client = GitLabClient(config)
         actions = [
             ensure_protected_branch(client, config),
+            ensure_project_merge_policy(client, config),
             ensure_mirror_push_allowance(client, config),
             ensure_approval_rule(client, config),
             ensure_variable(
