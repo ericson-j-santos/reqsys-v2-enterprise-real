@@ -3,7 +3,13 @@
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-18",
   "phase": "implementation",
-  "description": "Corrige falso negativo de readback serializando a descrição com CRLF conforme Issue#description= do Redmine, sem relaxar a comparação estrita nem alterar dados canônicos do ReqSys.",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "approval_context": "Requisito de corrigir a divergência, preservar readback estrito e testar autorizado pelo proprietário nas instruções Continue da tarefa #1686. Não representa revisão da PR, autorização de merge, deploy ou segurança do bundle. Design e tarefas aguardam revisão formal.",
+  "description": "Corrige falso negativo de readback serializando a descrição com CRLF conforme Issue#description= do Redmine. Mantém conteúdo, igualdade estrita e dados canônicos; coleta testes de serviço sem iniciar OAuth, preservando o cliente HTTP real sob demanda.",
   "sdd_gate": {
     "tests": [
       "backend/tests/test_redmine_api_line_endings.py",
@@ -12,7 +18,7 @@
   },
   "traceability": {
     "issue": "#1686",
-    "requirements": "docs/runbooks/redmine-description-crlf.md",
+    "requirements": ".sdd/specs/redmine-description-crlf.requirements.md",
     "policy_module": "backend/app/services/redmine_api.py",
     "official_source": "https://github.com/redmine/redmine/blob/6.1.5/app/models/issue.rb"
   }

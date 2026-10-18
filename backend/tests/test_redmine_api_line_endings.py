@@ -1,8 +1,11 @@
 """Regressão do readback CRLF; transporte simulado não substitui E2E externo."""
 from __future__ import annotations
 
+import builtins
 import copy
 import re
+import runpy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,11 +18,17 @@ from app.services.redmine_api import montar_campos_requisito_redmine
 
 
 def _campos(descricao: str) -> dict:
-    return dict(
-        codigo='REQ-E2E-1234ABCD', titulo='Atualizado 1234ABCD',
-        descricao=descricao, urgencia='media', area='Engenharia', sistema='ReqSys',
-        solicitante='E2E automatizado', status='recebido', impacto_regulatorio=False,
-    )
+    return {
+        'codigo': 'REQ-E2E-1234ABCD',
+        'titulo': 'Atualizado 1234ABCD',
+        'descricao': descricao,
+        'urgencia': 'media',
+        'area': 'Engenharia',
+        'sistema': 'ReqSys',
+        'solicitante': 'E2E automatizado',
+        'status': 'recebido',
+        'impacto_regulatorio': False,
+    }
 
 
 @pytest.mark.parametrize('text', [
@@ -144,3 +153,22 @@ def test_readback_continua_rejeitando_divergencia_real(db_session, monkeypatch, 
     assert db_session.query(VinculoGit).filter(
         VinculoGit.tipo == sync.SYNC_STATE_TYPE,
     ).count() == 0
+
+
+def test_fixture_so_carrega_api_real_quando_cliente_e_solicitado(monkeypatch):
+    original_import = builtins.__import__
+    attempts = []
+
+    def observe_import(name, *args, **kwargs):
+        if name == 'app.main':
+            attempts.append(name)
+            raise ImportError('API_STARTUP_REQUESTED_BY_HTTP_FIXTURE')
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, '__import__', observe_import)
+    namespace = runpy.run_path(str(Path(__file__).with_name('conftest.py')))
+    assert attempts == []
+    fixture = namespace['client'].__wrapped__()
+    with pytest.raises(ImportError, match='API_STARTUP_REQUESTED_BY_HTTP_FIXTURE'):
+        next(fixture)
+    assert attempts == ['app.main']
