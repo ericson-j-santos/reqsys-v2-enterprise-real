@@ -18,7 +18,9 @@ secret_detection_gitleaks:
     entrypoint: [""]
   script:
     - mkdir -p audit
-    - gitleaks detect --source . --no-git --redact --config .gitleaks.toml
+    # Keep findings actionable in the job trace without exposing detected secrets.
+    - gitleaks detect --source . --no-git --redact=100 --verbose --no-color
+        --config .gitleaks.toml
         --report-format json --report-path audit/gitlab-secret-detection-report.json
         --exit-code 1
   artifacts:

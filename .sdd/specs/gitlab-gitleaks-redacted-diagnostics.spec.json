@@ -1,0 +1,41 @@
+{
+  "feature_name": "gitlab-gitleaks-redacted-diagnostics",
+  "project": "Engineering Control Plane",
+  "created_at": "2026-10-18",
+  "updated_at": "2026-10-18",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Restaurar triagem pela interface de logs do Gitleaks com mascaramento integral, sem silenciar os cinco achados existentes.",
+  "environment": "GitHub Pre-PR / GitLab CI, sem alteração de runtime",
+  "production_enabled": false,
+  "files": [
+    "gitlab/ci/devsecops.yml",
+    "tests/test_gitlab_gitleaks_redacted_diagnostics.py"
+  ],
+  "risk": {
+    "level": 2,
+    "admin_permission": false,
+    "secrets_exposed": false,
+    "authorization": "Continuação do desbloqueio autorizada no chat; mudança diagnóstica reversível, sem reduzir controles.",
+    "rollback": "Reverter apenas as flags diagnósticas; preservar scanner, política e exit-code 1."
+  },
+  "acceptance_criteria": [
+    "Preservar imagem por digest, política .gitleaks.toml, varredura da raiz e relatório JSON.",
+    "Adicionar --verbose --no-color e exigir --redact=100.",
+    "Manter --exit-code 1 e scanner bloqueante; não excluir caminhos nem acrescentar allowlists.",
+    "Executar controles positivos, negativos, regressão do comando silencioso e repetição sem mutação.",
+    "READY_FOR_PR passa no HEAD exato antes de abrir PR.",
+    "Após integração e mirror, validar saída mascarada e falha por achados no GitLab real, sem alegar correção dos achados."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_gitlab_gitleaks_redacted_diagnostics.py"
+    ],
+    "evidence_contract": "Pre-PR no HEAD exato e job GitLab do mesmo incremento; testes de configuração não substituem scanner real."
+  }
+}
