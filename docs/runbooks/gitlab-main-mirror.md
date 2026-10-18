@@ -61,12 +61,18 @@ O provisionador:
 
 1. confirma que `41627393` é membro ativo do projeto, com acesso suficiente, e possui o nome exibido `reqsys-github-mirror`;
 2. recusa o identificador legado `41625052`;
-3. recusa permissão genérica de push para `Developer`;
-4. preserva os allowances existentes da branch;
-5. adiciona apenas `{user_id: 41627393}` em `allowed_to_push` quando necessário;
+3. remove somente os registros genéricos `Developer (30)` de push e merge da `main`, mas apenas quando o fallback `Maintainer (40)` continua presente; dry-run apenas descreve a remoção;
+4. preserva allowances por usuário, grupo, deploy key e outros níveis não afetados;
+5. aceita o allowance existente de `Maintainers (40)` como fallback compatível com GitLab Free para o bot Maintainer, registrando `least_privilege_exact_identity=false`; não tenta autoelevar o próprio token com uma regra por usuário;
 6. mantém `allow_force_push=false`;
-7. relê a branch protegida após a escrita;
-8. falha se o usuário não tiver sido persistido, se uma regra anterior desaparecer ou se force-push permanecer habilitado.
+7. exige `only_allow_merge_if_pipeline_succeeds=true` e `allow_merge_on_skipped_pipeline=false`;
+8. relê branch e projeto após cada escrita e falha fechado se qualquer pós-condição não for comprovada;
+9. mantém a regra individual por usuário apenas como possibilidade de plano/capacidade, nunca como requisito implícito para GitLab Free.
+
+
+### GitLab Free e menor privilégio
+
+No GitLab Free, a interface de branch protegida não oferece seleção de usuário individual. O estado mínimo aceito pelo ReqSys mantém `Maintainers (40)` como fallback de push para a identidade técnica já atestada e remove `Developers (30)`. Isso é mais amplo que uma regra por usuário e deve permanecer explícito na evidência; não é descrito como equivalência de least privilege. Se o plano futuramente oferecer regra individual, a migração deve ser separada e validada sem ampliar privilégios.
 
 O dry-run é automático e não escreve. O job `gitlab_governance_provision_apply` continua manual/protegido porque realiza alteração administrativa real. A autorização operacional para executar esse job deve ser explícita e vinculada à identidade acima.
 
