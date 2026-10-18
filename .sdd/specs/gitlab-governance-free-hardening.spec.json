@@ -1,0 +1,25 @@
+{
+  "feature_name": "gitlab-governance-free-hardening",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-18",
+  "updated_at": "2026-10-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Endurece a main GitLab no plano Free: remove allowances Developer com fallback Maintainer, desliga force-push, rejeita merge em pipeline skipped e evita autoelevação por user_id.",
+  "sdd_gate": {
+    "tests": [
+      "gitlab/tests/test_provision_gitlab_governance.py"
+    ]
+  },
+  "traceability": {
+    "issue": "#846",
+    "pipeline": "https://gitlab.com/ericson-j-santos/reqsys-v2-enterprise-real/-/pipelines/2960078371",
+    "attestation_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/39113775507",
+    "official_protected_branch_api": "https://docs.gitlab.com/api/protected_branches/",
+    "official_projects_api": "https://docs.gitlab.com/api/projects/"
+  }
+}
