@@ -1,0 +1,19 @@
+{
+  "feature_name": "redmine-description-crlf",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-18",
+  "phase": "implementation",
+  "description": "Corrige falso negativo de readback serializando a descrição com CRLF conforme Issue#description= do Redmine, sem relaxar a comparação estrita nem alterar dados canônicos do ReqSys.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_redmine_api_line_endings.py",
+      "backend/tests/test_redmine_lifecycle_sync.py"
+    ]
+  },
+  "traceability": {
+    "issue": "#1686",
+    "requirements": "docs/runbooks/redmine-description-crlf.md",
+    "policy_module": "backend/app/services/redmine_api.py",
+    "official_source": "https://github.com/redmine/redmine/blob/6.1.5/app/models/issue.rb"
+  }
+}
