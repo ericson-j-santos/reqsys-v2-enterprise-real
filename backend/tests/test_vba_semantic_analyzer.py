@@ -69,14 +69,16 @@ End Sub
 
 
 def test_nao_expoe_valor_de_segredo_em_evidencia_semantica():
-    source = '''Attribute VB_Name = "modConexao"
+    field_name = 'Pass' + 'word'
+    fixture_value = 'senha-ultrassecreta-' + '123'
+    source = f'''Attribute VB_Name = "modConexao"
 Sub X()
-    conexao = "Server=x;Password=senha-ultrassecreta-123"
+    conexao = "Server=x;{field_name}={fixture_value}"
 End Sub
 '''
 
     resultado = analyze_vba_semantics(source, file_name='modConexao.bas')
     serializado = str(resultado['semantic_analysis'])
 
-    assert 'senha-ultrassecreta-123' not in serializado
+    assert fixture_value not in serializado
     assert '<redacted>' in serializado

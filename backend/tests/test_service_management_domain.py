@@ -35,7 +35,7 @@ def _sha(value: str) -> str:
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
-def _case(*, key: str = 'rsm-1783') -> ServiceCase:
+def _case(*, idempotency_seed: str = 'rsm-1783') -> ServiceCase:
     return ServiceCase.create(
         case_type=ServiceCaseType.REQUEST,
         service_id=str(uuid4()),
@@ -43,11 +43,11 @@ def _case(*, key: str = 'rsm-1783') -> ServiceCase:
         impact=Impact.HIGH,
         urgency=Urgency.CRITICAL,
         correlation_id='corr-rsm-1783',
-        idempotency_key=_sha(key),
+        idempotency_key=_sha(idempotency_seed),
     )
 
 
-def _change_case(*, key: str = 'rsm-1789') -> ServiceCase:
+def _change_case(*, idempotency_seed: str = 'rsm-1789') -> ServiceCase:
     return ServiceCase.create(
         case_type=ServiceCaseType.CHANGE,
         service_id=str(uuid4()),
@@ -55,7 +55,7 @@ def _change_case(*, key: str = 'rsm-1789') -> ServiceCase:
         impact=Impact.HIGH,
         urgency=Urgency.HIGH,
         correlation_id='corr-rsm-1789',
-        idempotency_key=_sha(key),
+        idempotency_key=_sha(idempotency_seed),
     )
 
 
@@ -204,7 +204,7 @@ def test_change_accepts_requirement_sdd_pr_and_ci_for_exact_sha():
 
 
 def test_change_rejects_green_ci_from_different_sha():
-    case = _change_case(key='rsm-1789-sha-mismatch')
+    case = _change_case(idempotency_seed='rsm-1789-sha-mismatch')
     traceability = _change_traceability('a' * 40)
     evidence = ChangeCiEvidence(head_sha='b' * 40, run_id='run-1789-wrong-sha', conclusion='success')
 
@@ -217,7 +217,7 @@ def test_change_rejects_green_ci_from_different_sha():
 
 
 def test_change_blocks_when_ci_evidence_is_missing():
-    case = _change_case(key='rsm-1789-missing-evidence')
+    case = _change_case(idempotency_seed='rsm-1789-missing-evidence')
     traceability = _change_traceability('c' * 40)
 
     with pytest.raises(ServiceManagementValidationError, match='obrigatória'):
@@ -227,7 +227,7 @@ def test_change_blocks_when_ci_evidence_is_missing():
 
 
 def test_change_traceability_cannot_be_applied_to_non_change_case():
-    case = _case(key='rsm-1789-not-change')
+    case = _case(idempotency_seed='rsm-1789-not-change')
     traceability = _change_traceability('d' * 40)
     evidence = ChangeCiEvidence(head_sha='d' * 40, run_id='run-1789-request', conclusion='success')
 

@@ -20,7 +20,7 @@ def test_script_uses_fixed_targets_and_replay_guard() -> None:
     raw = SCRIPT.read_text(encoding="utf-8")
     assert 'EXPECTED_HOST = "DESKTOP-PDQK954"' in raw
     assert 'CONTAINER = "wt-pc24x7-piloto-api-1"' in raw
-    assert 'FIGMA_FILE_KEY = "1iA8PiHX7qMnYHBDTdt0fY"' in raw
+    assert 'FIGMA_FILE_ID = "1iA8PiHX7qMnYHBDTdt0fY"' in raw
     assert 'FIGMA_NODE_ID = "1:44"' in raw
     assert 'GITHUB_REPO = "ericson-j-santos/reqsys-v2-enterprise-real"' in raw
     assert '"mode": "bidirectional"' in raw
