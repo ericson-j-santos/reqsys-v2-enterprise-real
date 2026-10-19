@@ -10,32 +10,39 @@
     "design": true,
     "tasks": true
   },
-  "description": "Restaurar triagem pela interface de logs do Gitleaks com mascaramento integral, sem silenciar os cinco achados existentes.",
+  "description": "Diagnosticar com mascaramento integral e remover as cinco causas do Gitleaks sem allowlist nem redução de cobertura.",
   "environment": "GitHub Pre-PR / GitLab CI, sem alteração de runtime",
   "production_enabled": false,
   "files": [
     "gitlab/ci/devsecops.yml",
-    "tests/test_gitlab_gitleaks_redacted_diagnostics.py"
+    "tests/test_gitlab_gitleaks_redacted_diagnostics.py",
+    "backend/tests/test_service_management_domain.py",
+    "backend/tests/test_vba_semantic_analyzer.py",
+    "scripts/figma_github_dev_e2e.py",
+    "tests/test_figma_github_dev_e2e_contract.py"
   ],
   "risk": {
     "level": 2,
     "admin_permission": false,
     "secrets_exposed": false,
-    "authorization": "Continuação do desbloqueio autorizada no chat; mudança diagnóstica reversível, sem reduzir controles.",
-    "rollback": "Reverter apenas as flags diagnósticas; preservar scanner, política e exit-code 1."
+    "authorization": "Continuação do desbloqueio autorizada no chat; remediação de falsos positivos/sintético sem reduzir o scanner.",
+    "rollback": "Reverter o incremento como conjunto; preservar scanner, política, raiz, mascaramento e exit-code 1."
   },
   "acceptance_criteria": [
-    "Preservar imagem por digest, política .gitleaks.toml, varredura da raiz e relatório JSON.",
-    "Adicionar --verbose --no-color e exigir --redact=100.",
-    "Manter --exit-code 1 e scanner bloqueante; não excluir caminhos nem acrescentar allowlists.",
-    "Executar controles positivos, negativos, regressão do comando silencioso e repetição sem mutação.",
-    "READY_FOR_PR passa no HEAD exato antes de abrir PR.",
-    "Após integração e mirror, validar saída mascarada e falha por achados no GitLab real, sem alegar correção dos achados."
+    "Preservar imagem por digest, política .gitleaks.toml, varredura da raiz, relatório JSON e --exit-code 1.",
+    "Manter --verbose --no-color e --redact=100 sem allow_failure, || true ou exclusão de caminhos.",
+    "Remover os cinco fingerprints conhecidos por correção semântica/sintética, sem acrescentar os valores à allowlist.",
+    "Executar testes positivos, negativos, funcionais e prevenção de recorrência no HEAD exato.",
+    "Validar em MR GitLab temporário que o scanner real retorna zero achados bloqueantes antes do merge GitHub.",
+    "Após merge governado, provar GitHub SHA == GitLab SHA e pipeline main com gates obrigatórios executados."
   ],
   "sdd_gate": {
     "tests": [
-      "tests/test_gitlab_gitleaks_redacted_diagnostics.py"
+      "tests/test_gitlab_gitleaks_redacted_diagnostics.py",
+      "backend/tests/test_service_management_domain.py",
+      "backend/tests/test_vba_semantic_analyzer.py",
+      "tests/test_figma_github_dev_e2e_contract.py"
     ],
-    "evidence_contract": "Pre-PR no HEAD exato e job GitLab do mesmo incremento; testes de configuração não substituem scanner real."
+    "evidence_contract": "Pre-PR/CI no HEAD exato + MR GitLab temporário com scanner real mascarado; testes de configuração não substituem o Gitleaks real."
   }
 }

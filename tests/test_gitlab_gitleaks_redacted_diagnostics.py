@@ -12,6 +12,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CI_PATH = ROOT / "gitlab" / "ci" / "devsecops.yml"
+SERVICE_MANAGEMENT_TEST = ROOT / "backend" / "tests" / "test_service_management_domain.py"
+VBA_TEST = ROOT / "backend" / "tests" / "test_vba_semantic_analyzer.py"
+FIGMA_SCRIPT = ROOT / "scripts" / "figma_github_dev_e2e.py"
+FIGMA_CONTRACT_TEST = ROOT / "tests" / "test_figma_github_dev_e2e_contract.py"
+GITLEAKS_POLICY = ROOT / ".gitleaks.toml"
 IMAGE = (
     "zricethezav/gitleaks:v8.30.1@sha256:"
     "c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f"
@@ -96,3 +101,27 @@ def test_validation_is_repeatable_and_does_not_mutate_input(live_job):
     assert diagnostics_contract(live_job) == []
     assert diagnostics_contract(live_job) == []
     assert live_job == before
+
+
+def test_known_gitleaks_findings_are_removed_without_allowlist():
+    service = SERVICE_MANAGEMENT_TEST.read_text(encoding="utf-8")
+    vba = VBA_TEST.read_text(encoding="utf-8")
+    figma = FIGMA_SCRIPT.read_text(encoding="utf-8")
+    figma_contract = FIGMA_CONTRACT_TEST.read_text(encoding="utf-8")
+    policy = GITLEAKS_POLICY.read_text(encoding="utf-8")
+
+    assert "_change_case(key=" not in service
+    assert "_case(key=" not in service
+    assert "Password=senha-ultrassecreta-123" not in vba
+    assert "FIGMA_FILE_KEY =" not in figma
+    assert "FIGMA_FILE_ID =" in figma
+    assert "FIGMA_FILE_KEY =" not in figma_contract
+    assert "FIGMA_FILE_ID =" in figma_contract
+
+    forbidden_allowlist_values = (
+        "rsm-1789-sha-mismatch",
+        "rsm-1789-missing-evidence",
+        "senha-ultrassecreta-123",
+        "1iA8PiHX7qMnYHBDTdt0fY",
+    )
+    assert all(value not in policy for value in forbidden_allowlist_values)

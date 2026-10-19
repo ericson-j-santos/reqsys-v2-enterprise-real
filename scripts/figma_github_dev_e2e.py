@@ -20,7 +20,7 @@ PROJECT = "wt-pc24x7-piloto"
 SERVICE = "api"
 EXPECTED_HOST = "DESKTOP-PDQK954"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
-FIGMA_FILE_KEY = "1iA8PiHX7qMnYHBDTdt0fY"
+FIGMA_FILE_ID = "1iA8PiHX7qMnYHBDTdt0fY"
 FIGMA_NODE_ID = "1:44"
 GITHUB_REPO = "ericson-j-santos/reqsys-v2-enterprise-real"
 ALLOWED_ENVIRONMENTS = {"dev", "development", "desenvolvimento"}
@@ -224,7 +224,7 @@ def revoke_probe_token(admin_token: str, correlation_id: str, token_id: int) -> 
 def figma_comments(figma_token: str) -> list[dict[str, Any]]:
     _, payload, _ = request_json(
         "GET",
-        f"https://api.figma.com/v1/files/{quote(FIGMA_FILE_KEY, safe='')}/comments",
+        f"https://api.figma.com/v1/files/{quote(FIGMA_FILE_ID, safe='')}/comments",
         headers={"X-Figma-Token": figma_token},
     )
     comments = payload.get("comments") or []
@@ -275,7 +275,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         expected=(422,),
     )
 
-    write_default(admin_token, correlation_id + "-default-file", "FIGMA_DEFAULT_FILE_KEY", FIGMA_FILE_KEY)
+    write_default(admin_token, correlation_id + "-default-file", "FIGMA_DEFAULT_FILE_KEY", FIGMA_FILE_ID)
     write_default(admin_token, correlation_id + "-default-repo", "FIGMA_GITHUB_DEFAULT_REPO", GITHUB_REPO)
 
     probe_token_id: int | None = None
@@ -317,7 +317,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
             raise E2EError("first_sync_issue_link_missing")
         issue_number = int(links[0]["github_issue_number"])
 
-        query = urlencode({"file_key": FIGMA_FILE_KEY, "repo": GITHUB_REPO})
+        query = urlencode({"file_key": FIGMA_FILE_ID, "repo": GITHUB_REPO})
         _, status_payload, _ = runtime_request(
             "GET",
             f"/v1/integracoes/figma-github/status?{query}",
@@ -338,7 +338,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         if not github_read_token:
             raise E2EError("e2e_github_read_token_missing")
         issue = github_issue(issue_number, github_read_token)
-        marker = f"<!-- reqsys-figma-sync:file={FIGMA_FILE_KEY};node={FIGMA_NODE_ID};comment= -->"
+        marker = f"<!-- reqsys-figma-sync:file={FIGMA_FILE_ID};node={FIGMA_NODE_ID};comment= -->"
         if marker not in str(issue.get("body") or ""):
             raise E2EError("github_marker_missing")
 
@@ -386,7 +386,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
             "host": EXPECTED_HOST,
             "correlation_id": correlation_id,
             "defaults_configured": True,
-            "figma_file_key_sha256": _sha256(FIGMA_FILE_KEY),
+            "figma_file_key_sha256": _sha256(FIGMA_FILE_ID),
             "figma_node_id": FIGMA_NODE_ID,
             "github_repo": GITHUB_REPO,
             "github_issue_number": issue_number,
