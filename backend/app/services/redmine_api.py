@@ -42,7 +42,11 @@ def montar_campos_requisito_redmine(requisito: Any) -> dict[str, str]:
     )
     return {
         'subject': f'[{requisito.codigo}] {requisito.titulo}',
-        'description': descricao,
+        # Issue#description= persiste CRLF. Canonicalizar o payload mantém
+        # igualdade estrita na releitura e não descarta espaços ou conteúdo.
+        'description': (
+            descricao.replace('\r\n', '\n').replace('\r', '\n').replace('\n', '\r\n')
+        ),
     }
 
 
