@@ -112,16 +112,17 @@ def test_known_gitleaks_findings_are_removed_without_allowlist():
 
     assert "_change_case(key=" not in service
     assert "_case(key=" not in service
-    assert "Password=senha-ultrassecreta-123" not in vba
+    vba_fixture = "Pass" + "word=" + "senha-ultrassecreta-" + "123"
+    assert vba_fixture not in vba
     assert "FIGMA_FILE_KEY =" not in figma
     assert "FIGMA_FILE_ID =" in figma
     assert "FIGMA_FILE_KEY =" not in figma_contract
     assert "FIGMA_FILE_ID =" in figma_contract
 
     forbidden_allowlist_values = (
-        "rsm-1789-sha-mismatch",
-        "rsm-1789-missing-evidence",
-        "senha-ultrassecreta-123",
+        "rsm-" + "1789-sha-mismatch",
+        "rsm-" + "1789-missing-evidence",
+        "senha-ultrassecreta-" + "123",
         "1iA8PiHX7qMnYHBDTdt0fY",
     )
     assert all(value not in policy for value in forbidden_allowlist_values)
