@@ -49,6 +49,7 @@ const stubs = {
     props: ['type'],
     template: '<div :data-alert-type="type"><slot /></div>',
   },
+  ExpandTransition: Slot,
   VExpandTransition: Slot,
   VCard: Slot,
   VCardTitle: Slot,
