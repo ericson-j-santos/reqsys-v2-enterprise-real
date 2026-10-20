@@ -145,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$OCR_AUDIT_SHA"
-          test "$(git rev-parse HEAD:src/ocr_evidencia)" = "$OCR_SRC_TREE"
+          test "$(git rev-parse HEAD:src)" = "$OCR_SRC_TREE"
           test "$(gh api repos/$OCR_REPOSITORY/git/ref/heads/main --jq '.object.sha')" = "$OCR_MAIN_SHA"
           test "$(gh api repos/$OCR_REPOSITORY/git/ref/heads/audit/baseline92-reference-v1.0-20261020 --jq '.object.sha')" = "$OCR_AUDIT_SHA"
           mapfile -t changed < <(git diff --name-status "$OCR_BASE_AUDIT_SHA...$OCR_AUDIT_SHA")
