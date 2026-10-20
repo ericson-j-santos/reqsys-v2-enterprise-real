@@ -137,6 +137,82 @@ jobs:
           PY
           PYTHONPATH=backend python -m pytest -q backend/ocr_tests
 
+      - name: Validar evidência durável do pacote OCR
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          bundle = Path("backend/vendor/ocr-evidence-engine")
+          report_path = Path("artifacts/ocr-reproducibility-report.json")
+          toolchain_path = Path("artifacts/ocr-build-toolchain.json")
+          lock = json.loads(Path("config/ocr-engine-lock.json").read_text(encoding="utf-8"))
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          wheels = sorted(bundle.glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"ocr_durable_artifact_wheel_count_invalid:{len(wheels)}")
+          wheel = wheels[0]
+          required = {
+              wheel.name,
+              "MANIFEST.sha256",
+              "SHA256SUMS",
+              "provenance.json",
+          }
+          actual = {path.name for path in bundle.iterdir() if path.is_file()}
+          if actual != required:
+              raise SystemExit(
+                  "ocr_durable_artifact_file_set_mismatch:"
+                  f"expected={sorted(required)}:actual={sorted(actual)}"
+              )
+          if not toolchain_path.is_file():
+              raise SystemExit("ocr_durable_artifact_toolchain_missing")
+          if report.get("source_sha") != lock["sha"]:
+              raise SystemExit("ocr_durable_artifact_source_sha_mismatch")
+          if report.get("byte_identical") is not True:
+              raise SystemExit("ocr_durable_artifact_not_byte_identical")
+          if report.get("negative_control_detected") is not True:
+              raise SystemExit("ocr_durable_artifact_negative_control_missing")
+          if report.get("build_a") != report.get("build_b"):
+              raise SystemExit("ocr_durable_artifact_build_hashes_mismatch")
+
+          expected_hashes = report["build_b"]
+          expected_names = {wheel.name, "MANIFEST.sha256", "SHA256SUMS"}
+          if set(expected_hashes) != expected_names:
+              raise SystemExit("ocr_durable_artifact_report_file_set_mismatch")
+          for name, expected_digest in expected_hashes.items():
+              actual_digest = hashlib.sha256((bundle / name).read_bytes()).hexdigest()
+              if actual_digest != expected_digest:
+                  raise SystemExit(f"ocr_durable_artifact_hash_mismatch:{name}")
+
+          if (bundle / "MANIFEST.sha256").read_bytes() != (bundle / "SHA256SUMS").read_bytes():
+              raise SystemExit("ocr_durable_artifact_manifest_compatibility_mismatch")
+
+          print(
+              "OCR_DURABLE_ARTIFACT_OK "
+              f"source_sha={report['source_sha']} "
+              f"wheel_sha256={expected_hashes[wheel.name]} "
+              f"manifest_sha256={expected_hashes['MANIFEST.sha256']}"
+          )
+          PY
+
+      - name: Publicar bundle OCR reproduzível
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-runtime-package-${{ github.sha }}
+          path: |
+            backend/vendor/ocr-evidence-engine/*.whl
+            backend/vendor/ocr-evidence-engine/MANIFEST.sha256
+            backend/vendor/ocr-evidence-engine/SHA256SUMS
+            backend/vendor/ocr-evidence-engine/provenance.json
+            artifacts/ocr-build-toolchain.json
+            artifacts/ocr-reproducibility-report.json
+          if-no-files-found: error
+          retention-days: 90
+
   external-runtime-image-contract:
     name: OCR External Runtime Image Contract
     runs-on: ubuntu-latest

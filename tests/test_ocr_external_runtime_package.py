@@ -86,3 +86,43 @@ def test_benchmark_builds_real_image_with_negative_control_first() -> None:
     assert "docker build" in text
     assert "docker run --rm --entrypoint python" in text
     assert "local_ocr_copy_present" in text
+
+
+def test_benchmark_publishes_complete_reproducible_runtime_bundle() -> None:
+    job = _yaml(BENCHMARK_WORKFLOW)["jobs"]["external-package-contract"]
+    steps = job["steps"]
+    names = [step.get("name", "") for step in steps]
+    validate_name = "Validar evidência durável do pacote OCR"
+    upload_name = "Publicar bundle OCR reproduzível"
+
+    assert names.index("Preparar pacote OCR canônico e reproduzível") < names.index(
+        "Provar origem externa e executar contratos do ReqSys"
+    ) < names.index(validate_name) < names.index(upload_name)
+
+    validation = next(step for step in steps if step.get("name") == validate_name)
+    validation_script = validation["run"]
+    for value in (
+        'report.get("source_sha") != lock["sha"]',
+        'report.get("byte_identical") is not True',
+        'report.get("negative_control_detected") is not True',
+        'report.get("build_a") != report.get("build_b")',
+        "ocr_durable_artifact_hash_mismatch",
+        "MANIFEST.sha256",
+        "SHA256SUMS",
+        "provenance.json",
+    ):
+        assert value in validation_script
+
+    upload = next(step for step in steps if step.get("name") == upload_name)
+    assert upload["uses"] == "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    assert upload["with"]["name"] == "ocr-runtime-package-${{ github.sha }}"
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert upload["with"]["retention-days"] == "90"
+    assert set(upload["with"]["path"].splitlines()) == {
+        "backend/vendor/ocr-evidence-engine/*.whl",
+        "backend/vendor/ocr-evidence-engine/MANIFEST.sha256",
+        "backend/vendor/ocr-evidence-engine/SHA256SUMS",
+        "backend/vendor/ocr-evidence-engine/provenance.json",
+        "artifacts/ocr-build-toolchain.json",
+        "artifacts/ocr-reproducibility-report.json",
+    }
