@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "recovered_standalone_baseline92_api_compatibility",
+  "baseline_original_v1_0_bytes_verified": false,
+  "baseline_functional_certified": false,
+  "consumer_sha": "f487837fa553a0f5f8af753963539e60a79dbe19",
+  "engine_repository": "ericson-j-santos/ocr-evidence-engine",
+  "engine_sha": "15dd067032d7c55e22186ef3587c0d694d0392fd",
+  "engine_version": "1.2.0",
+  "wheel_sha256": "9301bc1ec426cb2a223b6beca6802c97f576bd5a89c4cf73a1b1f0a15d08b7ea",
+  "recovered_sources": [
+    {"version": "1.1.0", "generator_sha256": "95be3e4629d4d4fc37ba84ab34ec79974048ace28c43910aff3fd47887f7cea9", "payload_sha256": "2a9905f25526e6959a154ec02eb33098e4e64a5ab29fb98365f9415767b115da"},
+    {"version": "1.2.0", "generator_sha256": "a12f4fd1984547f07368d0534efd2832fa4c18f58c7a5a3e6cea52064655eeee", "payload_sha256": "6bcc92684488a5d2167a70a66e0bc3e3fd6b4933b9ab9a6d2b33d03fa5a611c4"}
+  ],
+  "id_format": "path::class::method",
+  "expected_cases": 92,
+  "mapping_basis": "Whole-file imports are prerequisites for every test in that file. Availability of imports is NOT execution of the test bodies or proof of semantic equivalence.",
+  "groups": [
+    {
+      "path": "tests/test_casos_uso.py",
+      "sha256": "885b32c0d4003948f05b108ec3b06dcfb5464d9fa9ddf56e7283db27b4d22418",
+      "expected_cases": 18,
+      "contracts": {
+        "ocr_evidencia.adaptadores.repositorio_jsonl": ["RelogioFixo", "RepositorioJsonl", "RepositorioMemoria"],
+        "ocr_evidencia.aplicacao.casos_uso": ["ConsolidarEvidencia", "PoliticaDecisao", "RegistrarObservacao"],
+        "ocr_evidencia.dominio.medicao": ["EstadoDecisao", "ResultadoComparacao"],
+        "ocr_evidencia.dominio.metrica": ["ConfiguracaoGate"],
+        "ocr_evidencia.portas.protocolos": ["Relogio", "RepositorioObservacoes"]
+      },
+      "cases": {
+        "TestPortas": ["test_adaptadores_satisfazem_as_portas"],
+        "TestRegistrarObservacao": ["test_extracao_correta_com_alta_confianca_vira_auto", "test_confianca_abaixo_do_limiar_vira_revisao", "test_dv_invalido_rebaixa_para_revisao_mesmo_com_confianca_alta", "test_campo_nao_localizado_vira_abstencao", "test_sem_baseline_a_comparacao_e_neutra", "test_divergencia_registra_classe_sem_valores", "test_reprocessamento_e_idempotente", "test_nova_versao_de_modelo_gera_nova_observacao", "test_observacao_persistida_nao_contem_pii", "test_contexto_de_uf_e_repassado_para_o_cep", "test_confianca_fora_do_intervalo_e_recusada"],
+        "TestPoliticaDecisao": ["test_limiar_mais_rigoroso_reduz_auto"],
+        "TestRepositorioJsonl": ["test_persistencia_e_releitura", "test_indice_de_idempotencia_sobrevive_a_reabertura", "test_sha256_muda_ao_acrescentar_evidencia", "test_linha_corrompida_falha_de_forma_explicita"],
+        "TestConsolidarEvidencia": ["test_consolidacao_reprova_gate_com_amostra_insuficiente"]
+      }
+    },
+    {
+      "path": "tests/test_metrica.py",
+      "sha256": "1aa1b0f0305f648af58f9bb3c043283c1ff80465517ad949ada674a0d746cb50",
+      "expected_cases": 21,
+      "contracts": {
+        "ocr_evidencia.dominio.medicao": ["EstadoDecisao", "Observacao", "ResultadoComparacao"],
+        "ocr_evidencia.dominio.metrica": ["ConfiguracaoGate", "amostras_necessarias", "avaliar_gate", "consolidar", "erro_calibracao_esperado", "limite_inferior_wilson"]
+      },
+      "cases": {
+        "TestWilson": ["test_amostra_pequena_nao_sustenta_meta_alta", "test_limite_cresce_com_a_amostra", "test_amostra_zero_retorna_zero", "test_limite_inferior_e_menor_que_a_estimativa_pontual", "test_sucessos_invalidos_levantam_erro"],
+        "TestDimensionamento": ["test_calcula_n_minimo_para_a_meta", "test_precisao_igual_a_meta_e_inatingivel", "test_meta_mais_folgada_exige_menos_amostras"],
+        "TestCalibracao": ["test_modelo_calibrado_tem_ece_baixo", "test_excesso_de_confianca_eleva_o_ece", "test_sem_pares_o_ece_e_zero"],
+        "TestConsolidacao": ["test_denominador_de_precisao_exclui_sem_baseline", "test_abstencao_entra_na_cobertura_mas_nao_na_precisao", "test_celulas_sao_segregadas_por_tipo_e_campo", "test_dv_invalido_em_auto_e_contabilizado", "test_dv_heuristico_invalido_nao_conta_como_inseguro"],
+        "TestGate": ["test_evidencia_suficiente_aprova", "test_amostra_insuficiente_reprova_mesmo_com_100_por_cento", "test_uma_decisao_insegura_reprova_o_gate", "test_mistura_de_versoes_de_modelo_reprova", "test_evidencia_vazia_reprova"]
+      }
+    },
+    {
+      "path": "tests/test_privacidade.py",
+      "sha256": "75f4bcd6126f23d5843574fb3545734f220b051adbe2b900be981efdec1b05b1",
+      "expected_cases": 24,
+      "contracts": {
+        "ocr_evidencia.dominio.divergencia": ["ClasseDivergencia", "ModoComparacao", "classificar_divergencia", "modo_para_campo", "normalizar"],
+        "ocr_evidencia.dominio.mascaramento": ["ErroPIIDetectada", "mascarar_cnpj", "mascarar_cpf", "mascarar_generico", "validar_ausencia_de_pii"]
+      },
+      "cases": {
+        "TestMascaramento": ["test_mascara_cpf_preserva_apenas_o_terceiro_grupo", "test_mascara_cnpj", "test_mascara_generica_preserva_comprimento", "test_valor_curto_e_totalmente_ocultado"],
+        "TestCercaDePII": ["test_chave_proibida_e_recusada", "test_chave_proibida_aninhada_e_recusada", "test_padrao_de_cpf_em_valor_livre_e_recusado", "test_sequencia_de_onze_digitos_e_recusada", "test_email_em_valor_livre_e_recusado", "test_hash_de_64_caracteres_nao_dispara_falso_positivo", "test_registro_limpo_passa"],
+        "TestDivergencia": ["test_normalizacao_ignora_caixa_acento_e_espaco", "test_valores_equivalentes_apos_normalizacao", "test_confusao_visual_identificada_sem_posicao", "test_transposicao_identificada", "test_campo_ausente", "test_campo_excedente", "test_erro_de_caractere_unico", "test_saida_nao_contem_os_valores_comparados", "test_identificador_formatado_nao_conta_como_divergencia", "test_data_em_formatos_distintos_nao_conta_como_divergencia", "test_modo_e_escolhido_pelo_nome_do_campo", "test_modo_identificador_nao_mascara_erro_real_de_digito", "test_dicionario_da_divergencia_passa_na_cerca_de_pii"]
+      }
+    },
+    {
+      "path": "tests/test_verificacao.py",
+      "sha256": "d24f0cc17a219e8b3283e0209083b07e9fbcbb56deabc4b59c5ffb47a552aaf4",
+      "expected_cases": 29,
+      "contracts": {
+        "ocr_evidencia.dominio.verificacao": ["Forca", "Situacao", "verificar_campo", "verificar_cep", "verificar_cnh", "verificar_cnpj", "verificar_cpf", "verificar_data_nascimento", "verificar_pis", "_FAIXAS_CEP"]
+      },
+      "cases": {
+        "TestCPF": ["test_cpf_valido_com_e_sem_mascara", "test_cpf_com_dv_incorreto", "test_cpf_com_comprimento_errado", "test_cpf_de_digito_repetido_e_rejeitado", "test_cpf_vazio_e_indeterminado_nao_invalido"],
+        "TestCNPJ": ["test_cnpj_numerico_valido", "test_cnpj_numerico_invalido", "test_cnpj_alfanumerico_e_generalizacao_do_numerico", "test_cnpj_alfanumerico_com_dv_errado", "test_cnpj_com_dv_nao_numerico_e_rejeitado", "test_letra_a_vale_dezessete"],
+        "TestPIS": ["test_pis_valido", "test_pis_invalido"],
+        "TestCNH": ["test_cnh_reprovada_nao_bloqueia_auto", "test_cnh_com_comprimento_errado", "test_cnh_consistente_com_a_propria_regra"],
+        "TestCEP": ["test_cep_dentro_da_faixa_da_uf", "test_cep_fora_da_faixa_da_uf", "test_cep_sem_uf_fica_indeterminado", "test_uf_desconhecida_fica_indeterminada", "test_faixas_cobrem_as_27_unidades_federativas"],
+        "TestDataNascimento": ["test_data_plausivel", "test_data_inexistente", "test_idade_implausivel", "test_data_futura_e_invalida", "test_formato_iso_aceito"],
+        "TestRoteador": ["test_campo_sem_regra_sai_nao_aplicavel", "test_roteador_repassa_contexto_de_uf", "test_roteador_normaliza_nome_do_campo"]
+      }
+    }
+  ]
+}
