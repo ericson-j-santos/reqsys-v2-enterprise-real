@@ -21,17 +21,28 @@ SCRIPT = ROOT / "scripts" / "powerbi_template_runtime_resolver.py"
 
 
 class FakeRequester:
-    def __init__(self, *, dre=True, ambiguous=False, execute_status=200, execute_value=0):
+    def __init__(
+        self, *, dre=True, ambiguous=False, execute_status=200, execute_value=0,
+        principal_role="Contributor", dedicated=False, read_only=False
+    ):
         self.calls = []
         self.dre = dre
         self.ambiguous = ambiguous
         self.execute_status = execute_status
         self.execute_value = execute_value
+        self.principal_role = principal_role
+        self.dedicated = dedicated
+        self.read_only = read_only
 
     def __call__(self, method, url, token, payload):
         self.calls.append((method, url, payload))
         if url == POWERBI_BASE + "/groups?$top=100&$skip=0":
-            return 200, {"value": [{"id": "11111111-1111-1111-1111-111111111111", "name": "segredo"}]}
+            return 200, {"value": [{
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "segredo",
+                "isReadOnly": self.read_only,
+                "isOnDedicatedCapacity": self.dedicated,
+            }]}
         if url.endswith("/reports"):
             values = []
             if self.dre:
@@ -45,6 +56,16 @@ class FakeRequester:
                     "id": "44444444-4444-4444-4444-444444444444",
                     "name": "DRE",
                     "datasetId": "55555555-5555-5555-5555-555555555555",
+                })
+            return 200, {"value": values}
+        if url.endswith("/users"):
+            values = []
+            if self.principal_role is not None:
+                values.append({
+                    "identifier": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "principalType": "App",
+                    "groupUserAccessRight": self.principal_role,
+                    "displayName": "segredo-app",
                 })
             return 200, {"value": values}
         if url.endswith("/datasets"):
@@ -86,7 +107,11 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
 
     def test_resolve_dre_e_executa_sentinel_sem_persistir_ids_nomes(self):
         fake = FakeRequester()
-        result = resolve_runtime(token="x", requester=fake)
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            requester=fake,
+        )
         dre = next(item for item in result["bindings"] if item["template_id"] == "dre")
         self.assertEqual(dre["status"], "resolved")
         self.assertRegex(dre["workspace_ref"], r"^[0-9a-f]{24}$")
@@ -107,9 +132,43 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertFalse(result["raw_remote_names_persisted"])
         self.assertFalse(result["raw_remote_ids_or_names_logged"])
 
+    def test_preflight_observa_role_e_capacidade_sem_inferir_custo_zero(self):
+        fake = FakeRequester(principal_role="Contributor", dedicated=False, read_only=False)
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            requester=fake,
+        )
+        workspace = result["workspace_access"][0]
+        self.assertEqual(workspace["principal_role"], "Contributor")
+        self.assertEqual(workspace["principal_role_status"], "observed")
+        self.assertFalse(workspace["is_read_only"])
+        self.assertFalse(workspace["is_on_dedicated_capacity"])
+        self.assertTrue(workspace["write_candidate"])
+        self.assertEqual(result["publication_preflight"]["write_candidate_count"], 1)
+        self.assertFalse(result["publication_preflight"]["new_capacity_or_license_requested"])
+        self.assertFalse(result["publication_preflight"]["billing_mutation_performed"])
+        self.assertFalse(result["publication_preflight"]["incremental_cost_verified_zero"])
+
+    def test_viewer_ou_workspace_readonly_nao_e_candidato_a_escrita(self):
+        for role, read_only in (("Viewer", False), ("Contributor", True), (None, False)):
+            with self.subTest(role=role, read_only=read_only):
+                result = resolve_runtime(
+                    token="x",
+                    principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    requester=FakeRequester(
+                        principal_role=role, dedicated=False, read_only=read_only
+                    ),
+                )
+                self.assertFalse(result["workspace_access"][0]["write_candidate"])
+
     def test_binding_ambiguo_falha_fechado_e_nao_executa_query(self):
         fake = FakeRequester(ambiguous=True)
-        result = resolve_runtime(token="x", requester=fake)
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            requester=fake,
+        )
         dre = next(item for item in result["bindings"] if item["template_id"] == "dre")
         self.assertEqual(dre["status"], "ambiguous")
         self.assertEqual(dre["candidate_count"], 2)
@@ -119,7 +178,11 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
 
     def test_execute_queries_403_fica_bloqueado_sem_corpo_remoto(self):
         fake = FakeRequester(execute_status=403)
-        result = resolve_runtime(token="x", requester=fake)
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            requester=fake,
+        )
         sentinel = result["sentinel_parity"]
         self.assertEqual(sentinel["status"], "blocked")
         self.assertEqual(sentinel["blocker"], "execute_queries_not_available")
@@ -128,7 +191,11 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
 
     def test_sentinel_detecta_divergencia_e_nao_promove_paridade(self):
         fake = FakeRequester(execute_value=1)
-        result = resolve_runtime(token="x", requester=fake)
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            requester=fake,
+        )
         self.assertEqual(result["sentinel_parity"]["status"], "failed")
         self.assertFalse(result["metric_parity_promoted"])
         self.assertFalse(SENTINEL["representative_business_metric"])
@@ -159,6 +226,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         ):
             self.assertNotIn(forbidden_method, text)
         self.assertIn("/executeQueries", text)
+        self.assertIn("/users", text)
 
     def test_workflow_oidc_sem_segredo_e_pr_restrito(self):
         text = WORKFLOW.read_text(encoding="utf-8")

@@ -28,8 +28,14 @@ persistir ou imprimir nomes/GUIDs remotos.
     `raw_remote_ids_persisted=false`, `raw_remote_names_persisted=false` e
     `raw_remote_ids_or_names_logged=false`.
 14. O resolvedor deve reutilizar o workflow canônico `fabric-oidc-readonly-probe.yml`; é proibido aumentar a superfície de workflows só para esse caso.
-15. Testes cobrem caso positivo, ambiguidade, 403 em ExecuteQueries, divergência do sentinel,
-    bloqueio de endpoint mutante, assinatura de domínio e contrato do workflow.
+15. O preflight também deve observar `isReadOnly`, `isOnDedicatedCapacity` e o papel da App
+    no workspace via `GET /groups/{groupId}/users`, sem persistir o identificador da App.
+16. O resultado pode marcar `write_candidate=true` apenas para Admin/Member/Contributor em
+    workspace não read-only.
+17. A API não pode inferir custo: `incremental_cost_verified_zero` permanece false até existir
+    evidência independente de cobrança/licenciamento; o probe não pode criar capacidade/licença.
+18. Testes cobrem caso positivo, ambiguidade, 403 em ExecuteQueries, divergência do sentinel,
+    bloqueio de endpoint mutante, assinatura de domínio, role/capacidade e contrato do workflow.
 
 ## Critérios de aceite
 
@@ -37,7 +43,7 @@ persistir ou imprimir nomes/GUIDs remotos.
 - Ruff/gates SDD e readiness verdes para os arquivos alterados;
 - workflow canônico sem crescimento líquido de arquivos em `.github/workflows`;
 - execução OIDC real em `development` com artifact sanitizado;
-- inventário de workspaces/reports/datasets concluído sem mutação;
+- inventário de workspaces/reports/datasets e role/capacidade do workspace concluído sem mutação;
 - ausência de nomes/GUIDs remotos em logs e artifact;
 - binding `resolved`, `unmatched` ou `ambiguous` registrado por template sem fuzzy;
 - sentinel executado somente se DRE possuir binding único;

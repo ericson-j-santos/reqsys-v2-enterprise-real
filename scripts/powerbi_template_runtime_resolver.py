@@ -26,7 +26,7 @@ POWERBI_RESOURCE = "https://analysis.windows.net/powerbi/api"
 POWERBI_BASE = "https://api.powerbi.com/v1.0/myorg"
 _GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 _ALLOWED_GET = re.compile(
-    r"^/v1\.0/myorg/(?:groups|groups/[0-9a-fA-F-]{36}/(?:reports|datasets))$"
+    r"^/v1\.0/myorg/(?:groups|groups/[0-9a-fA-F-]{36}/(?:reports|datasets|users))$"
 )
 _ALLOWED_POST = re.compile(
     r"^/v1\.0/myorg/groups/[0-9a-fA-F-]{36}/datasets/[0-9a-fA-F-]{36}/executeQueries$"
@@ -400,6 +400,7 @@ def _run_sentinel(
 def resolve_runtime(
     *,
     token: str,
+    principal_identifier: str | None = None,
     requester: Requester = _request_json,
 ) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
@@ -420,6 +421,7 @@ def resolve_runtime(
             break
 
     inventory = []
+    workspace_access: list[dict[str, Any]] = []
     report_count = dataset_count = 0
     for group in groups[:25]:
         workspace_id = _valid_guid(group.get("id"))
@@ -433,6 +435,53 @@ def resolve_runtime(
             requester, token, f"{POWERBI_BASE}/groups/{workspace_id}/datasets",
             events, "datasets",
         )
+        users = _collection(
+            requester, token, f"{POWERBI_BASE}/groups/{workspace_id}/users",
+            events, "workspace_users",
+        )
+        principal_roles = []
+        if principal_identifier and users is not None:
+            for item in users:
+                identifier = item.get("identifier")
+                principal_type = item.get("principalType")
+                role = item.get("groupUserAccessRight")
+                if (
+                    isinstance(identifier, str)
+                    and identifier.casefold() == principal_identifier.casefold()
+                    and principal_type == "App"
+                    and role in {"Admin", "Member", "Contributor", "Viewer", "None"}
+                ):
+                    principal_roles.append(role)
+        role = principal_roles[0] if len(principal_roles) == 1 else None
+        is_read_only = group.get("isReadOnly") if type(group.get("isReadOnly")) is bool else None
+        is_dedicated = (
+            group.get("isOnDedicatedCapacity")
+            if type(group.get("isOnDedicatedCapacity")) is bool else None
+        )
+        capacity_id = _valid_guid(group.get("capacityId"))
+        workspace_access.append({
+            "workspace_ref": _ref(workspace_id),
+            "is_read_only": is_read_only,
+            "is_on_dedicated_capacity": is_dedicated,
+            "capacity_ref": _ref(capacity_id) if capacity_id else None,
+            "default_dataset_storage_format": (
+                group.get("defaultDatasetStorageFormat")
+                if group.get("defaultDatasetStorageFormat") in {"Small", "Large"} else None
+            ),
+            "principal_role": role,
+            "principal_role_status": (
+                "observed"
+                if len(principal_roles) == 1
+                else "not_found"
+                if users is not None and not principal_roles
+                else "ambiguous"
+                if len(principal_roles) > 1
+                else "unobserved"
+            ),
+            "write_candidate": (
+                role in {"Admin", "Member", "Contributor"} and is_read_only is False
+            ),
+        })
         report_count += len(reports or [])
         dataset_count += len(datasets or [])
         inventory.append((workspace_id, reports, datasets))
@@ -457,6 +506,20 @@ def resolve_runtime(
         },
         "bindings": bindings,
         "binding_summary": dict(sorted(status_counts.items())),
+        "workspace_access": workspace_access,
+        "publication_preflight": {
+            "existing_workspace_only": True,
+            "new_capacity_or_license_requested": False,
+            "billing_mutation_performed": False,
+            "write_candidate_count": sum(
+                1 for item in workspace_access if item["write_candidate"]
+            ),
+            "incremental_cost_verified_zero": False,
+            "cost_verification_note": (
+                "The API proves existing workspace/capacity flags and role only; "
+                "it does not expose billing or prove zero incremental cost."
+            ),
+        },
         "sentinel_parity": sentinel,
         "metric_parity_promoted": False,
         "requests": events,
@@ -464,16 +527,20 @@ def resolve_runtime(
 
 
 def run(*, tenant_id: str, client_id: str, output: Path, requester: Requester = _request_json) -> dict[str, Any]:
-    del client_id  # intentionally never persisted or logged
+    client_id = client_id.strip()
     tenant_id = tenant_id.strip()
-    if not tenant_id:
+    if not tenant_id or not client_id or _valid_guid(client_id) is None:
         raise ResolverError("oidc_configuration_missing")
     active_tenant = _az_tsv(["account", "show", "--query", "tenantId", "--output", "tsv"])
     tenant_match = active_tenant.casefold() == tenant_id.casefold() == EXPECTED_TENANT.casefold()
     if not tenant_match:
         raise ResolverError("tenant_mismatch")
     token = _token()
-    evidence = resolve_runtime(token=token, requester=requester)
+    evidence = resolve_runtime(
+        token=token,
+        principal_identifier=client_id,
+        requester=requester,
+    )
     evidence["tenant_match"] = True
     evidence["correlation_id"] = str(uuid.uuid4())
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -521,6 +588,12 @@ def main() -> int:
     print(f"workspace_count={evidence['inventory']['workspace_count']}")
     print(f"report_count={evidence['inventory']['report_count']}")
     print(f"semantic_model_count={evidence['inventory']['semantic_model_count']}")
+    print(f"write_candidate_count={evidence['publication_preflight']['write_candidate_count']}")
+    if evidence["workspace_access"]:
+        workspace = evidence["workspace_access"][0]
+        print(f"workspace_is_read_only={workspace['is_read_only']}")
+        print(f"workspace_is_on_dedicated_capacity={workspace['is_on_dedicated_capacity']}")
+        print(f"workspace_principal_role={workspace['principal_role']}")
     for status, count in sorted(evidence["binding_summary"].items()):
         print(f"binding_{status}={count}")
     print(f"sentinel_status={evidence['sentinel_parity']['status']}")
