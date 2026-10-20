@@ -34,7 +34,7 @@ _ALLOWED_POST = re.compile(
     r"^/v1\.0/myorg/groups/[0-9a-fA-F-]{36}/datasets/[0-9a-fA-F-]{36}/executeQueries$"
 )
 _ALLOWED_FABRIC_GET = re.compile(
-    r"^/v1/workspaces/[0-9a-fA-F-]{36}/roleAssignments$"
+    r"^/v1/(?:workspaces|workspaces/[0-9a-fA-F-]{36}/roleAssignments)$"
 )
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
@@ -204,10 +204,17 @@ def _fabric_request_json(
         or parsed.username
         or parsed.password
         or parsed.fragment
-        or parsed.query
         or not _ALLOWED_FABRIC_GET.fullmatch(parsed.path)
     ):
         raise ResolverError("fabric_endpoint_not_allowed")
+    if parsed.path == "/v1/workspaces":
+        pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        if len(pairs) != 1 or pairs[0][0] != "roles" or pairs[0][1] not in {
+            "Admin", "Member", "Contributor", "Viewer"
+        }:
+            raise ResolverError("fabric_query_not_allowed")
+    elif parsed.query:
+        raise ResolverError("fabric_query_not_allowed")
     request = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {bearer}", "Accept": "application/json"},
@@ -471,6 +478,31 @@ def resolve_runtime(
 
     inventory = []
     workspace_access: list[dict[str, Any]] = []
+    fabric_role_workspace_ids: dict[str, set[str]] = {}
+    fabric_role_filter_status: dict[str, int] = {}
+    if fabric_token:
+        for candidate_role in ("Admin", "Member", "Contributor", "Viewer"):
+            role_status, role_payload = fabric_requester(
+                "GET",
+                f"{FABRIC_BASE}/workspaces?roles={candidate_role}",
+                fabric_token,
+                None,
+            )
+            fabric_role_filter_status[candidate_role] = role_status
+            events.append({
+                "category": f"fabric_workspaces_role_{candidate_role.casefold()}",
+                "method": "GET",
+                "status": role_status,
+            })
+            ids: set[str] = set()
+            if role_status == 200 and isinstance(role_payload.get("value"), list):
+                for item in role_payload["value"]:
+                    if isinstance(item, dict):
+                        identifier = _valid_guid(item.get("id"))
+                        if identifier:
+                            ids.add(identifier)
+            fabric_role_workspace_ids[candidate_role] = ids
+
     report_count = dataset_count = 0
     for group in groups[:25]:
         workspace_id = _valid_guid(group.get("id"))
@@ -560,7 +592,24 @@ def resolve_runtime(
             else:
                 fabric_role_status = "unobserved"
 
-        effective_role = fabric_role or role
+        role_filter_matches = [
+            candidate_role
+            for candidate_role, ids in fabric_role_workspace_ids.items()
+            if workspace_id in ids
+        ]
+        fabric_filter_role = role_filter_matches[0] if len(role_filter_matches) == 1 else None
+        fabric_filter_role_status = (
+            "observed"
+            if len(role_filter_matches) == 1
+            else "ambiguous"
+            if len(role_filter_matches) > 1
+            else "not_found"
+            if fabric_token and all(
+                status == 200 for status in fabric_role_filter_status.values()
+            )
+            else "unobserved"
+        )
+        effective_role = fabric_filter_role or fabric_role or role
         workspace_access.append({
             "workspace_ref": _ref(workspace_id),
             "is_read_only": is_read_only,
@@ -583,6 +632,9 @@ def resolve_runtime(
             "fabric_principal_role": fabric_role,
             "fabric_principal_role_status": fabric_role_status,
             "fabric_role_assignments_status": fabric_role_assignments_status,
+            "fabric_role_filter_role": fabric_filter_role,
+            "fabric_role_filter_status": fabric_filter_role_status,
+            "fabric_role_filter_http": dict(fabric_role_filter_status),
             "effective_write_role": effective_role,
             "write_candidate": (
                 effective_role in {"Admin", "Member", "Contributor"} and is_read_only is False
@@ -703,6 +755,8 @@ def main() -> int:
         print(f"workspace_is_on_dedicated_capacity={workspace['is_on_dedicated_capacity']}")
         print(f"powerbi_workspace_principal_role={workspace['powerbi_principal_role']}")
         print(f"fabric_workspace_principal_role={workspace['fabric_principal_role']}")
+        print(f"fabric_workspace_role_filter={workspace['fabric_role_filter_role']}")
+        print(f"fabric_workspace_role_filter_status={workspace['fabric_role_filter_status']}")
         print(f"fabric_role_assignments_status={workspace['fabric_role_assignments_status']}")
     for status, count in sorted(evidence["binding_summary"].items()):
         print(f"binding_{status}={count}")

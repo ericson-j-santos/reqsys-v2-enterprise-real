@@ -22,32 +22,44 @@ SCRIPT = ROOT / "scripts" / "powerbi_template_runtime_resolver.py"
 
 
 class FakeFabricRequester:
-    def __init__(self, role="Contributor", status=200):
+    def __init__(self, role="Contributor", status=200, role_assignments_status=None):
         self.role = role
         self.status = status
+        self.role_assignments_status = status if role_assignments_status is None else role_assignments_status
         self.calls = []
 
     def __call__(self, method, url, token, payload):
         self.calls.append((method, url, payload))
-        if not url.startswith(FABRIC_BASE + "/workspaces/") or not url.endswith("/roleAssignments"):
-            raise AssertionError(url)
-        if self.status != 200:
-            return self.status, {}
-        values = []
-        if self.role is not None:
-            values.append({
-                "id": "99999999-9999-9999-9999-999999999999",
-                "principal": {
-                    "id": "88888888-8888-8888-8888-888888888888",
-                    "type": "ServicePrincipal",
-                    "displayName": "segredo-fabric",
-                    "servicePrincipalDetails": {
-                        "aadAppId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        if url.startswith(FABRIC_BASE + "/workspaces?roles="):
+            if self.status != 200:
+                return self.status, {}
+            requested = url.rsplit("=", 1)[-1]
+            values = []
+            if self.role == requested:
+                values.append({
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "displayName": "segredo-fabric-workspace",
+                })
+            return 200, {"value": values}
+        if url.startswith(FABRIC_BASE + "/workspaces/") and url.endswith("/roleAssignments"):
+            if self.role_assignments_status != 200:
+                return self.role_assignments_status, {}
+            values = []
+            if self.role is not None:
+                values.append({
+                    "id": "99999999-9999-9999-9999-999999999999",
+                    "principal": {
+                        "id": "88888888-8888-8888-8888-888888888888",
+                        "type": "ServicePrincipal",
+                        "displayName": "segredo-fabric",
+                        "servicePrincipalDetails": {
+                            "aadAppId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                        },
                     },
-                },
-                "role": self.role,
-            })
-        return 200, {"value": values}
+                    "role": self.role,
+                })
+            return 200, {"value": values}
+        raise AssertionError(url)
 
 
 class FakeRequester:
@@ -178,6 +190,8 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertEqual(workspace["powerbi_principal_role_status"], "observed")
         self.assertEqual(workspace["fabric_principal_role"], "Contributor")
         self.assertEqual(workspace["fabric_principal_role_status"], "observed")
+        self.assertEqual(workspace["fabric_role_filter_role"], "Contributor")
+        self.assertEqual(workspace["fabric_role_filter_status"], "observed")
         self.assertEqual(workspace["fabric_role_assignments_status"], 200)
         self.assertFalse(workspace["is_read_only"])
         self.assertFalse(workspace["is_on_dedicated_capacity"])
@@ -205,13 +219,15 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             fabric_token="fabric-x",
             requester=FakeRequester(principal_role=None),
-            fabric_requester=FakeFabricRequester(role="Contributor"),
+            fabric_requester=FakeFabricRequester(role="Contributor", role_assignments_status=403),
         )
         workspace = result["workspace_access"][0]
         self.assertIsNone(workspace["powerbi_principal_role"])
         self.assertEqual(workspace["powerbi_principal_role_status"], "not_found")
-        self.assertEqual(workspace["fabric_principal_role"], "Contributor")
-        self.assertEqual(workspace["fabric_principal_role_status"], "observed")
+        self.assertIsNone(workspace["fabric_principal_role"])
+        self.assertEqual(workspace["fabric_principal_role_status"], "forbidden")
+        self.assertEqual(workspace["fabric_role_filter_role"], "Contributor")
+        self.assertEqual(workspace["fabric_role_filter_status"], "observed")
         self.assertTrue(workspace["write_candidate"])
 
     def test_fabric_role_403_nao_vira_permissao_por_inferencia(self):
@@ -220,7 +236,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             fabric_token="fabric-x",
             requester=FakeRequester(principal_role=None),
-            fabric_requester=FakeFabricRequester(role=None, status=403),
+            fabric_requester=FakeFabricRequester(role=None, status=403, role_assignments_status=403),
         )
         workspace = result["workspace_access"][0]
         self.assertEqual(workspace["fabric_principal_role_status"], "forbidden")
