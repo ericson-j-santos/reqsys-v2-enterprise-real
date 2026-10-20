@@ -30,12 +30,18 @@ persistir ou imprimir nomes/GUIDs remotos.
 14. O resolvedor deve reutilizar o workflow canônico `fabric-oidc-readonly-probe.yml`; é proibido aumentar a superfície de workflows só para esse caso.
 15. O preflight também deve observar `isReadOnly`, `isOnDedicatedCapacity` e o papel da App
     no workspace via `GET /groups/{groupId}/users`, sem persistir o identificador da App.
-16. O resultado pode marcar `write_candidate=true` apenas para Admin/Member/Contributor em
-    workspace não read-only.
-17. A API não pode inferir custo: `incremental_cost_verified_zero` permanece false até existir
+16. Para resolver divergência do endpoint clássico, consultar também somente por GET
+    `/v1/workspaces/{workspaceId}/roleAssignments` no Fabric e casar apenas
+    `servicePrincipalDetails.aadAppId` exatamente com `CCP_AZURE_CLIENT_ID`.
+17. O resultado pode marcar `write_candidate=true` apenas para Admin/Member/Contributor
+    observado no Power BI ou no Fabric em workspace não read-only.
+18. HTTP 403/401 do Fabric roleAssignments permanece estado desconhecido/bloqueado e não pode
+    ser convertido em permissão por inferência.
+19. A API não pode inferir custo: `incremental_cost_verified_zero` permanece false até existir
     evidência independente de cobrança/licenciamento; o probe não pode criar capacidade/licença.
-18. Testes cobrem caso positivo, ambiguidade, 403 em ExecuteQueries, divergência do sentinel,
-    bloqueio de endpoint mutante, assinatura de domínio, role/capacidade e contrato do workflow.
+20. Testes cobrem caso positivo, ambiguidade, 403 em ExecuteQueries, divergência do sentinel,
+    bloqueio de endpoint mutante, assinatura de domínio, divergência Power BI/Fabric,
+    role/capacidade e contrato do workflow.
 
 ## Critérios de aceite
 

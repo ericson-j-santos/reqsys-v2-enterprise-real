@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from scripts.powerbi_template_runtime_resolver import (
+    FABRIC_BASE,
     POWERBI_BASE,
     SENTINEL,
     TEMPLATE_ALIASES,
@@ -18,6 +19,35 @@ from scripts.powerbi_template_runtime_resolver import (
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "fabric-oidc-readonly-probe.yml"
 SCRIPT = ROOT / "scripts" / "powerbi_template_runtime_resolver.py"
+
+
+class FakeFabricRequester:
+    def __init__(self, role="Contributor", status=200):
+        self.role = role
+        self.status = status
+        self.calls = []
+
+    def __call__(self, method, url, token, payload):
+        self.calls.append((method, url, payload))
+        if not url.startswith(FABRIC_BASE + "/workspaces/") or not url.endswith("/roleAssignments"):
+            raise AssertionError(url)
+        if self.status != 200:
+            return self.status, {}
+        values = []
+        if self.role is not None:
+            values.append({
+                "id": "99999999-9999-9999-9999-999999999999",
+                "principal": {
+                    "id": "88888888-8888-8888-8888-888888888888",
+                    "type": "ServicePrincipal",
+                    "displayName": "segredo-fabric",
+                    "servicePrincipalDetails": {
+                        "aadAppId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                    },
+                },
+                "role": self.role,
+            })
+        return 200, {"value": values}
 
 
 class FakeRequester:
@@ -111,6 +141,8 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             requester=fake,
+            fabric_token="fabric-x",
+            fabric_requester=FakeFabricRequester(),
         )
         dre = next(item for item in result["bindings"] if item["template_id"] == "dre")
         self.assertEqual(dre["status"], "resolved")
@@ -138,10 +170,15 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             requester=fake,
+            fabric_token="fabric-x",
+            fabric_requester=FakeFabricRequester(),
         )
         workspace = result["workspace_access"][0]
-        self.assertEqual(workspace["principal_role"], "Contributor")
-        self.assertEqual(workspace["principal_role_status"], "observed")
+        self.assertEqual(workspace["powerbi_principal_role"], "Contributor")
+        self.assertEqual(workspace["powerbi_principal_role_status"], "observed")
+        self.assertEqual(workspace["fabric_principal_role"], "Contributor")
+        self.assertEqual(workspace["fabric_principal_role_status"], "observed")
+        self.assertEqual(workspace["fabric_role_assignments_status"], 200)
         self.assertFalse(workspace["is_read_only"])
         self.assertFalse(workspace["is_on_dedicated_capacity"])
         self.assertTrue(workspace["write_candidate"])
@@ -162,12 +199,42 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
                 )
                 self.assertFalse(result["workspace_access"][0]["write_candidate"])
 
+    def test_fabric_role_pode_confirmar_contributor_quando_powerbi_users_nao_encontra(self):
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            fabric_token="fabric-x",
+            requester=FakeRequester(principal_role=None),
+            fabric_requester=FakeFabricRequester(role="Contributor"),
+        )
+        workspace = result["workspace_access"][0]
+        self.assertIsNone(workspace["powerbi_principal_role"])
+        self.assertEqual(workspace["powerbi_principal_role_status"], "not_found")
+        self.assertEqual(workspace["fabric_principal_role"], "Contributor")
+        self.assertEqual(workspace["fabric_principal_role_status"], "observed")
+        self.assertTrue(workspace["write_candidate"])
+
+    def test_fabric_role_403_nao_vira_permissao_por_inferencia(self):
+        result = resolve_runtime(
+            token="x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            fabric_token="fabric-x",
+            requester=FakeRequester(principal_role=None),
+            fabric_requester=FakeFabricRequester(role=None, status=403),
+        )
+        workspace = result["workspace_access"][0]
+        self.assertEqual(workspace["fabric_principal_role_status"], "forbidden")
+        self.assertIsNone(workspace["fabric_principal_role"])
+        self.assertFalse(workspace["write_candidate"])
+
     def test_binding_ambiguo_falha_fechado_e_nao_executa_query(self):
         fake = FakeRequester(ambiguous=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             requester=fake,
+            fabric_token="fabric-x",
+            fabric_requester=FakeFabricRequester(),
         )
         dre = next(item for item in result["bindings"] if item["template_id"] == "dre")
         self.assertEqual(dre["status"], "ambiguous")
@@ -182,6 +249,8 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             requester=fake,
+            fabric_token="fabric-x",
+            fabric_requester=FakeFabricRequester(),
         )
         sentinel = result["sentinel_parity"]
         self.assertEqual(sentinel["status"], "blocked")
@@ -195,6 +264,8 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             requester=fake,
+            fabric_token="fabric-x",
+            fabric_requester=FakeFabricRequester(),
         )
         self.assertEqual(result["sentinel_parity"]["status"], "failed")
         self.assertFalse(result["metric_parity_promoted"])

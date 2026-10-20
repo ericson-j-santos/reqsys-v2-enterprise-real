@@ -23,13 +23,18 @@ from typing import Any, Callable
 
 EXPECTED_TENANT = "6d09c88c-0617-490c-8329-305e577684bc"
 POWERBI_RESOURCE = "https://analysis.windows.net/powerbi/api"
+FABRIC_RESOURCE = "https://api.fabric.microsoft.com"
 POWERBI_BASE = "https://api.powerbi.com/v1.0/myorg"
+FABRIC_BASE = "https://api.fabric.microsoft.com/v1"
 _GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 _ALLOWED_GET = re.compile(
     r"^/v1\.0/myorg/(?:groups|groups/[0-9a-fA-F-]{36}/(?:reports|datasets|users))$"
 )
 _ALLOWED_POST = re.compile(
     r"^/v1\.0/myorg/groups/[0-9a-fA-F-]{36}/datasets/[0-9a-fA-F-]{36}/executeQueries$"
+)
+_ALLOWED_FABRIC_GET = re.compile(
+    r"^/v1/workspaces/[0-9a-fA-F-]{36}/roleAssignments$"
 )
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
@@ -92,10 +97,10 @@ def _az_tsv(args: list[str]) -> str:
     return value
 
 
-def _token() -> str:
+def _token(resource: str) -> str:
     return _az_tsv([
         "account", "get-access-token",
-        "--resource", POWERBI_RESOURCE,
+        "--resource", resource,
         "--query", "accessToken",
         "--output", "tsv",
         "--only-show-errors",
@@ -182,6 +187,48 @@ def _validate_url(method: str, url: str) -> None:
     if method == "POST" and _ALLOWED_POST.fullmatch(parsed.path) and not parsed.query:
         return
     raise ResolverError("method_not_allowed")
+
+
+def _fabric_request_json(
+    method: str,
+    url: str,
+    bearer: str,
+    payload: dict[str, Any] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    if method != "GET" or payload is not None:
+        raise ResolverError("fabric_method_not_allowed")
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "api.fabric.microsoft.com"
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+        or parsed.query
+        or not _ALLOWED_FABRIC_GET.fullmatch(parsed.path)
+    ):
+        raise ResolverError("fabric_endpoint_not_allowed")
+    request = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {bearer}", "Accept": "application/json"},
+        method="GET",
+    )
+    opener = urllib.request.build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=30) as response:
+            raw = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
+                raise ResolverError("response_too_large")
+            try:
+                decoded = json.loads(raw.decode("utf-8")) if raw else {}
+            except (UnicodeError, json.JSONDecodeError) as exc:
+                raise ResolverError("invalid_json") from exc
+            return response.status, decoded if isinstance(decoded, dict) else {}
+    except urllib.error.HTTPError as exc:
+        exc.close()
+        return exc.code, {}
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return 0, {}
 
 
 def _request_json(
@@ -401,7 +448,9 @@ def resolve_runtime(
     *,
     token: str,
     principal_identifier: str | None = None,
+    fabric_token: str | None = None,
     requester: Requester = _request_json,
+    fabric_requester: Requester = _fabric_request_json,
 ) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
     groups: list[dict[str, Any]] = []
@@ -459,6 +508,59 @@ def resolve_runtime(
             if type(group.get("isOnDedicatedCapacity")) is bool else None
         )
         capacity_id = _valid_guid(group.get("capacityId"))
+        fabric_role = None
+        fabric_role_status = "unobserved"
+        fabric_role_assignments_status = None
+        if fabric_token and principal_identifier:
+            fabric_status, fabric_payload = fabric_requester(
+                "GET",
+                f"{FABRIC_BASE}/workspaces/{workspace_id}/roleAssignments",
+                fabric_token,
+                None,
+            )
+            fabric_role_assignments_status = fabric_status
+            events.append({
+                "category": "fabric_role_assignments",
+                "method": "GET",
+                "status": fabric_status,
+            })
+            if fabric_status == 200:
+                values = fabric_payload.get("value")
+                if isinstance(values, list):
+                    matched_roles = []
+                    for assignment in values:
+                        if not isinstance(assignment, dict):
+                            continue
+                        principal = assignment.get("principal")
+                        if not isinstance(principal, dict):
+                            continue
+                        details = principal.get("servicePrincipalDetails")
+                        app_id = details.get("aadAppId") if isinstance(details, dict) else None
+                        fabric_assignment_role = assignment.get("role")
+                        if (
+                            principal.get("type") == "ServicePrincipal"
+                            and isinstance(app_id, str)
+                            and app_id.casefold() == principal_identifier.casefold()
+                            and fabric_assignment_role in {"Admin", "Member", "Contributor", "Viewer"}
+                        ):
+                            matched_roles.append(fabric_assignment_role)
+                    if len(matched_roles) == 1:
+                        fabric_role = matched_roles[0]
+                        fabric_role_status = "observed"
+                    elif len(matched_roles) > 1:
+                        fabric_role_status = "ambiguous"
+                    else:
+                        fabric_role_status = "not_found"
+                else:
+                    fabric_role_status = "invalid_contract"
+            elif fabric_status == 403:
+                fabric_role_status = "forbidden"
+            elif fabric_status == 401:
+                fabric_role_status = "unauthorized"
+            else:
+                fabric_role_status = "unobserved"
+
+        effective_role = fabric_role or role
         workspace_access.append({
             "workspace_ref": _ref(workspace_id),
             "is_read_only": is_read_only,
@@ -468,8 +570,8 @@ def resolve_runtime(
                 group.get("defaultDatasetStorageFormat")
                 if group.get("defaultDatasetStorageFormat") in {"Small", "Large"} else None
             ),
-            "principal_role": role,
-            "principal_role_status": (
+            "powerbi_principal_role": role,
+            "powerbi_principal_role_status": (
                 "observed"
                 if len(principal_roles) == 1
                 else "not_found"
@@ -478,8 +580,12 @@ def resolve_runtime(
                 if len(principal_roles) > 1
                 else "unobserved"
             ),
+            "fabric_principal_role": fabric_role,
+            "fabric_principal_role_status": fabric_role_status,
+            "fabric_role_assignments_status": fabric_role_assignments_status,
+            "effective_write_role": effective_role,
             "write_candidate": (
-                role in {"Admin", "Member", "Contributor"} and is_read_only is False
+                effective_role in {"Admin", "Member", "Contributor"} and is_read_only is False
             ),
         })
         report_count += len(reports or [])
@@ -535,10 +641,12 @@ def run(*, tenant_id: str, client_id: str, output: Path, requester: Requester = 
     tenant_match = active_tenant.casefold() == tenant_id.casefold() == EXPECTED_TENANT.casefold()
     if not tenant_match:
         raise ResolverError("tenant_mismatch")
-    token = _token()
+    powerbi_token = _token(POWERBI_RESOURCE)
+    fabric_token = _token(FABRIC_RESOURCE)
     evidence = resolve_runtime(
-        token=token,
+        token=powerbi_token,
         principal_identifier=client_id,
+        fabric_token=fabric_token,
         requester=requester,
     )
     evidence["tenant_match"] = True
@@ -593,7 +701,9 @@ def main() -> int:
         workspace = evidence["workspace_access"][0]
         print(f"workspace_is_read_only={workspace['is_read_only']}")
         print(f"workspace_is_on_dedicated_capacity={workspace['is_on_dedicated_capacity']}")
-        print(f"workspace_principal_role={workspace['principal_role']}")
+        print(f"powerbi_workspace_principal_role={workspace['powerbi_principal_role']}")
+        print(f"fabric_workspace_principal_role={workspace['fabric_principal_role']}")
+        print(f"fabric_role_assignments_status={workspace['fabric_role_assignments_status']}")
     for status, count in sorted(evidence["binding_summary"].items()):
         print(f"binding_{status}={count}")
     print(f"sentinel_status={evidence['sentinel_parity']['status']}")
