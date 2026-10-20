@@ -387,8 +387,10 @@ def test_gateway_report_factory_fabric_dev_e2e_is_exact_main_dev_only() -> None:
     assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e'" in content
     assert "'/reqsys run report-factory-fabric-dev-e2e')" in content
     assert "target='report-factory-fabric-dev-preflight.yml'" in content
+    assert "mode='publish-e2e'" in content
     assert "report-factory-fabric-dev-preflight.yml" in content
-    assert "-f mode=publish-e2e" in content
+    assert 'publish-e2e|dre-sentinel)' in content
+    assert '-f mode="$TARGET_MODE"' in content
     assert "--ref main" in content
     assert "-f mode=prod" not in content
     assert "-f workspace=" not in content
@@ -593,3 +595,17 @@ def test_gateway_post_merge_runtime_controls_are_fixed_and_nonprod() -> None:
     assert "-f pr_number=$" not in content
     assert "-f head_sha=$" not in content
     assert "'production_touched': False" in content
+
+
+def test_gateway_powerbi_dre_sentinel_is_exact_main_dev_only() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run powerbi-dre-sentinel-dev'" in content
+    assert "'/reqsys run powerbi-dre-sentinel-dev')" in content
+    assert "target='report-factory-fabric-dev-preflight.yml'" in content
+    assert "mode='dre-sentinel'" in content
+    assert 'publish-e2e|dre-sentinel)' in content
+    assert '-f mode="$TARGET_MODE"' in content
+    assert "--ref main" in content
+    assert "-f workspace=" not in content
+    assert "-f environment=prod" not in content
+    assert "-f environment=stg" not in content
