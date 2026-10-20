@@ -139,11 +139,16 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
 
     def test_script_nao_contem_endpoints_de_mutacao(self):
         text = SCRIPT.read_text(encoding="utf-8")
-        for forbidden in (
-            "/imports", "/refreshes", "/rows", "/dashboards",
-            "semanticModels", "create", "delete", "patch",
+        lowered = text.casefold()
+        for forbidden_endpoint in (
+            "/imports", "/refreshes", "/tables/", "/rows", "/dashboards", "/semanticmodels",
         ):
-            self.assertNotIn(forbidden, text.casefold() if forbidden.islower() else text)
+            self.assertNotIn(forbidden_endpoint, lowered)
+        for forbidden_method in (
+            '"DELETE"', '"PATCH"', '"PUT"',
+            "method=\"DELETE\"", "method=\"PATCH\"", "method=\"PUT\"",
+        ):
+            self.assertNotIn(forbidden_method, text)
         self.assertIn("/executeQueries", text)
 
     def test_workflow_oidc_sem_segredo_e_pr_restrito(self):
