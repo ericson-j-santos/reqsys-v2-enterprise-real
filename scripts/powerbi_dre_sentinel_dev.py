@@ -159,7 +159,6 @@ def _request(
     payload: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
     _validate_endpoint(method, url)
-    parsed = urllib.parse.urlsplit(url)
     body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
     headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
     if body is not None:
