@@ -115,6 +115,37 @@ _NORMALIZED_ALIASES = {
     template_id: frozenset(_normalize_name(alias) for alias in aliases)
     for template_id, aliases in TEMPLATE_ALIASES.items()
 }
+_DOMAIN_SIGNATURES = {
+    "dre": (frozenset({"dre"}), frozenset({"v2"})),
+    "rh": (frozenset({"rh"}), frozenset({"v2"})),
+    "estoque": (frozenset({"estoque"}), frozenset({"v2"})),
+    "sac": (frozenset({"sac"}), frozenset({"v2"})),
+    "logistica": (frozenset({"logistica"}), frozenset({"v2"})),
+    "financeiro": (frozenset({"financeiro"}), frozenset({"v2"})),
+    "comercial": (frozenset({"comercial"}), frozenset({"v2"})),
+    "producao": (frozenset({"producao"}), frozenset({"v2"})),
+    "producao_v2": (frozenset({"producao", "v2"}), frozenset()),
+    "compras": (frozenset({"compras"}), frozenset({"v2"})),
+    "compras_v2": (frozenset({"compras", "v2"}), frozenset()),
+}
+
+
+def _matching_templates(normalized: str) -> list[tuple[str, str]]:
+    if not normalized:
+        return []
+    exact = [
+        (template_id, "name_exact")
+        for template_id, aliases in _NORMALIZED_ALIASES.items()
+        if normalized in aliases
+    ]
+    if exact:
+        return exact
+    tokens = frozenset(normalized.split())
+    matches = []
+    for template_id, (required, forbidden) in _DOMAIN_SIGNATURES.items():
+        if required <= tokens and not (forbidden & tokens):
+            matches.append((template_id, "domain_signature"))
+    return matches
 
 
 def _valid_guid(value: object) -> str | None:
@@ -218,38 +249,48 @@ def _resolve_candidates(
             normalized = _normalize_name(report.get("name"))
             if report_id is None or dataset_id is None:
                 continue
-            for template_id, aliases in _NORMALIZED_ALIASES.items():
-                if normalized in aliases:
-                    current = candidates[template_id].setdefault(
-                        dataset_id,
-                        {
-                            "workspace_id": workspace_id,
-                            "dataset_id": dataset_id,
-                            "report_ids": set(),
-                            "basis": set(),
-                        },
-                    )
-                    current["report_ids"].add(report_id)
-                    current["basis"].add("report_name_exact")
-                    if dataset_id in dataset_ids:
-                        current["basis"].add("dataset_visible")
+            matches = _matching_templates(normalized)
+            if len(matches) == 1:
+                template_id, matching_mode = matches[0]
+                current = candidates[template_id].setdefault(
+                    dataset_id,
+                    {
+                        "workspace_id": workspace_id,
+                        "dataset_id": dataset_id,
+                        "report_ids": set(),
+                        "basis": set(),
+                    },
+                )
+                current["report_ids"].add(report_id)
+                current["basis"].add(
+                    "report_name_exact"
+                    if matching_mode == "name_exact"
+                    else "report_domain_signature"
+                )
+                if dataset_id in dataset_ids:
+                    current["basis"].add("dataset_visible")
         for dataset in datasets or []:
             dataset_id = _valid_guid(dataset.get("id"))
             normalized = _normalize_name(dataset.get("name"))
             if dataset_id is None:
                 continue
-            for template_id, aliases in _NORMALIZED_ALIASES.items():
-                if normalized in aliases:
-                    current = candidates[template_id].setdefault(
-                        dataset_id,
-                        {
-                            "workspace_id": workspace_id,
-                            "dataset_id": dataset_id,
-                            "report_ids": set(),
-                            "basis": set(),
-                        },
-                    )
-                    current["basis"].add("dataset_name_exact")
+            matches = _matching_templates(normalized)
+            if len(matches) == 1:
+                template_id, matching_mode = matches[0]
+                current = candidates[template_id].setdefault(
+                    dataset_id,
+                    {
+                        "workspace_id": workspace_id,
+                        "dataset_id": dataset_id,
+                        "report_ids": set(),
+                        "basis": set(),
+                    },
+                )
+                current["basis"].add(
+                    "dataset_name_exact"
+                    if matching_mode == "name_exact"
+                    else "dataset_domain_signature"
+                )
 
     sanitized: list[dict[str, Any]] = []
     raw_bindings: dict[str, dict[str, str]] = {}

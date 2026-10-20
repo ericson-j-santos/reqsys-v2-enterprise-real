@@ -10,6 +10,7 @@ from scripts.powerbi_template_runtime_resolver import (
     SENTINEL,
     TEMPLATE_ALIASES,
     ResolverError,
+    _matching_templates,
     _normalize_name,
     _validate_url,
     resolve_runtime,
@@ -74,6 +75,15 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             "dre", "rh", "estoque", "sac", "logistica", "financeiro", "comercial",
             "producao", "producao_v2", "compras", "compras_v2",
         })
+
+    def test_assinatura_de_dominio_aceita_decoracao_sem_fuzzy(self):
+        self.assertEqual(_matching_templates(_normalize_name("ReqSys - Dashboard Financeiro - DEV")),
+                         [("financeiro", "domain_signature")])
+        self.assertEqual(_matching_templates(_normalize_name("Relatório Produção V2 HML")),
+                         [("producao_v2", "domain_signature")])
+        self.assertEqual(_matching_templates(_normalize_name("Relatório Produção HML")),
+                         [("producao", "domain_signature")])
+        self.assertEqual(_matching_templates(_normalize_name("ReqSys Observabilidade")), [])
 
     def test_resolve_dre_e_executa_sentinel_sem_persistir_ids_nomes(self):
         fake = FakeRequester()
