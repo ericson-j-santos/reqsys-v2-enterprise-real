@@ -18,7 +18,7 @@ concurrency:
 env:
   REQSYS_MAIN_SHA: f487837fa553a0f5f8af753963539e60a79dbe19
   OCR_REPOSITORY: ericson-j-santos/ocr-evidence-engine
-  OCR_AUDIT_SHA: 6430663d9e1583c7ac3436806f97f8cef3c78122
+  OCR_AUDIT_SHA: 7bcd3bce33c53bb94717853b6468f2bd94a69ada
   OCR_BASE_AUDIT_SHA: 2e0a860de2856f5c1711f4f9eabd1e80c6e43781
   OCR_MAIN_SHA: baa1f539c148be67ecea891f7037b97b987d5ee5
   OCR_SRC_TREE: b71816ae461790f6de9c8c924449e9d1d0fdf4c4
@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ericson-j-santos/ocr-evidence-engine
-          ref: 6430663d9e1583c7ac3436806f97f8cef3c78122
+          ref: 7bcd3bce33c53bb94717853b6468f2bd94a69ada
           token: ${{ steps.ocr-token.outputs.token }}
           path: .external/ocr-engine
           persist-credentials: false
