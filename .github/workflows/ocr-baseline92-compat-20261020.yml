@@ -1,0 +1,217 @@
+name: OCR Baseline92 Compatibility Audit
+'on':
+  push:
+    branches: ['audit/ocr-revalidation-20261020-f487837f']
+    paths:
+      - 'audit/ocr-baseline92/**'
+      - 'scripts/ocr_baseline92_compatibility.py'
+      - '.github/workflows/ocr-baseline92-compat-20261020.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ocr-baseline92-compat-20261020-f487837f
+  cancel-in-progress: false
+jobs:
+  compatibility:
+    if: github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' && github.actor == 'ericson-j-santos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify current main, exact audit revision and unchanged product files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const base = 'f487837fa553a0f5f8af753963539e60a79dbe19';
+            const branch = 'audit/ocr-revalidation-20261020-f487837f';
+            const allowed = new Set([
+              '.github/workflows/ocr-revalidation-dispatch-20261020.yml',
+              '.github/workflows/ocr-baseline92-compat-20261020.yml',
+              'audit/ocr-baseline92/inventory.json',
+              'scripts/ocr_baseline92_compatibility.py'
+            ]);
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            const head = await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});
+            if (main.data.object.sha !== base || head.data.object.sha !== context.sha) {
+              throw new Error('baseline92_sha_precondition_changed');
+            }
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: base + '...' + context.sha
+            });
+            if (comparison.data.behind_by !== 0 || comparison.data.files.length !== 4 ||
+                comparison.data.files.some(f => !allowed.has(f.filename) || f.status !== 'added')) {
+              throw new Error('baseline92_product_scope_changed');
+            }
+            core.info('BASELINE92_EXACT_SCOPE_OK ' + context.sha);
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.15'
+      - name: Compile the versioned audit probe
+        run: python -m py_compile scripts/ocr_baseline92_compatibility.py
+      - name: Prepare the unchanged pinned OCR wheel with the canonical action
+        id: wheel
+        uses: ./.github/actions/prepare-ocr-runtime
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+      - name: Validate wheel identity and install into a clean venv without network
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.wheel.outputs.ocr-sha }}" = '15dd067032d7c55e22186ef3587c0d694d0392fd'
+          test "${{ steps.wheel.outputs.wheel-sha256 }}" = '9301bc1ec426cb2a223b6beca6802c97f576bd5a89c4cf73a1b1f0a15d08b7ea'
+          test ! -e "$RUNNER_TEMP/baseline92-venv"
+          python -m venv "$RUNNER_TEMP/baseline92-venv"
+          "$RUNNER_TEMP/baseline92-venv/bin/python" -I -m pip install --no-index --no-deps --disable-pip-version-check backend/vendor/ocr-evidence-engine/*.whl
+          mkdir "$RUNNER_TEMP/baseline92-empty"
+          mkdir audit-baseline92-evidence
+      - name: Positive, negative and restored inventory controls
+        run: |
+          python -I -B scripts/ocr_baseline92_compatibility.py \
+            --inventory audit/ocr-baseline92/inventory.json \
+            --output audit-baseline92-evidence/inventory-controls.json --self-test
+      - name: Probe real installed APIs twice from an empty working directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/baseline92-empty"
+          unset PYTHONPATH PYTHONHOME
+          set +e
+          timeout 90 "$RUNNER_TEMP/baseline92-venv/bin/python" -I -B "$GITHUB_WORKSPACE/scripts/ocr_baseline92_compatibility.py" \
+            --inventory "$GITHUB_WORKSPACE/audit/ocr-baseline92/inventory.json" \
+            --output "$GITHUB_WORKSPACE/audit-baseline92-evidence/compatibility-a.json"
+          first=$?
+          timeout 90 "$RUNNER_TEMP/baseline92-venv/bin/python" -I -B "$GITHUB_WORKSPACE/scripts/ocr_baseline92_compatibility.py" \
+            --inventory "$GITHUB_WORKSPACE/audit/ocr-baseline92/inventory.json" \
+            --output "$GITHUB_WORKSPACE/audit-baseline92-evidence/compatibility-b.json"
+          second=$?
+          set -e
+          test "$first" -eq 2
+          test "$second" -eq 2
+          cmp "$GITHUB_WORKSPACE/audit-baseline92-evidence/compatibility-a.json" "$GITHUB_WORKSPACE/audit-baseline92-evidence/compatibility-b.json"
+          echo 'BASELINE92_PROBE_REPLAY_IDENTICAL_NOT_FUNCTIONAL_CERTIFICATION'
+      - name: Independently verify matrix coverage, counterexamples and evidence integrity
+        shell: bash
+        run: |
+          python -I -B - <<'PY'
+          import copy
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('audit-baseline92-evidence')
+          inventory = json.loads(Path('audit/ocr-baseline92/inventory.json').read_text())
+          first = json.loads((root / 'compatibility-a.json').read_text())
+          second = json.loads((root / 'compatibility-b.json').read_text())
+          controls = json.loads((root / 'inventory-controls.json').read_text())
+          expected = sorted(group['path'] + '::' + cls + '::' + method
+                            for group in inventory['groups']
+                            for cls, methods in group['cases'].items() for method in methods)
+          assert len(expected) == len(set(expected)) == 92
+          assert hashlib.sha256(json.dumps(expected, separators=(',', ':')).encode()).hexdigest() == '5ccf93074b4dafe3964e8c5ab0654ba516a65e1827db1ff5cc4c2fa09c27ec93'
+          assert len(controls['negative_controls_passed']) == 7
+          assert controls['valid_inventory_passed'] is True
+          assert controls['positive_revalidation_passed'] is True
+          assert first == second
+
+          def verify(report):
+              assert report['audit_sha'] == os.environ['GITHUB_SHA']
+              assert report['run_id'] == os.environ['GITHUB_RUN_ID']
+              assert report['engine_sha'] == inventory['engine_sha']
+              assert report['consumer_sha'] == inventory['consumer_sha']
+              assert report['baseline_functional_certified'] is False
+              assert report['historical_test_bodies_executed'] == 0
+              assert sorted(row['test_id'] for row in report['cases']) == expected
+              assert all(row['test_body_executed'] is False for row in report['cases'])
+              assert all(row['functional_result'] == 'NOT_EXECUTED' for row in report['cases'])
+              blocked = sum(bool(row['blocked_modules']) for row in report['cases'])
+              assert report['cases_blocked'] == blocked
+              assert report['cases_import_ready'] == 92 - blocked
+              assert len(report['modules']) == 8
+              assert len(report['positive_controls']) == 3
+              assert all(c['status'] == 'PRESENT' for c in report['positive_controls'].values())
+              assert report['negative_control']['status'] == 'MODULE_ABSENT'
+              for row in report['cases']:
+                  group = next(g for g in inventory['groups'] if row['test_id'].startswith(g['path'] + '::'))
+                  actual = sorted(n for n in group['contracts'] if report['modules'][n]['status'] != 'PRESENT')
+                  assert row['blocked_modules'] == actual
+                  assert row['api_prerequisites_available'] == (not actual)
+
+          verify(first)
+          counterexamples = []
+          for label in ('false_certification', 'missing_case', 'false_pass_count'):
+              invalid = copy.deepcopy(first)
+              if label == 'false_certification':
+                  invalid['baseline_functional_certified'] = True
+              elif label == 'missing_case':
+                  invalid['cases'].pop()
+              else:
+                  invalid['cases_import_ready'] = 92
+                  invalid['cases_blocked'] = 0
+              try:
+                  verify(invalid)
+              except AssertionError:
+                  counterexamples.append(label)
+              else:
+                  raise RuntimeError('matrix_validator_false_positive:' + label)
+          verify(first)
+          summary = {
+              'audit_sha': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'],
+              'correlation_id': first['correlation_id'], 'matrix_verified': True,
+              'inventory_cases': 92, 'probe_replay_byte_identical': True,
+              'inventory_negative_controls': controls['negative_controls_passed'],
+              'matrix_negative_controls': counterexamples,
+              'cases_blocked': first['cases_blocked'],
+              'module_statuses': {name: value['status'] for name, value in first['modules'].items()},
+              'historical_test_bodies_executed': 0, 'baseline_functional_certified': False,
+              'status': first['status'], 'production_touched': False, 'pin_changed': False,
+          }
+          (root / 'independent-verification.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          (root / 'inventory.json').write_bytes(Path('audit/ocr-baseline92/inventory.json').read_bytes())
+          (root / 'wheel-reproducibility.json').write_bytes(Path('artifacts/ocr-reproducibility-report.json').read_bytes())
+          entries = sorted(root.iterdir())
+          assert len(entries) == 6 and all(p.is_file() and not p.is_symlink() for p in entries)
+          manifest = ''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in entries)
+          (root / 'SHA256SUMS').write_text(manifest)
+          for line in manifest.splitlines():
+              digest, name = line.split('  ', 1)
+              assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+          print(json.dumps(summary, sort_keys=True))
+          PY
+      - name: Re-read main after the compatibility audit
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== 'f487837fa553a0f5f8af753963539e60a79dbe19') {
+              throw new Error('main_changed_during_baseline92_audit');
+            }
+            core.info('BASELINE92_MAIN_UNCHANGED');
+      - name: Preserve sanitized matrix and SHA-256 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-baseline92-compatibility-${{ github.run_id }}
+          path: audit-baseline92-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Baseline92 certification gate - refuse unexecuted historical tests
+        shell: bash
+        run: |
+          python -I -B - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('audit-baseline92-evidence/independent-verification.json').read_text())
+          if report['baseline_functional_certified'] is not True:
+              print('BASELINE92_NOT_CERTIFIED: ' + report['status'])
+              print('Historical test bodies executed: ' + str(report['historical_test_bodies_executed']))
+              raise SystemExit(2)
+          PY
