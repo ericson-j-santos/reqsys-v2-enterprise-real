@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "original_standalone_v1_0_reference_execution",
+  "correlation_id": "ocr-baseline92-reference-20261020-f487837f",
+  "consumer_sha": "f487837fa553a0f5f8af753963539e60a79dbe19",
+  "compatibility_audit_sha": "84b63883004bc7a425dfc72b7ea8b24b68017f16",
+  "source": {
+    "original_archive": {
+      "provider": "google_drive_private",
+      "file_id": "1eH9VCGcUwcZk3Z0PcP_IjveeB43TMoXs",
+      "name": "ocr evidencia-1.0.0",
+      "size_bytes": 91650,
+      "sha256": "2f0afdf3f3b006ec528c270e99574a43a2e0471a7c102688a4d92d4bccc0f32e",
+      "zip_entries": 37,
+      "uncompressed_bytes": 183276,
+      "repository_embedded": false,
+      "shared": false
+    },
+    "generator": {
+      "repository": "ericson-j-santos/ocr-evidence-engine",
+      "commit_sha": "de075002e14e77f3e69f53a276616d9d8b291bc7",
+      "path": "audit/baseline92/v1.0/gerar_ocr_evidencia.py",
+      "public_repository_embedded": false,
+      "original_path": "gerar_ocr_evidencia.py",
+      "version": "1.0.0",
+      "size_bytes": 59136,
+      "sha256": "e28f14311305247622922abcdf201f3101f5803d2f41b15593061103989830da"
+    },
+    "payload": {
+      "compressed_bytes": 32703,
+      "uncompressed_bytes": 112199,
+      "manifest_files": 24,
+      "sha256": "6bd0bdcc48b0cc01be01fd5231cba4d477c2bbb3a90856c0ef8eda1a111d6add"
+    },
+    "cross_attestation": {
+      "successor_version": "1.1.0",
+      "successor_html_sha256": "6576c7a30c9254c18d2af9e919bf2437fc38da01f657af96d12a4332092bd987",
+      "successor_report_sha256": "c794eac440a29a70b4faaf5e55d5064e84d3d8fdbb1f01812036f8596253dd18",
+      "declared_generator_v1_0_sha256": "e28f14311305247622922abcdf201f3101f5803d2f41b15593061103989830da",
+      "declared_payload_v1_0_sha256": "6bd0bdcc48b0cc01be01fd5231cba4d477c2bbb3a90856c0ef8eda1a111d6add",
+      "declared_tests_v1_0": 92
+    }
+  },
+  "baseline": {
+    "expected_cases": 92,
+    "ids_sha256": "5ccf93074b4dafe3964e8c5ab0654ba516a65e1827db1ff5cc4c2fa09c27ec93",
+    "tests": {
+      "tests/test_casos_uso.py": {
+        "expected_cases": 18,
+        "sha256": "885b32c0d4003948f05b108ec3b06dcfb5464d9fa9ddf56e7283db27b4d22418"
+      },
+      "tests/test_metrica.py": {
+        "expected_cases": 21,
+        "sha256": "1aa1b0f0305f648af58f9bb3c043283c1ff80465517ad949ada674a0d746cb50"
+      },
+      "tests/test_privacidade.py": {
+        "expected_cases": 24,
+        "sha256": "75f4bcd6126f23d5843574fb3545734f220b051adbe2b900be981efdec1b05b1"
+      },
+      "tests/test_verificacao.py": {
+        "expected_cases": 29,
+        "sha256": "d24f0cc17a219e8b3283e0209083b07e9fbcbb56deabc4b59c5ffb47a552aaf4"
+      }
+    }
+  },
+  "claims": {
+    "original_archive_bytes_verified_during_source_recovery": true,
+    "original_archive_bytes_reverified_by_ci": false,
+    "private_source_ref_verified": true,
+    "original_v1_0_generator_and_payload_bytes_verified": true,
+    "reference_execution_required": true,
+    "current_engine_baseline_functional_certified": false,
+    "current_engine_status": "BLOCKED_API_COMPATIBILITY",
+    "semantic_equivalence_to_current_engine": "NOT_PROVEN",
+    "concurrent_or_distributed_idempotency_certified": false
+  }
+}

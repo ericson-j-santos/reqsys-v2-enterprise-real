@@ -1,0 +1,377 @@
+name: OCR Baseline92 Original Standalone Reference
+'on':
+  push:
+    branches: ['audit/ocr-revalidation-20261020-f487837f']
+    paths:
+      - '.github/workflows/ocr-baseline92-reference-20261020.yml'
+      - 'audit/ocr-baseline92/inventory.json'
+      - 'tests/ocr_baseline92_reference.py'
+      - 'tests/test_ocr_baseline92_reference.py'
+      - 'tests/fixtures/ocr_baseline92_reference/source-attestation.json'
+permissions:
+  contents: read
+concurrency:
+  group: ocr-baseline92-reference-20261020-f487837f
+  cancel-in-progress: false
+jobs:
+  original-standalone-reference:
+    if: github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' && github.actor == 'ericson-j-santos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify current main and exact additive reference scope
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const base = 'f487837fa553a0f5f8af753963539e60a79dbe19';
+            const compatibilityAudit = '84b63883004bc7a425dfc72b7ea8b24b68017f16';
+            const branch = 'audit/ocr-revalidation-20261020-f487837f';
+            const existingAuditFiles = new Set([
+              '.github/workflows/ocr-revalidation-dispatch-20261020.yml',
+              '.github/workflows/ocr-baseline92-compat-20261020.yml',
+              'audit/ocr-baseline92/inventory.json',
+              'scripts/ocr_baseline92_compatibility.py'
+            ]);
+            const referenceFiles = new Set([
+              '.github/workflows/ocr-baseline92-reference-20261020.yml',
+              'tests/fixtures/ocr_baseline92_reference/source-attestation.json',
+              'tests/ocr_baseline92_reference.py',
+              'tests/test_ocr_baseline92_reference.py'
+            ]);
+            const completeScope = new Set([...existingAuditFiles, ...referenceFiles]);
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            const head = await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});
+            if (main.data.object.sha !== base || head.data.object.sha !== context.sha) {
+              throw new Error('baseline92_reference_sha_precondition_changed');
+            }
+
+            const increment = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: compatibilityAudit + '...' + context.sha
+            });
+            if (increment.data.behind_by !== 0 || increment.data.files.length !== referenceFiles.size ||
+                increment.data.files.some(f => !referenceFiles.has(f.filename) || f.status !== 'added')) {
+              throw new Error('baseline92_reference_increment_scope_changed');
+            }
+
+            const complete = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: base + '...' + context.sha
+            });
+            if (complete.data.behind_by !== 0 || complete.data.files.length !== completeScope.size ||
+                complete.data.files.some(f => !completeScope.has(f.filename) || f.status !== 'added')) {
+              throw new Error('baseline92_reference_complete_scope_changed');
+            }
+            core.info('BASELINE92_REFERENCE_EXACT_ADDITIVE_SCOPE_OK ' + context.sha);
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.15'
+      - name: Emit read-only token for the private reference source
+        id: reference-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ocr-evidence-engine
+          permission-contents: read
+      - name: Checkout only the immutable private reference files
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/ocr-evidence-engine
+          ref: de075002e14e77f3e69f53a276616d9d8b291bc7
+          token: ${{ steps.reference-token.outputs.token }}
+          path: .external/ocr-baseline92-reference
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: |
+            audit/baseline92/v1.0/gerar_ocr_evidencia.py
+            audit/baseline92/v1.0/source.json
+          sparse-checkout-cone-mode: false
+      - name: Prepare immutable source identity and evidence directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir audit-baseline92-reference-evidence
+          mkdir "$RUNNER_TEMP/baseline92-reference-empty"
+          test "$(git -C .external/ocr-baseline92-reference rev-parse HEAD)" = \
+            'de075002e14e77f3e69f53a276616d9d8b291bc7'
+          python -I -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = Path('audit-baseline92-reference-evidence')
+          private_root = Path('.external/ocr-baseline92-reference')
+          generator = private_root / 'audit/baseline92/v1.0/gerar_ocr_evidencia.py'
+          private_manifest = private_root / 'audit/baseline92/v1.0/source.json'
+          sources = {
+              'private_generator': generator,
+              'private_source_manifest': private_manifest,
+              'attestation': Path('tests/fixtures/ocr_baseline92_reference/source-attestation.json'),
+              'inventory': Path('audit/ocr-baseline92/inventory.json'),
+              'runner': Path('tests/ocr_baseline92_reference.py'),
+              'regression_tests': Path('tests/test_ocr_baseline92_reference.py'),
+          }
+          hashes = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in sources.items()}
+          assert not Path('tests/fixtures/ocr_baseline92_reference/gerar_ocr_evidencia_v1_0_0.py').exists()
+          assert generator.is_file() and not generator.is_symlink()
+          assert private_manifest.is_file() and not private_manifest.is_symlink()
+          assert hashes['private_generator'] == 'e28f14311305247622922abcdf201f3101f5803d2f41b15593061103989830da'
+          assert hashes['private_source_manifest'] == 'b89975db940c3c2a2fd569a49df73a39933108f3e014bb73ce76c8d9c6000df9'
+          assert hashes['attestation'] == '493edc8eaca72062c96afd7f0ec504d4a958d3956c12b7849f8e5c11e6f556fa'
+          assert hashes['inventory'] == 'e2a73dea8c204f8b36f8c4f49b1fbbb87f8a999deeb0a61c3fed198b47d2c492'
+          private_source = json.loads(private_manifest.read_text(encoding='utf-8'))
+          assert private_source['scope'] == 'isolated_historical_reference_only'
+          assert private_source['correlation_id'] == 'ocr-baseline92-reference-20261020-f487837f'
+          assert private_source['original_archive']['sha256'] == (
+              '2f0afdf3f3b006ec528c270e99574a43a2e0471a7c102688a4d92d4bccc0f32e'
+          )
+          assert private_source['original_archive']['shared'] is False
+          assert private_source['generator']['path'] == 'audit/baseline92/v1.0/gerar_ocr_evidencia.py'
+          assert private_source['generator']['sha256'] == hashes['private_generator']
+          assert private_source['embedded_payload']['sha256'] == (
+              '6bd0bdcc48b0cc01be01fd5231cba4d477c2bbb3a90856c0ef8eda1a111d6add'
+          )
+          assert private_source['claims']['runtime_integration'] is False
+          identity = {
+              'schema_version': '1.0.0',
+              'correlation_id': 'ocr-baseline92-reference-20261020-f487837f',
+              'audit_sha': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'externally_attested_original_archive_sha256': '2f0afdf3f3b006ec528c270e99574a43a2e0471a7c102688a4d92d4bccc0f32e',
+              'embedded_payload_sha256': '6bd0bdcc48b0cc01be01fd5231cba4d477c2bbb3a90856c0ef8eda1a111d6add',
+              'private_source': {
+                  'repository': 'ericson-j-santos/ocr-evidence-engine',
+                  'commit_sha': 'de075002e14e77f3e69f53a276616d9d8b291bc7',
+                  'path': 'audit/baseline92/v1.0/gerar_ocr_evidencia.py',
+                  'public_repository_embedded': False,
+                  'raw_private_bytes_uploaded': False,
+              },
+              'source_sha256': hashes,
+          }
+          (evidence / 'source-identity.json').write_text(
+              json.dumps(identity, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+      - name: Run focused reference-gate regression tests
+        env:
+          OCR_BASELINE92_REFERENCE_GENERATOR: ${{ github.workspace }}/.external/ocr-baseline92-reference/audit/baseline92/v1.0/gerar_ocr_evidencia.py
+          OCR_BASELINE92_REQUIRE_PRIVATE_SOURCE: '1'
+        run: python -I -B -m unittest discover -s tests -p 'test_ocr_baseline92_reference.py' -v
+      - name: Produce two byte-identical reference reports from empty directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/baseline92-reference-empty"
+          unset PYTHONPATH PYTHONHOME
+          for replay in a b; do
+            timeout 120 python -I -B "$GITHUB_WORKSPACE/tests/ocr_baseline92_reference.py" \
+              --generator "$GITHUB_WORKSPACE/.external/ocr-baseline92-reference/audit/baseline92/v1.0/gerar_ocr_evidencia.py" \
+              --attestation "$GITHUB_WORKSPACE/tests/fixtures/ocr_baseline92_reference/source-attestation.json" \
+              --inventory "$GITHUB_WORKSPACE/audit/ocr-baseline92/inventory.json" \
+              --output "$GITHUB_WORKSPACE/audit-baseline92-reference-evidence/reference-$replay.json"
+          done
+          cmp "$GITHUB_WORKSPACE/audit-baseline92-reference-evidence/reference-a.json" \
+              "$GITHUB_WORKSPACE/audit-baseline92-reference-evidence/reference-b.json"
+          echo 'BASELINE92_ORIGINAL_REFERENCE_REPLAY_BYTE_IDENTICAL'
+      - name: Independently verify reference results and preserve evidence hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('audit-baseline92-reference-evidence')
+          inventory_path = Path('audit/ocr-baseline92/inventory.json')
+          attestation_path = Path('tests/fixtures/ocr_baseline92_reference/source-attestation.json')
+          private_root = Path('.external/ocr-baseline92-reference')
+          generator_path = private_root / 'audit/baseline92/v1.0/gerar_ocr_evidencia.py'
+          private_manifest_path = private_root / 'audit/baseline92/v1.0/source.json'
+          assert not Path('tests/fixtures/ocr_baseline92_reference/gerar_ocr_evidencia_v1_0_0.py').exists()
+          inventory = json.loads(inventory_path.read_text(encoding='utf-8'))
+          first_bytes = (root / 'reference-a.json').read_bytes()
+          second_bytes = (root / 'reference-b.json').read_bytes()
+          assert first_bytes == second_bytes
+          report = json.loads(first_bytes)
+          expected_ids = sorted(
+              group['path'] + '::' + class_name + '::' + method
+              for group in inventory['groups']
+              for class_name, methods in group['cases'].items()
+              for method in methods
+          )
+          assert len(expected_ids) == len(set(expected_ids)) == 92
+          assert hashlib.sha256(json.dumps(expected_ids, separators=(',', ':')).encode()).hexdigest() == (
+              '5ccf93074b4dafe3964e8c5ab0654ba516a65e1827db1ff5cc4c2fa09c27ec93'
+          )
+          assert report['audit_sha'] == os.environ['GITHUB_SHA']
+          assert report['run_id'] == os.environ['GITHUB_RUN_ID']
+          assert report['correlation_id'] == 'ocr-baseline92-reference-20261020-f487837f'
+          assert report['compatibility_audit_sha'] == '84b63883004bc7a425dfc72b7ea8b24b68017f16'
+          assert report['claim'] == 'ORIGINAL_STANDALONE_REFERENCE_ONLY'
+          assert report['status'] == 'REFERENCE_STANDALONE_CERTIFIED_CURRENT_ENGINE_BLOCKED'
+          assert report['original_v1_0_generator_and_payload_bytes_verified'] is True
+          assert report['original_archive_bytes_reverified_in_this_run'] is False
+          assert report['reference_standalone_functional_certified'] is True
+          assert report['current_engine_baseline_functional_certified'] is False
+          assert report['current_engine_status'] == 'BLOCKED_API_COMPATIBILITY'
+          assert report['semantic_equivalence_to_current_engine'] == 'NOT_PROVEN'
+          assert report['legacy_modules_integrated'] is False
+          assert report['pin_changed'] is False and report['production_touched'] is False
+          assert report['idempotency_scope'] == (
+              'REFERENCE_SEQUENTIAL_MEMORY_AND_JSONL_REOPEN_ONLY_NOT_CONCURRENT_OR_DISTRIBUTED'
+          )
+          assert report['environment']['network_control'] == (
+              'PYTHON_AUDIT_HOOK_DENIED_NETWORK_SUBPROCESS_AND_OUTSIDE_READ_NOT_OS_AIRGAP'
+          )
+          assert report['reference'] == {
+              'archive_sha256': '2f0afdf3f3b006ec528c270e99574a43a2e0471a7c102688a4d92d4bccc0f32e',
+              'generator_sha256': 'e28f14311305247622922abcdf201f3101f5803d2f41b15593061103989830da',
+              'manifest_files': 24,
+              'payload_sha256': '6bd0bdcc48b0cc01be01fd5231cba4d477c2bbb3a90856c0ef8eda1a111d6add',
+              'source_commit': 'de075002e14e77f3e69f53a276616d9d8b291bc7',
+              'source_path': 'audit/baseline92/v1.0/gerar_ocr_evidencia.py',
+              'source_repository': 'ericson-j-santos/ocr-evidence-engine',
+              'version': '1.0.0',
+          }
+          assert report['execution_summary'] == {
+              'bodies_executed_per_run': 92,
+              'bodies_passed_per_run': 92,
+              'cases_per_run': 92,
+              'replays': 2,
+              'total_body_invocations': 184,
+          }
+          assert report['replay'] == {
+              'byte_identical': True,
+              'independent_processes': 2,
+              'independent_trees': 2,
+          }
+          expected_controls = {
+              'wrong_generator_sha', 'wrong_payload_sha', 'false_current_engine_certification',
+              'missing_test_id', 'duplicate_test_id', 'replaced_test_id_same_count',
+              'missing_execution_case', 'forged_pass_count', 'body_not_executed',
+              'skipped_test', 'replay_divergence',
+          }
+          assert set(report['negative_controls_passed']) == expected_controls
+          for execution in report['executions'].values():
+              assert execution['status'] == 'PASSED'
+              assert execution['python_isolated'] is True and execution['no_user_site'] is True
+              assert execution['cwd_empty'] is True and execution['third_party_paths_removed'] is True
+              assert execution['tests_run'] == execution['bodies_started'] == execution['passed'] == 92
+              assert all(execution[field] == 0 for field in (
+                  'failures', 'errors', 'skipped', 'expected_failures', 'unexpected_successes'
+              ))
+              assert sorted(case['test_id'] for case in execution['cases']) == expected_ids
+              assert all(case['body_executed'] is True for case in execution['cases'])
+              assert all(case['outcome'] == 'PASSED' for case in execution['cases'])
+              assert execution['controls'] == {
+                  'network_denied': True,
+                  'outside_read_denied': True,
+                  'subprocess_denied': True,
+              }
+
+          identity = json.loads((root / 'source-identity.json').read_text(encoding='utf-8'))
+          assert identity['audit_sha'] == os.environ['GITHUB_SHA']
+          assert identity['run_id'] == os.environ['GITHUB_RUN_ID']
+          assert identity['correlation_id'] == report['correlation_id']
+          assert identity['private_source'] == {
+              'commit_sha': 'de075002e14e77f3e69f53a276616d9d8b291bc7',
+              'path': 'audit/baseline92/v1.0/gerar_ocr_evidencia.py',
+              'public_repository_embedded': False,
+              'raw_private_bytes_uploaded': False,
+              'repository': 'ericson-j-santos/ocr-evidence-engine',
+          }
+          assert identity['source_sha256']['private_generator'] == hashlib.sha256(
+              generator_path.read_bytes()
+          ).hexdigest()
+          assert identity['source_sha256']['private_source_manifest'] == hashlib.sha256(
+              private_manifest_path.read_bytes()
+          ).hexdigest()
+          assert identity['source_sha256']['inventory'] == hashlib.sha256(inventory_path.read_bytes()).hexdigest()
+          assert identity['source_sha256']['attestation'] == hashlib.sha256(attestation_path.read_bytes()).hexdigest()
+          verification = {
+              'schema_version': '1.0.0',
+              'correlation_id': report['correlation_id'],
+              'audit_sha': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'original_reference_cases_per_run': 92,
+              'original_reference_bodies_executed_per_run': 92,
+              'original_reference_bodies_passed_per_run': 92,
+              'whole_report_replay_byte_identical': True,
+              'negative_controls_passed': sorted(expected_controls),
+              'original_v1_0_generator_and_payload_bytes_verified': True,
+              'original_archive_bytes_reverified_in_this_run': False,
+              'private_source_repository': 'ericson-j-santos/ocr-evidence-engine',
+              'private_source_commit': 'de075002e14e77f3e69f53a276616d9d8b291bc7',
+              'private_source_path': 'audit/baseline92/v1.0/gerar_ocr_evidencia.py',
+              'raw_private_bytes_uploaded': False,
+              'reference_standalone_functional_certified': True,
+              'current_engine_baseline_functional_certified': False,
+              'current_engine_status': 'BLOCKED_API_COMPATIBILITY',
+              'status': 'REFERENCE_STANDALONE_CERTIFIED_CURRENT_ENGINE_BLOCKED',
+          }
+          (root / 'independent-verification.json').write_text(
+              json.dumps(verification, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          (root / 'inventory.json').write_bytes(inventory_path.read_bytes())
+          (root / 'source-attestation.json').write_bytes(attestation_path.read_bytes())
+          evidence_files = sorted(path for path in root.iterdir() if path.is_file())
+          assert len(evidence_files) == 6 and all(not path.is_symlink() for path in evidence_files)
+          manifest = ''.join(
+              hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n'
+              for path in evidence_files
+          )
+          (root / 'SHA256SUMS').write_text(manifest, encoding='utf-8')
+          for line in manifest.splitlines():
+              digest, name = line.split('  ', 1)
+              assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+          print(json.dumps(verification, sort_keys=True))
+          PY
+      - name: Re-read main after the standalone reference execution
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== 'f487837fa553a0f5f8af753963539e60a79dbe19') {
+              throw new Error('main_changed_during_baseline92_reference_execution');
+            }
+            core.info('BASELINE92_REFERENCE_MAIN_UNCHANGED');
+      - name: Preserve reference-only evidence and SHA-256 manifest
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-baseline92-original-reference-${{ github.run_id }}
+          path: audit-baseline92-reference-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Reference certification gate - keep current engine blocked
+        shell: bash
+        run: |
+          python -I -B - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(
+              Path('audit-baseline92-reference-evidence/independent-verification.json').read_text(encoding='utf-8')
+          )
+          assert result['reference_standalone_functional_certified'] is True
+          assert result['original_v1_0_generator_and_payload_bytes_verified'] is True
+          assert result['original_archive_bytes_reverified_in_this_run'] is False
+          assert result['private_source_repository'] == 'ericson-j-santos/ocr-evidence-engine'
+          assert result['private_source_commit'] == 'de075002e14e77f3e69f53a276616d9d8b291bc7'
+          assert result['private_source_path'] == 'audit/baseline92/v1.0/gerar_ocr_evidencia.py'
+          assert result['raw_private_bytes_uploaded'] is False
+          assert result['current_engine_baseline_functional_certified'] is False
+          assert result['current_engine_status'] == 'BLOCKED_API_COMPATIBILITY'
+          print('BASELINE92_REFERENCE_CERTIFIED_CURRENT_ENGINE_REMAINS_BLOCKED')
+          PY
