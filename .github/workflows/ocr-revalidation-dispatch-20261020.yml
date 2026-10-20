@@ -1,0 +1,122 @@
+name: OCR Revalidation Dispatch 20261020
+'on':
+  push:
+    branches: ['audit/ocr-revalidation-20261020-f487837f']
+    paths: ['.github/workflows/ocr-revalidation-dispatch-20261020.yml']
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: ocr-revalidation-dispatch-20261020-f487837f
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' && github.actor == 'ericson-j-santos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch only the reviewed OCR workflow at the verified main SHA
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const fs = require('fs');
+            const expectedRepo = 'ericson-j-santos/reqsys-v2-enterprise-real';
+            const expectedSha = 'f487837fa553a0f5f8af753963539e60a79dbe19';
+            const expectedWorkflowBlob = '37f446e9b383e3f299bf139052408da925a795d8';
+            const workflowId = 'ocr-benchmark.yml';
+            const correlationId = 'ocr-revalidation-20261020-f487837f';
+            const {owner, repo} = context.repo;
+            const evidence = {
+              schema_version: '1.0.0', correlation_id: correlationId,
+              repository: expectedRepo, target_sha: expectedSha,
+              dispatcher_sha: context.sha, dispatcher_run_id: context.runId,
+              generated_at: new Date().toISOString(), workflow: workflowId,
+              dispatch_count: 0, reused: false, production_touched: false,
+              source_modified: false, tests_conclusion: 'not_observed'
+            };
+            function guard(repository, sha, blob) {
+              if (repository !== expectedRepo || sha !== expectedSha || blob !== expectedWorkflowBlob) {
+                throw new Error('ocr_audit_target_mismatch');
+              }
+            }
+            try {
+              guard(expectedRepo, expectedSha, expectedWorkflowBlob);
+              let negative = 0;
+              for (const args of [
+                ['other/repository', expectedSha, expectedWorkflowBlob],
+                [expectedRepo, '0'.repeat(40), expectedWorkflowBlob],
+                [expectedRepo, expectedSha, '0'.repeat(40)]
+              ]) {
+                try { guard(...args); } catch (error) { negative += 1; }
+              }
+              if (negative !== 3) throw new Error('ocr_audit_negative_control_failed');
+              evidence.guard_negative_controls_passed = negative;
+              const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+              const file = await github.rest.repos.getContent({
+                owner, repo, path: '.github/workflows/' + workflowId, ref: expectedSha
+              });
+              guard(owner + '/' + repo, main.data.object.sha, file.data.sha);
+              const workflow = await github.rest.actions.getWorkflow({owner, repo, workflow_id: workflowId});
+              if (workflow.data.state !== 'active') throw new Error('ocr_workflow_not_active');
+              const recent = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner, repo, workflow_id: workflowId, branch: 'main',
+                event: 'workflow_dispatch', created: '>=2026-10-20T00:00:00Z', per_page: 100
+              });
+              const exact = recent.filter(r => r.head_sha === expectedSha);
+              if (exact.length > 1) throw new Error('ocr_audit_multiple_current_runs');
+              if (recent.some(r => r.status !== 'completed' && r.head_sha !== expectedSha)) {
+                throw new Error('ocr_audit_other_main_run_active');
+              }
+              let runId;
+              if (exact.length === 1) {
+                runId = exact[0].id;
+                evidence.reused = true;
+              } else {
+                const preDispatch = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+                guard(owner + '/' + repo, preDispatch.data.object.sha, file.data.sha);
+                const response = await github.request(
+                  'POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches',
+                  {owner, repo, workflow_id: workflowId, ref: 'main',
+                   headers: {'X-GitHub-Api-Version': '2026-03-10'}}
+                );
+                evidence.dispatch_count = 1;
+                if (response.status !== 200 || !Number.isSafeInteger(response.data.workflow_run_id)) {
+                  throw new Error('ocr_dispatch_not_correlated_do_not_retry');
+                }
+                runId = response.data.workflow_run_id;
+                evidence.run_id = runId;
+                evidence.run_url = response.data.html_url;
+              }
+              const observed = await github.rest.actions.getWorkflowRun({owner, repo, run_id: runId});
+              const run = observed.data;
+              if (run.head_sha !== expectedSha || run.event !== 'workflow_dispatch' ||
+                  run.head_branch !== 'main' || run.path !== '.github/workflows/' + workflowId) {
+                throw new Error('ocr_dispatched_run_identity_mismatch');
+              }
+              evidence.run_id = run.id;
+              evidence.run_url = run.html_url;
+              evidence.run_status = run.status;
+              evidence.status = 'dispatch_verified_tests_not_yet_certified';
+              const after = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+              evidence.main_sha_after = after.data.object.sha;
+              if (after.data.object.sha !== expectedSha) throw new Error('main_advanced_during_audit');
+            } catch (error) {
+              evidence.status = 'blocked';
+              evidence.error = String(error.message).slice(0, 300);
+              core.setFailed(evidence.error);
+            } finally {
+              fs.mkdirSync('audit', {recursive: true});
+              fs.writeFileSync('audit/ocr-revalidation-dispatch.json', JSON.stringify(evidence, null, 2) + '\n');
+              core.info(JSON.stringify(evidence));
+              await core.summary.addHeading('OCR revalidation dispatch')
+                .addCodeBlock(JSON.stringify(evidence, null, 2), 'json').write();
+            }
+            return evidence;
+      - name: Preserve sanitized dispatch checkpoint
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-revalidation-dispatch-20261020-f487837f
+          path: audit/ocr-revalidation-dispatch.json
+          if-no-files-found: error
