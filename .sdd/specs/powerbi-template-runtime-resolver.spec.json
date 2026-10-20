@@ -1,0 +1,16 @@
+{
+  "schema": "reqsys/sdd-spec/v1",
+  "id": "powerbi-template-runtime-resolver",
+  "status": "proposed",
+  "environment": "development",
+  "risk": "read_only_external_probe",
+  "requirements_file": ".sdd/specs/powerbi-template-runtime-resolver.requirements.md",
+  "implementation": [
+    "scripts/powerbi_template_runtime_resolver.py",
+    ".github/workflows/powerbi-template-runtime-resolver.yml"
+  ],
+  "tests": [
+    "tests/test_powerbi_template_runtime_resolver.py"
+  ],
+  "evidence_contract": "Artifact sanitizado com bindings pseudonimizados dos 11 templates e sentinel ExecuteQueries sem promoção de paridade."
+}
