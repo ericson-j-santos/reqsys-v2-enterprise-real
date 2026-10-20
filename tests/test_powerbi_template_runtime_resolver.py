@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import unittest
 from pathlib import Path
 
@@ -17,7 +16,7 @@ from scripts.powerbi_template_runtime_resolver import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "powerbi-template-runtime-resolver.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "fabric-oidc-readonly-probe.yml"
 SCRIPT = ROOT / "scripts" / "powerbi_template_runtime_resolver.py"
 
 

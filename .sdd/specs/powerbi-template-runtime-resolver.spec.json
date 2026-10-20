@@ -1,16 +1,24 @@
 {
-  "schema": "reqsys/sdd-spec/v1",
-  "id": "powerbi-template-runtime-resolver",
-  "status": "proposed",
-  "environment": "development",
-  "risk": "read_only_external_probe",
-  "requirements_file": ".sdd/specs/powerbi-template-runtime-resolver.requirements.md",
-  "implementation": [
-    "scripts/powerbi_template_runtime_resolver.py",
-    ".github/workflows/powerbi-template-runtime-resolver.yml"
-  ],
-  "tests": [
-    "tests/test_powerbi_template_runtime_resolver.py"
-  ],
-  "evidence_contract": "Artifact sanitizado com bindings pseudonimizados dos 11 templates e sentinel ExecuteQueries sem promoção de paridade."
+  "schema_version": "1.0",
+  "feature_name": "Power BI Template Runtime Resolver",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_powerbi_template_runtime_resolver.py"
+    ],
+    "evidence_contract": "Resolver OIDC read-only dos 11 templates, com IDs/nomes remotos apenas em memória, artifact pseudonimizado e sentinel ExecuteQueries que nunca promove paridade global."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/fabric-oidc-readonly-probe.yml",
+    "pull_request": "#2985"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
 }

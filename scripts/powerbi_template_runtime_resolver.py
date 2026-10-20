@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
