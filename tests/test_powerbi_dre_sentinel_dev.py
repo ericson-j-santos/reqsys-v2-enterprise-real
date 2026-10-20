@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -215,14 +216,43 @@ def test_main_dispatch_and_literal_authorization_are_mandatory():
             m.execute(tenant_id=m.EXPECTED_TENANT, authorization="wrong")
 
 
-def test_source_has_no_delete_update_refresh_billing_or_prod_route():
+def test_endpoint_allowlist_rejects_mutations_and_arbitrary_paths():
+    m._validate_endpoint("POST", f"{m.FABRIC_BASE}/workspaces/{WS}/semanticModels")
+    m._validate_endpoint(
+        "POST",
+        f"{m.POWERBI_BASE}/groups/{WS}/datasets/{DATASET}/executeQueries",
+    )
+    for method, url in (
+        ("DELETE", f"{m.FABRIC_BASE}/workspaces/{WS}/semanticModels/{MODEL}"),
+        ("POST", f"{m.FABRIC_BASE}/workspaces/{WS}/semanticModels/{MODEL}/updateDefinition"),
+        ("POST", f"{m.POWERBI_BASE}/groups/{WS}/datasets/{DATASET}/refreshes"),
+        ("POST", f"{m.FABRIC_BASE}/capacities"),
+        ("GET", "https://example.com/anything"),
+    ):
+        with pytest.raises(m.CanaryError, match="endpoint_not_allowed"):
+            m._validate_endpoint(method, url)
+
+
+def test_source_has_no_update_refresh_or_delete_call_site():
     text = Path(m.__file__).read_text(encoding="utf-8")
-    lowered = text.casefold()
-    assert 'method="delete"' not in lowered
-    assert '"delete"' not in lowered
-    assert "/updatedefinition" not in lowered
-    assert "/refreshes" not in lowered
-    assert "/capacities" not in lowered
-    assert "purchase" not in lowered
-    assert "production_touched" in text
-    assert "stg_hml_touched" in text
+    assert "/updateDefinition" not in text
+    assert "/refreshes" not in text
+    assert 'requester("DELETE"' not in text
+    assert '"production_touched": False' in text
+    assert '"stg_hml_touched": False' in text
+
+
+def test_existing_workflow_keeps_mutation_main_dispatch_only():
+    workflow = (
+        Path(m.__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "report-factory-fabric-dev-preflight.yml"
+    ).read_text(encoding="utf-8")
+    assert "- dre-sentinel" in workflow
+    assert "name: powerbi-dre-sentinel-dev" in workflow
+    assert "github.event_name == 'workflow_dispatch'" in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
+    assert "inputs.mode == 'dre-sentinel'" in workflow
+    assert "PUBLISH-DRE-SENTINEL-DEV" in workflow
+    assert "environment: development" in workflow

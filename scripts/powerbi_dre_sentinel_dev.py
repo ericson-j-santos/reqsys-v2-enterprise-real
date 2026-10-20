@@ -36,6 +36,21 @@ POWERBI_BASE = "https://api.powerbi.com/v1.0/myorg"
 _GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 MAX_BYTES = 2 * 1024 * 1024
 LRO_TIMEOUT_SECONDS = 120.0
+_FABRIC_WS = r"[0-9a-fA-F-]{36}"
+_FABRIC_ITEM = r"[0-9a-fA-F-]{36}"
+_ALLOWED_FABRIC_GET = re.compile(
+    rf"^/v1/(?:workspaces|workspaces/{_FABRIC_WS}/semanticModels|operations/{_FABRIC_ITEM}(?:/result)?)$"
+)
+_ALLOWED_FABRIC_POST = re.compile(
+    rf"^/v1/workspaces/{_FABRIC_WS}/semanticModels(?:/{_FABRIC_ITEM}/getDefinition)?$"
+)
+_ALLOWED_PBI_GET = re.compile(
+    rf"^/v1\.0/myorg/(?:groups|groups/{_FABRIC_WS}/datasets)$"
+)
+_ALLOWED_PBI_POST = re.compile(
+    rf"^/v1\.0/myorg/groups/{_FABRIC_WS}/datasets/{_FABRIC_ITEM}/executeQueries$"
+)
+LRO_TIMEOUT_SECONDS = 120.0
 PBI_DISCOVERY_TIMEOUT_SECONDS = 90.0
 
 Requester = Callable[
@@ -99,21 +114,52 @@ def _safe_error_code(payload: dict[str, Any]) -> str:
     return value[:96] if re.fullmatch(r"[A-Za-z0-9_.:-]+", value) else "unknown"
 
 
+def _validate_endpoint(method: str, url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
+        raise CanaryError("endpoint_not_allowed")
+    if parsed.netloc == "api.fabric.microsoft.com":
+        if method == "GET" and _ALLOWED_FABRIC_GET.fullmatch(parsed.path):
+            if parsed.path == "/v1/workspaces":
+                pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+                if len(pairs) != 1 or pairs[0][0] != "roles" or pairs[0][1] not in {
+                    "Admin", "Member", "Contributor"
+                }:
+                    raise CanaryError("query_not_allowed")
+            elif parsed.query:
+                raise CanaryError("query_not_allowed")
+            return
+        if method == "POST" and _ALLOWED_FABRIC_POST.fullmatch(parsed.path):
+            if parsed.path.endswith("/getDefinition"):
+                if urllib.parse.parse_qsl(parsed.query, keep_blank_values=True) != [("format", "TMSL")]:
+                    raise CanaryError("query_not_allowed")
+            elif parsed.query:
+                raise CanaryError("query_not_allowed")
+            return
+        raise CanaryError("endpoint_not_allowed")
+    if parsed.netloc == "api.powerbi.com":
+        if method == "GET" and _ALLOWED_PBI_GET.fullmatch(parsed.path):
+            if parsed.path == "/v1.0/myorg/groups":
+                pairs = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+                if set(pairs) != {"$top", "$skip"} or not all(v.isdigit() for v in pairs.values()):
+                    raise CanaryError("query_not_allowed")
+            elif parsed.query:
+                raise CanaryError("query_not_allowed")
+            return
+        if method == "POST" and _ALLOWED_PBI_POST.fullmatch(parsed.path) and not parsed.query:
+            return
+        raise CanaryError("endpoint_not_allowed")
+    raise CanaryError("endpoint_not_allowed")
+
+
 def _request(
     method: str,
     url: str,
     token: str,
     payload: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
+    _validate_endpoint(method, url)
     parsed = urllib.parse.urlsplit(url)
-    if (
-        parsed.scheme != "https"
-        or parsed.netloc not in {"api.fabric.microsoft.com", "api.powerbi.com"}
-        or parsed.username
-        or parsed.password
-        or parsed.fragment
-    ):
-        raise CanaryError("endpoint_not_allowed")
     body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
     headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
     if body is not None:
