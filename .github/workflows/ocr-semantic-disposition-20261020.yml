@@ -1,0 +1,278 @@
+name: OCR Semantic Disposition Gate 20261020
+
+'on':
+  push:
+    branches:
+      - audit/ocr-semantic-disposition-20261020-f487837f
+    paths:
+      - .github/workflows/ocr-semantic-disposition-20261020.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ocr-semantic-disposition-20261020-f487837f
+  cancel-in-progress: false
+
+env:
+  REQSYS_MAIN_SHA: f487837fa553a0f5f8af753963539e60a79dbe19
+  OCR_REPOSITORY: ericson-j-santos/ocr-evidence-engine
+  OCR_AUDIT_SHA: 6430663d9e1583c7ac3436806f97f8cef3c78122
+  OCR_BASE_AUDIT_SHA: 2e0a860de2856f5c1711f4f9eabd1e80c6e43781
+  OCR_MAIN_SHA: baa1f539c148be67ecea891f7037b97b987d5ee5
+  OCR_SRC_TREE: b71816ae461790f6de9c8c924449e9d1d0fdf4c4
+  HISTORICAL_REFERENCE_RUN_ID: '39453187573'
+  HISTORICAL_REFERENCE_HEAD_SHA: 07ebd07d4bdb84ab86c2a867401e260340b98a0c
+  CURRENT_PROXY_RUN_ID: '39510244553'
+  CURRENT_PROXY_HEAD_SHA: 864907d2431a5f5bb8497a9c14c379e67877d388
+  CORRELATION_ID: ocr-semantic-disposition-20261020-f487837f
+
+jobs:
+  preflight:
+    name: Bind prior evidence and zero-cost audit scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Verify public scope and immutable prior evidence
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const expectedRepo = 'ericson-j-santos/reqsys-v2-enterprise-real';
+            const expectedMain = process.env.REQSYS_MAIN_SHA;
+            const expectedBranch = 'audit/ocr-semantic-disposition-20261020-f487837f';
+            const expectedWorkflow = '.github/workflows/ocr-semantic-disposition-20261020.yml';
+
+            if (owner + '/' + repo !== expectedRepo) throw new Error('semantic_repo_mismatch');
+            if (context.payload.repository.private !== false) throw new Error('semantic_executor_must_be_public');
+            if (context.actor !== 'ericson-j-santos') throw new Error('semantic_actor_mismatch');
+            if (context.ref !== 'refs/heads/' + expectedBranch) throw new Error('semantic_branch_mismatch');
+
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== expectedMain) throw new Error('reqsys_main_changed');
+
+            const head = await github.rest.git.getRef({owner, repo, ref: 'heads/' + expectedBranch});
+            if (head.data.object.sha !== context.sha) throw new Error('semantic_head_mismatch');
+
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: expectedMain + '...' + context.sha
+            });
+            if (comparison.data.behind_by !== 0 ||
+                comparison.data.files.length !== 1 ||
+                comparison.data.files[0].filename !== expectedWorkflow ||
+                comparison.data.files[0].status !== 'added') {
+              throw new Error('semantic_public_scope_not_one_added_workflow');
+            }
+
+            const historical = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: Number(process.env.HISTORICAL_REFERENCE_RUN_ID)
+            });
+            if (historical.data.status !== 'completed' ||
+                historical.data.conclusion !== 'success' ||
+                historical.data.head_sha !== process.env.HISTORICAL_REFERENCE_HEAD_SHA ||
+                historical.data.path !== '.github/workflows/ocr-baseline92-reference-20261020.yml') {
+              throw new Error('historical_reference_evidence_changed');
+            }
+            const historicalArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: Number(process.env.HISTORICAL_REFERENCE_RUN_ID), per_page: 100
+            });
+            const historicalArtifact = historicalArtifacts.data.artifacts.find(
+              item => item.id === 12278248662 &&
+                      item.name === 'ocr-baseline92-original-reference-39453187573' &&
+                      item.expired === false
+            );
+            if (!historicalArtifact) throw new Error('historical_reference_artifact_missing');
+
+            const current = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: Number(process.env.CURRENT_PROXY_RUN_ID)
+            });
+            if (current.data.status !== 'completed' ||
+                current.data.conclusion !== 'success' ||
+                current.data.head_sha !== process.env.CURRENT_PROXY_HEAD_SHA ||
+                current.data.path !== '.github/workflows/ocr-private-evidence-proxy-20261020.yml') {
+              throw new Error('current_engine_proxy_evidence_changed');
+            }
+            const currentArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: Number(process.env.CURRENT_PROXY_RUN_ID), per_page: 100
+            });
+            const currentArtifact = currentArtifacts.data.artifacts.find(
+              item => item.id === 12304904318 &&
+                      item.name === 'ocr-private-evidence-proxy-39510244553' &&
+                      item.expired === false
+            );
+            if (!currentArtifact) throw new Error('current_engine_proxy_artifact_missing');
+
+            core.info('SEMANTIC_PRIOR_EVIDENCE_BOUND historical=39453187573 current=39510244553');
+
+  semantic-disposition:
+    name: Prove semantic non-equivalence by design
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Mint read-only token for private OCR audit
+        id: ocr-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ocr-evidence-engine
+          permission-contents: read
+
+      - name: Checkout exact private semantic audit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/ocr-evidence-engine
+          ref: 6430663d9e1583c7ac3436806f97f8cef3c78122
+          token: ${{ steps.ocr-token.outputs.token }}
+          path: .external/ocr-engine
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Configure Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Verify additive private audit scope and unchanged engine source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.ocr-token.outputs.token }}
+        working-directory: .external/ocr-engine
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$OCR_AUDIT_SHA"
+          test "$(git rev-parse HEAD:src/ocr_evidencia)" = "$OCR_SRC_TREE"
+          test "$(gh api repos/$OCR_REPOSITORY/git/ref/heads/main --jq '.object.sha')" = "$OCR_MAIN_SHA"
+          test "$(gh api repos/$OCR_REPOSITORY/git/ref/heads/audit/baseline92-reference-v1.0-20261020 --jq '.object.sha')" = "$OCR_AUDIT_SHA"
+          mapfile -t changed < <(git diff --name-status "$OCR_BASE_AUDIT_SHA...$OCR_AUDIT_SHA")
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 3
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\taudit/baseline92/v1.0/semantic-equivalence-disposition.json'
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\tscripts/validate_baseline92_semantic_disposition.py'
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\ttests/test_baseline92_semantic_disposition.py'
+
+      - name: Install audit test dependencies
+        working-directory: .external/ocr-engine
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Execute semantic disposition validator
+        working-directory: .external/ocr-engine
+        run: |
+          python scripts/validate_baseline92_semantic_disposition.py             --repository-root .             --output "$RUNNER_TEMP/semantic-disposition.json"
+
+      - name: Execute semantic regression tests
+        working-directory: .external/ocr-engine
+        run: |
+          python -m pytest -q             tests/test_baseline92_semantic_disposition.py             tests/test_domain_contract.py             tests/test_benchmark_contract.py             tests/test_gold_standard_gate.py
+
+      - name: Independently verify and sanitize semantic evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p semantic-public-evidence
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "semantic-disposition.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          assert report["status"] == (
+              "SEMANTIC_EQUIVALENCE_NOT_APPLICABLE_BY_DESIGN_"
+              "CURRENT_SCOPE_CONTRACT_VALIDATED"
+          )
+          assert report["full_semantic_equivalence"] == "NOT_APPLICABLE_BY_DESIGN"
+          assert report["api_compatibility"] == "NOT_SUPPORTED_BY_DESIGN"
+          assert report["historical_reference_cases"] == 92
+          assert report["historical_contract_modules"] == 8
+          assert report["historical_dispositions"] == {
+              "PRESERVE_REFERENCE_ONLY": 5,
+              "SEPARATE": 3,
+          }
+          assert report["legacy_migration_required"] is False
+          assert report["migrate_count"] == 0
+          assert report["release_blocking"] is False
+          assert report["functional_replacement_claim"] is False
+          assert report["historical_reference_preserved"] is True
+          assert len(report["negative_controls_passed"]) == 9
+          assert report["private_audit_sha"] == os.environ["OCR_AUDIT_SHA"]
+          assert report["current_main_sha"] == os.environ["OCR_MAIN_SHA"]
+          assert report["production_touched"] is False
+          assert report["pin_changed"] is False
+
+          raw = report_path.read_bytes()
+          payload = {
+              "schema_version": "1.0.0",
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "status": report["status"],
+              "decision": {
+                  "full_semantic_equivalence": report["full_semantic_equivalence"],
+                  "api_compatibility": report["api_compatibility"],
+                  "legacy_migration_required": report["legacy_migration_required"],
+                  "migrate_count": report["migrate_count"],
+                  "release_blocking": report["release_blocking"],
+                  "functional_replacement_claim": report["functional_replacement_claim"],
+              },
+              "historical_reference": {
+                  "run_id": int(os.environ["HISTORICAL_REFERENCE_RUN_ID"]),
+                  "head_sha": os.environ["HISTORICAL_REFERENCE_HEAD_SHA"],
+                  "cases_per_run": 92,
+                  "standalone_certified": True,
+              },
+              "current_engine": {
+                  "proxy_run_id": int(os.environ["CURRENT_PROXY_RUN_ID"]),
+                  "proxy_head_sha": os.environ["CURRENT_PROXY_HEAD_SHA"],
+                  "private_audit_sha": os.environ["OCR_AUDIT_SHA"],
+                  "main_sha": os.environ["OCR_MAIN_SHA"],
+                  "source_tree_unchanged": True,
+                  "acceptance_basis": report["current_scope_acceptance_basis"],
+              },
+              "historical_dispositions": report["historical_dispositions"],
+              "negative_controls_passed": report["negative_controls_passed"],
+              "private_validator_report_sha256": hashlib.sha256(raw).hexdigest(),
+              "raw_private_bytes_uploaded": False,
+              "private_repository_mutated": False,
+              "production_touched": False,
+              "pin_changed": False,
+              "cost_classification": "COST_ZERO_CONFIRMED_PUBLIC_STANDARD_RUNNER",
+          }
+          out = Path("semantic-public-evidence/evidence.json")
+          out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          digest = hashlib.sha256(out.read_bytes()).hexdigest()
+          Path("semantic-public-evidence/SHA256SUMS").write_text(
+              digest + "  evidence.json\n", encoding="utf-8"
+          )
+          print(json.dumps(payload, sort_keys=True))
+          PY
+          test "$(find semantic-public-evidence -type f | wc -l)" -eq 2
+          test "$(find semantic-public-evidence -type f \( -name '*.py' -o -name '*.whl' -o -name '*.zip' \) | wc -l)" -eq 0
+          test "$(du -sb semantic-public-evidence | cut -f1)" -lt 100000
+          (cd semantic-public-evidence && sha256sum -c SHA256SUMS)
+          rm -rf .external
+          test ! -e .external
+
+      - name: Re-read ReqSys main
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== process.env.REQSYS_MAIN_SHA) {
+              throw new Error('reqsys_main_changed_during_semantic_gate');
+            }
+
+      - name: Upload sanitized semantic disposition only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-semantic-disposition-${{ github.run_id }}
+          path: semantic-public-evidence/
+          if-no-files-found: error
+          retention-days: 7
