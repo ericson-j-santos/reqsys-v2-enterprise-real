@@ -166,7 +166,8 @@ assert contract["status"] == "VALIDATED_REFERENCE_ONLY_NO_MIGRATION"
 assert contract["current_engine"]["baseline_functional_certified"] is False
 assert contract["current_engine"]["semantic_equivalence"] == "NOT_PROVEN"
 assert contract["historical_test_bodies_executed_by_this_validation"] == 0
-assert contract["decisions"] == {"PRESERVE_REFERENCE_ONLY": 5, "SEPARATE": 3}\nassert "MIGRATE" not in contract["decisions"]
+assert contract["decisions"] == {"PRESERVE_REFERENCE_ONLY": 5, "SEPARATE": 3}
+assert "MIGRATE" not in contract["decisions"]
 assert len(contract["negative_controls_passed"]) == 21
 assert negative["gate"] == "FAIL"
 assert negative["metrics"]["false_auto_total"] == 1
@@ -194,7 +195,8 @@ payload = {
     },
     "contract_disposition": {
         "status": contract["status"],
-        "decisions": contract["decisions"],\n        "migrate_count": 0,
+        "decisions": contract["decisions"],
+        "migrate_count": 0,
         "negative_controls_passed": len(contract["negative_controls_passed"]),
         "baseline_functional_certified": contract["current_engine"]["baseline_functional_certified"],
         "semantic_equivalence": contract["current_engine"]["semantic_equivalence"],
