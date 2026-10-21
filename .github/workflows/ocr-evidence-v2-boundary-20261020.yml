@@ -1,0 +1,286 @@
+name: OCR Evidence v2 Boundary Gate 20261020
+
+'on':
+  push:
+    branches:
+      - audit/ocr-evidence-v2-boundary-20261020-f487837f
+    paths:
+      - .github/workflows/ocr-evidence-v2-boundary-20261020.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ocr-evidence-v2-boundary-20261020-f487837f
+  cancel-in-progress: false
+
+env:
+  REQSYS_MAIN_SHA: f487837fa553a0f5f8af753963539e60a79dbe19
+  ENGINE_REPOSITORY: ericson-j-santos/ocr-evidence-engine
+  ENGINE_MAIN_SHA: baa1f539c148be67ecea891f7037b97b987d5ee5
+  ENGINE_AUDIT_SHA: 997f33c15f7d9854b7c3da8b17b148db2c620f39
+  ENGINE_SRC_TREE: b71816ae461790f6de9c8c924449e9d1d0fdf4c4
+  EVIDENCE_RUN_ID: '39411431127'
+  EVIDENCE_ARTIFACT_ID: '12259562165'
+  EVIDENCE_ARTIFACT_SHA256: 2ca7ce8c75719d37b62fe799d7be7d72f8e13f91b8cf2417abfc515e4d34fe1b
+  CORRELATION_ID: ocr-evidence-v2-boundary-20261020-f487837f
+
+jobs:
+  preflight:
+    name: Bind zero-cost scope and current Evidence v2 proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Verify public audit scope and immutable green evidence
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const expectedRepo = 'ericson-j-santos/reqsys-v2-enterprise-real';
+            const expectedBranch = 'audit/ocr-evidence-v2-boundary-20261020-f487837f';
+            const expectedWorkflow = '.github/workflows/ocr-evidence-v2-boundary-20261020.yml';
+            if (owner + '/' + repo !== expectedRepo) throw new Error('repository_mismatch');
+            if (context.payload.repository.private !== false) throw new Error('executor_must_be_public');
+            if (context.actor !== 'ericson-j-santos') throw new Error('actor_mismatch');
+            if (context.ref !== 'refs/heads/' + expectedBranch) throw new Error('branch_mismatch');
+
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== process.env.REQSYS_MAIN_SHA) throw new Error('reqsys_main_changed');
+
+            const head = await github.rest.git.getRef({owner, repo, ref: 'heads/' + expectedBranch});
+            if (head.data.object.sha !== context.sha) throw new Error('audit_head_mismatch');
+
+            const compare = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: process.env.REQSYS_MAIN_SHA + '...' + context.sha
+            });
+            if (compare.data.behind_by !== 0 ||
+                compare.data.files.length !== 1 ||
+                compare.data.files[0].filename !== expectedWorkflow ||
+                compare.data.files[0].status !== 'added') {
+              throw new Error('public_scope_not_exactly_one_added_workflow');
+            }
+
+            const run = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: Number(process.env.EVIDENCE_RUN_ID)
+            });
+            if (run.data.status !== 'completed' ||
+                run.data.conclusion !== 'success' ||
+                run.data.head_sha !== process.env.REQSYS_MAIN_SHA ||
+                run.data.path !== '.github/workflows/ocr-benchmark.yml') {
+              throw new Error('evidence_run_identity_mismatch');
+            }
+
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner, repo, run_id: Number(process.env.EVIDENCE_RUN_ID), filter: 'latest', per_page: 100
+            });
+            const evidenceJob = jobs.find(job => job.name === 'evidence-v2');
+            if (!evidenceJob || evidenceJob.status !== 'completed' || evidenceJob.conclusion !== 'success') {
+              throw new Error('evidence_v2_job_not_green');
+            }
+
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: Number(process.env.EVIDENCE_RUN_ID), per_page: 100
+            });
+            const artifact = artifacts.data.artifacts.find(
+              item => item.id === Number(process.env.EVIDENCE_ARTIFACT_ID)
+            );
+            if (!artifact ||
+                artifact.name !== 'ocr-evidence-v2' ||
+                artifact.expired !== false ||
+                artifact.digest !== 'sha256:' + process.env.EVIDENCE_ARTIFACT_SHA256) {
+              throw new Error('evidence_v2_artifact_mismatch');
+            }
+            core.info('EVIDENCE_V2_PRIOR_PROOF_BOUND run=' + process.env.EVIDENCE_RUN_ID);
+
+  boundary:
+    name: Prove Evidence v2 remains ReqSys-owned
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact ReqSys main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.REQSYS_MAIN_SHA }}
+          path: .external/reqsys-main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Mint read-only token for private engine audit
+        id: engine-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ocr-evidence-engine
+          permission-contents: read
+
+      - name: Checkout exact private boundary audit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/ocr-evidence-engine
+          ref: ${{ env.ENGINE_AUDIT_SHA }}
+          token: ${{ steps.engine-token.outputs.token }}
+          path: .external/ocr-engine
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Configure Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Verify additive engine audit and unchanged reusable source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.engine-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C .external/ocr-engine rev-parse HEAD)" = "$ENGINE_AUDIT_SHA"
+          test "$(git -C .external/ocr-engine rev-parse HEAD:src)" = "$ENGINE_SRC_TREE"
+          test "$(gh api repos/$ENGINE_REPOSITORY/git/ref/heads/main --jq '.object.sha')" = "$ENGINE_MAIN_SHA"
+          test "$(gh api repos/$ENGINE_REPOSITORY/git/ref/heads/audit/evidence-v2-boundary-20261020 --jq '.object.sha')" = "$ENGINE_AUDIT_SHA"
+          mapfile -t changed < <(git -C .external/ocr-engine diff --name-status "$ENGINE_MAIN_SHA...$ENGINE_AUDIT_SHA")
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 3
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\taudit/evidence-v2-boundary-20261020.json'
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\tscripts/validate_evidence_v2_boundary.py'
+          printf '%s\n' "${changed[@]}" | grep -Fx $'A\ttests/test_evidence_v2_boundary.py'
+
+      - name: Install audit test dependency
+        run: python -m pip install --disable-pip-version-check pytest==8.4.2
+
+      - name: Validate ownership boundary against exact ReqSys main
+        run: |
+          python .external/ocr-engine/scripts/validate_evidence_v2_boundary.py             --engine-root .external/ocr-engine             --reqsys-root .external/reqsys-main             --output "$RUNNER_TEMP/evidence-v2-boundary.json"
+
+      - name: Execute boundary regression controls
+        working-directory: .external/ocr-engine
+        run: python -m pytest -q tests/test_evidence_v2_boundary.py
+
+      - name: Download and independently verify the actual Evidence v2 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EVIDENCE_ARTIFACT_ID/zip" > "$RUNNER_TEMP/ocr-evidence-v2.zip"
+          test "$(sha256sum "$RUNNER_TEMP/ocr-evidence-v2.zip" | awk '{print $1}')" = "$EVIDENCE_ARTIFACT_SHA256"
+          mkdir "$RUNNER_TEMP/evidence-v2"
+          unzip -q "$RUNNER_TEMP/ocr-evidence-v2.zip" -d "$RUNNER_TEMP/evidence-v2"
+          test "$(find "$RUNNER_TEMP/evidence-v2" -type f | wc -l)" -eq 1
+          test -f "$RUNNER_TEMP/evidence-v2/ocr-evidence-v2.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ["RUNNER_TEMP"]) / "evidence-v2" / "ocr-evidence-v2.json"
+          data = json.loads(p.read_text(encoding="utf-8"))
+          assert data["gate"] == "PASS"
+          assert data["cases_total"] == 10
+          assert data["cases_passed"] == 10
+          assert data["failed_case_ids"] == []
+          assert data["contains_personal_data"] is False
+          assert data["raw_ocr_text_published"] is False
+          assert data["automatic_incorporation_allowed"] is False
+          assert len(data["evidence"]) == 10
+          assert all(item["status"] == "PASS" for item in data["evidence"])
+          assert all(item["idempotent"] is True for item in data["evidence"])
+          assert all(item["all_candidates_require_human_review"] is True for item in data["evidence"])
+          assert sum(int(item["trusted_identifiers"]) for item in data["evidence"]) == 0
+          forbidden = {"texto", "raw_text", "identifier_values", "mascara"}
+          def walk(value):
+              if isinstance(value, dict):
+                  assert forbidden.isdisjoint(value)
+                  for item in value.values():
+                      walk(item)
+              elif isinstance(value, list):
+                  for item in value:
+                      walk(item)
+          walk(data)
+          print("EVIDENCE_V2_ARTIFACT_INDEPENDENTLY_VERIFIED")
+          PY
+
+      - name: Build sanitized boundary evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p boundary-public-evidence
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          private_report = Path(os.environ["RUNNER_TEMP"]) / "evidence-v2-boundary.json"
+          report = json.loads(private_report.read_text(encoding="utf-8"))
+          assert report["status"] == "EVIDENCE_V2_BOUNDARY_VALIDATED_REQSYS_OWNS_PRODUCT_GATE"
+          assert report["ownership"] == "REQSYS_PRODUCT_BOUNDARY"
+          assert report["migrate_to_reusable_engine"] is False
+          assert report["migration_backlog_status"] == "CLOSED_NOT_A_TARGET"
+          assert report["engine_release_blocking"] is False
+          assert report["reqsys_gate_required"] is True
+          assert report["validated_cases"] == 10
+          assert len(report["negative_controls_passed"]) == 7
+          payload = {
+              "schema_version": "1.0.0",
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "status": report["status"],
+              "decision": {
+                  "ownership": report["ownership"],
+                  "migrate_to_reusable_engine": report["migrate_to_reusable_engine"],
+                  "migration_backlog_status": report["migration_backlog_status"],
+                  "engine_release_blocking": report["engine_release_blocking"],
+                  "reqsys_gate_required": report["reqsys_gate_required"],
+                  "future_extraction_requires_second_consumer": report["future_extraction_requires_second_consumer"],
+              },
+              "validated_execution": {
+                  "run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+                  "reqsys_main_sha": os.environ["REQSYS_MAIN_SHA"],
+                  "artifact_id": int(os.environ["EVIDENCE_ARTIFACT_ID"]),
+                  "artifact_sha256": os.environ["EVIDENCE_ARTIFACT_SHA256"],
+                  "cases_total": 10,
+                  "cases_passed": 10,
+              },
+              "engine": {
+                  "main_sha": os.environ["ENGINE_MAIN_SHA"],
+                  "audit_sha": os.environ["ENGINE_AUDIT_SHA"],
+                  "src_tree_unchanged": True,
+              },
+              "negative_controls_passed": report["negative_controls_passed"],
+              "private_validator_report_sha256": hashlib.sha256(private_report.read_bytes()).hexdigest(),
+              "raw_private_bytes_uploaded": False,
+              "production_touched": False,
+              "pin_changed": False,
+              "cost_classification": "COST_ZERO_CONFIRMED_PUBLIC_STANDARD_RUNNER",
+          }
+          out = Path("boundary-public-evidence/evidence.json")
+          out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          digest = hashlib.sha256(out.read_bytes()).hexdigest()
+          Path("boundary-public-evidence/SHA256SUMS").write_text(digest + "  evidence.json\n", encoding="utf-8")
+          print(json.dumps(payload, sort_keys=True))
+          PY
+          test "$(find boundary-public-evidence -type f | wc -l)" -eq 2
+          test "$(find boundary-public-evidence -type f \( -name '*.py' -o -name '*.whl' -o -name '*.zip' \) | wc -l)" -eq 0
+          (cd boundary-public-evidence && sha256sum -c SHA256SUMS)
+          rm -rf .external
+          test ! -e .external
+
+      - name: Re-read ReqSys main
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          retries: 0
+          script: |
+            const {owner, repo} = context.repo;
+            const main = await github.rest.git.getRef({owner, repo, ref: 'heads/main'});
+            if (main.data.object.sha !== process.env.REQSYS_MAIN_SHA) {
+              throw new Error('reqsys_main_changed_during_boundary_gate');
+            }
+
+      - name: Upload sanitized boundary evidence only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ocr-evidence-v2-boundary-${{ github.run_id }}
+          path: boundary-public-evidence/
+          if-no-files-found: error
+          retention-days: 7
