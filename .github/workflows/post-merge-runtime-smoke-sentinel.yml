@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     needs: contract
-    if: github.event_name == 'workflow_run'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

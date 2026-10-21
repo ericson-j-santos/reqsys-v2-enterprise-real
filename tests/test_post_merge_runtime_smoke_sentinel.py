@@ -275,6 +275,7 @@ def test_workflow_targets_active_dev_source_instead_of_retired_fly():
     assert f'workflows: ["{EXPECTED_WORKFLOW_NAME}"]' in pipeline
     assert EXPECTED_JOB_NAME in active
     assert "actions/download-artifact@" in pipeline
+    assert "github.event.workflow_run.event == 'push'" in pipeline
     assert "--upstream-evidence-dir artifacts/upstream-public-dev" in pipeline
     assert all(name in active for name in REQUIRED_STEPS)
     assert "build_sha_mismatch" in active
