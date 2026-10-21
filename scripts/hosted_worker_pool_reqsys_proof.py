@@ -13,6 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
@@ -46,6 +47,7 @@ STARTUP_FAILURE_CODES = frozenset({
     "authority_connection_unavailable:unknown",
 })
 STARTUP_LOG_LIMIT = 131072
+SYSTEM_CA_BUNDLE = Path("/etc/ssl/certs/ca-certificates.crt")
 
 
 class ProofError(RuntimeError):
@@ -145,6 +147,35 @@ def write_private(path: Path, value: str) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def materialize_explicit_system_root(
+    runtime_env: dict[str, str], private_dir: Path,
+) -> dict[str, str]:
+    """Bind libpq to the host CA bundle without exposing the private DSN."""
+    try:
+        source = Path(runtime_env["CODEX_WORKER_POOL_DATABASE_URL_FILE"])
+        value = source.read_text(encoding="utf-8").strip()
+        parsed = urlsplit(value)
+        pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except (KeyError, OSError, ValueError):
+        raise ProofError("runtime_tls_profile_invalid") from None
+    require(parsed.scheme == "postgresql" and bool(parsed.hostname),
+            "runtime_tls_profile_invalid")
+    roots = [item for key, item in pairs if key == "sslrootcert"]
+    require(roots == ["system"], "runtime_tls_profile_invalid")
+    require(SYSTEM_CA_BUNDLE.is_absolute() and SYSTEM_CA_BUNDLE.is_file(),
+            "system_ca_bundle_unavailable")
+    updated = [
+        (key, str(SYSTEM_CA_BUNDLE) if key == "sslrootcert" else item)
+        for key, item in pairs
+    ]
+    destination = private_dir / "runtime-explicit-root.url"
+    write_private(destination, urlunsplit(parsed._replace(query=urlencode(updated))))
+    result = dict(runtime_env)
+    result["CODEX_WORKER_POOL_DATABASE_URL_FILE"] = str(destination)
+    result["EWP_TEST_POSTGRES_URL_FILE"] = str(destination)
+    return result
 
 
 def run_task(reqsys_root: Path, arguments: list[str]) -> dict:
@@ -435,10 +466,11 @@ def main() -> int:
         identity = hydrate_github().get("identity")
         require(isinstance(identity, dict) and identity.get("sha") == args.base_sha,
                 "broker_identity_mismatch")
-        runtime = runtime_environment()
+        broker_runtime = runtime_environment()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="reqsys-hosted-proof-") as temporary:
             private_dir = Path(temporary)
+            runtime = materialize_explicit_system_root(broker_runtime, private_dir)
             result = execute(args, runtime, secrets.token_urlsafe(32),
                              secrets.token_urlsafe(32), private_dir)
         args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",

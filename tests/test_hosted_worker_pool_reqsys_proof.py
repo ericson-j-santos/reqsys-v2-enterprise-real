@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import stat
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -104,3 +106,54 @@ def test_wait_ready_preserves_healthy_service(tmp_path, monkeypatch):
 
     assert health["status"] == "healthy"
     assert health["storage_backend"] == "postgres"
+
+
+
+def test_materialize_explicit_system_root_uses_private_host_bundle(tmp_path, monkeypatch):
+    bundle = tmp_path / "ca-certificates.crt"
+    bundle.write_text("test-ca", encoding="utf-8")
+    source = tmp_path / "runtime.url"
+    source.write_text(
+        "postgresql://runtime:private-value@example.neon.tech/neondb"
+        "?sslmode=verify-full&sslrootcert=system&channel_binding=require\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(proof, "SYSTEM_CA_BUNDLE", bundle)
+
+    runtime = proof.materialize_explicit_system_root(
+        {
+            "CODEX_WORKER_POOL_DATABASE_URL_FILE": str(source),
+            "EWP_TEST_POSTGRES_URL_FILE": str(source),
+        },
+        tmp_path,
+    )
+
+    destination = Path(runtime["CODEX_WORKER_POOL_DATABASE_URL_FILE"])
+    assert runtime["EWP_TEST_POSTGRES_URL_FILE"] == str(destination)
+    assert destination != source
+    query = parse_qs(urlsplit(destination.read_text(encoding="utf-8").strip()).query)
+    assert query["sslmode"] == ["verify-full"]
+    assert query["sslrootcert"] == [str(bundle)]
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    assert "private-value" not in str(runtime)
+
+
+def test_materialize_explicit_system_root_rejects_unexpected_profile(tmp_path, monkeypatch):
+    bundle = tmp_path / "ca-certificates.crt"
+    bundle.write_text("test-ca", encoding="utf-8")
+    source = tmp_path / "runtime.url"
+    source.write_text(
+        "postgresql://runtime:private-value@example.neon.tech/neondb"
+        "?sslmode=verify-full&sslrootcert=/tmp/untrusted.pem\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(proof, "SYSTEM_CA_BUNDLE", bundle)
+
+    with pytest.raises(proof.ProofError, match=r"^runtime_tls_profile_invalid$"):
+        proof.materialize_explicit_system_root(
+            {
+                "CODEX_WORKER_POOL_DATABASE_URL_FILE": str(source),
+                "EWP_TEST_POSTGRES_URL_FILE": str(source),
+            },
+            tmp_path,
+        )
