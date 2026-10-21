@@ -33,6 +33,7 @@ class FakeRequester:
         query_status=200,
         negative_status=400,
         negative_code="DatasetExecuteQueriesError",
+        dedicated=False,
     ):
         self.exists = existing
         self.duplicate = duplicate
@@ -42,6 +43,7 @@ class FakeRequester:
         self.query_status = query_status
         self.negative_status = negative_status
         self.negative_code = negative_code
+        self.dedicated = dedicated
         self.create_calls = 0
         self.calls = []
 
@@ -55,7 +57,7 @@ class FakeRequester:
             return 200, {}, {"value": [{
                 "id": WS,
                 "name": m.WORKSPACE_NAME,
-                "isOnDedicatedCapacity": False,
+                "isOnDedicatedCapacity": self.dedicated,
                 "isReadOnly": False,
             }]}
         if url == f"{m.FABRIC_BASE}/workspaces/{WS}/semanticModels" and method == "GET":
@@ -98,7 +100,7 @@ class FakeRequester:
         raise AssertionError((method, url))
 
 
-def _run(fake):
+def _run(fake, *, reuse_only=False):
     with patch.dict(os.environ, {
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_EVENT_NAME": "workflow_dispatch",
@@ -109,6 +111,7 @@ def _run(fake):
             tenant_id=m.EXPECTED_TENANT,
             authorization=m.AUTHORIZATION,
             requester=fake,
+            reuse_only=reuse_only,
         )
 
 
@@ -138,6 +141,7 @@ def test_positive_create_readback_query_negative_and_replay():
     assert result["new_capacity_or_license_requested"] is False
     assert result["billing_mutation_performed"] is False
     assert result["incremental_cost_verified_zero"] is False
+    assert result["reuse_only"] is False
     assert result["metric_parity_promoted"] is False
     assert fake.create_calls == 1
     serialized = json.dumps(result)
@@ -149,10 +153,31 @@ def test_positive_create_readback_query_negative_and_replay():
 
 def test_existing_matching_canary_is_reused_without_write():
     fake = FakeRequester(existing=True)
-    result = _run(fake)
+    result = _run(fake, reuse_only=True)
     assert result["semantic_model_created"] is False
     assert result["idempotency_verified"] is True
+    assert result["reuse_only"] is True
+    assert result["workspace_shared_capacity"] is True
+    assert result["incremental_cost_verified_zero"] is True
+    assert result["cost_verification_basis"] == (
+        "existing_semantic_model_reused_on_power_bi_pro_shared_capacity"
+    )
     assert fake.create_calls == 0
+
+
+def test_reuse_only_blocks_missing_canary_before_write():
+    fake = FakeRequester()
+    with pytest.raises(m.CanaryError, match="canary_missing_reuse_only"):
+        _run(fake, reuse_only=True)
+    assert fake.create_calls == 0
+
+
+def test_dedicated_capacity_blocks_before_canary_access():
+    fake = FakeRequester(existing=True, dedicated=True)
+    with pytest.raises(m.CanaryError, match="workspace_shared_capacity_required"):
+        _run(fake, reuse_only=True)
+    assert fake.create_calls == 0
+    assert not any("/semanticModels" in url for _, url, _ in fake.calls)
 
 
 def test_existing_mismatched_canary_blocks_without_update_or_delete():
@@ -259,6 +284,10 @@ def test_existing_workflow_keeps_mutation_main_dispatch_only():
     assert "inputs.mode == 'dre-sentinel'" in workflow
     assert "PUBLISH-DRE-SENTINEL-DEV" in workflow
     assert "environment: development" in workflow
+    assert "--reuse-only" in workflow
+    assert 'data.get("workspace_shared_capacity") is True' in workflow
+    assert 'data.get("semantic_model_created") is False' in workflow
+    assert 'data.get("incremental_cost_verified_zero") is True' in workflow
 
 
 @pytest.mark.parametrize(
