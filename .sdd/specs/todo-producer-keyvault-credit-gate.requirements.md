@@ -15,10 +15,16 @@ Docker Compose e operações de runtime fora da autorização concedida em 21/10
 2. Ler o Key Vault existente somente via ARM para conferir assinatura, tenant,
    grupo de recursos e identidade exata do vault DEV. Não criar vault, alterar
    SKU, conceder RBAC ou acionar recursos pagos.
-3. Workflow GitHub Actions apenas por issue_comment exato:
-   /reqsys recover-todo-producer-keyvault-dev na issue #2973, enviado pelo
-   proprietário e recebido em main. OIDC limitado ao job DEV, permissões
-   contents:read e id-token:write, executor ubuntu-24.04 padrão do repo público.
+3. Reutilizar o Authorized Actions Gateway já publicado, na issue operacional
+   #1705, aceitando SOMENTE o comentário exato do proprietário:
+   /reqsys run todo-producer-keyvault-dev. O Gateway despacha o workflow
+   existente todo-global-hourly-cycle.yml em main, com operação tipada
+   producer-credit-gated e autorização correlacionada ao comentário. O job
+   OIDC deve validar em leitura independente o comentário autorizado
+   (autor, issue, comando, ID, prazo) antes de acessar ARM/Key Vault.
+   OIDC limitado a DEV, permissões contents:read, issues:read, id-token:write
+   exclusivamente no job, executor ubuntu-24.04 do repositório público.
+   Não aumentar a quantidade de workflows do ReqSys.
 4. Nenhuma operação do data plane Key Vault antes da comprovação ARM de custo
    zero; revalidar subscriptionPolicies antes de qualquer consulta ao segredo.
 5. Se segredo ativo/habilitado, reutilizar sem set/recover. Se soft-deleted,
@@ -44,7 +50,9 @@ Docker Compose e operações de runtime fora da autorização concedida em 21/10
 ## Critérios de aceite
 - READY_FOR_PR=passed no SHA vigente, antes de abrir PR.
 - CI do PR terminal no HEAD e sem falhas; merge somente governado.
-- Após integração, um único comando exato do owner na issue #2973.
+- Após integração, um único comando exato do owner na issue operacional #1705,
+  com comment_id vinculado ao workflow_dispatch; manter issue #2973 como fonte
+  do escopo autorizado.
 - Se spendingLimit não é On: COST_UNKNOWN_BLOCKED sem operações data-plane.
 - Se custo autorizado: somente recuperação/criação do segredo DEV sem valores
   em log/artifact; binding/runtime E2E continua pendente.
@@ -54,5 +62,6 @@ Docker Compose e operações de runtime fora da autorização concedida em 21/10
 ## Referências
 - Run 39616271178: SecretNotFound.
 - Issue #2973, comentário 6319619092: autorização técnica de credencial DEV.
+- Issue #1705: Authorized Actions Gateway existente, rota exata e SHA em main.
 - chatgpt-operational-rules/rules/cost-governance.md.
 - Microsoft ARM REST Subscriptions/Get API 2022-12-01: spendingLimit.

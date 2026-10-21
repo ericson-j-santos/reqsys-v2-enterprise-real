@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """DEV-only Azure spending-limit gate and narrow TODO producer secret recovery.
 
-Only callable after a fixed owner issue-comment event, on the default branch.
+Only callable after the fixed owner issue #1705 command was checked by the
+Authorized Actions Gateway and dispatched to the canonical workflow on main.
 No secret values, raw CLI responses, credentials or token URLs are logged.
 """
 from __future__ import annotations

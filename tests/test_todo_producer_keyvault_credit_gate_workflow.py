@@ -3,61 +3,74 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/todo-producer-keyvault-credit-gate.yml"
+WORKFLOW = ROOT / ".github/workflows/todo-global-hourly-cycle.yml"
+GATEWAY = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
 SOURCE = ROOT / "scripts/todo_producer_keyvault_credit_gate.py"
 
 
-def workflow() -> str:
-    return WORKFLOW.read_text(encoding="utf-8")
+def lane() -> str:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    return raw.split("  credential-dev:\n", 1)[1]
 
 
-def test_workflow_requires_exact_owner_issue_comment_and_main():
-    raw = workflow()
-    for condition in [
-        "issue_comment:",
-        "types: [created]",
-        "github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'",
-        "github.ref == 'refs/heads/main'",
-        "github.event.issue.number == 2973",
-        "!github.event.issue.pull_request",
-        "github.event.comment.user.login == 'ericson-j-santos'",
-        "github.event.sender.login == 'ericson-j-santos'",
-        "github.event.comment.body == '/reqsys recover-todo-producer-keyvault-dev'",
-    ]:
-        assert condition in raw
-    assert "workflow_dispatch:" not in raw
-    assert "push:" not in raw
-    assert "schedule:" not in raw
+def test_workflow_keeps_existing_cycle_and_runtime_paths():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "  cycle:\n" in raw
+    assert "  reconcile-runtime:\n" in raw
+    assert "  public-e2e:\n" in raw
+    assert "default: \"cycle\"" in raw
+    assert "          - reconcile-runtime" in raw
+    assert "          - producer-credit-gated" in raw
+    assert "authorization_comment_id:" in raw
+    assert "workflow_dispatch:" in raw
+    assert "issue_comment:" not in raw
 
 
-def test_hosted_oidc_has_no_admin_or_prod_permission():
-    raw = workflow()
-    assert "runs-on: ubuntu-24.04" in raw
-    assert "environment: development" in raw
-    assert "id-token: write" in raw
-    assert "contents: read" in raw
-    assert "actions: write" not in raw
-    assert "issues: write" not in raw
-    assert "secrets." not in raw
-    assert "self-hosted" not in raw
-    assert "uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in raw
+def test_gateway_proves_exact_owner_comment_and_typed_dispatch():
+    raw = GATEWAY.read_text(encoding="utf-8")
+    assert "github.event.issue.number == 1705" in raw
+    assert "github.event.comment.user.login == 'ericson-j-santos'" in raw
+    assert "github.event.comment.body == '/reqsys run todo-producer-keyvault-dev'" in raw
+    assert "'/reqsys run todo-producer-keyvault-dev')" in raw
+    assert "mode='producer-credit-gated'" in raw
+    assert 'AUTHORIZED_COMMENT_ID: ${{ github.event.comment.id }}' in raw
+    assert "-f operation=producer-credit-gated" in raw
+    assert '-f authorization_comment_id="$AUTHORIZED_COMMENT_ID"' in raw
+    assert "cycle|reconcile-runtime) ;;" in raw
+    assert "-f secret=" not in raw
+    assert "-f token=" not in raw
 
 
-def test_recovery_is_after_arm_cost_preflight_and_never_runs_compose():
-    raw = workflow()
-    preflight = "todo_producer_keyvault_credit_gate.py cost"
-    secret = "todo_producer_keyvault_credit_gate.py secret"
-    assert raw.index(preflight) < raw.index(secret)
-    assert "set -euo pipefail" in raw
-    for forbidden in ["docker ", "docker-compose", "az keyvault secret set",
-                      "az role assignment create", "production", "GH_TOKEN:"]:
-        if forbidden == "production":
-            continue  # Only a statement prohibiting production is allowed.
-        assert forbidden not in raw
-    assert "cancel-in-progress: false" in raw
+def test_hosted_oidc_recovery_is_isolated_from_physical_deploy_jobs():
+    text = lane()
+    assert "inputs.operation == 'producer-credit-gated'" in text
+    assert "github.actor == 'github-actions[bot]'" in text
+    assert "github.ref == 'refs/heads/main'" in text
+    assert "needs: contract" in text
+    assert "runs-on: ubuntu-24.04" in text
+    assert "environment: development" in text
+    assert "id-token: write" in text
+    assert "issues: read" in text
+    assert "contents: read" in text
+    assert "actions: write" not in text
+    assert "self-hosted" not in text
+    assert "secrets." not in text
+    assert "uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in text
 
 
-def test_python_security_contract():
+def test_secret_stage_runs_only_after_arm_cost_preflight():
+    text = lane()
+    first = "todo_producer_keyvault_credit_gate.py cost"
+    second = "todo_producer_keyvault_credit_gate.py secret"
+    assert text.index(first) < text.index(second)
+    assert "set -euo pipefail" in text
+    assert "az keyvault secret set" not in text
+    assert "az role assignment create" not in text
+    assert "docker" not in text.lower().split("      - name: Publicar status")[0]
+    assert "deploy " not in text.split("      - name: Publicar status")[0]
+
+
+def test_script_rejects_missing_hard_stop_and_forbids_plaintext_args():
     src = SOURCE.read_text(encoding="utf-8")
     assert 'policy.get("spendingLimit") == "On"' in src
     assert 'value.get("state") == "Enabled"' in src
@@ -66,6 +79,6 @@ def test_python_security_contract():
     assert '"--value"' not in src
     assert "secrets.token_urlsafe(48)" in src
     assert "metadata_lookup(deleted=True)" in src
+    assert "verify_owner_comment(ctx, os.environ)" in src
     assert "cost_preflight(ctx)" in src
-    assert "runtime_binding_verified" in src
     assert '"runtime_binding_verified": False' in src

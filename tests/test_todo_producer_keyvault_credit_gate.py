@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import stat
 from pathlib import Path
 
@@ -19,7 +18,8 @@ def context():
     env = {
         "GITHUB_ACTIONS": "true",
         "GITHUB_REPOSITORY": guard.REPOSITORY,
-        "GITHUB_EVENT_NAME": "issue_comment",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_ACTOR": guard.DISPATCH_ACTOR,
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_SHA": "a" * 40,
         "GITHUB_RUN_ID": "39600000001",
@@ -29,9 +29,8 @@ def context():
     }
     event = {
         "repository": {"full_name": guard.REPOSITORY},
-        "issue": {"number": 2973},
-        "comment": {"body": guard.COMMAND, "user": {"login": guard.OWNER}},
-        "sender": {"login": guard.OWNER},
+        "inputs": {"operation": guard.OPERATION, "authorization_comment_id": "6319619092"},
+        "sender": {"login": guard.DISPATCH_ACTOR},
     }
     return env, event
 
@@ -72,17 +71,17 @@ def test_context_restricts_owner_issue_main_and_dev():
                    "wrong_repo", "pull_request", "wrong_vault"):
         env2, event2 = context()
         if change == "wrong_actor":
-            event2["comment"]["user"]["login"] = "another-user"
+            event2["sender"]["login"] = "another-user"
         elif change == "wrong_issue":
-            event2["issue"]["number"] = 1705
+            event2["inputs"]["operation"] = "cycle"
         elif change == "wrong_command":
-            event2["comment"]["body"] = "/reqsys recover-todo-producer-keyvault-dev extra"
+            event2["inputs"]["authorization_comment_id"] = "evil"
         elif change == "wrong_branch":
             env2["GITHUB_REF"] = "refs/heads/feature"
         elif change == "wrong_repo":
             env2["GITHUB_REPOSITORY"] = "other/repo"
         elif change == "pull_request":
-            event2["issue"]["pull_request"] = {"url": "hidden"}
+            env2["GITHUB_EVENT_NAME"] = "pull_request"
         else:
             env2["REQSYS_KEY_VAULT_NAME"] = "kv-other"
         with pytest.raises(guard.Blocked):
@@ -267,3 +266,30 @@ def test_receipt_binds_identity_and_requires_private_mode(tmp_path):
     filename.chmod(0o644)
     with pytest.raises(guard.Blocked, match="cost_receipt_not_trusted"):
         guard.read_receipt(filename, ctx)
+
+
+
+def test_owner_comment_validated_against_live_issue_and_recent_time():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    record = {
+        "id": 6319619092,
+        "issue_url": f"https://api.github.com/repos/{guard.REPOSITORY}/issues/1705",
+        "user": {"login": guard.OWNER},
+        "body": guard.COMMAND,
+        "created_at": now.isoformat(),
+    }
+    guard.validate_comment_record(record, "6319619092", now)
+    for mutation in ("wrong_user", "wrong_issue", "wrong_body", "expired"):
+        changed = json.loads(json.dumps(record))
+        if mutation == "wrong_user":
+            changed["user"]["login"] = "unknown"
+        elif mutation == "wrong_issue":
+            changed["issue_url"] += "0"
+        elif mutation == "wrong_body":
+            changed["body"] += " extra"
+        else:
+            changed["created_at"] = (now - timedelta(hours=2)).isoformat()
+        with pytest.raises(guard.Blocked):
+            guard.validate_comment_record(changed, "6319619092", now)
