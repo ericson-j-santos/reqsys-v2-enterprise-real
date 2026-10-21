@@ -39,6 +39,7 @@ jobs:
         github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
+        github.event.comment.body == '/reqsys run powerbi-dre-sentinel-dev' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
         github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144' ||
         github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
@@ -155,6 +156,11 @@ jobs:
               ;;
             '/reqsys run report-factory-fabric-dev-e2e')
               target='report-factory-fabric-dev-preflight.yml'
+              mode='publish-e2e'
+              ;;
+            '/reqsys run powerbi-dre-sentinel-dev')
+              target='report-factory-fabric-dev-preflight.yml'
+              mode='dre-sentinel'
               ;;
             '/reqsys run codex-ollama-e2e-dev')
               target='codex-ollama-e2e-dev.yml'
@@ -599,10 +605,14 @@ jobs:
               --ref main \
               -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "report-factory-fabric-dev-preflight.yml" ]; then
+            case "$TARGET_MODE" in
+              publish-e2e|dre-sentinel) ;;
+              *) echo 'report_factory_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
-              -f mode=publish-e2e)"
+              -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "todo-global-hourly-cycle.yml" ]; then
             case "$TARGET_MODE" in
               cycle|reconcile-runtime) ;;

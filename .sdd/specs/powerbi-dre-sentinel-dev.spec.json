@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Power BI DRE Sentinel DEV",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_powerbi_dre_sentinel_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Canário DEV persistente e idempotente cria/reusa um SemanticModel mínimo, lê definição, executa Meta=0 e controle negativo, sem billing/RBAC/capacity/licença nem promoção de paridade."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/report-factory-fabric-dev-preflight.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "implementation": "scripts/powerbi_dre_sentinel_dev.py",
+    "pull_request": "#2985"
+  },
+  "risk": {
+    "production": false,
+    "deploy": true,
+    "merge": false,
+    "secrets": false
+  }
+}
