@@ -15,6 +15,10 @@ on:
       - ".sdd/specs/report-factory-rdl-mvp.spec.json"
       - ".sdd/specs/report-factory-rdl-mvp.requirements.md"
       - ".sdd/specs/report-factory-rdl-mvp.tasks.md"
+      - "scripts/powerbi_dre_sentinel_dev.py"
+      - "tests/test_powerbi_dre_sentinel_dev.py"
+      - ".sdd/specs/powerbi-dre-sentinel-dev.requirements.md"
+      - ".sdd/specs/powerbi-dre-sentinel-dev.spec.json"
   workflow_dispatch:
     inputs:
       mode:
@@ -25,6 +29,7 @@ on:
         options:
           - preflight
           - publish-e2e
+          - dre-sentinel
 
 permissions:
   contents: read
@@ -229,4 +234,106 @@ jobs:
           assert data.get("production_touched") is False, data
           assert data.get("source_sha") == os.environ["GITHUB_SHA"], data
           print("REPORT_FACTORY_FABRIC_DEV_E2E_OK")
+          PY
+
+
+  powerbi-dre-sentinel:
+    name: powerbi-dre-sentinel-dev
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'dre-sentinel'
+    needs: fabric-dev-preflight
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      EVIDENCE_FILE: artifacts/powerbi/dre-sentinel-dev.json
+      POWERBI_DRE_SENTINEL_AUTHORIZATION: PUBLISH-DRE-SENTINEL-DEV
+
+    steps:
+      - name: Checkout do SHA exato
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Validar fronteira DEV do sentinel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          test "${{ github.event_name }}" = "workflow_dispatch"
+          test "${{ inputs.mode }}" = "dre-sentinel"
+          test "$POWERBI_DRE_SENTINEL_AUTHORIZATION" = "PUBLISH-DRE-SENTINEL-DEV"
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::OIDC configuration missing"
+              exit 2
+            fi
+          done
+
+      - name: Login Azure OIDC governado
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Criar ou reutilizar SemanticModel sentinel e validar DAX
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -euo pipefail
+          python scripts/powerbi_dre_sentinel_dev.py \
+            --tenant-id "$CCP_AZURE_TENANT_ID" \
+            --authorization "$POWERBI_DRE_SENTINEL_AUTHORIZATION" \
+            --output "$EVIDENCE_FILE" \
+            --reuse-only
+
+      - name: Publicar evidência sanitizada do sentinel
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: powerbi-dre-sentinel-dev-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Gate E2E do sentinel
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path(os.environ["EVIDENCE_FILE"]).read_text(encoding="utf-8"))
+          assert data.get("status") == "passed", data.get("blocker")
+          assert data.get("environment") == "development"
+          assert data.get("source_sha") == os.environ["GITHUB_SHA"]
+          assert data.get("semantic_model_definition_verified") is True
+          assert data.get("idempotency_verified") is True
+          assert data.get("execute_queries_status") == 200
+          assert data.get("sentinel_value") == 0
+          assert data.get("sentinel_parity_passed") is True
+          assert data.get("negative_control_detected") is True
+          assert data.get("metric_parity_promoted") is False
+          assert data.get("representative_business_metric") is False
+          assert data.get("new_capacity_or_license_requested") is False
+          assert data.get("billing_mutation_performed") is False
+          assert data.get("reuse_only") is True
+          assert data.get("workspace_shared_capacity") is True
+          assert data.get("semantic_model_created") is False
+          assert data.get("incremental_cost_verified_zero") is True
+          assert data.get("production_touched") is False
+          assert data.get("stg_hml_touched") is False
+          assert data.get("delete_performed") is False
+          assert data.get("update_definition_performed") is False
+          print("POWERBI_DRE_SENTINEL_DEV_OK")
           PY
