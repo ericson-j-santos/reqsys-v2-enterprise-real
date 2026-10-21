@@ -22,6 +22,7 @@ from urllib.request import Request, urlopen
 
 EXPECTED_WORKFLOW_NAME = "Validação de Acessos Públicos — ReqSys"
 EXPECTED_WORKFLOW_ID = 298568643
+EXPECTED_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 EXPECTED_ARTIFACT_NAME = "validacao-acessos-publicos"
 EXPECTED_JOB_NAME = "Validar URLs públicas e gerar analítico"
 REQUIRED_STEPS = frozenset({
@@ -177,6 +178,8 @@ def evaluate_event(
 
     if not run:
         blocking.append("missing_event_payload")
+    if repo != EXPECTED_REPOSITORY:
+        blocking.append("repository_not_allowed")
     if workflow_name != expected_workflow or run.get("workflow_id") != EXPECTED_WORKFLOW_ID:
         blocking.append("wrong_workflow")
     if branch != "main":
@@ -193,7 +196,7 @@ def evaluate_event(
 
     if not token:
         blocking.append("github_provenance_unavailable")
-    elif not repo or type(run_id) is not int or run_id <= 0:
+    elif repo != EXPECTED_REPOSITORY or type(run_id) is not int or run_id <= 0:
         blocking.append("github_provenance_unavailable")
     else:
         try:

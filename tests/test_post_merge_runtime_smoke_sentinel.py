@@ -6,6 +6,7 @@ from scripts.post_merge_runtime_smoke_sentinel import (
     EXPECTED_ARTIFACT_NAME,
     EXPECTED_JOB_NAME,
     EXPECTED_WORKFLOW_ID,
+    EXPECTED_REPOSITORY,
     EXPECTED_WORKFLOW_NAME,
     REQUIRED_STEPS,
     evaluate_event,
@@ -34,7 +35,7 @@ def _event(
             "head_sha": source_sha,
             "event": source_event,
             "conclusion": conclusion,
-            "html_url": "https://github.com/example/repo/actions/runs/123",
+            "html_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/123",
         }
     }
 
@@ -50,7 +51,7 @@ def _transport(
 ):
     def fake_request_json(url: str, token: str) -> dict:
         assert token == "token"
-        assert url.startswith("https://api.github.com/repos/example/repo/")
+        assert url.startswith("https://api.github.com/repos/ericson-j-santos/reqsys-v2-enterprise-real/")
         if url.endswith("/actions/runs/123/artifacts?per_page=100"):
             return {
                 "artifacts": [{
@@ -84,7 +85,7 @@ def _transport(
 def _evaluate(event=None, **transport_options):
     return evaluate_event(
         _event() if event is None else event,
-        repo="example/repo",
+        repo=EXPECTED_REPOSITORY,
         token="token",
         request_json=_transport(**transport_options),
     )
@@ -159,8 +160,21 @@ def test_job_failure_blocks_even_if_workflow_conclusion_is_green():
     assert "required_steps_not_executed" in result.blocking_issues
 
 
+def test_untrusted_repository_cannot_redirect_github_api_requests():
+    def never_called(url: str, token: str) -> dict:
+        raise AssertionError("untrusted repo must be rejected before I/O")
+    result = evaluate_event(
+        _event(),
+        repo="other-owner/other-repo",
+        token="token",
+        request_json=never_called,
+    )
+    assert result.status == "blocked"
+    assert "repository_not_allowed" in result.blocking_issues
+
+
 def test_missing_token_blocks_real_evidence_validation():
-    result = evaluate_event(_event(), repo="example/repo", token=None)
+    result = evaluate_event(_event(), repo=EXPECTED_REPOSITORY, token=None)
     assert result.status == "blocked"
     assert "github_provenance_unavailable" in result.blocking_issues
 
@@ -193,6 +207,6 @@ def test_workflow_targets_active_dev_source_instead_of_retired_fly():
 def test_http_transport_exception_blocks_and_does_not_claim_sentinel_ready():
     def failed_transport(url: str, token: str) -> dict:
         raise RuntimeError("connection unavailable")
-    result = evaluate_event(_event(), repo="example/repo", token="token", request_json=failed_transport)
+    result = evaluate_event(_event(), repo=EXPECTED_REPOSITORY, token="token", request_json=failed_transport)
     assert result.status == "blocked"
     assert "github_read_unavailable" in result.blocking_issues
