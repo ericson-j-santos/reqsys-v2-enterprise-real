@@ -9,7 +9,7 @@
     "tests": [
       "tests/test_powerbi_template_runtime_resolver.py"
     ],
-    "evidence_contract": "Resolver OIDC read-only dos 11 templates, com IDs/nomes remotos apenas em memória, artifact pseudonimizado e sentinel ExecuteQueries que nunca promove paridade global."
+    "evidence_contract": "Resolver OIDC read-only dos 11 templates, com IDs/nomes remotos apenas em memória, artifact pseudonimizado, exclusão de dataset sentinela DRE mesmo quando o report usa alias de negócio e ExecuteQueries no dataset sintético isolado, nunca no DRE empresarial nem promovendo paridade global."
   },
   "traceability": {
     "workflow": ".github/workflows/fabric-oidc-readonly-probe.yml",
