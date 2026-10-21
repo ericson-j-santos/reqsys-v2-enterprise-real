@@ -178,11 +178,17 @@ def materialize_explicit_system_root(
     return result
 
 
-def run_task(reqsys_root: Path, arguments: list[str]) -> dict:
+def run_task(
+    reqsys_root: Path, arguments: list[str], *,
+    environment: dict[str, str] | None = None,
+) -> dict:
     command = [sys.executable, "-B", str(reqsys_root / "scripts/hosted_worker_pool_reqsys_task.py"), *arguments]
+    process_environment = dict(os.environ)
+    if environment is not None:
+        process_environment.update(environment)
     try:
-        result = subprocess.run(command, cwd=reqsys_root, check=False, capture_output=True,
-                                text=True, timeout=60)
+        result = subprocess.run(command, cwd=reqsys_root, env=process_environment,
+                                check=False, capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ProofError("reqsys_task_process_unavailable") from exc
     require(result.returncode == 0, "reqsys_task_process_failed")
@@ -237,6 +243,26 @@ def work_request(args: argparse.Namespace) -> dict:
         "merge_policy": "governed",
         "fencing_required": True,
     }
+
+
+def existing_verified_work(work: dict, base_sha: str) -> bool:
+    evidence = work.get("evidence")
+    merge = work.get("merge")
+    require(isinstance(evidence, dict) and isinstance(merge, dict),
+            "existing_work_evidence_invalid")
+    if evidence.get("state") == "pending":
+        return False
+    require(
+        evidence.get("state") == "verified"
+        and evidence.get("validation_sha") == base_sha
+        and evidence.get("independent_readback") is True
+        and evidence.get("positive_control") is True
+        and evidence.get("negative_control") is True
+        and merge.get("state") == "ready"
+        and merge.get("expected_head_sha") == base_sha,
+        "existing_work_evidence_invalid",
+    )
+    return True
 
 
 def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
@@ -362,23 +388,38 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
         else:
             require(current.get("state") == "completed", "existing_task_not_terminal")
 
-        evidence = {
-            "validation_run_id": run_id,
-            "validation_sha": args.base_sha,
-            "evidence_reference": "github-actions:" + run_id + ":reqsys-hosted-worker-pool-proof",
-            "independent_readback": True,
-            "positive_control": True,
-            "negative_control": True,
-            "correlation_id": args.correlation_id + "-evidence",
-        }
-        recorded = expect("POST", "/v1/work/" + work_id + "/evidence", token, evidence, {200})
-        require(recorded.get("evidence", {}).get("state") == "verified"
-                and recorded.get("merge", {}).get("state") == "ready",
-                "work_evidence_not_verified")
         final_task = expect("GET", "/v1/tasks/" + task_id, token, None, {200})
         require(final_task.get("state") == "completed"
                 and final_task.get("fencing_required") is True,
                 "final_task_readback_failed")
+
+        provider_file = args.output.parent / "provider-readback.json"
+        readback = run_task(reqsys_root, [
+            "provider-readback", "--output", str(provider_file),
+            "--worker-pool-root", str(pool_root), "--task-id", task_id,
+            "--rules-sha", args.rules_sha,
+        ], environment=runtime_env)
+        require(readback.get("result") == "REQSYS_HOSTED_WORKER_PROVIDER_READBACK_OK",
+                "provider_readback_failed")
+
+        current_work = expect("GET", "/v1/work/" + work_id, token, None, {200})
+        if existing_verified_work(current_work, args.base_sha):
+            recorded = current_work
+        else:
+            evidence = {
+                "validation_run_id": run_id,
+                "validation_sha": args.base_sha,
+                "evidence_reference": "github-actions:" + run_id + ":reqsys-hosted-worker-pool-proof",
+                "independent_readback": True,
+                "positive_control": True,
+                "negative_control": True,
+                "correlation_id": args.correlation_id + "-evidence",
+            }
+            recorded = expect("POST", "/v1/work/" + work_id + "/evidence",
+                              token, evidence, {200})
+        require(recorded.get("evidence", {}).get("state") == "verified"
+                and recorded.get("merge", {}).get("state") == "ready",
+                "work_evidence_not_verified")
     finally:
         if server.poll() is None:
             server.terminate()
@@ -389,14 +430,6 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
             server.wait(timeout=5)
         log_stream.close()
 
-    provider_file = args.output.parent / "provider-readback.json"
-    readback = run_task(reqsys_root, [
-        "provider-readback", "--output", str(provider_file),
-        "--worker-pool-root", str(pool_root), "--task-id", task_id,
-        "--rules-sha", args.rules_sha,
-    ])
-    require(readback.get("result") == "REQSYS_HOSTED_WORKER_PROVIDER_READBACK_OK",
-            "provider_readback_failed")
     return {
         "schema_version": "1.0.0",
         "result": "REQSYS_HOSTED_WORKER_POOL_PROOF_PASSED",
