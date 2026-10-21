@@ -13,8 +13,12 @@ Docker Compose e operações de runtime fora da autorização concedida em 21/10
    Off, CurrentPeriodOff, ausência, HTTP 403 e timeout bloqueiam operações
    tarifáveis do Key Vault. Budget de alerta não é hard stop.
 2. Ler o Key Vault existente somente via ARM para conferir assinatura, tenant,
-   grupo de recursos e identidade exata do vault DEV. Não criar vault, alterar
-   SKU, conceder RBAC ou acionar recursos pagos.
+   grupo de recursos e identidade exata do vault DEV. Validar URL ARM com
+   scheme HTTPS, autoridade exata management.azure.com, sem userinfo/fragmento,
+   query api-version permitida e path de assinatura/vault DEV limitado.
+   Prefixos parecidos, hosts homógrafos e paths arbitrários devem falhar antes
+   do subprocesso Azure CLI. Não criar vault, alterar SKU, conceder RBAC ou
+   acionar recursos pagos.
 3. Reutilizar o Authorized Actions Gateway já publicado, na issue operacional
    #1705, aceitando SOMENTE o comentário exato do proprietário:
    /reqsys run todo-producer-keyvault-dev. O Gateway despacha o workflow

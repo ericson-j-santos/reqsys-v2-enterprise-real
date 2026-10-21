@@ -18,6 +18,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
@@ -125,9 +126,27 @@ def cli(arguments: list[str]) -> tuple[int, str, str]:
 
 
 def read_arm(path: str, blocker: str) -> dict:
-    require(path.startswith("https://management.azure.com/subscriptions/")
-            and all(token not in path for token in ("\r", "\n", "#")),
-            "arm_target_invalid")
+    # Exact scheme, authority and resource path; prefix checks can accept
+    # lookalike domains such as management.azure.com.attacker.invalid.
+    try:
+        uri = urlsplit(path)
+        valid_path = re.fullmatch(
+            r"/subscriptions/[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+            rf"(?:/resourceGroups/{RESOURCE_GROUP}/providers/Microsoft.KeyVault/vaults/{VAULT})?",
+            uri.path,
+        ) is not None
+        valid = (uri.scheme == "https"
+                 and uri.netloc == "management.azure.com"
+                 and uri.hostname == "management.azure.com"
+                 and uri.username is None
+                 and uri.password is None
+                 and uri.fragment == ""
+                 and uri.query in {"api-version=2022-12-01", "api-version=2023-07-01"}
+                 and valid_path
+                 and not any(char in path for char in ("\r", "\n", "#")))
+    except ValueError:
+        valid = False
+    require(valid, "arm_target_invalid")
     status, out, _error = cli(["rest", "--method", "get", "--url", path,
                                "--only-show-errors", "--output", "json"])
     require(status == 0, blocker)

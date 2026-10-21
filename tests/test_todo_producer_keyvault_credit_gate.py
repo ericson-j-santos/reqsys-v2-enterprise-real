@@ -4,6 +4,7 @@ import importlib.util
 import json
 import stat
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -121,7 +122,7 @@ def test_cost_gate_on_and_qualified_existing_vault(monkeypatch):
     assert proof["spending_limit"] == "On"
     assert proof["keyvault_data_plane_attempted"] is False
     assert len(paths) == 2
-    assert all(x[0].startswith("https://management.azure.com") for x in paths)
+    assert all(urlsplit(x[0]).netloc == "management.azure.com" for x in paths)
 
 
 def test_cost_gate_fails_for_different_vault_or_tenant():
@@ -293,3 +294,39 @@ def test_owner_comment_validated_against_live_issue_and_recent_time():
             changed["created_at"] = (now - timedelta(hours=2)).isoformat()
         with pytest.raises(guard.Blocked):
             guard.validate_comment_record(changed, "6319619092", now)
+
+
+@pytest.mark.parametrize("unsafe_url", [
+    "http://management.azure.com/subscriptions/11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+    "https://management.azure.com.attacker.invalid/subscriptions/11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+    "https://management.azure.com@evil.invalid/subscriptions/11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+    "https://attacker.invalid/path/https://management.azure.com/subscriptions/11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+    "https://management.azure.com/other/11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+    "https://management.azure.com/subscriptions/11111111-1111-4111-8111-111111111111?api-version=2022-12-01#fragment",
+    "https://management.azure.com/subscriptions/11111111-1111-4111-8111-111111111111?unapproved=value",
+])
+def test_arm_url_rejects_host_spoof_and_invalid_targets_before_cli(
+    monkeypatch, unsafe_url: str
+):
+    monkeypatch.setattr(guard, "cli", lambda *_: pytest.fail("unsafe ARM URL reached Azure CLI"))
+    with pytest.raises(guard.Blocked, match=r"^arm_target_invalid$"):
+        guard.read_arm(unsafe_url, "request_failed")
+
+
+def test_arm_url_accepts_exact_subscription_read_only_request(monkeypatch):
+    accepted = []
+    monkeypatch.setattr(
+        guard, "cli",
+        lambda arguments: (
+            accepted.append(arguments) or 0,
+            json.dumps(subscription()), "",
+        ),
+    )
+    value = guard.read_arm(
+        "https://management.azure.com/subscriptions/"
+        "11111111-1111-4111-8111-111111111111?api-version=2022-12-01",
+        "request_failed",
+    )
+    assert value["subscriptionPolicies"]["spendingLimit"] == "On"
+    assert len(accepted) == 1
+    assert accepted[0][:4] == ["rest", "--method", "get", "--url"]
