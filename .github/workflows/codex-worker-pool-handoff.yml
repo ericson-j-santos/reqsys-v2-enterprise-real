@@ -171,14 +171,14 @@ jobs:
 
     steps:
       - name: Checkout ReqSys no SHA hospedado
-        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.base_sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Checkout Engineering Worker Pool integrado
-        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ericson-j-santos/engineering-worker-pool
           ref: ${{ env.WORKER_POOL_SHA }}
@@ -187,7 +187,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout bootstrap governado fixado
-        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.EXPECTED_RULES_SHA }}
