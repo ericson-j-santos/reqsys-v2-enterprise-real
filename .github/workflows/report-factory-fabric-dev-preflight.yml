@@ -293,7 +293,8 @@ jobs:
           python scripts/powerbi_dre_sentinel_dev.py \
             --tenant-id "$CCP_AZURE_TENANT_ID" \
             --authorization "$POWERBI_DRE_SENTINEL_AUTHORIZATION" \
-            --output "$EVIDENCE_FILE"
+            --output "$EVIDENCE_FILE" \
+            --reuse-only
 
       - name: Publicar evidência sanitizada do sentinel
         if: always()
@@ -326,6 +327,10 @@ jobs:
           assert data.get("representative_business_metric") is False
           assert data.get("new_capacity_or_license_requested") is False
           assert data.get("billing_mutation_performed") is False
+          assert data.get("reuse_only") is True
+          assert data.get("workspace_shared_capacity") is True
+          assert data.get("semantic_model_created") is False
+          assert data.get("incremental_cost_verified_zero") is True
           assert data.get("production_touched") is False
           assert data.get("stg_hml_touched") is False
           assert data.get("delete_performed") is False

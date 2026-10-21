@@ -227,11 +227,10 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted, watch } from 'vue'
+import { computed, reactive, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRequisitosStore } from '../stores/requisitos'
-import axios from 'axios'
-import { requireProviderNeutralRuntimeUrl } from '../services/runtimeUrlPolicy'
+import { api } from '../services/api'
 import { criarQueryFiltrosRequisitos, filtrarRequisitos, normalizarFiltrosRequisitos, possuiFiltroAtivo } from '../utils/filtrosRequisitos'
 
 const store = useRequisitosStore()
@@ -245,6 +244,23 @@ const filtros = reactive(normalizarFiltrosRequisitos(route.query))
 
 const form = reactive({ titulo: '', descricao: '', urgencia: 'media', area: '', sistema: '', solicitante: '' })
 const ia = reactive({ carregando: false, erro: '', justificativa: '', urgenciaSugerida: '' })
+
+const URGENCIAS_VALIDAS = new Set(['baixa', 'media', 'alta', 'critica'])
+let consultaIAId = 0
+
+function invalidarConsultaIA() {
+  consultaIAId += 1
+  ia.carregando = false
+  ia.erro = ''
+  ia.justificativa = ''
+  ia.urgenciaSugerida = ''
+}
+
+watch(dialog, (aberto) => {
+  if (!aberto) invalidarConsultaIA()
+}, { flush: 'sync' })
+
+onBeforeUnmount(invalidarConsultaIA)
 
 const headers = [
   { title: 'Código', key: 'codigo' },
@@ -295,6 +311,7 @@ function abrirDetalhe(_event, { item } = {}) {
 
 async function salvar() {
   salvando.value = true
+  invalidarConsultaIA()
   try {
     await store.criar({ ...form })
     dialog.value = false
@@ -304,37 +321,80 @@ async function salvar() {
 }
 
 async function assistenteIA() {
+  if (ia.carregando || salvando.value || !dialog.value) return
+
+  const requestId = ++consultaIAId
+  const entrada = { ...form }
   ia.carregando = true
   ia.erro = ''
   ia.justificativa = ''
   ia.urgenciaSugerida = ''
+
   try {
-    const base = requireProviderNeutralRuntimeUrl(
-      import.meta.env.VITE_API_URL || '/api',
-      'VITE_API_URL',
-    )
     const [resDescricao, resUrgencia] = await Promise.allSettled([
-      axios.post(`${base}/v1/ia/sugerir-descricao`, { titulo: form.titulo, area: form.area, sistema: form.sistema }),
-      axios.post(`${base}/v1/ia/classificar-urgencia`, { titulo: form.titulo, descricao: form.descricao || form.titulo }),
+      api.post('/v1/ia/sugerir-descricao', {
+        titulo: entrada.titulo,
+        area: entrada.area,
+        sistema: entrada.sistema,
+      }),
+      api.post('/v1/ia/classificar-urgencia', {
+        titulo: entrada.titulo,
+        descricao: entrada.descricao || entrada.titulo,
+      }),
     ])
-    if (resDescricao.status === 'fulfilled') {
-      const sugestao = resDescricao.value.data?.data?.descricao_sugerida
-      if (sugestao) form.descricao = sugestao
+
+    if (requestId !== consultaIAId || !dialog.value) return
+
+    const contextoPreservado = ['titulo', 'descricao', 'area', 'sistema']
+      .every((campo) => form[campo] === entrada[campo])
+    if (!contextoPreservado) {
+      ia.erro = 'Os dados foram alterados durante a consulta. As sugestões foram descartadas para preservar suas alterações.'
+      return
+    }
+
+    const urgenciaPreservada = form.urgencia === entrada.urgencia
+    const avisos = []
+
+    const descricaoEnvelope = resDescricao.status === 'fulfilled'
+      ? resDescricao.value.data
+      : null
+    const sugestao = descricaoEnvelope?.data?.descricao_sugerida
+    if (
+      descricaoEnvelope?.success === true
+      && typeof sugestao === 'string'
+      && sugestao.trim()
+    ) {
+      form.descricao = sugestao.trim()
     } else {
-      ia.erro = resDescricao.reason?.response?.data?.detail || 'Assistente IA indisponível no momento.'
+      avisos.push('Não foi possível sugerir uma descrição. A descrição preenchida foi mantida.')
     }
-    if (resUrgencia.status === 'fulfilled') {
-      const dados = resUrgencia.value.data?.data
-      if (dados?.urgencia) {
-        form.urgencia = dados.urgencia
-        ia.urgenciaSugerida = dados.urgencia
-        ia.justificativa = dados.justificativa || ''
-      }
+
+    const urgenciaEnvelope = resUrgencia.status === 'fulfilled'
+      ? resUrgencia.value.data
+      : null
+    const dados = urgenciaEnvelope?.data
+    const classificacaoValida = urgenciaEnvelope?.success === true
+      && URGENCIAS_VALIDAS.has(dados?.urgencia)
+      && typeof dados?.justificativa === 'string'
+      && dados.justificativa.trim().length > 0
+
+    if (!classificacaoValida) {
+      avisos.push('Não foi possível obter uma classificação válida de urgência. A urgência preenchida foi mantida; revise-a manualmente.')
+    } else if (!urgenciaPreservada) {
+      avisos.push('A urgência foi alterada durante a consulta e sua escolha foi mantida.')
+    } else {
+      form.urgencia = dados.urgencia
+      ia.urgenciaSugerida = dados.urgencia
+      ia.justificativa = dados.justificativa.trim()
     }
-  } catch (err) {
-    ia.erro = err?.response?.data?.detail || 'Erro ao contatar o Assistente IA.'
+
+    ia.erro = avisos.join(' ')
+  } catch {
+    if (requestId === consultaIAId && dialog.value) {
+      ia.erro = 'Não foi possível concluir a consulta ao Assistente IA. Os campos preenchidos foram mantidos.'
+    }
   } finally {
-    ia.carregando = false
+    if (requestId === consultaIAId) ia.carregando = false
   }
 }
 </script>

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.envelope import ok
 from app.services.gemini import (
+    ClassificacaoUrgenciaInvalida,
     GeminiIndisponivel,
     classificar_urgencia,
     get_uso,
@@ -113,6 +114,17 @@ def classificar(body: ClassificacaoRequest):
             **_groq_params(),
         )
         return ok({'urgencia': resultado.urgencia, 'justificativa': resultado.justificativa, 'provedor': provedor})
+    except ClassificacaoUrgenciaInvalida as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                'code': 'IA_CLASSIFICACAO_INVALIDA',
+                'message': (
+                    'A IA retornou uma classificação de urgência inválida. '
+                    'Revise a urgência manualmente ou tente novamente.'
+                ),
+            },
+        ) from exc
     except GeminiIndisponivel as exc:
         _handle_ia_error(exc)
 

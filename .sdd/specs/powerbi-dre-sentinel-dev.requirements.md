@@ -48,6 +48,11 @@ a paridade de negócio.
 18. Testes cobrem: criação positiva, replay idempotente, item divergente,
     duplicidade, rejeição por licença/capacidade, ExecuteQueries indisponível,
     divergência do valor, controle negativo e gate main/dispatch/autorização.
+19. Após a criação inicial comprovada, a rota governada opera em modo
+    `reuse-only`: exige o SemanticModel existente, bloqueia antes de qualquer
+    escrita se ele estiver ausente e aceita apenas workspace Power BI Pro em
+    capacidade compartilhada. Nesse modo, a evidência registra
+    `incremental_cost_verified_zero=true` somente quando nenhuma criação ocorreu.
 
 ## Critérios de aceite
 
@@ -61,4 +66,7 @@ a paridade de negócio.
 - run real registra `sentinel_value=0`;
 - controle negativo detectado;
 - nenhuma operação de billing/RBAC/capacity/licença;
+- o replay governado registra `reuse_only=true`,
+  `workspace_shared_capacity=true`, `semantic_model_created=false` e
+  `incremental_cost_verified_zero=true`;
 - paridade global continua falsa.

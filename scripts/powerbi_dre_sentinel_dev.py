@@ -464,10 +464,14 @@ def _ensure_canary(
     workspace_id: str,
     fabric_token: str,
     requester: Requester,
+    *,
+    reuse_only: bool = False,
 ) -> tuple[str, bool, bool]:
     existing = _exact_named(_list_semantic_models(workspace_id, fabric_token, requester), CANARY_NAME)
     if len(existing) > 1:
         raise CanaryError(f"canary_ambiguous_{len(existing)}")
+    if not existing and reuse_only:
+        raise CanaryError("canary_missing_reuse_only")
     if len(existing) == 1:
         model_id = _guid(existing[0].get("id"))
         if model_id is None:
@@ -603,6 +607,7 @@ def execute(
     tenant_id: str,
     authorization: str,
     requester: Requester = _request,
+    reuse_only: bool = False,
 ) -> dict[str, Any]:
     if os.getenv("GITHUB_REF") != EXPECTED_REF:
         raise CanaryError("main_required")
@@ -620,13 +625,21 @@ def execute(
     if role not in {"Admin", "Member", "Contributor"}:
         raise CanaryError("workspace_write_role_missing")
     shared = _powerbi_workspace_shared(workspace_id, powerbi_token, requester)
+    if not shared:
+        raise CanaryError("workspace_shared_capacity_required")
 
     model_id, created, definition_verified = _ensure_canary(
-        workspace_id, fabric_token, requester
+        workspace_id,
+        fabric_token,
+        requester,
+        reuse_only=reuse_only,
     )
     # Replay real da decisão: deve reutilizar o mesmo item e nunca criar/update.
     replay_id, replay_created, replay_verified = _ensure_canary(
-        workspace_id, fabric_token, requester
+        workspace_id,
+        fabric_token,
+        requester,
+        reuse_only=True,
     )
     if replay_id != model_id or replay_created or not replay_verified:
         raise CanaryError("canary_idempotency_failed")
@@ -675,8 +688,15 @@ def execute(
         "new_workspace_created": False,
         "new_capacity_or_license_requested": False,
         "billing_mutation_performed": False,
-        "incremental_cost_verified_zero": False,
-        "cost_policy": "no_purchase_or_capacity_creation; reject_on_license_or_capacity_error",
+        "incremental_cost_verified_zero": reuse_only and not created,
+        "cost_verification_basis": (
+            "existing_semantic_model_reused_on_power_bi_pro_shared_capacity"
+        ),
+        "cost_policy": (
+            "reuse_only_on_shared_capacity; "
+            "no_purchase_or_capacity_creation; reject_on_license_or_capacity_error"
+        ),
+        "reuse_only": reuse_only,
         "semantic_model_created": created,
         "semantic_model_definition_verified": definition_verified,
         "semantic_model_definition_hash": _definition_hash(_parts()),
@@ -704,11 +724,13 @@ def main() -> int:
     parser.add_argument("--tenant-id", required=True)
     parser.add_argument("--authorization", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--reuse-only", action="store_true")
     args = parser.parse_args()
     try:
         evidence = execute(
             tenant_id=args.tenant_id.strip(),
             authorization=args.authorization,
+            reuse_only=args.reuse_only,
         )
         code = 0
     except (CanaryError, OSError, subprocess.SubprocessError) as exc:
@@ -722,6 +744,7 @@ def main() -> int:
             "new_capacity_or_license_requested": False,
             "billing_mutation_performed": False,
             "incremental_cost_verified_zero": False,
+            "reuse_only": args.reuse_only,
             "metric_parity_promoted": False,
             "production_touched": False,
             "stg_hml_touched": False,
@@ -744,6 +767,9 @@ def main() -> int:
         "sentinel_parity_passed": evidence.get("sentinel_parity_passed"),
         "metric_parity_promoted": False,
         "billing_mutation_performed": False,
+        "incremental_cost_verified_zero": evidence.get(
+            "incremental_cost_verified_zero", False
+        ),
         "raw_remote_ids_logged": False,
     }, sort_keys=True))
     return code

@@ -1,0 +1,49 @@
+{
+  "feature_name": "ia-urgencia-invalid-provider",
+  "project": "ReqSys v2 Enterprise — Assistente IA de requisitos",
+  "created_at": "2026-10-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/2973",
+  "todo": "https://app.notion.com/3ff4c12bae7c81cebbe9cf958bb724b1",
+  "correlation_id": "REQSYS-URGENCIA-20261020-01",
+  "description": "Não aceitar resposta malformada do provedor como urgência média; falhar fechado no HTTP e preservar edições e valores do formulário de requisitos.",
+  "scope": "DEV — classificação de urgência IA e formulário de requisitos",
+  "files": [
+    "backend/app/services/gemini.py",
+    "backend/app/api/ia.py",
+    "backend/tests/test_ia_urgencia_contract.py",
+    "frontend/src/views/RequisitosView.vue",
+    "frontend/src/views/__tests__/RequisitosView.assistenteIA.test.js"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_ia_urgencia_contract.py",
+      "frontend/src/views/__tests__/RequisitosView.assistenteIA.test.js"
+    ],
+    "evidence_contract": "A regressão deve falhar na base antiga quando resposta IA inválida assume 'media', passar no HEAD corrigido, validar HTTP 502 sanitizado e 503 separado, quatro urgências válidas, fallback sem segunda chamada implícita por formato inválido, envelope de API real, edição/cancelamento/reabertura concorrente do formulário, payload de salvar e readback DEV por ID. CI e evidência READY_FOR_PR devem ser do HEAD exato; execuções simuladas são parciais até prova DEV."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  },
+  "acceptance_criteria": [
+    "Ausência, duplicação ou ambiguidade de categoria, justificativa vazia e campos não reconhecidos não geram urgência média implícita.",
+    "Resposta malformada gera HTTP 502 com IA_CLASSIFICACAO_INVALIDA e sem vazamento do payload bruto; provider indisponível continua 503.",
+    "Respostas válidas baixa, media, alta, critica e variantes de acento mantêm contrato.",
+    "Erro de classificação não substitui urgência manual; salvamento preserva os dados do usuário.",
+    "Resposta atrasada não altera formulário editado, cancelado, reaberto ou salvo; consulta antiga não libera loading de uma nova.",
+    "Casos positivos e negativos executados no backend e frontend com controles reproduzindo comportamento anterior.",
+    "READY_FOR_PR=passed no SHA e base atuais antes da abertura de PR; CI completo no HEAD da PR.",
+    "E2E DEV real confirma consulta, erro, preservação, salvamento e readback independente do requisito por ID; não substituir E2E de produto por mocks.",
+    "TODO Global→Worker Pool somente após admissão governada e exatamente uma execução, com replays sem duplicação; integrações e ambiente não são promovidos neste incremento."
+  ],
+  "rollback": "Reverter somente commit(s) deste hotfix antes de promover produto; os dados existentes e o campo de urgência do requisito permanecem preservados."
+}

@@ -57,7 +57,7 @@ jobs:
               else os.environ.get("RUN_URL", "")
           )
           payload = {
-              "schema_version": "1.0.0",
+              "schema_version": "1.1.0",
               "observed_at_utc": datetime.now(timezone.utc).isoformat(),
               "repository": os.environ["REPOSITORY"],
               "workflow": "Teams Commit Notification" if manual else os.environ.get("WORKFLOW_NAME"),
@@ -67,7 +67,16 @@ jobs:
               "conclusion": conclusion,
               "head_sha": "manual" if manual else os.environ.get("HEAD_SHA"),
               "head_branch": "manual" if manual else os.environ.get("HEAD_BRANCH"),
-              "healthy": conclusion in {"success", "manual_validation"},
+              # Conclusao de workflow nao comprova envio nem leitura no destino.
+              "workflow_succeeded": conclusion == "success",
+              "delivery_verified": False,
+              "delivery_state": (
+                  "not_evaluated" if manual else
+                  "locator_watch" if os.environ.get("RUN_EVENT") == "schedule" else
+                  "unverified" if conclusion == "success" else
+                  "failed" if conclusion == "failure" else "not_delivered"
+              ),
+              "healthy": False,
           }
           Path("evidence").mkdir(exist_ok=True)
           Path("evidence/teams-notification-delivery.json").write_text(
@@ -90,7 +99,7 @@ jobs:
           retention-days: 30
 
       - name: Abrir ou atualizar incidente
-        if: steps.evidence.outputs.healthy != 'true'
+        if: steps.evidence.outputs.conclusion == 'failure'
         env:
           CONCLUSION: ${{ steps.evidence.outputs.conclusion }}
           RUN_URL: ${{ steps.evidence.outputs.run_url }}
@@ -123,35 +132,14 @@ jobs:
             gh issue create --repo "$REPOSITORY" --title "$INCIDENT_TITLE" --body "$body"
           fi
 
-      - name: Fechar incidente após recuperação
-        if: steps.evidence.outputs.healthy == 'true' && github.event_name == 'workflow_run'
-        env:
-          RUN_URL: ${{ steps.evidence.outputs.run_url }}
-        shell: bash
-        run: |
-          issue_number=$(gh issue list \
-            --repo "$REPOSITORY" \
-            --state open \
-            --search "${INCIDENT_TITLE} in:title" \
-            --json number,title \
-            --jq ".[] | select(.title == \"${INCIDENT_TITLE}\") | .number" \
-            | head -n1)
-
-          if [[ -n "$issue_number" ]]; then
-            gh issue comment "$issue_number" \
-              --repo "$REPOSITORY" \
-              --body "Recuperação confirmada automaticamente. Execução verde: ${RUN_URL}"
-            gh issue close "$issue_number" \
-              --repo "$REPOSITORY" \
-              --reason completed
-          fi
-
       - name: Resumo operacional
         shell: bash
         run: |
           {
             echo "### Teams Notification Observability"
-            echo "- Saudável: ${{ steps.evidence.outputs.healthy }}"
+            echo "- Entrega comprovada independentemente: não"
+            echo "- Workflow verde, execução manual ou envio suprimido não encerram incidente."
+            echo "- Recuperação exige leitura no destino vinculada ao mesmo envio, SHA e ambiente."
             echo "- Conclusão: ${{ steps.evidence.outputs.conclusion }}"
             echo "- Execução observada: ${{ steps.evidence.outputs.run_url }}"
             echo "- Evidência: artifact teams-notification-evidence-${{ steps.evidence.outputs.run_id }}"

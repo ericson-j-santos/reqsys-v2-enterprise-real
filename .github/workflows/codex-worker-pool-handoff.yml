@@ -24,10 +24,22 @@ on:
         description: "Correlation ID do handoff"
         required: true
         type: string
+      execution_mode:
+        description: "Executor governado do handoff"
+        required: true
+        default: "legacy_pc24x7"
+        type: choice
+        options:
+          - legacy_pc24x7
+          - hosted_dev_proof
   push:
     paths:
       - "scripts/worker_pool_portable_contract_e2e.py"
       - "scripts/pending_development_worker_pool_bridge.py"
+      - "scripts/hosted_worker_pool_reqsys_proof.py"
+      - "scripts/hosted_worker_pool_reqsys_task.py"
+      - "scripts/validate_hosted_worker_pool_reqsys_proof.py"
+      - "tests/test_hosted_worker_pool_reqsys_task.py"
       - ".github/workflows/codex-worker-pool-handoff.yml"
       - "tests/test_worker_pool_portable_contract_e2e.py"
       - ".sdd/specs/codex-branch-first-worker-pool-bridge.requirements.md"
@@ -42,7 +54,7 @@ concurrency:
 
 jobs:
   enqueue:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'legacy_pc24x7'
     name: Enfileirar fallback local no Worker Pool
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 10
@@ -131,6 +143,202 @@ jobs:
             '- Merge/deploy: não'
             '- Token exposto: não'
           ) | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  hosted-dev-proof:
+    if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'hosted_dev_proof'
+    name: Executar menor tarefa ReqSys real no Worker Pool DEV
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WORKER_POOL_SHA: 5d8de580fea571404607aa80c7bd7637b4652db6
+      EXPECTED_RULES_SHA: 0757b9bcbc1e54ef9a1f081069f3b05ac0690062
+      REQSYS_WORKSPACE_ROOT: /workspace
+      REQSYS_GATEWAY_STATE_DIR: /workspace/.reqsys-command-gateway-posix
+      EWP_RULES_ROOT: /workspace/.chatgpt-workers/operational-rules-validation
+      EWP_OWNER_CONFIG: /workspace/.reqsys-command-gateway-posix/reqsys-hosted-proof/owner-risk3-exceptions.local.json
+      EWP_SESSION: reqsys-hosted-proof-${{ github.run_id }}-${{ github.run_attempt }}
+      EWP_CORRELATION: ${{ inputs.correlation_id }}
+      EWP_WORKTREE: /workspace/.chatgpt-workers/wt-chat-reqsys-hosted-proof-${{ github.run_id }}-${{ github.run_attempt }}
+      EWP_VENV: /workspace/.chatgpt-workers/reqsys-hosted-proof-venv-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: /workspace/.chatgpt-workers/reqsys-hosted-proof-public-${{ github.run_id }}-${{ github.run_attempt }}/evidence.json
+      EWP_OWNER_GATEWAY_ATTESTED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONNOUSERSITE: '1'
+      EWP_CONTEXT_ENV: 'REQSYS_WORKSPACE_ROOT,REQSYS_GATEWAY_STATE_DIR,PYTHONDONTWRITEBYTECODE,PYTHONNOUSERSITE,GITHUB_ACTIONS,GITHUB_WORKSPACE,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_REPOSITORY_OWNER,GITHUB_ACTOR,GITHUB_SHA,GITHUB_REF,GITHUB_REF_NAME,GITHUB_EVENT_NAME,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,RUNNER_NAME,EXPECTED_RULES_SHA,WORKER_POOL_SHA,EWP_RULES_ROOT,EWP_OWNER_CONFIG,EWP_SESSION,EWP_CORRELATION,EWP_WORKTREE,EWP_VENV,EVIDENCE_FILE,EWP_OWNER_GATEWAY_ATTESTED'
+
+    steps:
+      - name: Checkout ReqSys no SHA hospedado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout Engineering Worker Pool integrado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/engineering-worker-pool
+          ref: ${{ env.WORKER_POOL_SHA }}
+          path: _worker_pool
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout bootstrap governado fixado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.EXPECTED_RULES_SHA }}
+          path: .canonical-rules
+          persist-credentials: false
+
+      - name: Instalar Gateway canônico no host efêmero
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" /usr/bin/python3 -B
+          "$GITHUB_WORKSPACE/.canonical-rules/scripts/install_command_gateway_host.py"
+          --commit "$EXPECTED_RULES_SHA"
+          --expected-self-sha256 73ef3c091a16a261dfe71fa0ac7bb2e2c6a7f07bdfa3bc592c44855751c92329
+          --install-root /workspace/.reqsys-command-gateway-install
+          --work-root /workspace/.chatgpt-workers
+
+      - name: Materializar sessão ReqSys no HEAD exato
+        shell: bash
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: ${{ github.workspace }}
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV,GIT_CONFIG_COUNT,GIT_CONFIG_KEY_0,GIT_CONFIG_VALUE_0"
+          /usr/bin/python3 -B "$EWP_RULES_ROOT/scripts/session_launcher.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --repo "$GITHUB_WORKSPACE" --session-id "$EWP_SESSION"
+          --correlation-id "$EWP_CORRELATION" --expected-head "$GITHUB_SHA"
+          --sync-ref origin/main
+
+      - name: Criar ambiente Python isolado pelo Gateway
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" /usr/bin/python3 -B
+          "$EWP_RULES_ROOT/scripts/command_gateway.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --correlation-id "$EWP_CORRELATION" run --cwd "$EWP_WORKTREE"
+          --session-id "$EWP_SESSION" --risk 2 --timeout 300
+          --expected-head "$GITHUB_SHA" -- /usr/bin/python3 -m venv "$EWP_VENV"
+
+      - name: Instalar dependências fixadas pelo Gateway
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" /usr/bin/python3 -B
+          "$EWP_RULES_ROOT/scripts/command_gateway.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --correlation-id "$EWP_CORRELATION" run --cwd "$EWP_WORKTREE"
+          --session-id "$EWP_SESSION" --risk 2 --timeout 300
+          --expected-head "$GITHUB_SHA" --
+          "$EWP_VENV/bin/python" -m pip install --disable-pip-version-check --no-input
+          -r "$GITHUB_WORKSPACE/_worker_pool/requirements-postgres.txt"
+
+      - name: Manter modo DEV amplo desabilitado
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" /usr/bin/python3 -B
+          "$EWP_RULES_ROOT/scripts/command_gateway.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --correlation-id "$EWP_CORRELATION" run --cwd "$EWP_WORKTREE"
+          --session-id "$EWP_SESSION" --risk 2 --timeout 300
+          --expected-head "$GITHUB_SHA" --
+          "$EWP_VENV/bin/python" -B "$EWP_RULES_ROOT/scripts/set_owner_risk3_development_mode.py"
+          --config "$EWP_OWNER_CONFIG" --disable --confirm DISABLE-RISK3-DEV-MODE
+
+      - name: Autorizar somente a prova hospedada versionada
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" "$EWP_VENV/bin/python" -B
+          "$EWP_RULES_ROOT/scripts/set_owner_risk3_action.py"
+          --config "$EWP_OWNER_CONFIG"
+          --action-id reqsys.hosted.worker_pool.proof
+          --scope repo://reqsys-v2-enterprise-real/environment/dev/worker-pool-handoff
+          --environment dev --repo-root "$EWP_WORKTREE" --expected-head "$GITHUB_SHA"
+          --script scripts/hosted_worker_pool_reqsys_proof.py
+          --arg=--reqsys-root --arg="$EWP_WORKTREE"
+          --arg=--worker-pool-root --arg="$GITHUB_WORKSPACE/_worker_pool"
+          --arg=--worker-pool-sha --arg="$WORKER_POOL_SHA"
+          --arg=--rules-sha --arg="$EXPECTED_RULES_SHA"
+          --arg=--issue-number --arg="${{ inputs.issue_number }}"
+          --arg=--request-id --arg="${{ inputs.request_id }}"
+          --arg=--base-sha --arg="${{ inputs.base_sha }}"
+          --arg=--correlation-id --arg="${{ inputs.correlation_id }}"
+          --arg=--output --arg="$EVIDENCE_FILE"
+          --expires-minutes 25
+          --authorization-ref github://ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+          --confirm AUTHORIZE-SPECIFIC-RISK3-ACTION
+
+      - name: Reatestar sessão antes do acesso privado
+        shell: bash
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: ${{ github.workspace }}
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV,GIT_CONFIG_COUNT,GIT_CONFIG_KEY_0,GIT_CONFIG_VALUE_0"
+          /usr/bin/python3 -B "$EWP_RULES_ROOT/scripts/session_launcher.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --repo "$GITHUB_WORKSPACE" --session-id "$EWP_SESSION"
+          --correlation-id "$EWP_CORRELATION" --expected-head "$GITHUB_SHA"
+          --sync-ref origin/main
+
+      - name: Executar prova real pelo Owner Risk3 Gateway
+        id: execute
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV,ACTIONS_ID_TOKEN_REQUEST_URL,ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+          "$EWP_VENV/bin/python" -B "$EWP_RULES_ROOT/scripts/owner_risk3_gateway.py"
+          --config "$EWP_OWNER_CONFIG" --action-id reqsys.hosted.worker_pool.proof
+          --scope repo://reqsys-v2-enterprise-real/environment/dev/worker-pool-handoff
+          --cwd "$EWP_WORKTREE" --timeout 900 --correlation-id "$EWP_CORRELATION"
+
+      - name: Validar recibo público sem falso positivo
+        if: always() && steps.execute.outcome != 'skipped'
+        shell: bash
+        run: >-
+          sudo -n --preserve-env="$EWP_CONTEXT_ENV" /usr/bin/python3 -B
+          "$EWP_RULES_ROOT/scripts/command_gateway.py"
+          --policy "$EWP_RULES_ROOT/config/command-gateway.policy.posix.json"
+          --correlation-id "$EWP_CORRELATION" run --cwd "$EWP_WORKTREE"
+          --session-id "$EWP_SESSION" --risk 1 --timeout 60
+          --expected-head "$GITHUB_SHA" --
+          "$EWP_VENV/bin/python" -B scripts/validate_hosted_worker_pool_reqsys_proof.py
+          --input "$EVIDENCE_FILE" --reqsys-sha "$GITHUB_SHA"
+          --worker-pool-sha "$WORKER_POOL_SHA" --rules-sha "$EXPECTED_RULES_SHA"
+          --issue-number "${{ inputs.issue_number }}" --request-id "${{ inputs.request_id }}"
+
+      - name: Publicar evidência sanitizada da prova real
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-hosted-worker-pool-proof-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo da prova hospedada
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ReqSys Hosted Worker Pool DEV Proof"
+            echo "- ReqSys SHA: $GITHUB_SHA"
+            echo "- Worker Pool SHA: $WORKER_POOL_SHA"
+            echo "- Issue: #${{ inputs.issue_number }}"
+            echo "- Request ID: ${{ inputs.request_id }}"
+            echo "- Fencing: obrigatório"
+            echo "- Simulação: não"
+            echo "- Merge/deploy/produção: não"
+            echo "- Custo adicional: R$ 0,00"
+          } >> "$GITHUB_STEP_SUMMARY"
+
 
   portable-contract-e2e:
     name: Validar ReqSys contra Engineering Worker Pool v1
