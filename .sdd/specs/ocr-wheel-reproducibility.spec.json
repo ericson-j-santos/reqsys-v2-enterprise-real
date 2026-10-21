@@ -7,25 +7,42 @@
     "design": true,
     "tasks": true
   },
-  "description": "Fixa a toolchain e compara duas builds limpas do mesmo SHA do motor OCR.",
+  "description": "Fixa a toolchain e compara duas builds limpas do mesmo SHA do motor OCR. O OCR Benchmark Gate valida e publica o bundle e o relatório de reprodutibilidade em um artifact durável vinculado ao SHA da execução.",
   "sdd_gate": {
     "tests": [
       "tests/test_prepare_ocr_runtime_package.py",
       "tests/test_ocr_external_package_workflow.py",
       "tests/test_ocr_external_runtime_package.py"
     ],
-    "evidence_contract": "Duas árvores limpas independentes no SHA fixado devem produzir wheel, MANIFEST.sha256 e SHA256SUMS byte a byte idênticos; adulteração deve falhar e ambos os consumidores devem usar o bundle canônico."
+    "evidence_contract": "Duas árvores limpas independentes no SHA fixado devem produzir wheel, MANIFEST.sha256 e SHA256SUMS byte a byte idênticos; adulteração deve falhar e ambos os consumidores devem usar o bundle canônico. O job external-package-contract valida conjunto fechado de arquivos, source_sha, hashes das duas builds, controle negativo e equivalência de manifestos antes de publicar o artifact ocr-runtime-package-${{ github.sha }} por 90 dias; prova remota exige download e leitura independente no mesmo run/SHA."
   },
   "traceability": {
     "implementation": "scripts/prepare_ocr_runtime_package.py",
     "action": ".github/actions/prepare-ocr-runtime/action.yml",
     "workflow": ".github/workflows/ocr-benchmark.yml",
-    "toolchain": "config/ocr-build-toolchain.json"
+    "toolchain": "config/ocr-build-toolchain.json",
+    "durable_artifact_test": "tests/test_ocr_external_runtime_package.py",
+    "reproducibility_report": "artifacts/ocr-reproducibility-report.json"
   },
   "risk": {
     "production": false,
     "deploy": false,
     "merge": false,
     "secrets": false
+  },
+  "durable_artifact_contract": {
+    "job": "external-package-contract",
+    "name": "ocr-runtime-package-${{ github.sha }}",
+    "retention_days": 90,
+    "required_files": [
+      "backend/vendor/ocr-evidence-engine/*.whl",
+      "backend/vendor/ocr-evidence-engine/MANIFEST.sha256",
+      "backend/vendor/ocr-evidence-engine/SHA256SUMS",
+      "backend/vendor/ocr-evidence-engine/provenance.json",
+      "artifacts/ocr-build-toolchain.json",
+      "artifacts/ocr-reproducibility-report.json"
+    ],
+    "fail_closed": true,
+    "independent_download_required": true
   }
 }
