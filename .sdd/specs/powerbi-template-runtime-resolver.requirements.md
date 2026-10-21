@@ -20,7 +20,7 @@ persistir ou imprimir nomes/GUIDs remotos.
 6. Binding exige exatamente um semantic model candidato. Zero = `unmatched`; mais de um = `ambiguous`.
 7. Evidência persistida usa apenas `template_id` e referências SHA-256 truncadas; nomes e IDs brutos ficam somente em memória.
 8. Logs não podem imprimir nomes/GUIDs remotos, tenant/client ID ou token.
-9. O primeiro ciclo de paridade é um sentinel DRE `_Medidas[Meta]`, cuja definição local extraída é constante `0`.
+9. O primeiro ciclo de paridade é um sentinel DRE `_Medidas[Meta]`, cuja definição local extraída é constante `0`. A consulta usa exclusivamente o dataset sintético identificado pelo nome e nunca o modelo empresarial DRE.
 10. Sentinel serve para provar transporte/execução e nunca promove `metric_parity_verified`.
 11. HTTP 401/403/404/429, resposta inválida ou binding ausente/ambíguo produzem bloqueio explícito.
 12. O job OIDC em pull request só executa para PR do próprio repositório criado pelo proprietário.
@@ -45,6 +45,9 @@ persistir ou imprimir nomes/GUIDs remotos.
 21. O modelo sintético `ReqSys DRE Sentinel DEV` nunca pode ser candidato de
     template empresarial, mesmo quando o relatório associado possui alias DRE.
     Relatórios sem dataset visível também não produzem bindings por inferência.
+22. O ExecuteQueries de `_Medidas[Meta]` deve usar exclusivamente o ID do
+    sentinela sintético identificado no inventário; sentinela ausente/ambíguo
+    bloqueia essa consulta e nunca é substituído pelo dataset empresarial.
 
 ## Critérios de aceite
 
@@ -56,5 +59,5 @@ persistir ou imprimir nomes/GUIDs remotos.
 - ausência de nomes/GUIDs remotos em logs e artifact;
 - binding `resolved`, `unmatched` ou `ambiguous` registrado por template sem fuzzy;
 - sentinela DRE excluído por nome de modelo e vínculo datasetId, com testes positivo/negativo;
-- sentinel executado somente se DRE possuir binding único;
+- sentinel executado somente se o próprio dataset sintético possuir binding único, independente do DRE empresarial;
 - `metric_parity_promoted=false` em qualquer resultado do sentinel.

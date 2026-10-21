@@ -169,7 +169,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             _matching_templates(_normalize_name("ReqSys DRE Sentinel DEV")), []
         )
 
-    def test_sentinel_sozinho_nao_cria_binding_e_nao_executa_dax(self):
+    def test_sentinel_sozinho_nao_cria_binding_empresarial(self):
         fake = FakeRequester(
             dre=False, sentinel=True, sentinel_report_alias=True
         )
@@ -177,12 +177,22 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
         self.assertEqual(dre["status"], "unmatched")
         self.assertEqual(result["inventory"]["semantic_model_count"], 1)
+        self.assertEqual(result["sentinel_parity"]["status"], "passed")
+        queries = [
+            url for _, url, _ in fake.calls if url.endswith("/executeQueries")
+        ]
+        self.assertEqual(len(queries), 1)
+        self.assertIn("/datasets/77777777-7777-7777-7777-777777777777/", queries[0])
+
+    def test_sem_sentinela_nao_consulta_dataset_empresarial(self):
+        fake = FakeRequester(dre=True, sentinel=False)
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "resolved")
         self.assertEqual(
-            result["sentinel_parity"]["blocker"], "dre_binding_unresolved"
+            result["sentinel_parity"]["blocker"], "dre_sentinel_model_unavailable"
         )
-        self.assertFalse(
-            any(url.endswith("/executeQueries") for _, url, _ in fake.calls)
-        )
+        self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
 
     def test_dre_real_com_sentinel_nao_fica_ambiguo(self):
         fake = FakeRequester(
@@ -196,12 +206,12 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
             url for _, url, _ in fake.calls if url.endswith("/executeQueries")
         ]
         self.assertEqual(len(query_urls), 1)
-        self.assertIn("/datasets/33333333-3333-3333-3333-333333333333/", query_urls[0])
-        self.assertNotIn("77777777-7777-7777-7777-777777777777", query_urls[0])
+        self.assertIn("/datasets/77777777-7777-7777-7777-777777777777/", query_urls[0])
+        self.assertNotIn("33333333-3333-3333-3333-333333333333", query_urls[0])
         self.assertFalse(result["metric_parity_promoted"])
 
     def test_resolve_dre_e_executa_sentinel_sem_persistir_ids_nomes(self):
-        fake = FakeRequester()
+        fake = FakeRequester(sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -309,11 +319,13 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertEqual(dre["status"], "ambiguous")
         self.assertEqual(dre["candidate_count"], 2)
         self.assertEqual(result["sentinel_parity"]["status"], "blocked")
-        self.assertEqual(result["sentinel_parity"]["blocker"], "dre_binding_unresolved")
+        self.assertEqual(
+            result["sentinel_parity"]["blocker"], "dre_sentinel_model_unavailable"
+        )
         self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
 
     def test_execute_queries_403_fica_bloqueado_sem_corpo_remoto(self):
-        fake = FakeRequester(execute_status=403)
+        fake = FakeRequester(execute_status=403, sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -328,7 +340,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertNotIn("error", sentinel)
 
     def test_sentinel_detecta_divergencia_e_nao_promove_paridade(self):
-        fake = FakeRequester(execute_value=1)
+        fake = FakeRequester(execute_value=1, sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
