@@ -8,6 +8,10 @@ on:
       - "tests/test_fabric_oidc_readonly_probe.py"
       - ".sdd/specs/fabric-oidc-readonly-probe.requirements.md"
       - ".sdd/specs/fabric-oidc-readonly-probe.spec.json"
+      - "scripts/powerbi_template_runtime_resolver.py"
+      - "tests/test_powerbi_template_runtime_resolver.py"
+      - ".sdd/specs/powerbi-template-runtime-resolver.requirements.md"
+      - ".sdd/specs/powerbi-template-runtime-resolver.spec.json"
   workflow_dispatch:
 
 permissions:
@@ -32,8 +36,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile scripts/fabric_oidc_readonly_probe.py
-          python -m unittest tests/test_fabric_oidc_readonly_probe.py
+          python -m py_compile scripts/fabric_oidc_readonly_probe.py scripts/powerbi_template_runtime_resolver.py
+          python -m unittest tests/test_fabric_oidc_readonly_probe.py tests/test_powerbi_template_runtime_resolver.py -v
 
   probe:
     name: fabric-oidc-readonly-probe
@@ -111,4 +115,89 @@ jobs:
           assert data.get("mutations_performed") is False, data
           assert data.get("tenant_match") is True, data
           print("FABRIC_OIDC_PROBE_EVIDENCE_OK")
+          PY
+
+
+  template-resolver:
+    name: powerbi-template-runtime-resolver
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor == 'ericson-j-santos'
+      )
+    needs: contract
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      TEMPLATE_EVIDENCE_FILE: artifacts/powerbi-template-runtime-resolver.json
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Validar configuração OIDC do resolvedor
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::OIDC configuration missing"
+              exit 2
+            fi
+          done
+
+      - name: Login Azure OIDC governado para resolução
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver runtime e testar sentinel
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -euo pipefail
+          python scripts/powerbi_template_runtime_resolver.py \
+            --tenant-id "$CCP_AZURE_TENANT_ID" \
+            --client-id "$CCP_AZURE_CLIENT_ID" \
+            --output "$TEMPLATE_EVIDENCE_FILE"
+
+      - name: Publicar evidência sanitizada do resolvedor
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: powerbi-template-runtime-resolver-${{ github.run_id }}
+          path: ${{ env.TEMPLATE_EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Gate da evidência do resolvedor
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path(os.environ["TEMPLATE_EVIDENCE_FILE"]).read_text(encoding="utf-8"))
+          assert data.get("status") == "completed", data.get("status")
+          assert data.get("tenant_match") is True
+          assert data.get("mutations_performed") is False
+          assert data.get("secret_value_exposed") is False
+          assert data.get("raw_remote_ids_persisted") is False
+          assert data.get("raw_remote_names_persisted") is False
+          assert data.get("raw_remote_ids_or_names_logged") is False
+          assert data.get("metric_parity_promoted") is False
+          assert data.get("catalog_template_count") == 11
+          assert len(data.get("bindings") or []) == 11
+          sentinel = data.get("sentinel_parity") or {}
+          assert sentinel.get("promotes_metric_parity") is False
+          print("POWERBI_TEMPLATE_RUNTIME_RESOLVER_EVIDENCE_OK")
           PY
