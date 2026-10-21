@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -230,12 +231,20 @@ def lease_body(worker_id: str, claim: dict, correlation: str) -> dict:
     }
 
 
+def base_bound_work_request_id(request_id: str, base_sha: str) -> str:
+    """Derive a bounded Work identity that cannot replay across base SHAs."""
+    require(bool(request_id) and SHA40.fullmatch(base_sha) is not None,
+            "work_request_identity_invalid")
+    material = (request_id + "\0" + base_sha).encode("utf-8")
+    return "reqsys-" + hashlib.sha256(material).hexdigest()
+
+
 def work_request(args: argparse.Namespace) -> dict:
     """Build branch-first Work v1 input; the pool derives the safe task branch."""
     return {
         "repository": REPOSITORY,
         "issue_number": args.issue_number,
-        "request_id": args.request_id,
+        "request_id": base_bound_work_request_id(args.request_id, args.base_sha),
         "correlation_id": args.correlation_id,
         "priority": 10,
         "base_sha": args.base_sha,
@@ -316,6 +325,7 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
         require(negative_status == 401, "negative_auth_control_failed")
 
         body = work_request(args)
+        work_request_id = body["request_id"]
         first_status, first = request_json("POST", "/v1/work", token, body)
         require(first_status in {200, 201} and isinstance(first.get("work"), dict),
                 "work_create_failed")
@@ -357,7 +367,7 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
             expect("POST", "/v1/tasks/" + task_id + "/start", token, mutation, {200})
             built = run_task(reqsys_root, [
                 "build", "--root", str(reqsys_root), "--output", str(task_receipt),
-                "--issue-number", str(args.issue_number), "--request-id", args.request_id,
+                "--issue-number", str(args.issue_number), "--request-id", work_request_id,
                 "--base-sha", args.base_sha,
             ])
             require(built.get("result") == "REQSYS_HOSTED_WORKER_TASK_EXECUTED"
@@ -375,7 +385,7 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
                     "fenced_validator_claim_failed")
             validated = run_task(reqsys_root, [
                 "verify", "--root", str(reqsys_root), "--receipt", str(task_receipt),
-                "--issue-number", str(args.issue_number), "--request-id", args.request_id,
+                "--issue-number", str(args.issue_number), "--request-id", work_request_id,
                 "--base-sha", args.base_sha,
             ])
             require(validated.get("result") == "REQSYS_HOSTED_WORKER_TASK_VALIDATED"
@@ -439,6 +449,7 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
         "rules_sha": args.rules_sha,
         "issue_number": args.issue_number,
         "request_id": args.request_id,
+        "work_request_id": work_request_id,
         "correlation_id": args.correlation_id,
         "work_id": work_id,
         "task_id": task_id,

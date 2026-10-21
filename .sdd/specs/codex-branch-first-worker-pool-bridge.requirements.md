@@ -52,6 +52,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 41. No runner hospedado, após validar o perfil privado `sslrootcert=system`, a prova deve materializar uma cópia efêmera owner-only da DSN apontando explicitamente para `/etc/ssl/certs/ca-certificates.crt`; perfil divergente ou bundle ausente deve falhar fechado e a DSN nunca pode entrar na evidência.
 42. A criação do Work v1 hospedado não pode enviar branch protegida como destino; deve omitir `target_branch` e delegar ao Worker Pool a derivação branch-first determinística.
 43. A evidência do Work não pode declarar readback independente antes da conclusão bem-sucedida do subprocesso PostgreSQL separado; esse subprocesso deve receber o perfil privado com CA explícita. Em replay, evidência já verificada só pode ser reutilizada depois de novo readback e da coincidência de SHA, controles e merge state.
+44. A identidade idempotente enviada ao Work v1 pela prova hospedada deve ser derivada deterministicamente do `request_id` do gateway e do `base_sha` exato. Replay no mesmo SHA deve convergir; avanço da base deve gerar nova identidade, Work e task, sem atribuir evidência antiga ao SHA corrente.
 
 ## Critérios de aceite
 
@@ -68,7 +69,8 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 - o diagnóstico de startup deve provar causa allowlisted, redação de saída desconhecida e interrupção imediata quando o processo já encerrou;
 - o trust TLS hospedado deve preservar `verify-full`, usar arquivo privado `0600`, fixar somente o bundle CA do host e rejeitar perfil inesperado sem expor credenciais;
 - o payload Work v1 hospedado deve exigir fencing/governed e não conter `target_branch` protegido;
-- falha do subprocesso de readback deve impedir a gravação de evidência positiva; replay exige novo readback e validação estrita da evidência existente.
+- falha do subprocesso de readback deve impedir a gravação de evidência positiva; replay exige novo readback e validação estrita da evidência existente;
+- a identidade Work hospedada deve ser estável no mesmo `request_id + base_sha`, distinta após avanço da base e usada pelo recibo Builder/Validator; o identificador original do gateway permanece separado para rastreabilidade.
 
 ## Evidência E2E
 
