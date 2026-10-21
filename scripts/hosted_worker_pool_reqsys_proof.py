@@ -20,6 +20,32 @@ REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 POOL_URL = "http://127.0.0.1:8097"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 WORKER_POOL_SHA = "5d8de580fea571404607aa80c7bd7637b4652db6"
+STARTUP_FAILURE_CODES = frozenset({
+    "postgres_driver_not_installed",
+    "worker_pool_backend_invalid",
+    "authority_credentials_acl_unverified",
+    "authority_credentials_file_invalid",
+    "authority_credentials_file_changed",
+    "authority_schema_invalid",
+    "authority_identity_invalid",
+    "authority_connection_invalid",
+    "authority_tls_identity_unverified",
+    "authority_identity_mismatch",
+    "authority_schema_version_mismatch",
+    "authority_schema_incomplete",
+    "authority_indexes_unverified",
+    "authority_fence_guards_unverified",
+    "authority_queue_order_unverified",
+    "authority_connection_unavailable:unsupported_startup",
+    "authority_connection_unavailable:channel_binding",
+    "authority_connection_unavailable:authentication",
+    "authority_connection_unavailable:dns",
+    "authority_connection_unavailable:timeout",
+    "authority_connection_unavailable:tls_certificate",
+    "authority_connection_unavailable:tls",
+    "authority_connection_unavailable:unknown",
+})
+STARTUP_LOG_LIMIT = 131072
 
 
 class ProofError(RuntimeError):
@@ -78,9 +104,28 @@ def expect(method: str, path: str, token: str, payload: dict | None, statuses: s
     return body
 
 
-def wait_ready(token: str) -> dict:
+def startup_failure_reason(log_path: Path) -> str:
+    """Return one bounded public startup code without exposing raw service logs."""
+    try:
+        with log_path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - STARTUP_LOG_LIMIT))
+            payload = stream.read(STARTUP_LOG_LIMIT)
+    except OSError:
+        return "worker_pool_process_exited"
+    text = payload.decode("utf-8", errors="ignore").lower()
+    matches = [(text.rfind(code), code) for code in STARTUP_FAILURE_CODES if code in text]
+    if not matches:
+        return "worker_pool_process_exited"
+    return "worker_pool_startup_" + max(matches)[1].replace(":", "_")
+
+
+def wait_ready(token: str, process: subprocess.Popen, log_path: Path) -> dict:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise ProofError(startup_failure_reason(log_path))
         try:
             status, body = request_json("GET", "/health", token)
             if status == 200 and body.get("status") == "healthy":
@@ -88,6 +133,8 @@ def wait_ready(token: str) -> dict:
         except ProofError:
             pass
         time.sleep(0.25)
+    if process.poll() is not None:
+        raise ProofError(startup_failure_reason(log_path))
     raise ProofError("worker_pool_not_ready")
 
 
@@ -175,13 +222,16 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
         "CODEX_WORKER_POOL_FENCED_CUTOVER_ATTESTED": "0",
         "CODEX_WORKER_POOL_RECONCILE_INTERVAL_SECONDS": "300",
     })
+    service_log = private_dir / "worker-pool-service.log"
+    descriptor = os.open(service_log, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    log_stream = os.fdopen(descriptor, "wb")
     server = subprocess.Popen(
         [sys.executable, "-B", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8097"],
         cwd=pool_root, env=server_env, stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=log_stream, stderr=subprocess.STDOUT,
     )
     try:
-        health = wait_ready(token)
+        health = wait_ready(token, server, service_log)
         require(health.get("storage_backend") == "postgres"
                 and health.get("fenced_cutover_enabled") is True,
                 "qualified_fenced_authority_required")
@@ -295,12 +345,14 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
                 and final_task.get("fencing_required") is True,
                 "final_task_readback_failed")
     finally:
-        server.terminate()
+        if server.poll() is None:
+            server.terminate()
         try:
             server.wait(timeout=8)
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait(timeout=5)
+        log_stream.close()
 
     provider_file = args.output.parent / "provider-readback.json"
     readback = run_task(reqsys_root, [

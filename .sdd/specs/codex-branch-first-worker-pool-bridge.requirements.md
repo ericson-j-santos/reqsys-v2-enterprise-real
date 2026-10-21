@@ -48,6 +48,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 37. A menor tarefa real deve ler fontes versionadas do ReqSys, produzir recibo não simulado, passar por validação em processo independente, concluir a task e obter readback PostgreSQL em processo independente.
 38. A evidência pública deve registrar SHAs, IDs de work/task/run, controles de autorização, fencing, replay e readback, declarando explicitamente ausência de merge, deploy e produção e custo adicional de R$ 0,00; tokens, DSN e credenciais não podem ser emitidos.
 39. A prova hospedada só é autorizável depois que seu código estiver na `main` verificada; execução em branch deve falhar fechada no broker e não deve ser tratada como evidência.
+40. Se a fachada hospedada encerrar antes do health, a prova deve falhar imediatamente, manter o log bruto apenas no diretório privado efêmero e publicar somente um código de causa explicitamente allowlisted; saída desconhecida deve resultar em `worker_pool_process_exited`, sem DSN, token, host ou texto arbitrário.
 
 ## Critérios de aceite
 
@@ -61,6 +62,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 - a conclusão física de #1766 permanece parcial até uma task real produzir branch/SHA, passar por Validator independente e chegar a `READY_FOR_PR`/PR sem duplicidade;
 - a prova hospedada mínima só é aceita com `result=REQSYS_HOSTED_WORKER_POOL_PROOF_PASSED`, `simulated=false`, task `completed`, fencing ativo, claim legado rejeitado, Validator separado e readback PostgreSQL independente;
 - testes portáteis/SQLite continuam sendo regressão contratual e não substituem a prova hospedada real.
+- o diagnóstico de startup deve provar causa allowlisted, redação de saída desconhecida e interrupção imediata quando o processo já encerrou.
 
 ## Evidência E2E
 
