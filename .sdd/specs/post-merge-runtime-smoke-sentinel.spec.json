@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Post-merge PC24x7 Public Runtime Smoke Evidence",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_post_merge_runtime_smoke_sentinel.py"
+    ],
+    "evidence_contract": "O sentinel apos merge usa somente o workflow ativo de acesso publico DEV: origem e SHA main iguais, job + etapas nao skipped, artifact nao vazio nem expirado, e falha fechado em runtime desatualizado; nenhuma evidencia Fly aposentada aceita."
+  },
+  "traceability": {
+    "issue": 2120,
+    "source_workflow": ".github/workflows/validacao-acessos.yml",
+    "sentinel_workflow": ".github/workflows/post-merge-runtime-smoke-sentinel.yml",
+    "implementation": "scripts/post_merge_runtime_smoke_sentinel.py",
+    "regression_tests": "tests/test_post_merge_runtime_smoke_sentinel.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "billing": false,
+    "cost_additional_brl": 0
+  }
+}

@@ -2,7 +2,7 @@ name: Post-merge Runtime Smoke Sentinel
 
 on:
   workflow_run:
-    workflows: ["Runtime Production Smoke Governed"]
+    workflows: ["Validação de Acessos Públicos — ReqSys"]
     types: [completed]
     branches: [main]
   pull_request:
