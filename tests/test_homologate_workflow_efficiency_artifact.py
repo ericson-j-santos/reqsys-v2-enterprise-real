@@ -94,6 +94,18 @@ renderWorkflowEfficiency(payload);
             self.assertIn("Workflow Efficiency sem amostra real de PRs", evidence["errors"])
             self.assertIn("card Workflow Efficiency diverge do contrato-fonte", evidence["errors"])
 
+    def test_blocks_malformed_source_shape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.build_fixture(root)
+            source_path = root / "data" / "ci-workflow-efficiency-dashboard.json"
+            source = json.loads(source_path.read_text(encoding="utf-8"))
+            source["summary"] = ["invalid"]
+            source_path.write_text(json.dumps(source), encoding="utf-8")
+            evidence = homologate(root, "malformed-source")
+            self.assertEqual(evidence["decision"], "BLOCKED")
+            self.assertTrue(any("contrato inválido" in item for item in evidence["errors"]))
+
     def test_blocks_missing_artifact_files(self):
         with tempfile.TemporaryDirectory() as directory:
             evidence = homologate(Path(directory), "test-789")
