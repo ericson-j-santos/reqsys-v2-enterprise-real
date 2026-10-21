@@ -104,6 +104,37 @@ jobs:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
 
+      - name: Validar paridade do fallback local com engine pinado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_ocr_local_fallback_parity.py \
+            --local-root "$RUNNER_TEMP/ocr_evidencia_local_copy" \
+            --engine-checkout .external/ocr-evidence-engine-a \
+            --lock config/ocr-engine-lock.json \
+            --reqsys-root . \
+            --output artifacts/ocr-local-fallback-parity.json
+
+      - name: Controle negativo de drift do fallback local
+        shell: bash
+        run: |
+          set -euo pipefail
+          tampered="$RUNNER_TEMP/ocr_evidencia_local_tampered"
+          cp -a "$RUNNER_TEMP/ocr_evidencia_local_copy" "$tampered"
+          printf '\n# drift-negative-control\n' >> "$tampered/dominio/nome.py"
+          set +e
+          python scripts/validate_ocr_local_fallback_parity.py \
+            --local-root "$tampered" \
+            --engine-checkout .external/ocr-evidence-engine-a \
+            --lock config/ocr-engine-lock.json \
+            --reqsys-root . > "$RUNNER_TEMP/ocr-parity-negative.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/ocr-parity-negative.log"
+          test "$rc" -eq 3
+          grep -q 'python_drift:dominio/nome.py' "$RUNNER_TEMP/ocr-parity-negative.log"
+          echo "OCR_LOCAL_FALLBACK_DRIFT_NEGATIVE_CONTROL_OK"
+
       - name: Instalar somente o wheel canônico verificado
         shell: bash
         run: |
