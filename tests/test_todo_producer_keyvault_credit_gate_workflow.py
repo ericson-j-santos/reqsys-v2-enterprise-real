@@ -82,3 +82,17 @@ def test_script_rejects_missing_hard_stop_and_forbids_plaintext_args():
     assert "verify_owner_comment(ctx, os.environ)" in src
     assert "cost_preflight(ctx)" in src
     assert '"runtime_binding_verified": False' in src
+
+
+def test_hourly_cycle_requires_arm_cost_gate_before_keyvault_lookup():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    cycle = raw.split("  cycle:\n", 1)[1].split("\n  credential-dev:\n", 1)[0]
+    assert "github.event_name == 'schedule'" in cycle
+    assert cycle.index("todo_producer_keyvault_credit_gate.py cycle-cost") < cycle.index(
+        "az keyvault secret show")
+    assert cycle.index("Login Azure por OIDC") < cycle.index(
+        "todo_producer_keyvault_credit_gate.py cycle-cost")
+    script = SOURCE.read_text(encoding="utf-8")
+    assert '"cycle-cost"' in script
+    assert "validate_cycle_cost_context" in script
+    assert "cost_preflight(ctx)" in script

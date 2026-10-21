@@ -65,3 +65,14 @@ Docker Compose e operações de runtime fora da autorização concedida em 21/10
 - Issue #1705: Authorized Actions Gateway existente, rota exata e SHA em main.
 - chatgpt-operational-rules/rules/cost-governance.md.
 - Microsoft ARM REST Subscriptions/Get API 2022-12-01: spendingLimit.
+
+
+## Prevenção de cobranças recorrentes no ciclo horário (21/10/2026)
+O ciclo agendado falhou no run 39642465391 após tentar obter diretamente o token
+no Key Vault, mesmo depois de a prova manual 39642269836 ter confirmado
+`COST_UNKNOWN_BLOCKED` (sem `spendingLimit=On`). O job `cycle` deve executar
+a mesma consulta ARM somente leitura, vinculada à main e à identidade do
+workflow, imediatamente antes de qualquer operação com segredo. `Off`,
+`CurrentPeriodOff`, erro ARM, tenant/vault incompatíveis e branch indevida
+bloqueiam a busca do segredo. Nunca marcar a rotina como E2E aprovada por
+sucesso de login Azure ou de contrato. O gate não modifica o estado do TODO-38.

@@ -73,6 +73,39 @@ def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
 
 
 
+
+def validate_cycle_cost_context(env: dict[str, str], event: dict) -> dict[str, str]:
+    """ARM-only credit check for the existing TODO cycle, not a secret grant."""
+    event_name = env.get("GITHUB_EVENT_NAME", "")
+    require(env.get("GITHUB_ACTIONS") == "true"
+            and env.get("GITHUB_REPOSITORY") == REPOSITORY
+            and env.get("GITHUB_REF") == "refs/heads/main"
+            and SHA.fullmatch(env.get("GITHUB_SHA", "")) is not None
+            and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None
+            and event_name in {"schedule", "workflow_dispatch"},
+            "cycle_cost_context_invalid")
+    require(isinstance(event, dict)
+            and isinstance(event.get("repository"), dict)
+            and event["repository"].get("full_name") == REPOSITORY,
+            "cycle_cost_event_invalid")
+    if event_name == "workflow_dispatch":
+        sender = (event.get("sender") or {}).get("login")
+        require((event.get("inputs") or {}).get("operation") == "cycle"
+                and sender in {OWNER, DISPATCH_ACTOR}
+                and env.get("GITHUB_ACTOR") == sender,
+                "cycle_cost_event_invalid")
+    else:
+        require(not event.get("inputs"), "cycle_cost_event_invalid")
+    subscription = env.get("CCP_AZURE_SUBSCRIPTION_ID", "")
+    tenant = env.get("CCP_AZURE_TENANT_ID", "")
+    require(GUID.fullmatch(subscription) is not None
+            and GUID.fullmatch(tenant) is not None
+            and env.get("REQSYS_KEY_VAULT_NAME") == VAULT,
+            "dev_scope_configuration_invalid")
+    return {"subscription": subscription.lower(), "tenant": tenant.lower(),
+            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"]}
+
+
 def validate_comment_record(value: dict, comment_id: str, now: datetime) -> None:
     """Validate authoritative owner comment, not user supplied dispatch inputs."""
     expected_issue = f"https://api.github.com/repos/{REPOSITORY}/issues/{AUTHORIZATION_ISSUE}"
@@ -319,15 +352,23 @@ def recover_or_provision(ctx: dict[str, str], proof: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["cost", "secret"])
-    parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("phase", choices=["cost", "secret", "cycle-cost"])
+    parser.add_argument("--receipt", type=Path)
     args = parser.parse_args()
     try:
         context_file = Path(os.environ["GITHUB_EVENT_PATH"])
         require(context_file.stat().st_size <= 262144, "github_event_too_large")
         event = json.loads(context_file.read_text(encoding="utf-8"))
+        if args.phase == "cycle-cost":
+            ctx = validate_cycle_cost_context(os.environ, event)
+            proof = cost_preflight(ctx)
+            print(json.dumps({"decision": proof["decision"],
+                              "spending_limit": proof["spending_limit"],
+                              "secret_touched": False}, sort_keys=True))
+            return 0
         ctx = validate_context(os.environ, event)
         verify_owner_comment(ctx, os.environ)
+        require(args.receipt is not None, "receipt_required")
         path = receipt_path(args.receipt, os.environ)
         if args.phase == "cost":
             proof = cost_preflight(ctx)
@@ -342,7 +383,7 @@ def main() -> int:
             print(json.dumps(result, sort_keys=True))
         return 0
     except Blocked as exc:
-        print(json.dumps({"decision": "COST_UNKNOWN_BLOCKED" if args.phase == "cost" else "BLOCKED",
+        print(json.dumps({"decision": "COST_UNKNOWN_BLOCKED" if args.phase in ("cost", "cycle-cost") else "BLOCKED",
                           "reason": str(exc), "secret_value_exposed": False},
                          sort_keys=True))
         return 2
