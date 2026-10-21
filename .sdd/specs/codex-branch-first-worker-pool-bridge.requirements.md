@@ -29,8 +29,8 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 19. A evidência deve registrar `contract_mode`, versão esperada e se o fallback legado foi usado, sem registrar token.
 20. O parâmetro `--require-contract-v1` deve desabilitar o fallback legado sem exigir nova alteração de código.
 21. O Authorized Actions Gateway deve aceitar o comando exato `/reqsys run codex-worker-pool-handoff-e2e-dev` somente na issue operacional #1705 e pelo owner.
-22. O comando deve mapear exclusivamente para `codex-worker-pool-handoff.yml`, em `main`, fixando `issue_number=2020`, `base_branch=main`, `base_sha` no SHA corrente capturado pelo próprio gateway e `request_id` determinístico de `repo:2020:main`; nenhum input arbitrário pode vir do comentário.
-23. O handoff E2E deve usar o mesmo watchdog de pickup self-hosted de 60 segundos do gateway e cancelar/falhar fechado quando o PC24x7 não adquirir o job.
+22. O comando deve mapear exclusivamente para `codex-worker-pool-handoff.yml`, em `main`, fixando `issue_number=2020`, `base_branch=main`, `base_sha` no SHA corrente capturado pelo próprio gateway, `request_id` determinístico de `repo:2020:main` e `execution_mode=hosted_dev_proof`; nenhum input arbitrário pode vir do comentário.
+23. A rota hospedada não deve usar o watchdog de pickup self-hosted; a evidência do gateway deve vincular o run despachado ao SHA corrente, e o próprio job hospedado deve falhar fechado se OIDC, broker, autoridade DEV ou gates não forem satisfeitos.
 
 24. Deve existir um E2E portátil em runner GitHub-hosted que suba o repositório real `engineering-worker-pool` em SHA completo fixado e valide o consumidor ReqSys sem depender do runner físico.
 25. O E2E portátil deve usar banco SQLite e bearer token efêmeros no filesystem temporário do runner, sem GitHub Secret, sem persistência e sem exposição em log/evidência.
