@@ -26,7 +26,10 @@ renderWorkflowEfficiency(payload);
                 "workflow_efficiency": {
                     "status": "healthy",
                     "score_percent": 92.5,
-                    "mode": "report-only",
+                    "mode": "report_only",
+                    "available": True,
+                    "source_contract": "ci-workflow-efficiency-dashboard",
+                    "pr_sample_count": 4,
                 }
             } if include_card else {},
             "links": {
@@ -35,6 +38,14 @@ renderWorkflowEfficiency(payload);
         }
         (root / "data" / "runtime-executive-index.json").write_text(
             json.dumps(payload), encoding="utf-8"
+        )
+        (root / "data" / "ci-workflow-efficiency-dashboard.json").write_text(
+            json.dumps({
+                "mode": "report_only",
+                "source_available": True,
+                "summary": {"pr_sample_count": 4},
+                "executive_card": {"score_percent": 92.5},
+            }), encoding="utf-8"
         )
 
     def test_homologates_complete_artifact(self):
@@ -59,6 +70,29 @@ renderWorkflowEfficiency(payload);
             self.assertEqual(evidence["status"], "failed")
             self.assertEqual(evidence["decision"], "BLOCKED")
             self.assertIn("cards.workflow_efficiency ausente ou vazio", evidence["errors"])
+
+    def test_blocks_missing_source_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.build_fixture(root)
+            (root / "data" / "ci-workflow-efficiency-dashboard.json").unlink()
+            evidence = homologate(root, "missing-source")
+            self.assertEqual(evidence["decision"], "BLOCKED")
+            self.assertFalse(evidence["checks"]["source_contract_exists"])
+
+    def test_blocks_unmeasured_or_inconsistent_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.build_fixture(root)
+            source_path = root / "data" / "ci-workflow-efficiency-dashboard.json"
+            source = json.loads(source_path.read_text(encoding="utf-8"))
+            source["source_available"] = False
+            source["executive_card"]["score_percent"] = 99
+            source_path.write_text(json.dumps(source), encoding="utf-8")
+            evidence = homologate(root, "fake-source")
+            self.assertEqual(evidence["decision"], "BLOCKED")
+            self.assertIn("Workflow Efficiency sem amostra real de PRs", evidence["errors"])
+            self.assertIn("card Workflow Efficiency diverge do contrato-fonte", evidence["errors"])
 
     def test_blocks_missing_artifact_files(self):
         with tempfile.TemporaryDirectory() as directory:
