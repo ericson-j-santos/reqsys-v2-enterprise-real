@@ -135,8 +135,14 @@ _DOMAIN_SIGNATURES = {
 }
 
 
+def _is_dre_sentinel_name(normalized: str) -> bool:
+    """Impede que o canário sintético participe do matching de negócio."""
+    tokens = frozenset(normalized.split())
+    return frozenset({"dre", "sentinel"}) <= tokens
+
+
 def _matching_templates(normalized: str) -> list[tuple[str, str]]:
-    if not normalized:
+    if not normalized or _is_dre_sentinel_name(normalized):
         return []
     exact = [
         (template_id, "name_exact")
@@ -297,11 +303,24 @@ def _resolve_candidates(
             for item in datasets or []
             if (dataset_id := _valid_guid(item.get("id"))) is not None
         }
+        # A exclusão por nome não basta: um relatório DRE pode apontar
+        # diretamente para o dataset do canário mesmo com outro título.
+        sentinel_dataset_ids = {
+            dataset_id
+            for item in datasets or []
+            if (dataset_id := _valid_guid(item.get("id"))) is not None
+            and _is_dre_sentinel_name(_normalize_name(item.get("name")))
+        }
         for report in reports or []:
             report_id = _valid_guid(report.get("id"))
             dataset_id = _valid_guid(report.get("datasetId"))
             normalized = _normalize_name(report.get("name"))
-            if report_id is None or dataset_id is None:
+            if (
+                report_id is None
+                or dataset_id is None
+                or dataset_id not in dataset_ids
+                or dataset_id in sentinel_dataset_ids
+            ):
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:
@@ -326,7 +345,7 @@ def _resolve_candidates(
         for dataset in datasets or []:
             dataset_id = _valid_guid(dataset.get("id"))
             normalized = _normalize_name(dataset.get("name"))
-            if dataset_id is None:
+            if dataset_id is None or dataset_id in sentinel_dataset_ids:
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:

@@ -42,6 +42,9 @@ persistir ou imprimir nomes/GUIDs remotos.
 20. Testes cobrem caso positivo, ambiguidade, 403 em ExecuteQueries, divergência do sentinel,
     bloqueio de endpoint mutante, assinatura de domínio, divergência Power BI/Fabric,
     role/capacidade e contrato do workflow.
+21. O modelo sintético `ReqSys DRE Sentinel DEV` nunca pode ser candidato de
+    template empresarial, mesmo quando o relatório associado possui alias DRE.
+    Relatórios sem dataset visível também não produzem bindings por inferência.
 
 ## Critérios de aceite
 
@@ -52,5 +55,6 @@ persistir ou imprimir nomes/GUIDs remotos.
 - inventário de workspaces/reports/datasets e role/capacidade do workspace concluído sem mutação;
 - ausência de nomes/GUIDs remotos em logs e artifact;
 - binding `resolved`, `unmatched` ou `ambiguous` registrado por template sem fuzzy;
+- sentinela DRE excluído por nome de modelo e vínculo datasetId, com testes positivo/negativo;
 - sentinel executado somente se DRE possuir binding único;
 - `metric_parity_promoted=false` em qualquer resultado do sentinel.
