@@ -49,6 +49,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 38. A evidência pública deve registrar SHAs, IDs de work/task/run, controles de autorização, fencing, replay e readback, declarando explicitamente ausência de merge, deploy e produção e custo adicional de R$ 0,00; tokens, DSN e credenciais não podem ser emitidos.
 39. A prova hospedada só é autorizável depois que seu código estiver na `main` verificada; execução em branch deve falhar fechada no broker e não deve ser tratada como evidência.
 40. Se a fachada hospedada encerrar antes do health, a prova deve falhar imediatamente, manter o log bruto apenas no diretório privado efêmero e publicar somente um código de causa explicitamente allowlisted; saída desconhecida deve resultar em `worker_pool_process_exited`, sem DSN, token, host ou texto arbitrário.
+41. No runner hospedado, após validar o perfil privado `sslrootcert=system`, a prova deve materializar uma cópia efêmera owner-only da DSN apontando explicitamente para `/etc/ssl/certs/ca-certificates.crt`; perfil divergente ou bundle ausente deve falhar fechado e a DSN nunca pode entrar na evidência.
 
 ## Critérios de aceite
 
@@ -62,7 +63,8 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 - a conclusão física de #1766 permanece parcial até uma task real produzir branch/SHA, passar por Validator independente e chegar a `READY_FOR_PR`/PR sem duplicidade;
 - a prova hospedada mínima só é aceita com `result=REQSYS_HOSTED_WORKER_POOL_PROOF_PASSED`, `simulated=false`, task `completed`, fencing ativo, claim legado rejeitado, Validator separado e readback PostgreSQL independente;
 - testes portáteis/SQLite continuam sendo regressão contratual e não substituem a prova hospedada real.
-- o diagnóstico de startup deve provar causa allowlisted, redação de saída desconhecida e interrupção imediata quando o processo já encerrou.
+- o diagnóstico de startup deve provar causa allowlisted, redação de saída desconhecida e interrupção imediata quando o processo já encerrou;
+- o trust TLS hospedado deve preservar `verify-full`, usar arquivo privado `0600`, fixar somente o bundle CA do host e rejeitar perfil inesperado sem expor credenciais.
 
 ## Evidência E2E
 
