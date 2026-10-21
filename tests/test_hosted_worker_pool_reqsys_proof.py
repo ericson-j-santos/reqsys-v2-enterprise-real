@@ -157,3 +157,21 @@ def test_materialize_explicit_system_root_rejects_unexpected_profile(tmp_path, m
             },
             tmp_path,
         )
+
+
+
+def test_work_request_delegates_safe_branch_derivation_to_work_v1():
+    request = proof.work_request(
+        proof.argparse.Namespace(
+            issue_number=2020,
+            request_id="request-123",
+            correlation_id="correlation-123",
+            base_sha="a" * 40,
+        )
+    )
+
+    assert request["repository"] == proof.REPOSITORY
+    assert request["fencing_required"] is True
+    assert request["merge_policy"] == "governed"
+    assert "target_branch" not in request
+    assert "main" not in request.values()
