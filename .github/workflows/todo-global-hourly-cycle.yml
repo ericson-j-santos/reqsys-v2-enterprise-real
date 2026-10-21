@@ -29,6 +29,9 @@ on:
       - 'scripts/todo_global_hourly_cycle.py'
       - 'tests/test_pc24x7_todo_runtime_reconcile.py'
       - 'tests/test_todo_global_hourly_cycle.py'
+      - 'scripts/todo_producer_keyvault_credit_gate.py'
+      - 'tests/test_todo_producer_keyvault_credit_gate.py'
+      - 'tests/test_todo_producer_keyvault_credit_gate_workflow.py'
   workflow_dispatch:
     inputs:
       operation:
@@ -39,6 +42,12 @@ on:
         options:
           - cycle
           - reconcile-runtime
+          - producer-credit-gated
+      authorization_comment_id:
+        description: "ID de comentário validado no Gateway #1705, apenas modo producer-credit-gated"
+        required: false
+        default: ""
+        type: string
       timeout_seconds:
         description: "Limite para aguardar o estado terminal"
         required: false
@@ -68,8 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.2
-          python -m py_compile scripts/reconcile_pc24x7_todo_runtime.py scripts/todo_global_hourly_cycle.py
-          python -m pytest -q             tests/test_pc24x7_todo_runtime_reconcile.py             tests/test_todo_global_hourly_cycle.py
+          python -m py_compile scripts/reconcile_pc24x7_todo_runtime.py scripts/todo_global_hourly_cycle.py scripts/todo_producer_keyvault_credit_gate.py
+          python -m pytest -q tests/test_pc24x7_todo_runtime_reconcile.py tests/test_todo_global_hourly_cycle.py tests/test_todo_producer_keyvault_credit_gate.py tests/test_todo_producer_keyvault_credit_gate_workflow.py
 
   reconcile-runtime:
     name: Materializar TODO Runtime no Desktop PC24x7
@@ -352,3 +361,64 @@ jobs:
           path: artifacts/todo-global-hourly/
           if-no-files-found: warn
           retention-days: 30
+
+  credential-dev:
+    name: Comprovar hard stop Azure e recuperar somente produtor TODO DEV
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'producer-credit-gated' &&
+      github.actor == 'github-actions[bot]' &&
+      github.ref == 'refs/heads/main'
+    needs: contract
+    runs-on: ubuntu-24.04
+    environment: development
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      issues: read
+      id-token: write
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      GH_TOKEN: ${{ github.token }}
+      AZURE_CORE_OUTPUT: none
+    steps:
+      - name: Checkout imutável da main autorizada
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Login Azure OIDC DEV
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+      - name: Validar autorização GitHub e hard stop de crédito via ARM
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py cost --receipt "$proof"
+      - name: Recuperar/provisionar somente o segredo DEV após custo comprovado
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py secret --receipt "$proof"
+      - name: Publicar status sanitizado sem credenciais
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## TODO Producer Key Vault Credit Gate — DEV'
+            echo "- Run: $GITHUB_RUN_ID"
+            echo "- SHA: $GITHUB_SHA"
+            echo '- Cost gate: somente spendingLimit On permite operações de segredos'
+            echo '- Readback: metadados somente; binding ao runtime não validado'
+            echo '- Docker/deploy/produção/RBAC: não executados'
+            echo '- TODO-38 continua EM ANDAMENTO / E2E PARCIAL'
+          } >> "$GITHUB_STEP_SUMMARY"
