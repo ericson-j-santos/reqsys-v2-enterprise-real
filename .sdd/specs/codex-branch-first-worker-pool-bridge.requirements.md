@@ -49,6 +49,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 38. A evidência pública deve registrar SHAs, IDs de work/task/run, controles de autorização, fencing, replay e readback, declarando explicitamente ausência de merge, deploy e produção e custo adicional de R$ 0,00; tokens, DSN e credenciais não podem ser emitidos.
 39. A prova hospedada só é autorizável depois que seu código estiver na `main` verificada; execução em branch deve falhar fechada no broker e não deve ser tratada como evidência.
 40. Se a fachada hospedada encerrar antes do health, a prova deve falhar imediatamente, manter o log bruto apenas no diretório privado efêmero e publicar somente um código de causa explicitamente allowlisted; saída desconhecida deve resultar em `worker_pool_process_exited`, sem DSN, token, host ou texto arbitrário.
+41. Após OIDC e antes de iniciar a fachada PostgreSQL, o runtime hospedado deve qualificar o bundle de CAs de sistema Ubuntu, usar `SSL_CERT_FILE` para o serviço e o processo independente de readback, remover `SSL_CERT_DIR` herdado e preservar `sslmode=verify-full`, `sslrootcert=system` e channel binding; arquivos não regulares, ausentes, sem propriedade root, alteráveis por grupo/outros ou vazios devem falhar fechados, com testes negativos e idempotência.
 
 ## Critérios de aceite
 

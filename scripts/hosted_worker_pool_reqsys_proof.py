@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import subprocess
 import sys
 import tempfile
@@ -46,10 +47,28 @@ STARTUP_FAILURE_CODES = frozenset({
     "authority_connection_unavailable:unknown",
 })
 STARTUP_LOG_LIMIT = 131072
+SYSTEM_CA_BUNDLE = Path("/etc/ssl/certs/ca-certificates.crt")
 
 
 class ProofError(RuntimeError):
     pass
+
+
+def configure_system_ca_bundle(env: dict[str, str], *, bundle: Path = SYSTEM_CA_BUNDLE) -> None:
+    """Use qualified Ubuntu system trust for psycopg-binary; never relax verify-full."""
+    try:
+        info = bundle.lstat()
+    except OSError:
+        raise ProofError("hosted_ca_bundle_unavailable") from None
+    if not (
+        stat.S_ISREG(info.st_mode)
+        and info.st_uid == 0
+        and info.st_mode & 0o022 == 0
+        and 0 < info.st_size <= 10000000
+    ):
+        raise ProofError("hosted_ca_bundle_unqualified")
+    env["SSL_CERT_FILE"] = str(bundle)
+    env.pop("SSL_CERT_DIR", None)
 
 
 def require(value: object, code: str) -> None:
@@ -436,6 +455,8 @@ def main() -> int:
         require(isinstance(identity, dict) and identity.get("sha") == args.base_sha,
                 "broker_identity_mismatch")
         runtime = runtime_environment()
+        # Both the service and independent readback inherit this qualified CA trust.
+        configure_system_ca_bundle(os.environ)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="reqsys-hosted-proof-") as temporary:
             private_dir = Path(temporary)

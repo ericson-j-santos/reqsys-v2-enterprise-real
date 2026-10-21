@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -104,3 +106,60 @@ def test_wait_ready_preserves_healthy_service(tmp_path, monkeypatch):
 
     assert health["status"] == "healthy"
     assert health["storage_backend"] == "postgres"
+
+
+class FakeCABundle:
+    def __init__(self, *, mode: int = stat.S_IFREG | 0o644,
+                 owner: int = 0, size: int = 1024, missing: bool = False) -> None:
+        self.mode, self.owner, self.size, self.missing = mode, owner, size, missing
+
+    def lstat(self):
+        if self.missing:
+            raise FileNotFoundError("test-bundle")
+        return SimpleNamespace(st_mode=self.mode, st_uid=self.owner, st_size=self.size)
+
+    def __str__(self) -> str:
+        return "/etc/ssl/certs/ca-certificates.crt"
+
+
+def test_system_ca_bundle_qualified_preserves_strict_tls_and_replay() -> None:
+    env = {
+        "SSL_CERT_FILE": "/tmp/untrusted.crt",
+        "SSL_CERT_DIR": "/tmp/untrusted",
+        "PGSSLMODE": "verify-full",
+        "PGSSLROOTCERT": "system",
+    }
+    qualified = FakeCABundle()
+
+    proof.configure_system_ca_bundle(env, bundle=qualified)
+    snapshot = dict(env)
+    proof.configure_system_ca_bundle(env, bundle=qualified)
+
+    assert env == snapshot
+    assert env["SSL_CERT_FILE"] == "/etc/ssl/certs/ca-certificates.crt"
+    assert "SSL_CERT_DIR" not in env
+    assert env["PGSSLMODE"] == "verify-full"
+    assert env["PGSSLROOTCERT"] == "system"
+
+
+@pytest.mark.parametrize(
+    ("bundle", "reason"),
+    [
+        (FakeCABundle(mode=stat.S_IFLNK | 0o777), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(mode=stat.S_IFDIR | 0o755), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(mode=stat.S_IFREG | 0o666), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(owner=1000), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(size=0), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(size=10000001), "hosted_ca_bundle_unqualified"),
+        (FakeCABundle(missing=True), "hosted_ca_bundle_unavailable"),
+    ],
+)
+def test_system_ca_bundle_blocks_untrusted_input_without_mutating_env(
+    bundle, reason: str
+) -> None:
+    env = {"SSL_CERT_FILE": "/tmp/original.crt", "SSL_CERT_DIR": "/tmp/original"}
+
+    with pytest.raises(proof.ProofError, match=rf"^{reason}$"):
+        proof.configure_system_ca_bundle(env, bundle=bundle)
+
+    assert env == {"SSL_CERT_FILE": "/tmp/original.crt", "SSL_CERT_DIR": "/tmp/original"}
