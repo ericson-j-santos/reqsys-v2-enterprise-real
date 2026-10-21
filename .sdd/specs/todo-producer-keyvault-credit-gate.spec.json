@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "todo-producer-keyvault-credit-gate",
+  "increment_type": "fix",
+  "approvals": {
+    "requirements": true
+  },
+  "phase": "implementation",
+  "scope": "github-hosted-oidc-keyvault-producer-dev-only",
+  "files": [
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    ".github/workflows/todo-global-hourly-cycle.yml",
+    "scripts/todo_producer_keyvault_credit_gate.py",
+    "tests/test_todo_producer_keyvault_credit_gate.py",
+    "tests/test_todo_producer_keyvault_credit_gate_workflow.py",
+    ".sdd/specs/todo-producer-keyvault-credit-gate.requirements.md",
+    ".sdd/specs/todo-producer-keyvault-credit-gate.spec.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_todo_producer_keyvault_credit_gate.py",
+      "tests/test_todo_producer_keyvault_credit_gate_workflow.py"
+    ],
+    "evidence_contract": "Owner command #1705 validated by existing Authorized Actions Gateway, typed workflow_dispatch operation producer-credit-gated with authorization_comment_id revalidated against exact owner comment by GitHub API, main/sha/OIDC DEV. ARM spendingLimit=On and vault identity before any Key Vault secret data-plane, secret metadata/recovery/provision only after recheck, private 0600 token, idempotency, readback. Zero new workflow files. No Docker/deploy/production/RBAC; product E2E remains partial."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": true,
+    "admin_permissions": false,
+    "scope": "only-dev-existing-keyvault-todo-producer-secret"
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/todo-producer-keyvault-credit-gate.requirements.md",
+    "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
+    "tests": "tests/test_todo_producer_keyvault_credit_gate.py",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  }
+}
