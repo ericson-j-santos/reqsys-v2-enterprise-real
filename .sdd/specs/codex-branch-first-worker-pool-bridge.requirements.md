@@ -50,6 +50,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 39. A prova hospedada só é autorizável depois que seu código estiver na `main` verificada; execução em branch deve falhar fechada no broker e não deve ser tratada como evidência.
 40. Se a fachada hospedada encerrar antes do health, a prova deve falhar imediatamente, manter o log bruto apenas no diretório privado efêmero e publicar somente um código de causa explicitamente allowlisted; saída desconhecida deve resultar em `worker_pool_process_exited`, sem DSN, token, host ou texto arbitrário.
 41. No runner hospedado, após validar o perfil privado `sslrootcert=system`, a prova deve materializar uma cópia efêmera owner-only da DSN apontando explicitamente para `/etc/ssl/certs/ca-certificates.crt`; perfil divergente ou bundle ausente deve falhar fechado e a DSN nunca pode entrar na evidência.
+42. A criação do Work v1 hospedado não pode enviar branch protegida como destino; deve omitir `target_branch` e delegar ao Worker Pool a derivação branch-first determinística.
 
 ## Critérios de aceite
 
@@ -64,7 +65,8 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 - a prova hospedada mínima só é aceita com `result=REQSYS_HOSTED_WORKER_POOL_PROOF_PASSED`, `simulated=false`, task `completed`, fencing ativo, claim legado rejeitado, Validator separado e readback PostgreSQL independente;
 - testes portáteis/SQLite continuam sendo regressão contratual e não substituem a prova hospedada real.
 - o diagnóstico de startup deve provar causa allowlisted, redação de saída desconhecida e interrupção imediata quando o processo já encerrou;
-- o trust TLS hospedado deve preservar `verify-full`, usar arquivo privado `0600`, fixar somente o bundle CA do host e rejeitar perfil inesperado sem expor credenciais.
+- o trust TLS hospedado deve preservar `verify-full`, usar arquivo privado `0600`, fixar somente o bundle CA do host e rejeitar perfil inesperado sem expor credenciais;
+- o payload Work v1 hospedado deve exigir fencing/governed e não conter `target_branch` protegido.
 
 ## Evidência E2E
 
