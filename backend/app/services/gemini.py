@@ -52,6 +52,10 @@ def _modelos_candidatos(model: str, alternativos: tuple[str, ...]) -> list[str]:
     return candidatos
 
 
+class ClassificacaoUrgenciaInvalida(ValueError):
+    """O provider respondeu sem uma única urgência válida e justificativa."""
+
+
 class GeminiIndisponivel(Exception):
     """Lançada quando nenhum provider IA está disponível."""
 
@@ -373,16 +377,26 @@ def classificar_urgencia(
     )
     texto, provedor = _gerar_com_fallback(api_key, model, groq_key, groq_model, prompt)
 
-    urgencia = 'media'
-    justificativa = texto
+    if not isinstance(texto, str):
+        raise ClassificacaoUrgenciaInvalida('Resposta inválida da IA para classificação de urgência.')
 
+    campos: dict[str, str] = {}
     for linha in texto.splitlines():
-        linha_lower = linha.lower()
-        if linha_lower.startswith('urgencia:') or linha_lower.startswith('urgência:'):
-            valor = linha.split(':', 1)[1].strip().lower()
-            if valor in ('baixa', 'media', 'média', 'alta', 'critica', 'crítica'):
-                urgencia = valor.replace('média', 'media').replace('crítica', 'critica')
-        elif linha_lower.startswith('justificativa:'):
-            justificativa = linha.split(':', 1)[1].strip()
+        if not linha.strip():
+            continue
+        nome, separador, valor = linha.partition(':')
+        nome = nome.strip().casefold().replace('urgência', 'urgencia')
+        valor = valor.strip()
+        if not separador or nome not in ('urgencia', 'justificativa') or nome in campos or not valor:
+            raise ClassificacaoUrgenciaInvalida('Resposta inválida da IA para classificação de urgência.')
+        campos[nome] = valor
 
-    return ClassificacaoUrgencia(urgencia=urgencia, justificativa=justificativa), provedor
+    if set(campos) != {'urgencia', 'justificativa'}:
+        raise ClassificacaoUrgenciaInvalida('Resposta inválida da IA para classificação de urgência.')
+
+    urgencia = campos['urgencia'].casefold()
+    urgencia = {'média': 'media', 'crítica': 'critica'}.get(urgencia, urgencia)
+    if urgencia not in ('baixa', 'media', 'alta', 'critica'):
+        raise ClassificacaoUrgenciaInvalida('Resposta inválida da IA para classificação de urgência.')
+
+    return ClassificacaoUrgencia(urgencia=urgencia, justificativa=campos['justificativa']), provedor

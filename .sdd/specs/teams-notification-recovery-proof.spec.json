@@ -1,0 +1,23 @@
+{
+  "feature_name": "teams-notification-recovery-proof",
+  "project": "ReqSys",
+  "created_at": "2026-10-21",
+  "updated_at": "2026-10-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Impede recuperacao automatica de notificacoes inferida apenas da conclusao do workflow; issue #3002 e execucao 39574202403.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_teams_notification_recovery_proof.py"
+    ],
+    "evidence_contract": "Metadados de workflow e comprovacao de entrega sao distintos. Sem leitor independente, delivery_verified e healthy permanecem false; nao fechar incidente."
+  },
+  "evidence": [
+    "main@971a939b93f38fed147d37bf0c096527a0928b78: run 39574202403 success com notification_skipped/no_material_remediation; observador fecha incidente pelo success.",
+    "Run 39571022504: data.json desatualizado 57.01h apesar de produtor 39572271491 success."
+  ]
+}
