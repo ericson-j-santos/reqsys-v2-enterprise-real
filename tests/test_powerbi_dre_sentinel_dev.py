@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from scripts import powerbi_dre_sentinel_dev as m
+from scripts import powerbi_template_runtime_resolver as resolver
 
 
 WS = "11111111-1111-1111-1111-111111111111"
@@ -256,3 +257,30 @@ def test_existing_workflow_keeps_mutation_main_dispatch_only():
     assert "inputs.mode == 'dre-sentinel'" in workflow
     assert "PUBLISH-DRE-SENTINEL-DEV" in workflow
     assert "environment: development" in workflow
+
+
+@pytest.mark.parametrize(
+    "extractor,error",
+    [(m._single_value, m.CanaryError), (resolver._extract_single_value, resolver.ResolverError)],
+)
+@pytest.mark.parametrize("payload", [
+    {},
+    {"results": []},
+    {"results": None},
+    {"results": [{"tables": []}]},
+    {"results": [{"tables": [{"rows": []}]}]},
+    {"results": [{"tables": [{"rows": ["private-remote-value"]}]}]},
+    {"results": [{"tables": [{"rows": [{"a": 0}, {"a": 0}]}]}]},
+    {"results": [{"tables": [{"rows": [{"a": 0, "b": 1}]}]}]},
+])
+def test_malformed_query_response_is_rejected_without_remote_details(extractor, error, payload):
+    with pytest.raises(error, match="^execute_queries_response_invalid$") as captured:
+        extractor(payload)
+    assert captured.value.__suppress_context__ or captured.value.__context__ is None
+    assert "private-remote-value" not in str(captured.value)
+
+
+@pytest.mark.parametrize("extractor", [m._single_value, resolver._extract_single_value])
+@pytest.mark.parametrize("row", [{"[value]": 0}, {"value": 0}, {"[Meta]": 0}])
+def test_valid_single_zero_is_preserved(extractor, row):
+    assert extractor({"results": [{"tables": [{"rows": [row]}]}]}) == 0

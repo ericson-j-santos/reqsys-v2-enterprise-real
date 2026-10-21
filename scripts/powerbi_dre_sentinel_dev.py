@@ -35,7 +35,6 @@ FABRIC_BASE = "https://api.fabric.microsoft.com/v1"
 POWERBI_BASE = "https://api.powerbi.com/v1.0/myorg"
 _GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 MAX_BYTES = 2 * 1024 * 1024
-LRO_TIMEOUT_SECONDS = 120.0
 _FABRIC_WS = r"[0-9a-fA-F-]{36}"
 _FABRIC_ITEM = r"[0-9a-fA-F-]{36}"
 _ALLOWED_FABRIC_GET = re.compile(
@@ -583,7 +582,8 @@ def _single_value(data: dict[str, Any]) -> Any:
         if len(row) == 1:
             return next(iter(row.values()))
     except (KeyError, IndexError, TypeError):
-        pass
+        # Não anexar payload/erro remoto, que pode conter dados privados.
+        raise CanaryError("execute_queries_response_invalid") from None
     raise CanaryError("execute_queries_response_invalid")
 
 

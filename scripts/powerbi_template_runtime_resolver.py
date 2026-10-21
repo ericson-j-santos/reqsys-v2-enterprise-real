@@ -391,7 +391,8 @@ def _extract_single_value(payload: dict[str, Any]) -> Any:
         if len(row) == 1:
             return next(iter(row.values()))
     except (KeyError, IndexError, TypeError):
-        pass
+        # Não anexar payload/erro remoto, que pode conter dados privados.
+        raise ResolverError("execute_queries_response_invalid") from None
     raise ResolverError("execute_queries_response_invalid")
 
 
