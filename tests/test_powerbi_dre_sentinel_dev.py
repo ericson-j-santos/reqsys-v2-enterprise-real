@@ -32,6 +32,7 @@ class FakeRequester:
         query_value=0,
         query_status=200,
         negative_status=400,
+        negative_code="DatasetExecuteQueriesError",
     ):
         self.exists = existing
         self.duplicate = duplicate
@@ -40,6 +41,7 @@ class FakeRequester:
         self.query_value = query_value
         self.query_status = query_status
         self.negative_status = negative_status
+        self.negative_code = negative_code
         self.create_calls = 0
         self.calls = []
 
@@ -89,7 +91,7 @@ class FakeRequester:
         if url == f"{m.POWERBI_BASE}/groups/{WS}/datasets/{DATASET}/executeQueries":
             query = payload["queries"][0]["query"]
             if "Inexistente" in query:
-                return self.negative_status, {}, {"error": {"code": "DAX query failure"}}
+                return self.negative_status, {}, {"error": {"code": self.negative_code}}
             if self.query_status != 200:
                 return self.query_status, {}, {"error": {"code": "ExecuteQueriesDisabled"}}
             return 200, {}, {"results": [{"tables": [{"rows": [{"[value]": self.query_value}]}]}]}
@@ -284,3 +286,46 @@ def test_malformed_query_response_is_rejected_without_remote_details(extractor, 
 @pytest.mark.parametrize("row", [{"[value]": 0}, {"value": 0}, {"[Meta]": 0}])
 def test_valid_single_zero_is_preserved(extractor, row):
     assert extractor({"results": [{"tables": [{"rows": [row]}]}]}) == 0
+
+
+@pytest.mark.parametrize("status", [0, 200, 401, 403, 404, 408, 429, 500, 503])
+def test_negative_control_rejects_transport_auth_quota_and_service_errors(status):
+    with pytest.raises(m.CanaryError, match="negative_control_failed"):
+        _run(FakeRequester(negative_status=status))
+
+
+def test_negative_control_rejects_unrelated_bad_request():
+    with pytest.raises(m.CanaryError, match="negative_control_failed"):
+        _run(FakeRequester(negative_status=400, negative_code="InvalidRequest"))
+
+
+@pytest.mark.parametrize(
+    "extractor,error",
+    [(m._single_value, m.CanaryError), (resolver._extract_single_value, resolver.ResolverError)],
+)
+@pytest.mark.parametrize("level", ["response", "result", "table"])
+def test_http_200_with_embedded_error_is_not_success(extractor, error, level):
+    table = {"rows": [{"[value]": 0}]}
+    result = {"tables": [table]}
+    payload = {"results": [result]}
+    target = {"response": payload, "result": result, "table": table}[level]
+    target["error"] = {"code": "PartialResult"}
+    with pytest.raises(error, match="execute_queries_response_invalid"):
+        extractor(payload)
+
+
+@pytest.mark.parametrize(
+    "extractor,error",
+    [(m._single_value, m.CanaryError), (resolver._extract_single_value, resolver.ResolverError)],
+)
+@pytest.mark.parametrize("duplicate", ["result", "table"])
+def test_extra_results_or_tables_cannot_hide_invalid_data(extractor, error, duplicate):
+    table = {"rows": [{"[value]": 0}]}
+    result = {"tables": [table]}
+    payload = {"results": [result]}
+    if duplicate == "result":
+        payload["results"].append(result)
+    else:
+        result["tables"].append(table)
+    with pytest.raises(error, match="execute_queries_response_invalid"):
+        extractor(payload)

@@ -573,7 +573,18 @@ def _execute_query(
 
 def _single_value(data: dict[str, Any]) -> Any:
     try:
-        rows = data["results"][0]["tables"][0]["rows"]
+        result = data["results"][0]
+        table = result["tables"][0]
+        if (
+            not isinstance(table, dict)
+            or data.get("error")
+            or result.get("error")
+            or table.get("error")
+            or len(data["results"]) != 1
+            or len(result["tables"]) != 1
+        ):
+            raise KeyError
+        rows = table["rows"]
         if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
             raise KeyError
         row = rows[0]
@@ -636,14 +647,17 @@ def execute(
     if isinstance(value, bool) or not isinstance(value, (int, float)) or float(value) != 0.0:
         raise CanaryError("sentinel_value_mismatch")
 
-    negative_status, _ = _execute_query(
+    negative_status, negative_data = _execute_query(
         workspace_id,
         dataset_id,
         'EVALUATE ROW("value", [Medida Inexistente Controle DRE])',
         powerbi_token,
         requester,
     )
-    if negative_status == 200:
+    # Erro de transporte, autenticação ou quota não comprova rejeição DAX.
+    if negative_status != 400 or _safe_error_code(negative_data) not in {
+        "DatasetExecuteQueriesError"
+    }:
         raise CanaryError("negative_control_failed")
 
     return {

@@ -380,7 +380,18 @@ def _resolve_candidates(
 
 def _extract_single_value(payload: dict[str, Any]) -> Any:
     try:
-        rows = payload["results"][0]["tables"][0]["rows"]
+        result = payload["results"][0]
+        table = result["tables"][0]
+        if (
+            not isinstance(table, dict)
+            or payload.get("error")
+            or result.get("error")
+            or table.get("error")
+            or len(payload["results"]) != 1
+            or len(result["tables"]) != 1
+        ):
+            raise KeyError
+        rows = table["rows"]
         if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
             raise KeyError
         row = rows[0]
