@@ -175,3 +175,55 @@ def test_work_request_delegates_safe_branch_derivation_to_work_v1():
     assert request["merge_policy"] == "governed"
     assert "target_branch" not in request
     assert "main" not in request.values()
+
+
+
+def test_run_task_forwards_private_runtime_environment(tmp_path, monkeypatch):
+    observed = {}
+    monkeypatch.setenv("AMBIENT_CONTEXT", "preserved")
+
+    class Completed:
+        returncode = 0
+        stdout = '{"result":"ok"}\n'
+
+    def fake_run(*_args, **kwargs):
+        observed.update(kwargs["env"])
+        return Completed()
+
+    monkeypatch.setattr(proof.subprocess, "run", fake_run)
+
+    result = proof.run_task(
+        tmp_path,
+        ["provider-readback"],
+        environment={"CODEX_WORKER_POOL_DATABASE_URL_FILE": "/private/runtime.url"},
+    )
+
+    assert result == {"result": "ok"}
+    assert observed["AMBIENT_CONTEXT"] == "preserved"
+    assert observed["CODEX_WORKER_POOL_DATABASE_URL_FILE"] == "/private/runtime.url"
+
+
+def test_existing_verified_work_requires_all_independent_controls():
+    work = {
+        "evidence": {
+            "state": "verified",
+            "validation_sha": "a" * 40,
+            "independent_readback": True,
+            "positive_control": True,
+            "negative_control": True,
+        },
+        "merge": {"state": "ready", "expected_head_sha": "a" * 40},
+    }
+
+    assert proof.existing_verified_work(work, "a" * 40) is True
+
+    work["evidence"]["independent_readback"] = False
+    with pytest.raises(proof.ProofError, match=r"^existing_work_evidence_invalid$"):
+        proof.existing_verified_work(work, "a" * 40)
+
+
+def test_pending_work_evidence_is_not_accepted_as_verified():
+    assert proof.existing_verified_work(
+        {"evidence": {"state": "pending"}, "merge": {"state": "pending"}},
+        "a" * 40,
+    ) is False
