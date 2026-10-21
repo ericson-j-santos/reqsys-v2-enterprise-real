@@ -1,0 +1,43 @@
+{
+  "feature_name": "workflow-efficiency-canonical-artifact",
+  "project": "ReqSys v2 Enterprise — Ops Dashboard",
+  "created_at": "2026-10-21",
+  "updated_at": "2026-10-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Integra ao artifact Ops Dashboard o indicador Workflow Efficiency medido em PRs reais, impedindo publicação de um contrato sem fonte ou com score inconsistente.",
+  "scope": "ops-dashboard-workflow-efficiency-canonical",
+  "files": [
+    ".github/workflows/ops-dashboard.yml",
+    "scripts/homologate_workflow_efficiency_artifact.py",
+    "tests/test_homologate_workflow_efficiency_artifact.py",
+    "tests/test_ops_dashboard_workflow_efficiency_integration.py",
+    ".sdd/specs/workflow-efficiency-canonical-artifact.requirements.md",
+    ".sdd/specs/workflow-efficiency-canonical-artifact.spec.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_homologate_workflow_efficiency_artifact.py",
+      "tests/test_ops_dashboard_workflow_efficiency_integration.py"
+    ],
+    "evidence_contract": "O Produtor lê dados reais de PRs, integra o card e homologa pré-publicação; um consumidor independente baixa o artifact do mesmo SHA e confirma HOMOLOGATED, com fontes, hashes e controle negativo."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  },
+  "acceptance_criteria": [
+    "Fail closed quando a amostra real estiver ausente.",
+    "Homologação positiva somente com HTML, JSON do índice, fonte medição e link relativo canônico coerentes.",
+    "Controle negativo rejeita contrato ausente, fonte inválida, amostra vazia e score divergente.",
+    "Pre-PR e demais gates aprovados no HEAD real antes da PR e merge.",
+    "Download independente e homologação no SHA final, sem confundir artifact de falha com êxito."
+  ]
+}
