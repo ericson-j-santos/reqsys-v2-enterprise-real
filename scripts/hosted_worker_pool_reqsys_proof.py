@@ -202,134 +202,135 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
     })
     service_log = private_dir / "worker-pool-service.log"
     descriptor = os.open(service_log, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as log_stream:
-        server = subprocess.Popen(
-            [sys.executable, "-B", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8097"],
-            cwd=pool_root, env=server_env, stdin=subprocess.DEVNULL,
-            stdout=log_stream, stderr=subprocess.STDOUT,
-        )
-        try:
-            health = wait_ready(token, server, service_log)
-            require(health.get("storage_backend") == "postgres"
-                    and health.get("fenced_cutover_enabled") is True,
-                    "qualified_fenced_authority_required")
-            authority = expect("GET", "/v1/authority", token, None, {200})
-            contract = expect("GET", "/v1/contract", token, None, {200})
-            require(contract.get("contract_name") == "engineering-worker-pool"
-                    and contract.get("contract_version") == "v1",
-                    "worker_pool_contract_invalid")
-            negative_status, _ = request_json("GET", "/v1/contract", "invalid-token")
-            require(negative_status == 401, "negative_auth_control_failed")
+    log_stream = os.fdopen(descriptor, "wb")
+    server = subprocess.Popen(
+        [sys.executable, "-B", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8097"],
+        cwd=pool_root, env=server_env, stdin=subprocess.DEVNULL,
+        stdout=log_stream, stderr=subprocess.STDOUT,
+    )
+    try:
+        health = wait_ready(token, server, service_log)
+        require(health.get("storage_backend") == "postgres"
+                and health.get("fenced_cutover_enabled") is True,
+                "qualified_fenced_authority_required")
+        authority = expect("GET", "/v1/authority", token, None, {200})
+        contract = expect("GET", "/v1/contract", token, None, {200})
+        require(contract.get("contract_name") == "engineering-worker-pool"
+                and contract.get("contract_version") == "v1",
+                "worker_pool_contract_invalid")
+        negative_status, _ = request_json("GET", "/v1/contract", "invalid-token")
+        require(negative_status == 401, "negative_auth_control_failed")
 
-            body = {
-                "repository": REPOSITORY,
-                "issue_number": args.issue_number,
-                "request_id": args.request_id,
-                "correlation_id": args.correlation_id,
-                "priority": 10,
-                "base_sha": args.base_sha,
-                "target_branch": "main",
-                "max_attempts": 2,
-                "merge_policy": "governed",
-                "fencing_required": True,
-            }
-            first_status, first = request_json("POST", "/v1/work", token, body)
-            require(first_status in {200, 201} and isinstance(first.get("work"), dict),
-                    "work_create_failed")
-            work = first["work"]
-            task_id = str(work.get("task_id") or "")
-            work_id = str(work.get("work_id") or "")
-            require(task_id and work_id and work.get("task", {}).get("fencing_required") is True,
-                    "fenced_work_identity_invalid")
-            replay = expect("POST", "/v1/work", token, body, {200})
-            require(replay.get("created") is False
-                    and replay.get("work", {}).get("task_id") == task_id
-                    and replay.get("work", {}).get("work_id") == work_id,
-                    "work_replay_failed")
+        body = {
+            "repository": REPOSITORY,
+            "issue_number": args.issue_number,
+            "request_id": args.request_id,
+            "correlation_id": args.correlation_id,
+            "priority": 10,
+            "base_sha": args.base_sha,
+            "target_branch": "main",
+            "max_attempts": 2,
+            "merge_policy": "governed",
+            "fencing_required": True,
+        }
+        first_status, first = request_json("POST", "/v1/work", token, body)
+        require(first_status in {200, 201} and isinstance(first.get("work"), dict),
+                "work_create_failed")
+        work = first["work"]
+        task_id = str(work.get("task_id") or "")
+        work_id = str(work.get("work_id") or "")
+        require(task_id and work_id and work.get("task", {}).get("fencing_required") is True,
+                "fenced_work_identity_invalid")
+        replay = expect("POST", "/v1/work", token, body, {200})
+        require(replay.get("created") is False
+                and replay.get("work", {}).get("task_id") == task_id
+                and replay.get("work", {}).get("work_id") == work_id,
+                "work_replay_failed")
 
-            run_id = os.environ["GITHUB_RUN_ID"]
-            builder_id = ("reqsys-hosted-builder-" + run_id)[-128:]
-            validator_id = ("reqsys-hosted-validator-" + run_id)[-128:]
-            legacy_id = ("reqsys-legacy-negative-" + run_id)[-128:]
-            register(token, worker_id=legacy_id, role="builder", rules_sha=args.rules_sha,
-                     correlation=args.correlation_id + "-legacy", root=reqsys_root)
-            legacy = expect("POST", "/v1/claims/exact", token, {
-                "worker_id": legacy_id, "task_id": task_id,
-                "correlation_id": args.correlation_id + "-legacy-claim", "lease_seconds": 60,
+        run_id = os.environ["GITHUB_RUN_ID"]
+        builder_id = ("reqsys-hosted-builder-" + run_id)[-128:]
+        validator_id = ("reqsys-hosted-validator-" + run_id)[-128:]
+        legacy_id = ("reqsys-legacy-negative-" + run_id)[-128:]
+        register(token, worker_id=legacy_id, role="builder", rules_sha=args.rules_sha,
+                 correlation=args.correlation_id + "-legacy", root=reqsys_root)
+        legacy = expect("POST", "/v1/claims/exact", token, {
+            "worker_id": legacy_id, "task_id": task_id,
+            "correlation_id": args.correlation_id + "-legacy-claim", "lease_seconds": 60,
+        }, {200})
+        require(legacy.get("claimed") is False, "legacy_worker_admitted_fenced_task")
+
+        task_receipt = args.output.parent / "task-receipt.json"
+        execution_performed = False
+        current = expect("GET", "/v1/tasks/" + task_id, token, None, {200})
+        if current.get("state") == "queued":
+            register(token, worker_id=builder_id, role="builder", rules_sha=args.rules_sha,
+                     correlation=args.correlation_id + "-builder", root=reqsys_root)
+            claim = expect("POST", "/v1/claims/fenced/exact", token, {
+                "worker_id": builder_id, "task_id": task_id,
+                "correlation_id": args.correlation_id + "-builder-claim", "lease_seconds": 180,
             }, {200})
-            require(legacy.get("claimed") is False, "legacy_worker_admitted_fenced_task")
+            require(claim.get("claimed") is True, "fenced_builder_claim_failed")
+            mutation = lease_body(builder_id, claim, args.correlation_id + "-builder")
+            expect("POST", "/v1/tasks/" + task_id + "/start", token, mutation, {200})
+            built = run_task(reqsys_root, [
+                "build", "--root", str(reqsys_root), "--output", str(task_receipt),
+                "--issue-number", str(args.issue_number), "--request-id", args.request_id,
+                "--base-sha", args.base_sha,
+            ])
+            require(built.get("result") == "REQSYS_HOSTED_WORKER_TASK_EXECUTED"
+                    and built.get("simulated") is False, "real_task_execution_failed")
+            expect("POST", "/v1/tasks/" + task_id + "/validation", token,
+                   {**mutation, "produced_sha": args.base_sha}, {200})
 
-            task_receipt = args.output.parent / "task-receipt.json"
-            execution_performed = False
-            current = expect("GET", "/v1/tasks/" + task_id, token, None, {200})
-            if current.get("state") == "queued":
-                register(token, worker_id=builder_id, role="builder", rules_sha=args.rules_sha,
-                         correlation=args.correlation_id + "-builder", root=reqsys_root)
-                claim = expect("POST", "/v1/claims/fenced/exact", token, {
-                    "worker_id": builder_id, "task_id": task_id,
-                    "correlation_id": args.correlation_id + "-builder-claim", "lease_seconds": 180,
-                }, {200})
-                require(claim.get("claimed") is True, "fenced_builder_claim_failed")
-                mutation = lease_body(builder_id, claim, args.correlation_id + "-builder")
-                expect("POST", "/v1/tasks/" + task_id + "/start", token, mutation, {200})
-                built = run_task(reqsys_root, [
-                    "build", "--root", str(reqsys_root), "--output", str(task_receipt),
-                    "--issue-number", str(args.issue_number), "--request-id", args.request_id,
-                    "--base-sha", args.base_sha,
-                ])
-                require(built.get("result") == "REQSYS_HOSTED_WORKER_TASK_EXECUTED"
-                        and built.get("simulated") is False, "real_task_execution_failed")
-                expect("POST", "/v1/tasks/" + task_id + "/validation", token,
-                       {**mutation, "produced_sha": args.base_sha}, {200})
+            register(token, worker_id=validator_id, role="validator", rules_sha=args.rules_sha,
+                     correlation=args.correlation_id + "-validator", root=reqsys_root)
+            validation_claim = expect("POST", "/v1/claims/fenced/exact", token, {
+                "worker_id": validator_id, "task_id": task_id,
+                "correlation_id": args.correlation_id + "-validator-claim", "lease_seconds": 180,
+            }, {200})
+            require(validation_claim.get("claimed") is True,
+                    "fenced_validator_claim_failed")
+            validated = run_task(reqsys_root, [
+                "verify", "--root", str(reqsys_root), "--receipt", str(task_receipt),
+                "--issue-number", str(args.issue_number), "--request-id", args.request_id,
+                "--base-sha", args.base_sha,
+            ])
+            require(validated.get("result") == "REQSYS_HOSTED_WORKER_TASK_VALIDATED"
+                    and validated.get("independent_process") is True,
+                    "independent_task_validation_failed")
+            expect("POST", "/v1/tasks/" + task_id + "/complete", token,
+                   lease_body(validator_id, validation_claim,
+                              args.correlation_id + "-validator-complete"), {200})
+            execution_performed = True
+        else:
+            require(current.get("state") == "completed", "existing_task_not_terminal")
 
-                register(token, worker_id=validator_id, role="validator", rules_sha=args.rules_sha,
-                         correlation=args.correlation_id + "-validator", root=reqsys_root)
-                validation_claim = expect("POST", "/v1/claims/fenced/exact", token, {
-                    "worker_id": validator_id, "task_id": task_id,
-                    "correlation_id": args.correlation_id + "-validator-claim", "lease_seconds": 180,
-                }, {200})
-                require(validation_claim.get("claimed") is True,
-                        "fenced_validator_claim_failed")
-                validated = run_task(reqsys_root, [
-                    "verify", "--root", str(reqsys_root), "--receipt", str(task_receipt),
-                    "--issue-number", str(args.issue_number), "--request-id", args.request_id,
-                    "--base-sha", args.base_sha,
-                ])
-                require(validated.get("result") == "REQSYS_HOSTED_WORKER_TASK_VALIDATED"
-                        and validated.get("independent_process") is True,
-                        "independent_task_validation_failed")
-                expect("POST", "/v1/tasks/" + task_id + "/complete", token,
-                       lease_body(validator_id, validation_claim,
-                                  args.correlation_id + "-validator-complete"), {200})
-                execution_performed = True
-            else:
-                require(current.get("state") == "completed", "existing_task_not_terminal")
-
-            evidence = {
-                "validation_run_id": run_id,
-                "validation_sha": args.base_sha,
-                "evidence_reference": "github-actions:" + run_id + ":reqsys-hosted-worker-pool-proof",
-                "independent_readback": True,
-                "positive_control": True,
-                "negative_control": True,
-                "correlation_id": args.correlation_id + "-evidence",
-            }
-            recorded = expect("POST", "/v1/work/" + work_id + "/evidence", token, evidence, {200})
-            require(recorded.get("evidence", {}).get("state") == "verified"
-                    and recorded.get("merge", {}).get("state") == "ready",
-                    "work_evidence_not_verified")
-            final_task = expect("GET", "/v1/tasks/" + task_id, token, None, {200})
-            require(final_task.get("state") == "completed"
-                    and final_task.get("fencing_required") is True,
-                    "final_task_readback_failed")
-        finally:
-            if server.poll() is None:
-                server.terminate()
-            try:
-                server.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=5)
+        evidence = {
+            "validation_run_id": run_id,
+            "validation_sha": args.base_sha,
+            "evidence_reference": "github-actions:" + run_id + ":reqsys-hosted-worker-pool-proof",
+            "independent_readback": True,
+            "positive_control": True,
+            "negative_control": True,
+            "correlation_id": args.correlation_id + "-evidence",
+        }
+        recorded = expect("POST", "/v1/work/" + work_id + "/evidence", token, evidence, {200})
+        require(recorded.get("evidence", {}).get("state") == "verified"
+                and recorded.get("merge", {}).get("state") == "ready",
+                "work_evidence_not_verified")
+        final_task = expect("GET", "/v1/tasks/" + task_id, token, None, {200})
+        require(final_task.get("state") == "completed"
+                and final_task.get("fencing_required") is True,
+                "final_task_readback_failed")
+    finally:
+        if server.poll() is None:
+            server.terminate()
+        try:
+            server.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            server.kill()
+            server.wait(timeout=5)
+        log_stream.close()
 
     provider_file = args.output.parent / "provider-readback.json"
     readback = run_task(reqsys_root, [
