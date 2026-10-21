@@ -9,7 +9,7 @@
     "tests": [
       "tests/test_post_merge_runtime_smoke_sentinel.py"
     ],
-    "evidence_contract": "O sentinel apos merge usa somente o workflow ativo de acesso publico DEV: origem e SHA main iguais, job + etapas nao skipped, artifact nao vazio nem expirado, e falha fechado em runtime desatualizado; nenhuma evidencia Fly aposentada aceita."
+    "evidence_contract": "Origem DEV ativa, repo e SHA canônicos, job/steps positivos, artifact único baixado e conteúdo runtime-smoke.json validado independentemente: observed/final/expected SHA iguais, health/readiness 200, frontend Nginx estático e HMR 404. Drift físico, artifact ausente/duplicado, erro ou skipped bloqueiam. Sem Fly, deploy ou overage."
   },
   "traceability": {
     "issue": 2120,

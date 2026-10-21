@@ -40,6 +40,37 @@ def _event(
     }
 
 
+def _runtime_evidence(expected_sha: str = SHA) -> dict:
+    return {
+        "environment": "dev",
+        "base_url_kind": "signed_locator",
+        "expected_sha": expected_sha,
+        "observed_sha": expected_sha,
+        "final_observed_sha": expected_sha,
+        "build_sha_matches_expected": True,
+        "/api/health": {"http": 200},
+        "/api/runtime/health": {"http": 200},
+        "/api/runtime/readiness": {"http": 200},
+        "/api/runtime/build-info": {"http": 200},
+        "frontend": {
+            "mode": "static_nginx",
+            "http": 200,
+            "vite_client_http": 404,
+            "asset_http": 200,
+        },
+    }
+
+
+def _evaluate_with_evidence(event=None, evidence=None, **transport_options):
+    return evaluate_event(
+        _event() if event is None else event,
+        repo=EXPECTED_REPOSITORY,
+        token="token",
+        request_json=_transport(**transport_options),
+        upstream_evidence=_runtime_evidence() if evidence is None else evidence,
+    )
+
+
 def _transport(
     *,
     artifact_name: str = EXPECTED_ARTIFACT_NAME,
@@ -83,12 +114,7 @@ def _transport(
 
 
 def _evaluate(event=None, **transport_options):
-    return evaluate_event(
-        _event() if event is None else event,
-        repo=EXPECTED_REPOSITORY,
-        token="token",
-        request_json=_transport(**transport_options),
-    )
+    return _evaluate_with_evidence(event=event, **transport_options)
 
 
 def test_real_runtime_source_accepts_matching_main_and_executed_steps():
@@ -119,6 +145,57 @@ def test_expired_or_empty_artifact_blocks():
         result = _evaluate(**options)
         assert result.status == "blocked"
         assert "artifact_missing_or_invalid" in result.blocking_issues
+
+
+def test_runtime_artifact_value_not_equal_current_sha_blocks():
+    payload = _runtime_evidence()
+    payload["observed_sha"] = OTHER_SHA
+    payload["final_observed_sha"] = OTHER_SHA
+    payload["build_sha_matches_expected"] = False
+    result = _evaluate_with_evidence(evidence=payload)
+    assert result.status == "blocked"
+    assert "runtime_evidence_contract_failed" in result.blocking_issues
+    assert result.runtime_observed_sha == OTHER_SHA
+
+
+def test_runtime_artifact_health_and_frontend_checks_must_have_executed():
+    for mutation in ("health", "frontend", "sha"):
+        payload = _runtime_evidence()
+        if mutation == "health":
+            payload["/api/runtime/readiness"]["http"] = 503
+        elif mutation == "frontend":
+            payload["frontend"]["vite_client_http"] = 200
+        else:
+            payload["expected_sha"] = OTHER_SHA
+        result = _evaluate_with_evidence(evidence=payload)
+        assert result.status == "blocked"
+        assert not result.runtime_evidence_verified
+
+
+def test_runtime_artifact_missing_blocks_even_when_source_passed():
+    result = evaluate_event(
+        _event(),
+        repo=EXPECTED_REPOSITORY,
+        token="token",
+        request_json=_transport(),
+        upstream_evidence=None,
+    )
+    assert result.status == "blocked"
+    assert "runtime_evidence_missing" in result.blocking_issues
+
+
+def test_runtime_artifact_local_reader_rejects_duplicates_and_non_json(tmp_path):
+    from scripts.post_merge_runtime_smoke_sentinel import _load_runtime_evidence
+    (tmp_path / "pc24x7-dev").mkdir()
+    root = tmp_path / "pc24x7-dev" / "runtime-smoke.json"
+    root.write_text("not json", encoding="utf-8")
+    assert _load_runtime_evidence(tmp_path) is None
+    import json
+    root.write_text(json.dumps(_runtime_evidence()), encoding="utf-8")
+    assert _load_runtime_evidence(tmp_path)["observed_sha"] == SHA
+    (tmp_path / "extra").mkdir()
+    (tmp_path / "extra" / "runtime-smoke.json").write_text(root.read_text(encoding="utf-8"), encoding="utf-8")
+    assert _load_runtime_evidence(tmp_path) is None
 
 
 def test_skipped_or_failed_source_never_passes():
@@ -197,6 +274,8 @@ def test_workflow_targets_active_dev_source_instead_of_retired_fly():
     retired = (root / ".github/workflows/runtime-production-smoke-governed.yml").read_text(encoding="utf-8")
     assert f'workflows: ["{EXPECTED_WORKFLOW_NAME}"]' in pipeline
     assert EXPECTED_JOB_NAME in active
+    assert "actions/download-artifact@" in pipeline
+    assert "--upstream-evidence-dir artifacts/upstream-public-dev" in pipeline
     assert all(name in active for name in REQUIRED_STEPS)
     assert "build_sha_mismatch" in active
     assert "runtime-smoke.json" in active

@@ -53,6 +53,8 @@ class SentinelResult:
     main_sha: str | None
     source_event: str | None
     required_steps_verified: bool
+    runtime_evidence_verified: bool
+    runtime_observed_sha: str | None
 
 
 def _utc_now() -> str:
@@ -152,6 +154,63 @@ def _current_main_sha(
     return value if isinstance(value, str) and _SHA.fullmatch(value) else None
 
 
+def _load_runtime_evidence(directory: Path) -> dict[str, Any] | None:
+    """Read exactly one small, local artifact file downloaded from the upstream run."""
+    if not directory.is_dir():
+        return None
+    resolved_root = directory.resolve()
+    candidates = [
+        item for item in directory.rglob("runtime-smoke.json")
+        if item.is_file() and item.resolve().is_relative_to(resolved_root)
+    ]
+    if len(candidates) != 1:
+        return None
+    try:
+        raw = candidates[0].read_bytes()
+        if len(raw) > 65536:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _verify_runtime_evidence(payload: dict[str, Any], expected_sha: str | None) -> tuple[bool, str | None]:
+    """A successful upstream job does not replace independent runtime SHA checks."""
+    if expected_sha is None or not isinstance(payload, dict):
+        return False, None
+    observed = payload.get("observed_sha")
+    final = payload.get("final_observed_sha")
+    if (
+        payload.get("environment") != "dev"
+        or payload.get("base_url_kind") != "signed_locator"
+        or payload.get("expected_sha") != expected_sha
+        or observed != expected_sha
+        or final != expected_sha
+        or payload.get("build_sha_matches_expected") is not True
+    ):
+        return False, observed if isinstance(observed, str) and _SHA.fullmatch(observed) else None
+    for path in (
+        "/api/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/build-info",
+    ):
+        item = payload.get(path)
+        if not isinstance(item, dict) or item.get("http") != 200:
+            return False, observed
+    frontend = payload.get("frontend")
+    if (
+        not isinstance(frontend, dict)
+        or frontend.get("mode") != "static_nginx"
+        or frontend.get("http") != 200
+        or frontend.get("vite_client_http") != 404
+        or frontend.get("asset_http") != 200
+    ):
+        return False, observed
+    return True, observed
+
+
 def evaluate_event(
     event: dict[str, Any],
     *,
@@ -160,6 +219,7 @@ def evaluate_event(
     expected_workflow: str = EXPECTED_WORKFLOW_NAME,
     expected_artifact: str = EXPECTED_ARTIFACT_NAME,
     request_json: Callable[[str, str], dict[str, Any]] = _github_request,
+    upstream_evidence: dict[str, Any] | None = None,
 ) -> SentinelResult:
     run = event.get("workflow_run") or {}
     if not isinstance(run, dict):
@@ -175,6 +235,8 @@ def evaluate_event(
     artifacts: list[str] = []
     main_sha: str | None = None
     verified_steps = False
+    runtime_evidence_verified = False
+    runtime_observed_sha: str | None = None
 
     if not run:
         blocking.append("missing_event_payload")
@@ -214,6 +276,15 @@ def evaluate_event(
     elif source_sha != main_sha:
         blocking.append("published_run_not_current_main_sha")
 
+    if upstream_evidence is None:
+        blocking.append("runtime_evidence_missing")
+    else:
+        runtime_evidence_verified, runtime_observed_sha = _verify_runtime_evidence(
+            upstream_evidence, source_sha
+        )
+        if not runtime_evidence_verified:
+            blocking.append("runtime_evidence_contract_failed")
+
     return SentinelResult(
         contract="post-merge-runtime-smoke-sentinel",
         generated_at=_utc_now(),
@@ -231,6 +302,8 @@ def evaluate_event(
         main_sha=main_sha,
         source_event=str(source_event) if source_event is not None else None,
         required_steps_verified=verified_steps,
+        runtime_evidence_verified=runtime_evidence_verified,
+        runtime_observed_sha=runtime_observed_sha,
     )
 
 
@@ -247,6 +320,8 @@ def render_summary(result: SentinelResult) -> str:
         f"- Source SHA: `{result.source_sha}`",
         f"- Current main SHA: `{result.main_sha}`",
         f"- Required steps actually executed: `{result.required_steps_verified}`",
+        f"- Runtime evidence verified: `{result.runtime_evidence_verified}`",
+        f"- Observed runtime SHA: `{result.runtime_observed_sha}`",
         f"- Expected artifact: `{result.expected_artifact}`",
         f"- Artifacts: `{', '.join(result.artifacts) if result.artifacts else 'none'}`",
         "",
@@ -262,6 +337,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--event-path", default=os.environ.get("GITHUB_EVENT_PATH", ""))
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--output-dir", default="artifacts/post-merge-runtime-smoke-sentinel")
+    parser.add_argument("--upstream-evidence-dir", default="artifacts/upstream-public-dev")
     return parser.parse_args()
 
 
@@ -275,7 +351,10 @@ def main() -> int:
         print("--repo or GITHUB_REPOSITORY is required", file=sys.stderr)
         return 2
     event = _load_json(Path(args.event_path))
-    result = evaluate_event(event, repo=args.repo, token=token)
+    runtime_evidence = _load_runtime_evidence(Path(args.upstream_evidence_dir))
+    result = evaluate_event(
+        event, repo=args.repo, token=token, upstream_evidence=runtime_evidence
+    )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "post-merge-runtime-smoke-sentinel.json").write_text(
