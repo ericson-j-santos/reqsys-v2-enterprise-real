@@ -66,7 +66,7 @@ def test_secret_stage_runs_only_after_arm_cost_preflight():
     assert "set -euo pipefail" in text
     assert "az keyvault secret set" not in text
     assert "az role assignment create" not in text
-    assert "docker" not in text.lower().split("      - name: Publicar status")[0]
+    assert "docker" not in text.lower().split("      - name: publicar status")[0]
     assert "deploy " not in text.split("      - name: Publicar status")[0]
 
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """DEV-only Azure spending-limit gate and narrow TODO producer secret recovery.
 
-Only callable after the fixed owner issue #1705 command was checked by the
-Authorized Actions Gateway and dispatched to the canonical workflow on main.
+Only callable after the owner command is authenticated by the existing Actions
+Gateway and re-verified from the GitHub issue-comment API on the main branch.
 No secret values, raw CLI responses, credentials or token URLs are logged.
 """
 from __future__ import annotations
@@ -14,15 +14,18 @@ import re
 import secrets
 import stat
 import subprocess
-import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 OWNER = "ericson-j-santos"
-ISSUE_NUMBER = 2973
-COMMAND = "/reqsys recover-todo-producer-keyvault-dev"
+AUTHORIZATION_ISSUE = 1705
+COMMAND = "/reqsys run todo-producer-keyvault-dev"
+OPERATION = "producer-credit-gated"
+DISPATCH_ACTOR = "github-actions[bot]"
 VAULT = "kv-reqsys-ccp"
 RESOURCE_GROUP = "rg-reqsys-ccp"
 SECRET = "reqsys-pc24x7-todo-runtime-producer-token"
@@ -43,18 +46,20 @@ def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
     """Re-attest immutable action context in both phases; never trust CLI inputs."""
     require(env.get("GITHUB_ACTIONS") == "true"
             and env.get("GITHUB_REPOSITORY") == REPOSITORY
-            and env.get("GITHUB_EVENT_NAME") == "issue_comment"
+            and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+            and env.get("GITHUB_ACTOR") == DISPATCH_ACTOR
             and env.get("GITHUB_REF") == "refs/heads/main"
             and SHA.fullmatch(env.get("GITHUB_SHA", "")) is not None
             and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None,
             "github_context_invalid")
+    inputs = event.get("inputs") or {}
+    comment_id = inputs.get("authorization_comment_id")
     require(isinstance(event, dict)
             and event.get("repository", {}).get("full_name") == REPOSITORY
-            and event.get("issue", {}).get("number") == ISSUE_NUMBER
-            and event.get("issue", {}).get("pull_request") is None
-            and event.get("comment", {}).get("body") == COMMAND
-            and event.get("comment", {}).get("user", {}).get("login") == OWNER
-            and event.get("sender", {}).get("login") == OWNER,
+            and event.get("sender", {}).get("login") == DISPATCH_ACTOR
+            and inputs.get("operation") == OPERATION
+            and isinstance(comment_id, str)
+            and re.fullmatch(r"[1-9][0-9]{0,19}", comment_id) is not None,
             "github_authorization_invalid")
     subscription = env.get("CCP_AZURE_SUBSCRIPTION_ID", "")
     tenant = env.get("CCP_AZURE_TENANT_ID", "")
@@ -63,8 +68,49 @@ def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
             and env.get("REQSYS_KEY_VAULT_NAME") == VAULT,
             "dev_scope_configuration_invalid")
     return {"subscription": subscription.lower(), "tenant": tenant.lower(),
-            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"]}
+            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"],
+            "authorization_comment_id": comment_id}
 
+
+
+def validate_comment_record(value: dict, comment_id: str, now: datetime) -> None:
+    """Validate authoritative owner comment, not user supplied dispatch inputs."""
+    expected_issue = f"https://api.github.com/repos/{REPOSITORY}/issues/{AUTHORIZATION_ISSUE}"
+    require(isinstance(value, dict)
+            and str(value.get("id")) == comment_id
+            and value.get("issue_url") == expected_issue
+            and value.get("user", {}).get("login") == OWNER
+            and value.get("body") == COMMAND, "owner_comment_mismatch")
+    try:
+        created = datetime.fromisoformat(value["created_at"].replace("Z", "+00:00"))
+        age = (now - created).total_seconds()
+    except (TypeError, ValueError, KeyError):
+        raise Blocked("owner_comment_time_invalid") from None
+    require(created.tzinfo is not None and -60 <= age <= 5400,
+            "owner_comment_expired")
+
+
+def verify_owner_comment(ctx: dict[str, str], env: dict[str, str]) -> None:
+    """Read one exact GitHub issue comment with a read-only token; never print it."""
+    token = env.get("GH_TOKEN", "")
+    require(20 < len(token) < 16384 and not any(ch in token for ch in "\r\n"),
+            "github_read_token_unavailable")
+    url = ("https://api.github.com/repos/" + REPOSITORY
+           + "/issues/comments/" + ctx["authorization_comment_id"])
+    request = Request(url, headers={
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ReqSysTodoProducerCreditGate/1.0",
+    })
+    try:
+        with urlopen(request, timeout=12) as response:
+            data = response.read(32769)
+        require(len(data) <= 32768, "github_comment_response_invalid")
+        item = json.loads(data)
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        raise Blocked("github_owner_comment_read_unavailable") from None
+    validate_comment_record(item, ctx["authorization_comment_id"],
+                            datetime.now(timezone.utc))
 
 def cli(arguments: list[str]) -> tuple[int, str, str]:
     """Bounded non-shell Azure CLI call. Keep stdout and stderr private."""
@@ -281,6 +327,7 @@ def main() -> int:
         require(context_file.stat().st_size <= 262144, "github_event_too_large")
         event = json.loads(context_file.read_text(encoding="utf-8"))
         ctx = validate_context(os.environ, event)
+        verify_owner_comment(ctx, os.environ)
         path = receipt_path(args.receipt, os.environ)
         if args.phase == "cost":
             proof = cost_preflight(ctx)

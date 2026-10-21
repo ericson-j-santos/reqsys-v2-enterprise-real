@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "15 */6 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Deploy ReqSys Pages Composite
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -16,6 +21,9 @@ concurrency:
 jobs:
   monitor:
     name: Validar dashboard público
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -150,6 +158,7 @@ jobs:
         run: |
           existing=$(gh issue list --repo "${{ github.repository }}" --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
           body=$(cat <<EOF
+          <!-- reqsys-operational-panel -->
           ## Dashboard GitHub → Teams indisponível
 
           - URL: ${DASHBOARD_URL}
@@ -159,11 +168,12 @@ jobs:
           - Falhas detectadas: **${{ steps.health.outputs.error_count }}**
           - Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          A issue será fechada automaticamente quando o dashboard voltar a atender ao contrato.
+          Painel operacional mantido por automação. A issue será fechada automaticamente quando o dashboard voltar a atender ao contrato.
           EOF
           )
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --repo "${{ github.repository }}" --body "$body"
+            gh issue edit "$existing" --repo "${{ github.repository }}" --body "$body"
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body "Estado operacional atualizado. Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           else
             gh issue create --repo "${{ github.repository }}" --title "${INCIDENT_TITLE}" --body "$body" --label incident
           fi
