@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "OCR Local Fallback Parity",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Preserva backend/ocr_evidencia como fallback DEV/offline, mas exige paridade executável com o ocr-evidence-engine pinado e mantém produção obrigatoriamente no wheel externo.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ocr_local_fallback_parity.py",
+      "tests/test_ocr_external_package_workflow.py",
+      "tests/test_ocr_external_runtime_package.py",
+      "backend/ocr_tests/test_worker.py"
+    ],
+    "evidence_contract": "No mesmo HEAD, um checkout real do engine no SHA do lock deve provar conjunto Python equivalente, byte-identidade dos módulos executáveis, contrato semântico do __init__, proveniência comum e detecção negativa de drift; os contratos de pacote externo e imagem externa permanecem obrigatórios."
+  },
+  "traceability": {
+    "implementation": "scripts/validate_ocr_local_fallback_parity.py",
+    "local_snapshot": "backend/ocr_evidencia",
+    "lock": "config/ocr-engine-lock.json",
+    "action": ".github/actions/prepare-ocr-runtime/action.yml",
+    "workflow": ".github/workflows/ocr-benchmark.yml"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "cost_additional_brl": 0
+  }
+}
