@@ -50,6 +50,7 @@ jobs:
       PROVISIONAL_DAYS: "7"
       MIN_RUNS: "20"
       DELIVERY_WORKFLOW: teams-commit-notification.yml
+      DELIVERY_EVENTS: "push,workflow_run"
       MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
       STATUS_ISSUE_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"
     steps:
@@ -99,7 +100,11 @@ jobs:
           now = datetime.now(timezone.utc)
           cutoff = now - timedelta(days=window_days)
 
-          def workflow_runs(filename: str, newest_first: bool = True) -> list[dict]:
+          def workflow_runs(
+              filename: str,
+              newest_first: bool = True,
+              allowed_events: set[str] | None = None,
+          ) -> list[dict]:
               completed = subprocess.run(
                   [
                       "gh", "api", "--paginate", "-q", ".workflow_runs[]",
@@ -117,8 +122,11 @@ jobs:
                       continue
                   run = json.loads(document)
                   created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                  if created >= cutoff and run.get("status") == "completed":
-                      runs.append(run)
+                  if created < cutoff or run.get("status") != "completed":
+                      continue
+                  if allowed_events is not None and run.get("event") not in allowed_events:
+                      continue
+                  runs.append(run)
               runs.sort(key=lambda item: item["created_at"], reverse=newest_first)
               return runs
 
@@ -143,9 +151,25 @@ jobs:
                   "first_run_at": first_run_at,
               }
 
-          delivery_runs = workflow_runs(os.environ["DELIVERY_WORKFLOW"])
+          delivery_events = {
+              value.strip()
+              for value in os.environ["DELIVERY_EVENTS"].split(",")
+              if value.strip()
+          }
+          if delivery_events != {"push", "workflow_run"}:
+              raise SystemExit(f"eventos de entrega inesperados: {sorted(delivery_events)}")
+
+          delivery_runs = workflow_runs(
+              os.environ["DELIVERY_WORKFLOW"],
+              allowed_events=delivery_events,
+          )
+          locator_watch_runs = workflow_runs(
+              os.environ["DELIVERY_WORKFLOW"],
+              allowed_events={"schedule"},
+          )
           monitor_runs = workflow_runs(os.environ["MONITOR_WORKFLOW"])
           delivery = metrics(delivery_runs)
+          locator_watch = metrics(locator_watch_runs)
           monitor = metrics(monitor_runs)
 
           allowed_failures = math.floor(delivery["total"] * (100.0 - target) / 100.0)
@@ -164,6 +188,12 @@ jobs:
               if run.get("conclusion") == "success":
                   break
               consecutive_failures += 1
+
+          locator_watch_consecutive_failures = 0
+          for run in locator_watch_runs:
+              if run.get("conclusion") == "success":
+                  break
+              locator_watch_consecutive_failures += 1
 
           state = "insufficient_data" if delivery["total"] == 0 else ("healthy" if delivery["success_rate_percent"] >= target else "breached")
           observed_days = min(delivery["observed_days"], monitor["observed_days"])
@@ -259,10 +289,28 @@ jobs:
               "remaining_error_budget": remaining_budget,
               "consecutive_failures": consecutive_failures,
               "mean_duration_seconds": mean_duration,
+              "delivery_event_filter": sorted(delivery_events),
+              "locator_watch": {
+                  "total_runs": locator_watch["total"],
+                  "successful_runs": locator_watch["successes"],
+                  "failed_runs": locator_watch["failures"],
+                  "success_rate_percent": locator_watch["success_rate_percent"],
+                  "consecutive_failures": locator_watch_consecutive_failures,
+              },
               "certification": certification_payload,
               "recent_runs": [
                   {"id": run.get("id"), "event": run.get("event"), "conclusion": run.get("conclusion"), "created_at": run.get("created_at"), "html_url": run.get("html_url")}
                   for run in delivery_runs[:20]
+              ],
+              "recent_locator_watch_runs": [
+                  {
+                      "id": run.get("id"),
+                      "event": run.get("event"),
+                      "conclusion": run.get("conclusion"),
+                      "created_at": run.get("created_at"),
+                      "html_url": run.get("html_url"),
+                  }
+                  for run in locator_watch_runs[:20]
               ],
           }
 
@@ -276,7 +324,11 @@ jobs:
 
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write("### Teams Notification Dashboard\n")
-              summary.write(f"- SLO: **{delivery['success_rate_percent']:.2f}%**\n")
+              summary.write(f"- SLO de entrega: **{delivery['success_rate_percent']:.2f}%**\n")
+              summary.write(
+                  f"- Watchdog locator: **{locator_watch['success_rate_percent']:.2f}%** "
+                  f"({locator_watch['successes']}/{locator_watch['total']})\n"
+              )
               summary.write(f"- Certificação: **{certification_state}**\n")
               summary.write(f"- Observação: **{observed_days:.2f}/{window_days} dias**\n")
               summary.write(f"- Bloqueios: **{len(blockers)}**\n")
