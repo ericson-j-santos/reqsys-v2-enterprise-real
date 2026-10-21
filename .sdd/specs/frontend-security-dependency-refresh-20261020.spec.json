@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Frontend Security Dependency Refresh",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_frontend_security_dependencies.py"
+    ],
+    "evidence_contract": "Atualização mínima de Vite/follow-redirects com lockfile coerente; npm audit high e build reais permanecem gates obrigatórios."
+  },
+  "traceability": {
+    "package_json": "frontend/package.json",
+    "lockfile": "frontend/package-lock.json",
+    "pull_request": "#2991"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}
