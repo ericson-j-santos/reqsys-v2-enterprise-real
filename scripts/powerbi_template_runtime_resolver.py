@@ -54,6 +54,7 @@ TEMPLATE_ALIASES = {
 
 SENTINEL = {
     "template_id": "dre",
+    "dataset_name": "ReqSys DRE Sentinel DEV",
     "measure_table": "_Medidas",
     "measure_name": "Meta",
     "dax_expression": "0",
@@ -116,6 +117,11 @@ def _normalize_name(value: object) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
+def _is_sentinel_name(value: object) -> bool:
+    """Modelo tecnico nao constitui vinculo de template de negocio."""
+    return "sentinel" in _normalize_name(value).split()
+
+
 _NORMALIZED_ALIASES = {
     template_id: frozenset(_normalize_name(alias) for alias in aliases)
     for template_id, aliases in TEMPLATE_ALIASES.items()
@@ -136,7 +142,7 @@ _DOMAIN_SIGNATURES = {
 
 
 def _matching_templates(normalized: str) -> list[tuple[str, str]]:
-    if not normalized:
+    if not normalized or _is_sentinel_name(normalized):
         return []
     exact = [
         (template_id, "name_exact")
@@ -297,11 +303,19 @@ def _resolve_candidates(
             for item in datasets or []
             if (dataset_id := _valid_guid(item.get("id"))) is not None
         }
+        sentinel_dataset_ids = {
+            dataset_id
+            for item in datasets or []
+            if _is_sentinel_name(item.get("name"))
+            if (dataset_id := _valid_guid(item.get("id"))) is not None
+        }
         for report in reports or []:
             report_id = _valid_guid(report.get("id"))
             dataset_id = _valid_guid(report.get("datasetId"))
             normalized = _normalize_name(report.get("name"))
             if report_id is None or dataset_id is None:
+                continue
+            if _is_sentinel_name(report.get("name")) or dataset_id in sentinel_dataset_ids:
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:
@@ -326,7 +340,7 @@ def _resolve_candidates(
         for dataset in datasets or []:
             dataset_id = _valid_guid(dataset.get("id"))
             normalized = _normalize_name(dataset.get("name"))
-            if dataset_id is None:
+            if dataset_id is None or _is_sentinel_name(dataset.get("name")):
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:
@@ -378,6 +392,30 @@ def _resolve_candidates(
     return sanitized, raw_bindings
 
 
+def _find_sentinel_binding(
+    inventory: list[tuple[str, list[dict[str, Any]] | None, list[dict[str, Any]] | None]]
+) -> tuple[dict[str, str] | None, str]:
+    """Descobre exclusivamente o sentinela tecnico, sem promocao de negocio."""
+    expected = _normalize_name(SENTINEL["dataset_name"])
+    candidates: dict[tuple[str, str], dict[str, str]] = {}
+    for workspace_id, _reports, datasets in inventory:
+        for dataset in datasets or []:
+            if _normalize_name(dataset.get("name")) != expected:
+                continue
+            model_id = _valid_guid(dataset.get("id"))
+            if model_id is None:
+                return None, "sentinel_binding_invalid"
+            candidates[(workspace_id, model_id)] = {
+                "workspace_id": workspace_id,
+                "dataset_id": model_id,
+            }
+    if len(candidates) != 1:
+        return None, (
+            "sentinel_binding_ambiguous" if candidates else "sentinel_binding_unresolved"
+        )
+    return next(iter(candidates.values())), ""
+
+
 def _extract_single_value(payload: dict[str, Any]) -> Any:
     try:
         result = payload["results"][0]
@@ -410,10 +448,11 @@ def _extract_single_value(payload: dict[str, Any]) -> Any:
 def _run_sentinel(
     requester: Requester,
     token: str,
-    raw_bindings: dict[str, dict[str, str]],
+    sentinel_binding: dict[str, str] | None,
+    sentinel_blocker: str,
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    binding = raw_bindings.get(SENTINEL["template_id"])
+    binding = sentinel_binding
     base = {
         "template_id": SENTINEL["template_id"],
         "measure_table": SENTINEL["measure_table"],
@@ -426,7 +465,7 @@ def _run_sentinel(
         "promotes_metric_parity": False,
     }
     if not binding:
-        return {**base, "status": "blocked", "blocker": "dre_binding_unresolved"}
+        return {**base, "status": "blocked", "blocker": sentinel_blocker}
     url = (
         f"{POWERBI_BASE}/groups/{binding['workspace_id']}"
         f"/datasets/{binding['dataset_id']}/executeQueries"
@@ -656,8 +695,9 @@ def resolve_runtime(
         dataset_count += len(datasets or [])
         inventory.append((workspace_id, reports, datasets))
 
-    bindings, raw_bindings = _resolve_candidates(inventory)
-    sentinel = _run_sentinel(requester, token, raw_bindings, events)
+    bindings, _business_bindings = _resolve_candidates(inventory)
+    sentinel_binding, sentinel_blocker = _find_sentinel_binding(inventory)
+    sentinel = _run_sentinel(requester, token, sentinel_binding, sentinel_blocker, events)
     status_counts = Counter(item["status"] for item in bindings)
     return {
         "schema": "reqsys/powerbi-template-runtime-resolver/v1",

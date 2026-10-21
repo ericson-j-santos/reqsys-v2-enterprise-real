@@ -65,10 +65,14 @@ class FakeFabricRequester:
 class FakeRequester:
     def __init__(
         self, *, dre=True, ambiguous=False, execute_status=200, execute_value=0,
-        principal_role="Contributor", dedicated=False, read_only=False
+        principal_role="Contributor", dedicated=False, read_only=False,
+        sentinel=True, sentinel_report_alias=False, sentinel_ambiguous=False
     ):
         self.calls = []
         self.dre = dre
+        self.sentinel = sentinel
+        self.sentinel_report_alias = sentinel_report_alias
+        self.sentinel_ambiguous = sentinel_ambiguous
         self.ambiguous = ambiguous
         self.execute_status = execute_status
         self.execute_value = execute_value
@@ -99,6 +103,12 @@ class FakeRequester:
                     "name": "DRE",
                     "datasetId": "55555555-5555-5555-5555-555555555555",
                 })
+            if self.sentinel:
+                values.append({
+                    "id": "77777777-7777-7777-7777-777777777777",
+                    "name": "Dashboard DRE" if self.sentinel_report_alias else SENTINEL["dataset_name"],
+                    "datasetId": "66666666-6666-6666-6666-666666666666",
+                })
             return 200, {"value": values}
         if url.endswith("/users"):
             values = []
@@ -121,6 +131,16 @@ class FakeRequester:
                 values.append({
                     "id": "55555555-5555-5555-5555-555555555555",
                     "name": "Dashboard DRE",
+                })
+            if self.sentinel:
+                values.append({
+                    "id": "66666666-6666-6666-6666-666666666666",
+                    "name": SENTINEL["dataset_name"],
+                })
+            if self.sentinel_ambiguous:
+                values.append({
+                    "id": "88888888-8888-8888-8888-888888888888",
+                    "name": SENTINEL["dataset_name"],
                 })
             return 200, {"value": values}
         if url.endswith("/executeQueries"):
@@ -255,8 +275,40 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         dre = next(item for item in result["bindings"] if item["template_id"] == "dre")
         self.assertEqual(dre["status"], "ambiguous")
         self.assertEqual(dre["candidate_count"], 2)
+        self.assertEqual(result["sentinel_parity"]["status"], "passed")
+        self.assertFalse(result["sentinel_parity"]["promotes_metric_parity"])
+        self.assertEqual(sum(url.endswith("/executeQueries") for _, url, _ in fake.calls), 1)
+
+    def test_sentinel_isolado_nao_se_torna_dashboard_dre(self):
+        fake = FakeRequester(dre=False)
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "unmatched")
+        self.assertEqual(result["sentinel_parity"]["status"], "passed")
+        self.assertFalse(result["metric_parity_promoted"])
+        self.assertEqual(result["binding_summary"].get("resolved", 0), 0)
+
+    def test_report_com_alias_dre_e_dataset_sentinela_nao_se_torna_negocio(self):
+        fake = FakeRequester(dre=False, sentinel_report_alias=True)
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "unmatched")
+        self.assertEqual(result["sentinel_parity"]["status"], "passed")
+
+    def test_dre_de_negocio_nao_recebe_query_do_sentinela_ausente(self):
+        fake = FakeRequester(sentinel=False)
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "resolved")
         self.assertEqual(result["sentinel_parity"]["status"], "blocked")
-        self.assertEqual(result["sentinel_parity"]["blocker"], "dre_binding_unresolved")
+        self.assertEqual(result["sentinel_parity"]["blocker"], "sentinel_binding_unresolved")
+        self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
+
+    def test_sentinela_duplicado_bloqueia_consulta_sem_efeito(self):
+        fake = FakeRequester(sentinel_ambiguous=True)
+        result = resolve_runtime(token="x", requester=fake)
+        self.assertEqual(result["sentinel_parity"]["status"], "blocked")
+        self.assertEqual(result["sentinel_parity"]["blocker"], "sentinel_binding_ambiguous")
         self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
 
     def test_execute_queries_403_fica_bloqueado_sem_corpo_remoto(self):
