@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "todo-producer-keyvault-credit-gate",
+  "increment_type": "fix",
+  "approvals": {
+    "requirements": true
+  },
+  "phase": "implementation",
+  "scope": "github-hosted-oidc-keyvault-producer-dev-only",
+  "files": [
+    ".github/workflows/todo-producer-keyvault-credit-gate.yml",
+    "scripts/todo_producer_keyvault_credit_gate.py",
+    "tests/test_todo_producer_keyvault_credit_gate.py",
+    "tests/test_todo_producer_keyvault_credit_gate_workflow.py",
+    ".sdd/specs/todo-producer-keyvault-credit-gate.requirements.md",
+    ".sdd/specs/todo-producer-keyvault-credit-gate.spec.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_todo_producer_keyvault_credit_gate.py",
+      "tests/test_todo_producer_keyvault_credit_gate_workflow.py"
+    ],
+    "evidence_contract": "Precisely scoped owner issue comment on #2973 main; hosted OIDC DEV reads ARM subscription spendingLimit=On and existing vault first, no Key Vault data-plane when cost unknown. Secret-only recovery/provisioning uses preflight recheck, private 0600 token file, idempotent active/no mutation, deleted/recover, sanitized metadata readback. No Docker/deploy/prod/RBAC or product E2E claim."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": true,
+    "admin_permissions": false,
+    "scope": "only-dev-existing-keyvault-todo-producer-secret"
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/todo-producer-keyvault-credit-gate.requirements.md",
+    "workflow": ".github/workflows/todo-producer-keyvault-credit-gate.yml",
+    "tests": "tests/test_todo_producer_keyvault_credit_gate.py"
+  }
+}

@@ -1,0 +1,78 @@
+name: TODO Producer Key Vault Credit Gate — DEV
+
+# Only the exact owner's command on issue #2973 may run the secret-only lane.
+# A completed cost preflight is required before ANY Key Vault data-plane call.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: reqsys-todo-producer-keyvault-credit-gate-dev
+  cancel-in-progress: false
+
+jobs:
+  guarded-recovery:
+    name: Validar hard stop Azure e recuperar somente segredo produtor DEV
+    if: >-
+      github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.issue.number == 2973 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == 'ericson-j-santos' &&
+      github.event.sender.login == 'ericson-j-santos' &&
+      github.event.comment.body == '/reqsys recover-todo-producer-keyvault-dev'
+    runs-on: ubuntu-24.04
+    environment: development
+    timeout-minutes: 8
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      AZURE_CORE_OUTPUT: none
+    steps:
+      - name: Checkout do código auditado na main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Login Azure com OIDC restrito a DEV
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+      - name: Ler somente subscriptionPolicies.spendingLimit e identidade do cofre via ARM
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Zero Key Vault secret operations are permitted in this stage.
+          proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py cost --receipt "$proof"
+      - name: Recuperar ou provisionar somente a credencial de produtor DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Rechecks subscription spendingLimit before any billable metadata call.
+          # Does not run Docker, deploy, RBAC mutation, or print token/DSN.
+          proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py secret --receipt "$proof"
+      - name: Evidência de escopo e estado de produto
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## TODO Producer Key Vault — DEV'
+            echo "- GitHub run: $GITHUB_RUN_ID"
+            echo "- SHA: $GITHUB_SHA"
+            echo '- Custo: negar operação de segredo quando hard stop Azure não confirmado'
+            echo '- Credencial: somente recuperação/provisionamento idempotente em Key Vault DEV'
+            echo '- Binding ao runtime: não comprovado neste workflow'
+            echo '- Docker/deploy/produção/RBAC: não executados'
+            echo '- TODO-38: EM ANDAMENTO / E2E PARCIAL'
+          } >> "$GITHUB_STEP_SUMMARY"
