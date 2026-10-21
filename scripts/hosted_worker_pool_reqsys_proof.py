@@ -21,8 +21,8 @@ POOL_URL = "http://127.0.0.1:8097"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 WORKER_POOL_SHA = "5d8de580fea571404607aa80c7bd7637b4652db6"
 STARTUP_FAILURE_CODE = re.compile(
-    r"\\b(?:authority_[a-z0-9_]+(?::[a-z0-9_]+)?|"
-    r"postgres_driver_not_installed|worker_pool_backend_invalid)\\b"
+    r"\b(?:authority_[a-z0-9_]+(?::[a-z0-9_]+)?|"
+    r"postgres_driver_not_installed|worker_pool_backend_invalid)\b"
 )
 STARTUP_LOG_LIMIT = 131072
 
