@@ -171,11 +171,31 @@ def test_work_request_delegates_safe_branch_derivation_to_work_v1():
     )
 
     assert request["repository"] == proof.REPOSITORY
+    assert request["request_id"] == proof.base_bound_work_request_id(
+        "request-123", "a" * 40
+    )
+    assert request["request_id"] != "request-123"
     assert request["fencing_required"] is True
     assert request["merge_policy"] == "governed"
     assert "target_branch" not in request
     assert "main" not in request.values()
 
+
+
+def test_work_request_identity_is_stable_per_base_and_changes_across_bases():
+    first = proof.base_bound_work_request_id("gateway-request", "a" * 40)
+    replay = proof.base_bound_work_request_id("gateway-request", "a" * 40)
+    advanced = proof.base_bound_work_request_id("gateway-request", "b" * 40)
+
+    assert first == replay
+    assert first != advanced
+    assert first.startswith("reqsys-")
+    assert len(first) == 71
+
+
+def test_work_request_identity_rejects_invalid_base_sha():
+    with pytest.raises(proof.ProofError, match=r"^work_request_identity_invalid$"):
+        proof.base_bound_work_request_id("gateway-request", "main")
 
 
 def test_run_task_forwards_private_runtime_environment(tmp_path, monkeypatch):
