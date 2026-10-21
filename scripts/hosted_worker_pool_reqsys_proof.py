@@ -224,6 +224,21 @@ def lease_body(worker_id: str, claim: dict, correlation: str) -> dict:
     }
 
 
+def work_request(args: argparse.Namespace) -> dict:
+    """Build branch-first Work v1 input; the pool derives the safe task branch."""
+    return {
+        "repository": REPOSITORY,
+        "issue_number": args.issue_number,
+        "request_id": args.request_id,
+        "correlation_id": args.correlation_id,
+        "priority": 10,
+        "base_sha": args.base_sha,
+        "max_attempts": 2,
+        "merge_policy": "governed",
+        "fencing_required": True,
+    }
+
+
 def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
             reconciliation_token: str, private_dir: Path) -> dict:
     reqsys_root = args.reqsys_root.resolve()
@@ -274,18 +289,7 @@ def execute(args: argparse.Namespace, runtime_env: dict[str, str], token: str,
         negative_status, _ = request_json("GET", "/v1/contract", "invalid-token")
         require(negative_status == 401, "negative_auth_control_failed")
 
-        body = {
-            "repository": REPOSITORY,
-            "issue_number": args.issue_number,
-            "request_id": args.request_id,
-            "correlation_id": args.correlation_id,
-            "priority": 10,
-            "base_sha": args.base_sha,
-            "target_branch": "main",
-            "max_attempts": 2,
-            "merge_policy": "governed",
-            "fencing_required": True,
-        }
+        body = work_request(args)
         first_status, first = request_json("POST", "/v1/work", token, body)
         require(first_status in {200, 201} and isinstance(first.get("work"), dict),
                 "work_create_failed")
