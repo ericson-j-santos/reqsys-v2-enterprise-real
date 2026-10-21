@@ -77,6 +77,31 @@ def homologate(root: Path, correlation_id: str) -> dict[str, Any]:
                 errors.append("cards.workflow_efficiency ausente ou vazio")
             if not checks["contract_link_present"]:
                 errors.append("links.workflow_efficiency ausente ou vazio")
+            elif link != "data/ci-workflow-efficiency-dashboard.json":
+                errors.append("links.workflow_efficiency não aponta para o contrato canônico")
+            else:
+                source_path = root / link
+                checks["source_contract_exists"] = source_path.is_file()
+                if not source_path.is_file():
+                    errors.append(f"contrato Workflow Efficiency não empacotado: {source_path}")
+                else:
+                    source = load_json(source_path)
+                    checks["source_contract_sha256"] = sha256_file(source_path)
+                    sample = int((source.get("summary") or {}).get("pr_sample_count") or 0)
+                    actual_score = (source.get("executive_card") or {}).get("score_percent")
+                    checks["source_real_sample"] = source.get("source_available") is True and sample > 0
+                    checks["source_card_consistent"] = (
+                        card.get("available") is True
+                        and card.get("source_contract") == "ci-workflow-efficiency-dashboard"
+                        and card.get("mode") == source.get("mode") == "report_only"
+                        and card.get("pr_sample_count") == sample
+                        and actual_score is not None
+                        and card.get("score_percent") == actual_score
+                    )
+                    if not checks["source_real_sample"]:
+                        errors.append("Workflow Efficiency sem amostra real de PRs")
+                    if not checks["source_card_consistent"]:
+                        errors.append("card Workflow Efficiency diverge do contrato-fonte")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             errors.append(f"contrato inválido: {exc}")
 
