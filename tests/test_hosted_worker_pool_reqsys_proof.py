@@ -157,3 +157,93 @@ def test_materialize_explicit_system_root_rejects_unexpected_profile(tmp_path, m
             },
             tmp_path,
         )
+
+
+
+def test_work_request_delegates_safe_branch_derivation_to_work_v1():
+    request = proof.work_request(
+        proof.argparse.Namespace(
+            issue_number=2020,
+            request_id="request-123",
+            correlation_id="correlation-123",
+            base_sha="a" * 40,
+        )
+    )
+
+    assert request["repository"] == proof.REPOSITORY
+    assert request["request_id"] == proof.base_bound_work_request_id(
+        "request-123", "a" * 40
+    )
+    assert request["request_id"] != "request-123"
+    assert request["fencing_required"] is True
+    assert request["merge_policy"] == "governed"
+    assert "target_branch" not in request
+    assert "main" not in request.values()
+
+
+
+def test_work_request_identity_is_stable_per_base_and_changes_across_bases():
+    first = proof.base_bound_work_request_id("gateway-request", "a" * 40)
+    replay = proof.base_bound_work_request_id("gateway-request", "a" * 40)
+    advanced = proof.base_bound_work_request_id("gateway-request", "b" * 40)
+
+    assert first == replay
+    assert first != advanced
+    assert first.startswith("reqsys-")
+    assert len(first) == 71
+
+
+def test_work_request_identity_rejects_invalid_base_sha():
+    with pytest.raises(proof.ProofError, match=r"^work_request_identity_invalid$"):
+        proof.base_bound_work_request_id("gateway-request", "main")
+
+
+def test_run_task_forwards_private_runtime_environment(tmp_path, monkeypatch):
+    observed = {}
+    monkeypatch.setenv("AMBIENT_CONTEXT", "preserved")
+
+    class Completed:
+        returncode = 0
+        stdout = '{"result":"ok"}\n'
+
+    def fake_run(*_args, **kwargs):
+        observed.update(kwargs["env"])
+        return Completed()
+
+    monkeypatch.setattr(proof.subprocess, "run", fake_run)
+
+    result = proof.run_task(
+        tmp_path,
+        ["provider-readback"],
+        environment={"CODEX_WORKER_POOL_DATABASE_URL_FILE": "/private/runtime.url"},
+    )
+
+    assert result == {"result": "ok"}
+    assert observed["AMBIENT_CONTEXT"] == "preserved"
+    assert observed["CODEX_WORKER_POOL_DATABASE_URL_FILE"] == "/private/runtime.url"
+
+
+def test_existing_verified_work_requires_all_independent_controls():
+    work = {
+        "evidence": {
+            "state": "verified",
+            "validation_sha": "a" * 40,
+            "independent_readback": True,
+            "positive_control": True,
+            "negative_control": True,
+        },
+        "merge": {"state": "ready", "expected_head_sha": "a" * 40},
+    }
+
+    assert proof.existing_verified_work(work, "a" * 40) is True
+
+    work["evidence"]["independent_readback"] = False
+    with pytest.raises(proof.ProofError, match=r"^existing_work_evidence_invalid$"):
+        proof.existing_verified_work(work, "a" * 40)
+
+
+def test_pending_work_evidence_is_not_accepted_as_verified():
+    assert proof.existing_verified_work(
+        {"evidence": {"state": "pending"}, "merge": {"state": "pending"}},
+        "a" * 40,
+    ) is False

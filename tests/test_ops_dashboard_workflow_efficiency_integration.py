@@ -17,6 +17,11 @@ class OpsDashboardWorkflowEfficiencyIntegrationTests(unittest.TestCase):
             "python -m py_compile scripts/validate_workflow_efficiency_visual_card.py",
             "python scripts/inject_workflow_efficiency_visual_card.py",
             "python scripts/validate_workflow_efficiency_visual_card.py",
+            "python scripts/build_pr_workflow_run_metrics.py",
+            "python scripts/build_ci_workflow_pareto_recommendations.py",
+            "python scripts/build_ci_workflow_efficiency_dashboard.py",
+            "python scripts/enrich_reqsys_state_workflow_efficiency.py",
+            "python scripts/homologate_workflow_efficiency_artifact.py",
             "python3 scripts/validate_workflow_efficiency_visual_card.py",
             'test -f artifacts/ops-dashboard/data/runtime-executive-index.json',
             'test "$(grep -c \'id=\\"workflow-efficiency-visual-card\\"\' artifacts/ops-dashboard/index.html)" -eq 1',
@@ -41,6 +46,21 @@ class OpsDashboardWorkflowEfficiencyIntegrationTests(unittest.TestCase):
         injection = content.index("- name: Inject Workflow Efficiency visual card")
         packaging = content.index("- name: Prepare dashboard artifact")
         self.assertLess(injection, packaging)
+
+    def test_measured_source_and_homologation_precede_publication(self):
+        content = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100"', content)
+        self.assertIn("sem amostra real de PRs", content)
+        self.assertNotIn("Generate synthetic Pareto source", content)
+        collect = content.index("- name: Collect measured Workflow Efficiency and enrich canonical index")
+        injection = content.index("- name: Inject Workflow Efficiency visual card")
+        packaging = content.index("- name: Prepare dashboard artifact")
+        homologation = content.index("python scripts/homologate_workflow_efficiency_artifact.py")
+        publishing = content.index("- name: Publish ops dashboard artifact")
+        self.assertLess(collect, injection)
+        self.assertLess(injection, packaging)
+        self.assertLess(packaging, homologation)
+        self.assertLess(homologation, publishing)
 
     def test_parallel_workflow_was_removed(self):
         self.assertFalse(
