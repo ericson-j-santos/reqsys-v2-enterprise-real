@@ -102,7 +102,7 @@ def homologate(root: Path, correlation_id: str) -> dict[str, Any]:
                         errors.append("Workflow Efficiency sem amostra real de PRs")
                     if not checks["source_card_consistent"]:
                         errors.append("card Workflow Efficiency diverge do contrato-fonte")
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError) as exc:
             errors.append(f"contrato inválido: {exc}")
 
     status = "passed" if not errors else "failed"
