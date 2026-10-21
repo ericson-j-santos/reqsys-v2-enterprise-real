@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Teams Dashboard SLO Event Separation",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Separa SLO de entrega Teams dos runs de watchdog do locator, revalida dashboard após Pages e marca incidentes automáticos como painéis operacionais.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_teams_dashboard_slo_separation.py",
+      "tests/test_pc24x7_locator_watch_contract.py",
+      "tests/test_live_dashboard_post_merge_trigger.py",
+      "tests/test_validate_issue_governance.py"
+    ],
+    "evidence_contract": "No mesmo HEAD, o dashboard deve excluir schedule do SLO de entrega, preservar o watchdog fail-closed como métrica separada, o monitor deve reagir a Deploy ReqSys Pages Composite concluído com sucesso e o incidente automático deve usar reqsys-operational-panel."
+  },
+  "traceability": {
+    "delivery_workflow": ".github/workflows/teams-commit-notification.yml",
+    "dashboard_workflow": ".github/workflows/teams-notification-dashboard.yml",
+    "availability_workflow": ".github/workflows/teams-dashboard-availability-monitor.yml",
+    "issue_validator": "scripts/validate_issue_governance.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "cost_additional_brl": 0
+  }
+}
