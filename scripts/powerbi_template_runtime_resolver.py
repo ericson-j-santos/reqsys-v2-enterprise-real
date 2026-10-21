@@ -135,8 +135,14 @@ _DOMAIN_SIGNATURES = {
 }
 
 
+def _is_dre_sentinel_name(normalized: str) -> bool:
+    """Impede que o canário sintético participe do matching de negócio."""
+    tokens = frozenset(normalized.split())
+    return frozenset({"dre", "sentinel"}) <= tokens
+
+
 def _matching_templates(normalized: str) -> list[tuple[str, str]]:
-    if not normalized:
+    if not normalized or _is_dre_sentinel_name(normalized):
         return []
     exact = [
         (template_id, "name_exact")
@@ -297,11 +303,24 @@ def _resolve_candidates(
             for item in datasets or []
             if (dataset_id := _valid_guid(item.get("id"))) is not None
         }
+        # A exclusão por nome não basta: um relatório DRE pode apontar
+        # diretamente para o dataset do canário mesmo com outro título.
+        sentinel_dataset_ids = {
+            dataset_id
+            for item in datasets or []
+            if (dataset_id := _valid_guid(item.get("id"))) is not None
+            and _is_dre_sentinel_name(_normalize_name(item.get("name")))
+        }
         for report in reports or []:
             report_id = _valid_guid(report.get("id"))
             dataset_id = _valid_guid(report.get("datasetId"))
             normalized = _normalize_name(report.get("name"))
-            if report_id is None or dataset_id is None:
+            if (
+                report_id is None
+                or dataset_id is None
+                or dataset_id not in dataset_ids
+                or dataset_id in sentinel_dataset_ids
+            ):
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:
@@ -326,7 +345,7 @@ def _resolve_candidates(
         for dataset in datasets or []:
             dataset_id = _valid_guid(dataset.get("id"))
             normalized = _normalize_name(dataset.get("name"))
-            if dataset_id is None:
+            if dataset_id is None or dataset_id in sentinel_dataset_ids:
                 continue
             matches = _matching_templates(normalized)
             if len(matches) == 1:
@@ -407,13 +426,36 @@ def _extract_single_value(payload: dict[str, Any]) -> Any:
     raise ResolverError("execute_queries_response_invalid")
 
 
+def _resolve_sentinel_binding(
+    inventory: list[tuple[str, list[dict[str, Any]] | None, list[dict[str, Any]] | None]],
+) -> tuple[dict[str, str] | None, str | None]:
+    """Busca o canário por nome de dataset, sem confundi-lo com DRE empresarial."""
+    candidates: dict[tuple[str, str], dict[str, str]] = {}
+    for workspace_id, _, datasets in inventory:
+        for item in datasets or []:
+            dataset_id = _valid_guid(item.get("id"))
+            if (
+                dataset_id is not None
+                and _is_dre_sentinel_name(_normalize_name(item.get("name")))
+            ):
+                candidates[(workspace_id, dataset_id)] = {
+                    "workspace_id": workspace_id,
+                    "dataset_id": dataset_id,
+                }
+    if not candidates:
+        return None, "dre_sentinel_model_unavailable"
+    if len(candidates) != 1:
+        return None, "dre_sentinel_model_ambiguous"
+    return next(iter(candidates.values())), None
+
+
 def _run_sentinel(
     requester: Requester,
     token: str,
-    raw_bindings: dict[str, dict[str, str]],
+    sentinel_binding: dict[str, str] | None,
+    sentinel_blocker: str | None,
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    binding = raw_bindings.get(SENTINEL["template_id"])
     base = {
         "template_id": SENTINEL["template_id"],
         "measure_table": SENTINEL["measure_table"],
@@ -425,11 +467,15 @@ def _run_sentinel(
         "representative_business_metric": False,
         "promotes_metric_parity": False,
     }
-    if not binding:
-        return {**base, "status": "blocked", "blocker": "dre_binding_unresolved"}
+    if sentinel_binding is None:
+        return {
+            **base,
+            "status": "blocked",
+            "blocker": sentinel_blocker or "dre_sentinel_model_unavailable",
+        }
     url = (
-        f"{POWERBI_BASE}/groups/{binding['workspace_id']}"
-        f"/datasets/{binding['dataset_id']}/executeQueries"
+        f"{POWERBI_BASE}/groups/{sentinel_binding['workspace_id']}"
+        f"/datasets/{sentinel_binding['dataset_id']}/executeQueries"
     )
     status, payload = requester(
         "POST",
@@ -656,8 +702,11 @@ def resolve_runtime(
         dataset_count += len(datasets or [])
         inventory.append((workspace_id, reports, datasets))
 
-    bindings, raw_bindings = _resolve_candidates(inventory)
-    sentinel = _run_sentinel(requester, token, raw_bindings, events)
+    bindings, _ = _resolve_candidates(inventory)
+    sentinel_binding, sentinel_blocker = _resolve_sentinel_binding(inventory)
+    sentinel = _run_sentinel(
+        requester, token, sentinel_binding, sentinel_blocker, events
+    )
     status_counts = Counter(item["status"] for item in bindings)
     return {
         "schema": "reqsys/powerbi-template-runtime-resolver/v1",

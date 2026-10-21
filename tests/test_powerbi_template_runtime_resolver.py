@@ -65,7 +65,8 @@ class FakeFabricRequester:
 class FakeRequester:
     def __init__(
         self, *, dre=True, ambiguous=False, execute_status=200, execute_value=0,
-        principal_role="Contributor", dedicated=False, read_only=False
+        principal_role="Contributor", dedicated=False, read_only=False,
+        sentinel=False, sentinel_report_alias=False,
     ):
         self.calls = []
         self.dre = dre
@@ -75,6 +76,8 @@ class FakeRequester:
         self.principal_role = principal_role
         self.dedicated = dedicated
         self.read_only = read_only
+        self.sentinel = sentinel
+        self.sentinel_report_alias = sentinel_report_alias
 
     def __call__(self, method, url, token, payload):
         self.calls.append((method, url, payload))
@@ -92,6 +95,15 @@ class FakeRequester:
                     "id": "22222222-2222-2222-2222-222222222222",
                     "name": "1. Dashboard DRE",
                     "datasetId": "33333333-3333-3333-3333-333333333333",
+                })
+            if self.sentinel:
+                values.append({
+                    "id": "66666666-6666-6666-6666-666666666666",
+                    "name": (
+                        "1. Dashboard DRE" if self.sentinel_report_alias
+                        else "ReqSys DRE Sentinel DEV"
+                    ),
+                    "datasetId": "77777777-7777-7777-7777-777777777777",
                 })
             if self.ambiguous:
                 values.append({
@@ -116,6 +128,11 @@ class FakeRequester:
                 values.append({
                     "id": "33333333-3333-3333-3333-333333333333",
                     "name": "DRE",
+                })
+            if self.sentinel:
+                values.append({
+                    "id": "77777777-7777-7777-7777-777777777777",
+                    "name": "ReqSys DRE Sentinel DEV",
                 })
             if self.ambiguous:
                 values.append({
@@ -147,8 +164,54 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
                          [("producao", "domain_signature")])
         self.assertEqual(_matching_templates(_normalize_name("ReqSys Observabilidade")), [])
 
+    def test_sentinel_dre_nao_pode_casar_com_template_de_negocio(self):
+        self.assertEqual(
+            _matching_templates(_normalize_name("ReqSys DRE Sentinel DEV")), []
+        )
+
+    def test_sentinel_sozinho_nao_cria_binding_empresarial(self):
+        fake = FakeRequester(
+            dre=False, sentinel=True, sentinel_report_alias=True
+        )
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "unmatched")
+        self.assertEqual(result["inventory"]["semantic_model_count"], 1)
+        self.assertEqual(result["sentinel_parity"]["status"], "passed")
+        queries = [
+            url for _, url, _ in fake.calls if url.endswith("/executeQueries")
+        ]
+        self.assertEqual(len(queries), 1)
+        self.assertIn("/datasets/77777777-7777-7777-7777-777777777777/", queries[0])
+
+    def test_sem_sentinela_nao_consulta_dataset_empresarial(self):
+        fake = FakeRequester(dre=True, sentinel=False)
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "resolved")
+        self.assertEqual(
+            result["sentinel_parity"]["blocker"], "dre_sentinel_model_unavailable"
+        )
+        self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
+
+    def test_dre_real_com_sentinel_nao_fica_ambiguo(self):
+        fake = FakeRequester(
+            dre=True, sentinel=True, sentinel_report_alias=True
+        )
+        result = resolve_runtime(token="x", requester=fake)
+        dre = next(x for x in result["bindings"] if x["template_id"] == "dre")
+        self.assertEqual(dre["status"], "resolved")
+        self.assertEqual(result["binding_summary"], {"resolved": 1, "unmatched": 10})
+        query_urls = [
+            url for _, url, _ in fake.calls if url.endswith("/executeQueries")
+        ]
+        self.assertEqual(len(query_urls), 1)
+        self.assertIn("/datasets/77777777-7777-7777-7777-777777777777/", query_urls[0])
+        self.assertNotIn("33333333-3333-3333-3333-333333333333", query_urls[0])
+        self.assertFalse(result["metric_parity_promoted"])
+
     def test_resolve_dre_e_executa_sentinel_sem_persistir_ids_nomes(self):
-        fake = FakeRequester()
+        fake = FakeRequester(sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -256,11 +319,13 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertEqual(dre["status"], "ambiguous")
         self.assertEqual(dre["candidate_count"], 2)
         self.assertEqual(result["sentinel_parity"]["status"], "blocked")
-        self.assertEqual(result["sentinel_parity"]["blocker"], "dre_binding_unresolved")
+        self.assertEqual(
+            result["sentinel_parity"]["blocker"], "dre_sentinel_model_unavailable"
+        )
         self.assertFalse(any(url.endswith("/executeQueries") for _, url, _ in fake.calls))
 
     def test_execute_queries_403_fica_bloqueado_sem_corpo_remoto(self):
-        fake = FakeRequester(execute_status=403)
+        fake = FakeRequester(execute_status=403, sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -275,7 +340,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertNotIn("error", sentinel)
 
     def test_sentinel_detecta_divergencia_e_nao_promove_paridade(self):
-        fake = FakeRequester(execute_value=1)
+        fake = FakeRequester(execute_value=1, sentinel=True)
         result = resolve_runtime(
             token="x",
             principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
