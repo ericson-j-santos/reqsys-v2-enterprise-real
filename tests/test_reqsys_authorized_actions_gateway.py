@@ -402,26 +402,28 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     dispatch_section = content.split(
         "- name: Dispatch fixed workflow on main", maxsplit=1
     )[1].split("- name: Validate exact dispatched run evidence", maxsplit=1)[0]
+    pickup_section = content.split(
+        "- name: Validate self-hosted runner pickup", maxsplit=1
+    )[1].split("- name: Cancel self-hosted run without pickup", maxsplit=1)[0]
     assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in dispatch_section
 
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev'" in content
     assert "'/reqsys run codex-worker-pool-handoff-e2e-dev')" in content
     assert "target='codex-worker-pool-handoff.yml'" in content
-    assert "mode='work-e2e'" in content
+    assert "mode='hosted-dev-proof'" in content
     assert 'TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml"' in content
     assert "-f issue_number=2020" in content
     assert '-f request_id="$request_id"' in content
     assert "-f base_branch=main" in content
     assert '-f base_sha="$EXPECTED_SHA"' in content
     assert '-f correlation_id="$correlation_id"' in content
+    assert "-f execution_mode=hosted_dev_proof" in content
     assert 'os.environ["GITHUB_REPOSITORY"]+":2020:main"' in content
     assert 'correlation_id="work-v1-e2e-${GITHUB_RUN_ID}"' in content
-    assert "steps.route.outputs.target == 'codex-worker-pool-handoff.yml'" in content
-    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.route.outputs.target == 'codex-worker-pool-handoff.yml'" not in pickup_section
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
     assert "-f environment=prod" not in content
-
 
 def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
     content = _workflow()
