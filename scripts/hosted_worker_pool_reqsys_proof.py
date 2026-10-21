@@ -20,10 +20,31 @@ REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 POOL_URL = "http://127.0.0.1:8097"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 WORKER_POOL_SHA = "5d8de580fea571404607aa80c7bd7637b4652db6"
-STARTUP_FAILURE_CODE = re.compile(
-    r"\b(?:authority_[a-z0-9_]+(?::[a-z0-9_]+)?|"
-    r"postgres_driver_not_installed|worker_pool_backend_invalid)\b"
-)
+STARTUP_FAILURE_CODES = frozenset({
+    "postgres_driver_not_installed",
+    "worker_pool_backend_invalid",
+    "authority_credentials_acl_unverified",
+    "authority_credentials_file_invalid",
+    "authority_credentials_file_changed",
+    "authority_schema_invalid",
+    "authority_identity_invalid",
+    "authority_connection_invalid",
+    "authority_tls_identity_unverified",
+    "authority_identity_mismatch",
+    "authority_schema_version_mismatch",
+    "authority_schema_incomplete",
+    "authority_indexes_unverified",
+    "authority_fence_guards_unverified",
+    "authority_queue_order_unverified",
+    "authority_connection_unavailable:unsupported_startup",
+    "authority_connection_unavailable:channel_binding",
+    "authority_connection_unavailable:authentication",
+    "authority_connection_unavailable:dns",
+    "authority_connection_unavailable:timeout",
+    "authority_connection_unavailable:tls_certificate",
+    "authority_connection_unavailable:tls",
+    "authority_connection_unavailable:unknown",
+})
 STARTUP_LOG_LIMIT = 131072
 
 
@@ -93,10 +114,11 @@ def startup_failure_reason(log_path: Path) -> str:
             payload = stream.read(STARTUP_LOG_LIMIT)
     except OSError:
         return "worker_pool_process_exited"
-    matches = STARTUP_FAILURE_CODE.findall(payload.decode("utf-8", errors="ignore").lower())
+    text = payload.decode("utf-8", errors="ignore").lower()
+    matches = [(text.rfind(code), code) for code in STARTUP_FAILURE_CODES if code in text]
     if not matches:
         return "worker_pool_process_exited"
-    return "worker_pool_startup_" + matches[-1].replace(":", "_")
+    return "worker_pool_startup_" + max(matches)[1].replace(":", "_")
 
 
 def wait_ready(token: str, process: subprocess.Popen, log_path: Path) -> dict:
