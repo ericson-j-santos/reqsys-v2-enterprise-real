@@ -18,8 +18,9 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 EXPECTED_TENANT = "6d09c88c-0617-490c-8329-305e577684bc"
 POWERBI_RESOURCE = "https://analysis.windows.net/powerbi/api"
@@ -667,7 +668,52 @@ def resolve_runtime(
             )
             else "unobserved"
         )
-        effective_role = fabric_filter_role or fabric_role or role
+        powerbi_role_status = (
+            "observed"
+            if len(principal_roles) == 1
+            else "not_found"
+            if users is not None and not principal_roles
+            else "ambiguous"
+            if len(principal_roles) > 1
+            else "unobserved"
+        )
+        observed_roles = [
+            candidate_role
+            for candidate_role, candidate_status in (
+                (role, powerbi_role_status),
+                (fabric_role, fabric_role_status),
+                (fabric_filter_role, fabric_filter_role_status),
+            )
+            if candidate_status == "observed" and candidate_role is not None
+        ]
+        observed_fabric_role = (
+            fabric_role_status == "observed"
+            or fabric_filter_role_status == "observed"
+        )
+        role_sources_ambiguous = any(
+            status in {"ambiguous", "invalid_contract"}
+            for status in (
+                powerbi_role_status,
+                fabric_role_status,
+                fabric_filter_role_status,
+            )
+        )
+        distinct_roles = set(observed_roles)
+        if fabric_token and not observed_fabric_role:
+            effective_role = None
+            role_evidence_status = "fabric_unverified"
+        elif role_sources_ambiguous:
+            effective_role = None
+            role_evidence_status = "ambiguous"
+        elif len(distinct_roles) > 1:
+            effective_role = None
+            role_evidence_status = "conflicting"
+        elif len(distinct_roles) == 1:
+            effective_role = next(iter(distinct_roles))
+            role_evidence_status = "observed"
+        else:
+            effective_role = None
+            role_evidence_status = "unobserved"
         workspace_access.append({
             "workspace_ref": _ref(workspace_id),
             "is_read_only": is_read_only,
@@ -678,15 +724,7 @@ def resolve_runtime(
                 if group.get("defaultDatasetStorageFormat") in {"Small", "Large"} else None
             ),
             "powerbi_principal_role": role,
-            "powerbi_principal_role_status": (
-                "observed"
-                if len(principal_roles) == 1
-                else "not_found"
-                if users is not None and not principal_roles
-                else "ambiguous"
-                if len(principal_roles) > 1
-                else "unobserved"
-            ),
+            "powerbi_principal_role_status": powerbi_role_status,
             "fabric_principal_role": fabric_role,
             "fabric_principal_role_status": fabric_role_status,
             "fabric_role_assignments_status": fabric_role_assignments_status,
@@ -694,6 +732,7 @@ def resolve_runtime(
             "fabric_role_filter_status": fabric_filter_role_status,
             "fabric_role_filter_http": dict(fabric_role_filter_status),
             "effective_write_role": effective_role,
+            "role_evidence_status": role_evidence_status,
             "write_candidate": (
                 effective_role in {"Admin", "Member", "Contributor"} and is_read_only is False
             ),
