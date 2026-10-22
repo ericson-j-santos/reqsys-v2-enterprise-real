@@ -259,6 +259,11 @@ def _prove_public_overlay_from_siblings(
             raise RecreateError("public_runtime_recovery_identity_not_proven")
 
 
+def _require_public_runtime_host() -> None:
+    if os.name != "nt" or socket.gethostname().casefold() != EXPECTED_HOST.casefold():
+        raise RecreateError("public_runtime_host_not_allowed")
+
+
 def validate_local_docker(
     container: str,
     *,
@@ -266,8 +271,7 @@ def validate_local_docker(
     public_override: Path,
     admin_override: Path | None = None,
 ) -> None:
-    if os.name != "nt" or socket.gethostname().casefold() != EXPECTED_HOST.casefold():
-        raise RecreateError("public_runtime_host_not_allowed")
+    _require_public_runtime_host()
     if os.environ.get("DOCKER_HOST") or os.environ.get("DOCKER_CONTEXT"):
         raise RecreateError("docker_environment_override_blocked")
     endpoint_raw = run(
