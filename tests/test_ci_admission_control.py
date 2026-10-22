@@ -23,6 +23,7 @@ def load_module(name: str, path: Path):
 
 manifest = load_module("ci_admission_manifest", MANIFEST_SCRIPT)
 guard = load_module("ci_admission_guard", GUARD_SCRIPT)
+PR_NUMBER = 3050
 
 
 def readiness(*, status: str = "passed", blockers: list[str] | None = None, profiles: list[str] | None = None):
@@ -81,11 +82,13 @@ def test_manifest_rejects_evidence_from_another_sha() -> None:
 def test_guard_accepts_only_successful_pre_pr_on_exact_sha() -> None:
     head = "a" * 40
     runs = [
-        {"id": 1, "name": "Pre-PR Readiness Gate", "head_sha": "b" * 40, "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:00:00Z"},
-        {"id": 2, "name": "Pre-PR Readiness Gate", "head_sha": head, "status": "completed", "conclusion": "failure", "updated_at": "2026-09-22T10:01:00Z"},
-        {"id": 3, "name": "Pre-PR Readiness Gate", "head_sha": head, "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:02:00Z"},
+        {"id": 1, "name": "Pre-PR Readiness Gate", "head_sha": "b" * 40, "event": "pull_request", "pull_requests": [{"number": PR_NUMBER}], "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:00:00Z"},
+        {"id": 2, "name": "Pre-PR Readiness Gate", "head_sha": head, "event": "pull_request", "pull_requests": [{"number": PR_NUMBER}], "status": "completed", "conclusion": "failure", "updated_at": "2026-09-22T10:01:00Z"},
+        {"id": 3, "name": "Pre-PR Readiness Gate", "head_sha": head, "event": "pull_request", "pull_requests": [{"number": PR_NUMBER}], "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:02:00Z"},
+        {"id": 4, "name": "Pre-PR Readiness Gate", "head_sha": head, "event": "push", "pull_requests": [{"number": PR_NUMBER}], "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:03:00Z"},
+        {"id": 5, "name": "Pre-PR Readiness Gate", "head_sha": head, "event": "pull_request", "pull_requests": [{"number": PR_NUMBER + 1}], "status": "completed", "conclusion": "success", "updated_at": "2026-09-22T10:04:00Z"},
     ]
-    selected = guard.successful_pre_pr_runs(runs, head)
+    selected = guard.successful_pre_pr_runs(runs, head, PR_NUMBER)
     assert [item["id"] for item in selected] == [3]
 
 
@@ -103,6 +106,8 @@ def test_guard_queries_canonical_pre_pr_workflow(monkeypatch) -> None:
                         "id": 7,
                         "name": guard.WORKFLOW_NAME,
                         "head_sha": head,
+                        "event": "pull_request",
+                        "pull_requests": [{"number": PR_NUMBER}],
                         "status": "completed",
                         "conclusion": "success",
                         "updated_at": "2026-10-03T10:00:00Z",
@@ -124,11 +129,209 @@ def test_guard_queries_canonical_pre_pr_workflow(monkeypatch) -> None:
         lambda repository, artifact, head_sha, base_sha, token: {"status": "admitted"},
     )
 
-    result = guard.verify_evidence("owner/repo", head, base, "token")
+    result = guard.verify_evidence("owner/repo", head, base, "token", PR_NUMBER)
 
     assert result["pre_pr_run_id"] == 7
     assert paths[0].startswith("actions/workflows/pre-pr-readiness.yml/runs?")
     assert "actions/runs?" not in paths[0]
+
+
+def test_guard_falls_back_when_filtered_lookup_is_empty(monkeypatch) -> None:
+    head = "a" * 40
+    base = "b" * 40
+    paths: list[str] = []
+
+    def fake_github_json(repository: str, path: str, token: str):
+        paths.append(path)
+        if "head_sha=" in path:
+            return {"workflow_runs": []}
+        if path.endswith("per_page=100&page=1"):
+            return {
+                "workflow_runs": [
+                    {
+                        "id": 6,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "event": "push",
+                        "pull_requests": [{"number": PR_NUMBER}],
+                        "status": "completed",
+                        "conclusion": "success",
+                    },
+                    {
+                        "id": 8,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "event": "pull_request",
+                        "pull_requests": [{"number": PR_NUMBER + 1}],
+                        "status": "completed",
+                        "conclusion": "success",
+                    },
+                    {
+                        "id": 7,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "event": "pull_request",
+                        "pull_requests": [{"number": PR_NUMBER}],
+                        "status": "completed",
+                        "conclusion": "success",
+                    },
+                ]
+            }
+        if path == "actions/runs/7/artifacts?per_page=100":
+            return {
+                "artifacts": [
+                    {"id": 11, "name": f"ci-admission-{head}", "expired": False}
+                ]
+            }
+        raise AssertionError(f"consulta inesperada: {path}")
+
+    monkeypatch.setattr(guard, "github_json", fake_github_json)
+    monkeypatch.setattr(
+        guard,
+        "load_and_validate_manifest",
+        lambda repository, artifact, head_sha, base_sha, token: {"status": "admitted"},
+    )
+
+    result = guard.verify_evidence("owner/repo", head, base, "token", PR_NUMBER)
+
+    assert result["pre_pr_run_id"] == 7
+    assert any(path.endswith("per_page=100&page=1") for path in paths)
+    assert "actions/runs/6/artifacts?per_page=100" not in paths
+
+
+def test_guard_fallback_never_accepts_push_or_wrong_pr_artifact(monkeypatch) -> None:
+    head = "a" * 40
+    paths: list[str] = []
+
+    def fake_github_json(repository: str, path: str, token: str):
+        paths.append(path)
+        if "head_sha=" in path:
+            return {"workflow_runs": []}
+        if path.endswith("per_page=100&page=1"):
+            return {
+                "workflow_runs": [
+                    {
+                        "id": 99,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "event": "push",
+                        "pull_requests": [{"number": PR_NUMBER}],
+                        "status": "completed",
+                        "conclusion": "success",
+                    },
+                    {
+                        "id": 100,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "event": "pull_request",
+                        "pull_requests": [{"number": PR_NUMBER + 1}],
+                        "status": "completed",
+                        "conclusion": "success",
+                    }
+                ]
+            }
+        raise AssertionError(f"consulta inesperada: {path}")
+
+    monkeypatch.setattr(guard, "github_json", fake_github_json)
+
+    try:
+        guard.verify_evidence("owner/repo", head, "c" * 40, "token", PR_NUMBER)
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "pre_pr_success_missing_for_head_sha"
+    else:
+        raise AssertionError("run push ou de outra PR não deveria ser aceito")
+    assert not any(path.startswith("actions/runs/") for path in paths)
+
+
+def test_guard_fallback_is_bounded_to_five_pages(monkeypatch) -> None:
+    head = "a" * 40
+    paths: list[str] = []
+
+    def fake_github_json(repository: str, path: str, token: str):
+        paths.append(path)
+        if "head_sha=" in path:
+            return {"workflow_runs": []}
+        return {
+            "workflow_runs": [
+                {
+                    "id": page_id,
+                    "name": guard.WORKFLOW_NAME,
+                    "head_sha": "b" * 40,
+                    "event": "pull_request",
+                    "pull_requests": [{"number": PR_NUMBER}],
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+                for page_id in range(1, 101)
+            ]
+        }
+
+    monkeypatch.setattr(guard, "github_json", fake_github_json)
+
+    assert guard.list_pre_pr_runs("owner/repo", head, PR_NUMBER, "token") == []
+    fallback_paths = [path for path in paths if "head_sha=" not in path]
+    assert len(fallback_paths) == guard.WORKFLOW_RUN_FALLBACK_MAX_PAGES
+    assert fallback_paths[-1].endswith("per_page=100&page=5")
+    assert not any("page=6" in path for path in fallback_paths)
+
+
+def test_guard_fallback_preserves_pending_and_failed_classification(monkeypatch) -> None:
+    head = "a" * 40
+    paths: list[str] = []
+
+    def fake_for(state: str, result: str | None):
+        def fake_github_json(repository: str, path: str, token: str):
+            paths.append(path)
+            if "head_sha=" in path:
+                return {
+                    "workflow_runs": [
+                        {
+                            "id": 7,
+                            "name": guard.WORKFLOW_NAME,
+                            "head_sha": head,
+                            "event": "pull_request",
+                            "pull_requests": [{"number": PR_NUMBER}],
+                            "status": state,
+                            "conclusion": result,
+                        }
+                    ]
+                }
+            raise AssertionError("fallback não deveria rodar quando a consulta exata tem match")
+
+        return fake_github_json
+
+    for status, conclusion, expected in (
+        ("in_progress", None, "pre_pr_pending_for_head_sha"),
+        ("completed", "failure", "pre_pr_failed_for_head_sha"),
+    ):
+        monkeypatch.setattr(guard, "github_json", fake_for(status, conclusion))
+        try:
+            guard.verify_evidence(
+                "owner/repo",
+                head,
+                "b" * 40,
+                "token",
+                PR_NUMBER,
+            )
+        except guard.AdmissionGuardError as exc:
+            assert str(exc) == expected
+        else:
+            raise AssertionError(f"estado {status}/{conclusion} deveria bloquear")
+    assert len(paths) == 2
+
+
+def test_guard_rejects_invalid_pr_number_before_api_lookup(monkeypatch) -> None:
+    monkeypatch.setattr(
+        guard,
+        "github_json",
+        lambda *args: (_ for _ in ()).throw(AssertionError("API não deveria ser chamada")),
+    )
+    try:
+        guard.list_pre_pr_runs("owner/repo", "a" * 40, 0, "token")
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "pr_number_invalid"
+    else:
+        raise AssertionError("número de PR inválido deveria bloquear")
 
 
 def test_guard_rejects_old_or_expired_admission_artifact() -> None:
@@ -180,6 +383,7 @@ def test_expensive_pr_workflows_are_guarded_before_router_or_guardrails() -> Non
         assert "CI Admission Controller" in raw
         assert "scripts/ci_admission_guard.py" in raw
         assert "--base-ref" in raw
+        assert "--pr-number" in raw
         assert expected in raw
 
 
@@ -199,6 +403,7 @@ def test_pr_evidence_gate_requires_manifest_from_current_sha() -> None:
     assert "head_sha: headSha" in raw
     assert "Validate admission manifest content" in raw
     assert "scripts.ci_admission_guard" in raw
+    assert "pr_number=int(pr_number)" in raw
     enforce = raw.split("- name: Enforce evidence gate result", 1)[1]
     assert 'if [[ "$status" == "passed" ]]' in enforce
     assert '|| "$status" == "deferred"' not in enforce

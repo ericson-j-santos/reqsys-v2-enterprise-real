@@ -46,6 +46,7 @@ jobs:
             --head-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
             --event-name "${{ github.event_name }}" \
             --base-ref "${{ github.event.pull_request.base.ref || 'main' }}" \
+            --pr-number "${{ github.event.pull_request.number || 0 }}" \
             --max-wait-seconds 240 \
             --poll-seconds 5 \
             --output "artifacts/ci-admission-guard/${{ github.event.pull_request.head.sha || github.sha }}.json"
