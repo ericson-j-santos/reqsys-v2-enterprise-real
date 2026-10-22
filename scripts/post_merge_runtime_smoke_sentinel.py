@@ -13,10 +13,11 @@ import json
 import os
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -77,7 +78,7 @@ def _github_request(url: str, token: str) -> dict[str, Any]:
         },
     )
     try:
-        with urlopen(request, timeout=30) as response:  # noqa: S310 - controlled GitHub API URL.
+        with urlopen(request, timeout=30) as response:  # nosec B310 - controlled GitHub API URL.
             body = response.read().decode("utf-8")
             return json.loads(body) if body else {}
     except HTTPError as exc:
@@ -256,9 +257,7 @@ def evaluate_event(
     if type(run_id) is not int or run_id <= 0:
         blocking.append("run_id_invalid")
 
-    if not token:
-        blocking.append("github_provenance_unavailable")
-    elif repo != EXPECTED_REPOSITORY or type(run_id) is not int or run_id <= 0:
+    if not token or repo != EXPECTED_REPOSITORY or type(run_id) is not int or run_id <= 0:
         blocking.append("github_provenance_unavailable")
     else:
         try:
@@ -267,7 +266,11 @@ def evaluate_event(
             main_sha = _current_main_sha(repo, token, request_json)
         except (RuntimeError, KeyError, TypeError, ValueError):
             blocking.append("github_read_unavailable")
-    if artifacts.count(expected_artifact) != 1:
+    # GitHub preserves artifacts from previous attempts when a failed job is
+    # re-run.  More than one current, non-empty artifact with the same name is
+    # therefore valid provenance for the run; the downloaded runtime evidence
+    # is still independently checked against the exact source SHA below.
+    if expected_artifact not in artifacts:
         blocking.append("artifact_missing_or_invalid")
     if not verified_steps:
         blocking.append("required_steps_not_executed")
@@ -368,3 +371,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
