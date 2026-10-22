@@ -2,7 +2,7 @@
   "feature_name": "noteri-desktop-watchdog-recovery",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-10-08",
+  "updated_at": "2026-10-22",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -17,13 +17,16 @@
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
     ".github/self-hosted-runner-policy.json",
     "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
-    "tests/test_reqsys_authorized_actions_gateway.py"
+    "tests/test_reqsys_authorized_actions_gateway.py",
+    "scripts/desktop_watchdog_readback.py",
+    "tests/test_desktop_watchdog_readback.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
-      "tests/test_self_hosted_runner_governance.py"
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_desktop_watchdog_readback.py"
     ],
     "evidence_contract": "Fixed local Desktop host/task; dedicated clean C:\\\\dev\\\\chatgpt-workers\\\\reqsys-watchdog-session-source clone created from immutable checkout, bound to canonical origin and validated at the exact origin/main SHA before Session Launcher; runner checkout under LOCALAPPDATA and divergent operational clone are never target_repo; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; watchdog repair materializes that verified runtime under LOCALAPPDATA only when absent; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; local Query+Run, plus exact passwordless local Create only after an unequivocal missing-task result; no /S or credentials; independent XML proves enabled+AtStartup+S4U; negative authorization/config tests; exact gateway dispatch and Desktop runner pickup."
   },
@@ -58,7 +61,9 @@
     "Se a sessão do runner não puder apresentar elevação, watchdog-uac-stage deixa no Desktop do runner um launcher CMD, um launcher PowerShell e uma cópia do reparador nativo exclusivo do watchdog vinculada ao SHA imutável da execução; sem depender do Desktop Admin Broker, eleva, aguarda e valida o reparador, tenta as mesmas cópias no Desktop público e registra caminhos, recusa de acesso e o último diagnóstico nativo sanitizado. Execução e aprovação UAC permanecem locais e humanas.",
     "Pickup real no runner Desktop é pré-condição e prova do host executor.",
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
-    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
+    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas.",
+    "O modo watchdog-readback é separado e manual, usa host/runner/repositório/SHA/correlation_id exatos, sessão e Gateway; coleta somente metadados da tarefa fixa, consulta SCM de nome candidato fixo e state.json do watchdog, sem configuração privada, segredo, reparação, /Run ou mutação de serviço.",
+    "Metadados indisponíveis permanecem unknown/unavailable; ausência do nome candidato não prova ausência de outros serviços, last_cycle_source_sha não prova release instalada, e nenhum resultado atesta produtor ReqSys, boot real ou ciclos contínuos."
   ],
   "operational_rules": {
     "repository": "ericson-j-santos/chatgpt-operational-rules",
@@ -88,5 +93,32 @@
       "runtime_location": "RUNNER_TEMP_per_run",
       "module_resolution": "ephemeral_python312._pth_exact_rules_scripts"
     }
+  },
+  "readback_mode": {
+    "mode": "watchdog-readback",
+    "scope": "metadata-only, local-dev",
+    "trigger": "workflow_dispatch only",
+    "rules_sha": "fabaccc32abbbf6f95be443629ef2ebb1246dad5",
+    "implementation": "scripts/desktop_watchdog_readback.py",
+    "tests": "tests/test_desktop_watchdog_readback.py",
+    "reads": [
+      "fixed watchdog task XML and verbose CSV",
+      "SCM query-status for one explicit service-name candidate",
+      "fixed watchdog state.json"
+    ],
+    "excluded": [
+      "private configuration",
+      "metadata.json contents",
+      "runner credentials",
+      "secrets",
+      "task/service mutation",
+      "recovery",
+      "ReqSys producer attestation"
+    ],
+    "receipt_only_worktree_write": true,
+    "task_action_identity_verified": false,
+    "runner_service_identity_verified": false,
+    "partial_metadata_is_not_readiness": true,
+    "gate_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/39843440443"
   }
 }
