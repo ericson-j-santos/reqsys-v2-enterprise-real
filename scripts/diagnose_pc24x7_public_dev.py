@@ -14,6 +14,10 @@ from pathlib import Path
 HOST = "DESKTOP-PDQK954"
 API_PORT = "8210"
 DOCKER_ENDPOINT = "npipe:////./pipe/dockerDesktopLinuxEngine"
+LOCAL_DOCKER_CONTEXT_ENDPOINTS = frozenset({
+    DOCKER_ENDPOINT,
+    "npipe:////./pipe/docker_engine",
+})
 SERVICES = frozenset({"api", "frontend", "nginx"})
 # Match the legacy reconciler's fixed DEV surface; never guess from "healthy".
 PROJECTS = frozenset({
@@ -46,7 +50,11 @@ def _verify_docker_target() -> None:
         endpoint = json.loads(result.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired):
         raise DiagnosticError("docker_context_unavailable") from None
-    if endpoint != DOCKER_ENDPOINT:
+    # Docker Desktop for Windows can keep the local `default` context active
+    # while exposing the Linux engine through its dedicated named pipe.  Both
+    # context endpoints are local-only; every inventory command below remains
+    # explicitly pinned to DOCKER_ENDPOINT.
+    if endpoint not in LOCAL_DOCKER_CONTEXT_ENDPOINTS:
         raise DiagnosticError("docker_context_not_local_dev")
 
 

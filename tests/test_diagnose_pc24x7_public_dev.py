@@ -264,6 +264,48 @@ class DiagnosticTests(unittest.TestCase):
             MODULE._capture(["ps"])
             self.assertEqual(run.call_args.args[0], ["docker", "--host", MODULE.DOCKER_ENDPOINT, "ps"])
 
+    def test_windows_default_local_context_accepted_but_daemon_remains_pinned(self):
+        default_endpoint = "npipe:////./pipe/docker_engine"
+        results = [
+            SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(default_endpoint),
+                stderr="",
+            ),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        ]
+        with patch.dict(MODULE.os.environ, {}, clear=True), patch.object(
+            MODULE.subprocess,
+            "run",
+            side_effect=results,
+        ) as run:
+            MODULE._verify_docker_target()
+            MODULE._capture(["ps"])
+            self.assertEqual(
+                run.call_args_list[0].args[0][:3],
+                ["docker", "context", "inspect"],
+            )
+            self.assertEqual(
+                run.call_args_list[1].args[0],
+                ["docker", "--host", MODULE.DOCKER_ENDPOINT, "ps"],
+            )
+
+    def test_arbitrary_local_named_pipe_context_is_refused(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps("npipe:////./pipe/unapprovedEngine"),
+            stderr="",
+        )
+        with patch.dict(MODULE.os.environ, {}, clear=True), patch.object(
+            MODULE.subprocess,
+            "run",
+            return_value=result,
+        ), self.assertRaisesRegex(
+            MODULE.DiagnosticError,
+            "docker_context_not_local_dev",
+        ):
+            MODULE._verify_docker_target()
+
 
 if __name__ == "__main__":
     unittest.main()
