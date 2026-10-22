@@ -301,4 +301,3 @@ def test_http_transport_exception_blocks_and_does_not_claim_sentinel_ready():
     result = evaluate_event(_event(), repo=EXPECTED_REPOSITORY, token="token", request_json=failed_transport)
     assert result.status == "blocked"
     assert "github_read_unavailable" in result.blocking_issues
-
