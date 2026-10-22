@@ -11,7 +11,6 @@ import scripts.provision_pc24x7_teams_bot_runtime as provision
 import scripts.reconcile_pc24x7_teams_dev_runtime as reconcile
 import scripts.recreate_cofre_dev_pc24x7 as recreate
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -140,6 +139,37 @@ def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path
             Path(r"\\server\share\docker-compose.pc24x7-public-dev.yml"),
             "a" * 40,
         )
+
+
+def test_recreate_public_override_hash_uses_git_path_filters(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "runtime"
+    repo.mkdir()
+    public = repo / recreate.PUBLIC_DEV_OVERRIDE_REL
+    public.write_bytes(b"services:\r\n  api: {}\r\n")
+    blob = "1" * 40
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        if command[:2] == ["git", "rev-parse"]:
+            return SimpleNamespace(stdout=f"{blob}\n")
+        if command[:2] == ["git", "hash-object"]:
+            return SimpleNamespace(stdout=f"{blob}\n")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(recreate, "run", fake_run)
+
+    assert recreate.validate_public_override(repo, public, "a" * 40) == public.resolve()
+    assert [
+        "git",
+        "hash-object",
+        "--path",
+        recreate.PUBLIC_DEV_OVERRIDE_REL.as_posix(),
+        str(public),
+    ] in commands
+    assert not any("--no-filters" in command for command in commands)
 
 
 def test_recreate_uses_selected_inspection_and_sanitized_failure_contract() -> None:
