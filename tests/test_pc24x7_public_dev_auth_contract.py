@@ -118,8 +118,7 @@ def test_direct_auth_true_never_completes(monkeypatch) -> None:
 
 
 def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(recreate.os, "name", "nt")
-    monkeypatch.setattr(recreate.socket, "gethostname", lambda: recreate.EXPECTED_HOST)
+    monkeypatch.setattr(recreate, "_require_public_runtime_host", lambda: None)
     monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
     monkeypatch.setattr(
@@ -228,8 +227,7 @@ def test_recreate_allows_api_overlay_recovery_only_with_two_sibling_proofs(
         name = template.split('"')[1]
         return labels[container_id][name]
 
-    monkeypatch.setattr(recreate.os, "name", "nt")
-    monkeypatch.setattr(recreate.socket, "gethostname", lambda: recreate.EXPECTED_HOST)
+    monkeypatch.setattr(recreate, "_require_public_runtime_host", lambda: None)
     monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
     monkeypatch.setattr(recreate, "run", fake_run)
