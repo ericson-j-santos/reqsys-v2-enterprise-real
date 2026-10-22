@@ -12,6 +12,7 @@
   "description": "Reconcilia o ReqSys DEV público no PC24x7 para o SHA exato e substitui Vite/HMR remoto por build estático Nginx.",
   "sdd_gate": {
     "tests": [
+      "tests/test_diagnose_pc24x7_public_dev.py",
       "tests/test_pc24x7_public_dev_static_runtime.py",
       "tests/test_pc24x7_public_dev_cutover_guard.py",
       "tests/test_dev_runtime_recovery_executor.py",

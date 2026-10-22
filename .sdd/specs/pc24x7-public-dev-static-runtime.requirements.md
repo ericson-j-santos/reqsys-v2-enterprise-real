@@ -106,3 +106,10 @@ um receipt sanitizado com `status=inventory_blocked` e `reason_code` pertencente
 uma allowlist fixa. O receipt não pode incluir stdout/stderr, IDs ou metadados de
 contêiner, paths privados ou credenciais. A ausência de inventário válido continua
 bloqueando backup, OIDC, Compose, locator e qualquer outra mutação.
+
+No Windows, a verificação do alvo Docker aceita somente os dois endpoints locais
+fixos do Docker Desktop (`dockerDesktopLinuxEngine` e `docker_engine`). Overrides
+por `DOCKER_HOST`/`DOCKER_CONTEXT`, TCP e qualquer named pipe não allowlisted
+continuam bloqueados. Independentemente do contexto local ativo, toda leitura do
+inventário permanece explicitamente presa ao pipe Linux
+`dockerDesktopLinuxEngine`.
