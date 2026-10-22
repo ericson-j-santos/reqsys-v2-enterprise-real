@@ -31,7 +31,8 @@ def state():
         "host": m.EXPECTED_HOST, "service": m.WATCHDOG_SERVICE,
         "source_sha": SHA, "generated_at": NOW.isoformat(), "ok": True,
         "github_runner": {"status": "process_running"},
-        "rdc": {"status": "retired_fail_closed", "enabled": False},
+        "rdc": {"status": "retired_fail_closed", "enabled": False,
+                "recovered": False, "marker": m.RDC_RETIREMENT_MARKER},
     }
 
 
@@ -288,3 +289,61 @@ def test_workflow_readback_is_manual_bounded_and_separate():
     assert "Materialize verified persistent watchdog Python" not in lane
     assert "runtime_ready" in lane and "reqsys_producer_verified" in lane
     assert "noteri_desktop_watchdog_rpc_recovery.py" not in lane
+
+
+@pytest.mark.parametrize("value", [None, [], {}, 123, True])
+def test_runner_state_wrong_types_are_unknown_not_exception(value):
+    payload = state()
+    payload["github_runner"]["status"] = value
+    result = m.sanitize_state(payload, NOW)
+    assert result["runner_status"] == "unknown"
+
+
+@pytest.mark.parametrize("key,value", [
+    ("marker", "other"), ("marker", None), ("recovered", True),
+    ("recovered", "false"), ("enabled", "false"),
+])
+def test_retirement_requires_canonical_marker_and_strict_booleans(key, value):
+    payload = state()
+    payload["rdc"][key] = value
+    assert m.sanitize_state(payload, NOW)["rdc_retired_observed"] is False
+
+
+def test_retirement_observation_has_complete_canonical_fields():
+    assert m.sanitize_state(state(), NOW)["rdc_retired_observed"] is True
+
+
+def test_nested_invalid_state_is_partial_without_traceback(monkeypatch):
+    def nested_error(path):
+        raise RecursionError("private-error")
+    monkeypatch.setattr(m, "_fixed_runtime_root", lambda: Path("unused"))
+    monkeypatch.setattr(m, "_read_state", nested_error)
+    result = m.watchdog_state_metadata(NOW)
+    assert result["status"] == "unavailable"
+    assert "private-error" not in json.dumps(result)
+
+
+def test_changed_file_identity_is_rejected_before_content_read(monkeypatch, tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps(state()), encoding="utf-8")
+    real_stat = path.stat()
+    changed = SimpleNamespace(
+        st_dev=real_stat.st_dev, st_ino=real_stat.st_ino + 1,
+        st_size=real_stat.st_size, st_mtime_ns=real_stat.st_mtime_ns,
+    )
+    reads = []
+    class Handle:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def fileno(self):
+            return 123
+        def read(self, count):
+            reads.append(count)
+            return b"private-error"
+    monkeypatch.setattr(Path, "open", lambda *args, **kwargs: Handle())
+    monkeypatch.setattr(m.os, "fstat", lambda fd: changed)
+    with pytest.raises(m.ReadbackError, match="state_changed_before_read"):
+        m._read_state(path)
+    assert reads == []

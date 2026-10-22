@@ -31,6 +31,7 @@ EXPECTED_RUNNER_SERVICE = (
     "actions.runner.ericson-j-santos-reqsys-v2-enterprise-real.DESKTOP-PDQK954"
 )
 RECEIPT_REL = Path("artifacts/desktop-watchdog-readback/evidence.json")
+RDC_RETIREMENT_MARKER = "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003"
 MAX_STATE_BYTES = 65536
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 CORRELATION_RE = re.compile(r"desktop-watchdog-readback-[0-9]+-[0-9]+")
@@ -197,12 +198,15 @@ def _read_state(path: Path) -> dict:
     before = path.stat()
     if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_STATE_BYTES:
         raise ReadbackError("state_file_invalid")
-    with path.open("rb") as handle:
-        opened = os.fstat(handle.fileno())
-        raw = handle.read(MAX_STATE_BYTES + 1)
-        after = os.fstat(handle.fileno())
     def identity(info):
         return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+
+    with path.open("rb") as handle:
+        opened = os.fstat(handle.fileno())
+        if identity(before) != identity(opened):
+            raise ReadbackError("state_changed_before_read")
+        raw = handle.read(MAX_STATE_BYTES + 1)
+        after = os.fstat(handle.fileno())
     if len(raw) > MAX_STATE_BYTES or identity(before) != identity(opened) or identity(opened) != identity(after):
         raise ReadbackError("state_changed_during_read")
     payload = json.loads(raw.decode("utf-8"))
@@ -231,7 +235,12 @@ def sanitize_state(payload: dict, observed_at: datetime) -> dict:
     runner = runner if isinstance(runner, dict) else {}
     rdc = rdc if isinstance(rdc, dict) else {}
     runner_status = runner.get("status")
-    retired = rdc.get("status") == "retired_fail_closed" and rdc.get("enabled") is False
+    retired = (
+        rdc.get("status") == "retired_fail_closed"
+        and rdc.get("enabled") is False
+        and rdc.get("recovered") is False
+        and rdc.get("marker") == RDC_RETIREMENT_MARKER
+    )
     return {
         "status": "observed",
         "service": WATCHDOG_SERVICE,
@@ -239,7 +248,7 @@ def sanitize_state(payload: dict, observed_at: datetime) -> dict:
         "last_cycle_generated_at": generated.astimezone(timezone.utc).isoformat(),
         "age_seconds": max(0, int(age)),
         "fresh_within_120_seconds": age <= 120,
-        "runner_status": runner_status if runner_status in {"process_running", "recovered", "failed"} else "unknown",
+        "runner_status": runner_status if isinstance(runner_status, str) and runner_status in {"process_running", "recovered", "failed"} else "unknown",
         "last_cycle_ok": payload.get("ok") if isinstance(payload.get("ok"), bool) else None,
         "rdc_retired_observed": retired,
         "installed_release_verified": False,
@@ -254,7 +263,7 @@ def watchdog_state_metadata(observed_at: datetime) -> dict:
         return sanitize_state(payload, observed_at)
     except FileNotFoundError:
         return {"status": "unavailable", "reason": "state_missing"}
-    except (OSError, ValueError, ReadbackError, UnicodeError):
+    except (OSError, ValueError, ReadbackError, UnicodeError, RecursionError):
         return {"status": "unavailable", "reason": "state_unreadable_or_invalid"}
 
 
