@@ -6,9 +6,9 @@ Automatizar a validação de PRs verdes, **bloquear abertura de novas frentes** 
 
 ## Princípio operacional
 
-O caminho CI-driven executa merge automaticamente quando a `Governed Merge Queue` e os workflows obrigatórios estão verdes no HEAD exato, o PR está aberto, não-draft, mergeável e contém `merge-queue:eligible`. Para `ci:recuperado`, draft verde é primeiro promovido para ready e o ciclo termina sem merge; `ready_for_review` força nova validação.
+O caminho CI-driven executa merge automaticamente quando a `Governed Merge Queue` e os workflows obrigatórios estão verdes no HEAD exato, o PR está aberto, não-draft, mergeável e contém `merge-queue:eligible` **e** `governed-merge-approved`. Para `ci:recuperado`, draft verde é primeiro promovido para ready e o ciclo termina sem merge; `ready_for_review` força nova validação.
 
-A autorização operacional permanente do owner está nas regras canônicas do ReqSys; não é necessária solicitação ou label adicional por PR. O `workflow_dispatch` permanece como contingência manual e mantém modo `dry-run`.
+A label `governed-merge-approved` é a autorização humana explícita e revogável por PR. Sem ela, a automação falha fechada mesmo quando a fila e os demais gates estão verdes. O `workflow_dispatch` permanece como contingência manual e mantém modo `dry-run`.
 
 ## Workflow
 
@@ -30,7 +30,7 @@ Governed PR Automation
 |---|---|---|
 | `pull_request` (`opened`, `reopened`, `ready_for_review`, `labeled`) | `increment-gate-on-open` | Bloquear abertura quando `new_front_allowed=false` |
 | `workflow_dispatch` | `governed-pr-check` | Validar merge + executar squash merge opcional |
-| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Revalidar HEAD/gates e executar merge automático sob autorização operacional permanente |
+| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Revalidar HEAD/gates/label explícita e executar merge automático somente com autorização humana por PR |
 
 ## Entradas (`workflow_dispatch`)
 
