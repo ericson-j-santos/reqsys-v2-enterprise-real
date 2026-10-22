@@ -39,6 +39,7 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  AUTO_MERGE_APPROVAL_LABEL: governed-merge-approved
   REQUIRED_WORKFLOWS: |
     CI Enterprise Fast
     CI — ReqSys v2 Enterprise
@@ -372,6 +373,10 @@ jobs:
             if (!labelNames.includes('merge-queue:eligible')) {
               failures.push('Label merge-queue:eligible ausente.');
             }
+            const approvalLabel = process.env.AUTO_MERGE_APPROVAL_LABEL;
+            if (!labelNames.includes(approvalLabel)) {
+              failures.push(`Autorização humana explícita ausente: label ${approvalLabel}.`);
+            }
 
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               owner,
@@ -432,7 +437,8 @@ jobs:
                 currentDraftComparison.status === 'behind' ||
                 currentDraftComparison.behind_by > 0 ||
                 !currentDraftLabelNames.includes('ci:recuperado') ||
-                !currentDraftLabelNames.includes('merge-queue:eligible')
+                !currentDraftLabelNames.includes('merge-queue:eligible') ||
+                !currentDraftLabelNames.includes(approvalLabel)
               ) {
                 core.setFailed(`Estado mudou antes de promover draft recuperado; esperado head ${triggerHeadSha}, atual ${currentDraft.head.sha}`);
                 return;
@@ -499,7 +505,8 @@ jobs:
               currentComparison.status === 'diverged' ||
               currentComparison.status === 'behind' ||
               currentComparison.behind_by > 0 ||
-              !currentLabelNames.includes('merge-queue:eligible')
+              !currentLabelNames.includes('merge-queue:eligible') ||
+              !currentLabelNames.includes(approvalLabel)
             ) {
               core.setFailed(
                 `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
@@ -515,7 +522,7 @@ jobs:
               sha: triggerHeadSha,
               commit_title: `chore: governed CI-driven merge PR #${prNumber}`,
               commit_message:
-                'Merge governado executado sob autorizacao operacional permanente do owner apos todos os gates obrigatorios verdes no HEAD exato.',
+                `Merge governado executado após autorização humana explícita via label ${approvalLabel} e gates obrigatórios verdes no HEAD exato.`,
             });
 
             if (!result.data.merged) {
@@ -542,6 +549,7 @@ jobs:
                   `HEAD validado: \`${triggerHeadSha}\``,
                   `Merge SHA: \`${result.data.sha}\``,
                   'Método: `squash`',
+                  `Autorização explícita: \`${approvalLabel}\``,
                   'Deploy/promoção: não executados por este workflow.',
                 ].join('\n')
               )
