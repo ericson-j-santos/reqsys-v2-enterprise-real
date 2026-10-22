@@ -293,3 +293,76 @@ def test_owner_comment_validated_against_live_issue_and_recent_time():
             changed["created_at"] = (now - timedelta(hours=2)).isoformat()
         with pytest.raises(guard.Blocked):
             guard.validate_comment_record(changed, "6319619092", now)
+
+
+def _cycle_context():
+    env, _ = context()
+    env["GITHUB_EVENT_NAME"] = "schedule"
+    event = {"repository": {"full_name": guard.REPOSITORY}}
+    return env, event
+
+
+def test_hourly_cost_context_allows_schedule_and_typed_main_dispatch():
+    env, event = _cycle_context()
+    ctx = guard.validate_cycle_cost_context(env, event)
+    assert ctx["subscription"] == env["CCP_AZURE_SUBSCRIPTION_ID"]
+    env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+    env["GITHUB_ACTOR"] = guard.OWNER
+    event.update({"sender": {"login": guard.OWNER}, "inputs": {"operation": "cycle"}})
+    assert guard.validate_cycle_cost_context(env, event)["sha"] == "a" * 40
+
+
+@pytest.mark.parametrize("change", [
+    "branch", "repo", "event", "vault", "subscription", "wrong_operation",
+    "wrong_sender", "scheduled_with_inputs",
+])
+def test_hourly_cost_context_blocks_invalid_identity(change):
+    env, event = _cycle_context()
+    if change == "branch":
+        env["GITHUB_REF"] = "refs/heads/feature"
+    elif change == "repo":
+        event["repository"]["full_name"] = "unknown/repo"
+    elif change == "event":
+        env["GITHUB_EVENT_NAME"] = "pull_request"
+    elif change == "vault":
+        env["REQSYS_KEY_VAULT_NAME"] = "other"
+    elif change == "subscription":
+        env["CCP_AZURE_SUBSCRIPTION_ID"] = "not-a-guid"
+    elif change == "scheduled_with_inputs":
+        event["inputs"] = {"operation": "cycle"}
+    else:
+        env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+        env["GITHUB_ACTOR"] = guard.OWNER
+        event["sender"] = {"login": guard.OWNER}
+        event["inputs"] = {"operation": "cycle"}
+        if change == "wrong_operation":
+            event["inputs"]["operation"] = "producer-credit-gated"
+        else:
+            event["sender"]["login"] = "unknown-user"
+    with pytest.raises(guard.Blocked):
+        guard.validate_cycle_cost_context(env, event)
+
+
+@pytest.mark.parametrize("spending,allowed", [
+    ("On", True), ("Off", False), ("CurrentPeriodOff", False),
+])
+def test_hourly_preflight_never_calls_keyvault_before_cost_gate(monkeypatch, spending, allowed):
+    env, event = _cycle_context()
+    ctx = guard.validate_cycle_cost_context(env, event)
+    paths = []
+
+    def read_arm(path, blocker):
+        paths.append(path)
+        return subscription(spending=spending) if "Microsoft.KeyVault" not in path else vault()
+
+    monkeypatch.setattr(guard, "read_arm", read_arm)
+    monkeypatch.setattr(guard, "metadata_lookup", lambda **kwargs: pytest.fail("Key Vault reached"))
+    if allowed:
+        result = guard.cost_preflight(ctx)
+        assert result["decision"] == "COST_ZERO_CONFIRMED"
+        assert len(paths) == 2
+    else:
+        with pytest.raises(guard.Blocked, match="cost_unknown_no_azure_hard_stop"):
+            guard.cost_preflight(ctx)
+        assert len(paths) == 1
+    assert all(path.startswith("https://management.azure.com/") for path in paths)

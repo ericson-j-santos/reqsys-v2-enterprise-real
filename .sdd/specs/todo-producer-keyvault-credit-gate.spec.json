@@ -21,7 +21,7 @@
       "tests/test_todo_producer_keyvault_credit_gate.py",
       "tests/test_todo_producer_keyvault_credit_gate_workflow.py"
     ],
-    "evidence_contract": "Owner command #1705 validated by existing Authorized Actions Gateway, typed workflow_dispatch operation producer-credit-gated with authorization_comment_id revalidated against exact owner comment by GitHub API, main/sha/OIDC DEV. ARM spendingLimit=On and vault identity before any Key Vault secret data-plane, secret metadata/recovery/provision only after recheck, private 0600 token, idempotency, readback. Zero new workflow files. No Docker/deploy/production/RBAC; product E2E remains partial."
+    "evidence_contract": "Owner command #1705 validated by existing Authorized Actions Gateway, typed workflow_dispatch operation producer-credit-gated with authorization_comment_id revalidated against exact owner comment by GitHub API, main/sha/OIDC DEV. ARM spendingLimit=On and vault identity before any Key Vault secret data-plane, secret metadata/recovery/provision only after recheck, private 0600 token, idempotency, readback. Zero new workflow files. No Docker/deploy/production/RBAC; product E2E remains partial. Scheduled TODO Global hourly cycle and typed manual cycle require ARM-only cycle-cost preflight on main/OIDC DEV immediately before reading the producer secret. Without spendingLimit=On and qualified vault, block before all Key Vault data-plane. Positive, negative, identity, idempotency and no-secret-read regression controls are in the existing test suite."
   },
   "risk": {
     "production": false,
