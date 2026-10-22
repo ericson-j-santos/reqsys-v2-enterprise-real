@@ -20,8 +20,18 @@ authorize production operations, deployment, secret reads, or network changes.
    confirmation. It revalidates host, root, service cardinality, Compose labels,
    images, tags, files, identity, and readiness before mutation and between phases.
 
+For the explicitly approved public DEV cutover wrapper, an unavailable candidate
+API is an allowed rollback trigger, not a reason to strand the deployment. In that
+case the pre-mutation guard still revalidates host, canonical root, Compose project,
+service cardinality, labels and image IDs without claiming candidate readiness.
+All post-rollback identity, readiness and database checks remain mandatory.
+
 The fingerprint supplied by the operator is evidence external to the manifest.
 Recalculating a fingerprint inside a modified manifest cannot satisfy the gate.
+Prepared recovery state includes immutable private snapshots of the ordered Compose
+manifests and fixes Compose `--project-directory` to the canonical runtime root.
+Environment files stay in their original location and are never duplicated. This
+keeps rollback valid after a tracked-source fast-forward without copying secrets.
 
 ## Rollback phases
 
@@ -70,3 +80,8 @@ containers can reference it through Compose labels.
 - Automatic deployment or rollback.
 - Production, staging, or a different host/project.
 - Image pruning, secret rotation, container log collection, or database export.
+
+The last item applies to this standalone image-recovery command. The separate
+`pc24x7_public_dev_cutover_guard.py` wrapper is allowed to create a DEV-only
+PostgreSQL backup because it keeps only DPAPI ciphertext, proves an isolated
+networkless restore and never uploads the dump or its private manifest.

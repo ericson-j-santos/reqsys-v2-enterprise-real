@@ -45,3 +45,28 @@ Quando o runner GitHub do DESKTOP-PDQK954 estiver disponível, usá-lo para cons
 ## Regras canônicas atuais
 
 O workflow usa o SHA canônico `562fc4274aff24f7058cb135f27a509aa69031c1` nos modos `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary`. Pin histórico de regras é bloqueio de execução física.
+
+## Readback manual separado, sem recuperação — 2026-10-22
+
+O modo adicional watchdog-readback não altera os modos anteriores e não é acionado por push, PR ou schedule.
+Ele usa o mesmo workflow já allowlisted, o SHA exato da execução, CPython portátil validado, regras
+canônicas fabaccc32abbbf6f95be443629ef2ebb1246dad5, Session Launcher com preflight de versão e Command Gateway.
+A classificação Risk 2 cobre exclusivamente o recibo escrito no worktree isolado; o runtime observado não é alterado.
+
+- Host e runner: DESKTOP-PDQK954; repositório: ericson-j-santos/reqsys-v2-enterprise-real.
+- Consultar somente XML/CSV da tarefa fixa; observar separadamente Enabled, BootTrigger habilitado,
+  LogonType e LastTaskResult numérico. Nunca assumir zero quando idioma/campo não for reconhecido.
+- O serviço SCM é uma sonda do nome candidato fixo, não descoberta de todos os serviços nem prova
+  da identidade executável. Usar somente CONNECT/QUERY_STATUS, sem ler configuração ou contas.
+- Ler somente o state.json fixo do watchdog, com limite de tamanho, rejeição de reparse ancestral e
+  allowlist de campos tipados. Não ler metadata.json, .runner, .service, .env ou credenciais.
+- Não publicar XML/CSV/JSON bruto, caminhos, mensagens de exceção ou campos desconhecidos.
+- Não executar /Run, repair, restart, install, recuperação RDC, atualização do runtime ou acesso externo.
+- Registrar coleta parcial quando metadados estiverem indisponíveis. Probe concluído não significa
+  watchdog saudável, serviço ausente globalmente, release instalada atual, boot validado ou ciclos contínuos.
+- A identidade e os ciclos do produtor ReqSys permanecem não verificados por esta lane.
+- CI deve executar testes positivos, negativos, idioma, dados malformados, identidade, ausência,
+  reparse e ausência de efeitos mutantes. O teste físico só pode ocorrer por dispatch revisado separado.
+
+Autorização de incremento: Agent Increment Gate 39843440443, hotfix com referência 3051,
+allowed=true. Esta evidência não autoriza merge nem substitui READY_FOR_PR no novo HEAD.

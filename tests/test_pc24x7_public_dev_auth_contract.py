@@ -11,7 +11,6 @@ import scripts.provision_pc24x7_teams_bot_runtime as provision
 import scripts.reconcile_pc24x7_teams_dev_runtime as reconcile
 import scripts.recreate_cofre_dev_pc24x7 as recreate
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -119,8 +118,7 @@ def test_direct_auth_true_never_completes(monkeypatch) -> None:
 
 
 def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(recreate.os, "name", "nt")
-    monkeypatch.setattr(recreate.socket, "gethostname", lambda: recreate.EXPECTED_HOST)
+    monkeypatch.setattr(recreate, "_require_public_runtime_host", lambda: None)
     monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
     monkeypatch.setattr(
@@ -139,6 +137,119 @@ def test_remote_docker_and_unsafe_paths_are_rejected(monkeypatch, tmp_path: Path
             tmp_path,
             Path(r"\\server\share\docker-compose.pc24x7-public-dev.yml"),
             "a" * 40,
+        )
+
+
+def test_recreate_public_override_hash_uses_git_path_filters(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "runtime"
+    repo.mkdir()
+    public = repo / recreate.PUBLIC_DEV_OVERRIDE_REL
+    public.write_bytes(b"services:\r\n  api: {}\r\n")
+    blob = "1" * 40
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        if command[:2] == ["git", "rev-parse"]:
+            return SimpleNamespace(stdout=f"{blob}\n")
+        if command[:2] == ["git", "hash-object"]:
+            return SimpleNamespace(stdout=f"{blob}\n")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(recreate, "run", fake_run)
+
+    assert recreate.validate_public_override(repo, public, "a" * 40) == public.resolve()
+    assert [
+        "git",
+        "hash-object",
+        "--path",
+        recreate.PUBLIC_DEV_OVERRIDE_REL.as_posix(),
+        str(public),
+    ] in commands
+    assert not any("--no-filters" in command for command in commands)
+
+
+def test_recreate_allows_api_overlay_recovery_only_with_two_sibling_proofs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "runtime"
+    repo.mkdir()
+    public = repo / recreate.PUBLIC_DEV_OVERRIDE_REL
+    public.write_text("services: {}\n", encoding="utf-8")
+    admin = tmp_path / "admin.yml"
+    admin.write_text("services: {}\n", encoding="utf-8")
+    base = repo / "docker-compose.yml"
+    base.write_text("services: {}\n", encoding="utf-8")
+    api_files = f"{base},{admin},{repo / '.tmp' / 'sha.yml'}"
+    sibling_files = f"{base},{admin},{public}"
+    labels = {
+        "api-id": {
+            "com.docker.compose.project": recreate.DEFAULT_PROJECT,
+            "com.docker.compose.service": "api",
+            "com.docker.compose.project.working_dir": str(repo),
+            "com.docker.compose.project.config_files": api_files,
+        },
+        "frontend-id": {
+            "com.docker.compose.project": recreate.DEFAULT_PROJECT,
+            "com.docker.compose.service": "frontend",
+            "com.docker.compose.project.working_dir": str(repo),
+            "com.docker.compose.project.config_files": sibling_files,
+        },
+        "nginx-id": {
+            "com.docker.compose.project": recreate.DEFAULT_PROJECT,
+            "com.docker.compose.service": "nginx",
+            "com.docker.compose.project.working_dir": str(repo),
+            "com.docker.compose.project.config_files": sibling_files,
+        },
+    }
+
+    def fake_run(command, **_kwargs):
+        if command[1:3] == ["context", "inspect"]:
+            return SimpleNamespace(stdout='"npipe:////./pipe/docker_engine"')
+        if command[1] == "ps":
+            service = next(
+                item.rsplit("=", 1)[-1]
+                for item in command
+                if item.startswith("label=com.docker.compose.service=")
+            )
+            return SimpleNamespace(stdout=f"{service}-id\n")
+        if command[1] == "port":
+            return SimpleNamespace(
+                stdout="8000/tcp -> 0.0.0.0:8210\n8000/tcp -> [::]:8210\n"
+            )
+        raise AssertionError(command)
+
+    def fake_inspect(container_id, template, **_kwargs):
+        if template == "{{.Name}}":
+            return f"/{recreate.DEFAULT_CONTAINER}"
+        name = template.split('"')[1]
+        return labels[container_id][name]
+
+    monkeypatch.setattr(recreate, "_require_public_runtime_host", lambda: None)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    monkeypatch.setattr(recreate, "run", fake_run)
+    monkeypatch.setattr(recreate, "_inspect_value", fake_inspect)
+
+    recreate.validate_local_docker(
+        recreate.DEFAULT_CONTAINER,
+        cwd=repo,
+        public_override=public,
+        admin_override=admin,
+    )
+
+    labels["nginx-id"]["com.docker.compose.project.config_files"] = f"{base},{admin}"
+    with pytest.raises(
+        recreate.RecreateError,
+        match="public_runtime_recovery_identity_not_proven",
+    ):
+        recreate.validate_local_docker(
+            recreate.DEFAULT_CONTAINER,
+            cwd=repo,
+            public_override=public,
+            admin_override=admin,
         )
 
 

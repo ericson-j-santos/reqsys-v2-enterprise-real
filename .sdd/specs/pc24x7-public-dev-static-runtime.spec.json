@@ -2,7 +2,7 @@
   "feature_name": "pc24x7-public-dev-static-runtime",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-09-24",
-  "updated_at": "2026-10-14",
+  "updated_at": "2026-10-22",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -13,14 +13,16 @@
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_public_dev_static_runtime.py",
+      "tests/test_pc24x7_public_dev_cutover_guard.py",
+      "tests/test_dev_runtime_recovery_executor.py",
       "tests/test_pc24x7_dev_runtime_supervisor.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "DEV somente; fast-forward; api/frontend/nginx; build_sha same-SHA; frontend estático; /@vite/client 404; health/readiness/build-info 200; smoke público independente; sem produção ou segredo. Rota public-static legada fica explicitamente bloqueada antes do OIDC/Compose/locator e também no executável sem backup PostgreSQL e rollback governado atestados; teste negativo obrigatorio. Inventário público DEV governado somente leitura antes do bloqueio de cutover; não comprova backup/rollback nem autoriza deploy."
+    "evidence_contract": "DEV somente; fast-forward; api/frontend/nginx; build_sha same-SHA; frontend estático; /@vite/client 404; health/readiness/build-info 200; smoke público independente; sem produção ou segredo. Dispatch public-static exige comentário exato e recente do owner na issue #1705 e SHA de main capturado pelo gateway, revalidados no job físico. Inventário público DEV governado read-only precede toda mutação. Falha desse inventário publica somente receipt sanitizado com status inventory_blocked e reason_code de allowlist fixa, sem stdout/stderr, metadados Docker, paths privados ou credenciais, e continua bloqueando qualquer mutação. Cutover exige, na mesma execução, Session Launcher/Command Gateway para bootstrap e inventário e Owner Risk 3 Gateway para scripts mutativos versionados, com configuração privada standard_gold_development válida e timeout máximo de 900 s. São obrigatórias imagens de rollback verificadas, snapshots privados dos manifests Compose sem duplicar env-files, pg_dump cifrado por DPAPI, restauração PostgreSQL isolada sem rede com fingerprint de esquema/contagens/sequências e manifesto privado com fingerprint externo. Deploy revalida essa prova; falha aciona rollback de api/frontend/nginx mesmo com API candidata indisponível e exige base inalterada. Manifesto/dump nunca são artifacts; locator só é publicado após validação local same-SHA."
   },
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-public-dev-static-runtime.requirements.md",
-    "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py",
+    "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py + scripts/pc24x7_public_dev_cutover_guard.py + scripts/dev_runtime_recovery.py",
     "workflow": ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     "issue": 1596
   }

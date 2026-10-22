@@ -1,14 +1,14 @@
 {
   "allowed": true,
   "reason": "hotfix_escopo_fechado",
-  "detail": "Hotfix com referencia #1532.",
+  "detail": "Hotfix com referencia #2546.",
   "strict_mode": false,
   "canonical_drift_count": 0,
   "contract_drift_count": 0,
   "strict_blocked": false,
   "increment_type": "hotfix",
-  "reference": "#1532",
-  "intent": "Confirmar Action.Submit do Teams imediatamente e processar o turno em background",
+  "reference": "#2546",
+  "intent": "remover quarentena public-static somente após backup PostgreSQL, restore isolado e rollback DEV atestados",
   "coordenador_state": "yellow",
   "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {
@@ -17,7 +17,7 @@
       "state_yellow"
     ],
     "open_pr_threshold": 5,
-    "open_prs": 1,
+    "open_prs": 2,
     "duplicate_group_count": 0,
     "critical_gaps": 0,
     "allowed_increment_types": [
@@ -33,30 +33,6 @@
       "action": "bloquear_nova_frente",
       "reference": "state_yellow",
       "detail": "Resolver bloqueios antes de abrir branch/PR novo"
-    },
-    {
-      "priority": "P2",
-      "action": "validar_workflow_ausente_na_janela",
-      "reference": "Actions Auto Operator",
-      "detail": "Disparar leitura ou workflow allowlisted se necessario"
-    },
-    {
-      "priority": "P2",
-      "action": "validar_workflow_ausente_na_janela",
-      "reference": "Branch Protection Audit",
-      "detail": "Disparar leitura ou workflow allowlisted se necessario"
-    },
-    {
-      "priority": "P2",
-      "action": "validar_workflow_ausente_na_janela",
-      "reference": "CI Enterprise Fast",
-      "detail": "Disparar leitura ou workflow allowlisted se necessario"
-    },
-    {
-      "priority": "P2",
-      "action": "validar_workflow_ausente_na_janela",
-      "reference": "CI — ReqSys v2 Enterprise",
-      "detail": "Disparar leitura ou workflow allowlisted se necessario"
     }
   ],
   "operational_cycle": [

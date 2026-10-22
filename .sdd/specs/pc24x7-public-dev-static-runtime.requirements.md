@@ -58,3 +58,51 @@ Este incremento não executa backup físico, restore, Docker Compose ou deploy.
 O modo `public-static` passa a utilizar Session Launcher/Command Gateway da mesma forma que o `study-mode`, com checkout da regra fixada, preflight de versão do runner, SHA exato, reserva de worktree, sessão e inspeção somente leitura por `scripts/diagnose_pc24x7_public_dev.py --stdout-only` (`python -B`, risco 1). A coleta do inventário comprova apenas metadados permitidos do Docker DEV e produz um receipt público sanitizado sem o JSON bruto do host. A quarentena anterior permanece obrigatória **depois** do inventário e **antes** de OIDC, Compose, publicação do locator ou aplicação de configuração. Se o inventário falhar, a execução também falha fechada. Não há backup físico nesta fase.
 
 A remoção futura da quarentena dependerá de implementação e prova independente de backup PostgreSQL real, restauração em cópia isolada, imagens api/frontend/nginx para rollback, controle de concorrência, autorização Risk 3 específica de host e DEV, cenário negativo e E2E same-SHA. Os testes estruturais detectam bypass da quarentena, desativação da sessão e elevação indevida de risco da leitura. Referência de continuidade: issue #2546, run físico #38613970486.
+
+## Segundo incremento — cutover recuperável governado — 22/10/2026
+
+A quarentena deixa de ser um `throw` incondicional somente quando a mesma execução
+manual produz e valida as seguintes provas antes de OIDC/Compose/locator:
+
+- Session Launcher e Command Gateway fixados no SHA de `main` para bootstrap e
+  inventário; toda mutação passa pela rota separada `owner_risk3_gateway.py`,
+  classificada como Risk 3 e limitada a host/DEV;
+- dispatch vinculado ao comentário exato e recente do owner na issue `#1705` e
+  ao SHA de `main` capturado pelo gateway, com readback antes do checkout;
+- captura selada das imagens correntes de api/frontend/nginx e criação de tags de
+  rollback com readback do image ID;
+- snapshots privados e imutáveis, na ordem observada, somente dos manifests
+  Compose; env-files continuam no local original e não são duplicados;
+- `pg_dump` da base DEV executado dentro do contêiner PostgreSQL observado, mantido
+  em disco apenas como ciphertext DPAPI de escopo do usuário;
+- restauração do dump em contêiner descartável da mesma imagem PostgreSQL, sem rede,
+  comparando fingerprint de esquema, contagem de todas as tabelas e sequências;
+- manifesto privado íntegro com fingerprint externo, nunca incluído em artifact;
+- deploy executado pelo Owner Risk 3 Gateway e condicionado à revalidação do
+  manifesto;
+- em falha do cutover, rollback automático das três imagens, inclusive quando a API
+  candidata estiver indisponível, preservando as validações físicas de host, raiz,
+  projeto, cardinalidade e imagens;
+- publicação do locator somente depois do runtime local same-SHA e dos controles de
+  frontend estático; smoke público independente permanece obrigatório.
+
+O backup cifrado, manifesto e override de rollback permanecem no diretório privado
+`.reqsys-recovery` do runtime, junto aos snapshots Compose necessários para que o
+fast-forward não invalide o rollback. Artifacts públicos contêm apenas flags sanitizadas,
+fingerprints e resultado. O fluxo não restaura a base ativa automaticamente: api,
+frontend e nginx são os únicos serviços recriados pelo deploy; qualquer divergência
+da base após rollback falha fechada e exige intervenção específica. HML/STG/PROD,
+segredos, rotação de credenciais, pruning de imagem e mudança de rede continuam fora
+do escopo.
+
+O Command Gateway geral continua recusando Risk 3. A rota do owner exige a
+configuração privada do modo temporário `standard_gold_development` ainda válida,
+worktree limpo, script Python rastreado no SHA da sessão, timeout máximo de 900 s e
+auditoria por hash. Ausência ou expiração dessa configuração bloqueia antes de
+qualquer mutação; ela não é ativada automaticamente pelo workflow.
+
+Se o inventário read-only falhar, o workflow deve continuar fail-closed e publicar
+um receipt sanitizado com `status=inventory_blocked` e `reason_code` pertencente a
+uma allowlist fixa. O receipt não pode incluir stdout/stderr, IDs ou metadados de
+contêiner, paths privados ou credenciais. A ausência de inventário válido continua
+bloqueando backup, OIDC, Compose, locator e qualquer outra mutação.

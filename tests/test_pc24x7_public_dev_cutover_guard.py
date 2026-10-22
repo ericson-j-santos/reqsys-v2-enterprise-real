@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+import scripts.pc24x7_public_dev_cutover_guard as guard
+
+SHA = "a" * 40
+IMAGE = "sha256:" + "b" * 64
+CORRELATION = "pc24x7-public-static-123-1"
+
+
+def _prepared_runtime():
+    return {
+        "schema": 2,
+        "state": "prepared",
+        "host": guard.HOST,
+        "environment": "dev",
+        "project": guard.PROJECT,
+        "runtime_root": str(guard.ROOT),
+        "runtime_sha": "c" * 40,
+        "services": {},
+        "compose_files": [],
+        "environment_files": [],
+        "rollback_override": {},
+        "fingerprint": "d" * 64,
+    }
+
+
+def _patch_prepare_dependencies(monkeypatch, root: Path):
+    monkeypatch.setattr(guard.recovery, "observed_scope", lambda _host: None)
+    monkeypatch.setattr(guard.recovery, "capture", lambda *_args, **_kwargs: {"fingerprint": "1" * 64})
+    monkeypatch.setattr(guard.recovery, "prepare", lambda *_args, **_kwargs: _prepared_runtime())
+    monkeypatch.setattr(guard, "_unique_container", lambda _service: "db-container")
+    monkeypatch.setattr(guard, "_db_identity", lambda _container, _root: IMAGE)
+    monkeypatch.setattr(
+        guard,
+        "database_snapshot",
+        lambda *_args, **_kwargs: {"table_count": 4, "row_count_total": 19, "fingerprint": "e" * 64},
+    )
+    monkeypatch.setattr(guard, "_dump_database", lambda _container: b"private-postgres-dump")
+    monkeypatch.setattr(guard.recovery, "file_meta", lambda path, _root: {
+        "relative_path": path.relative_to(root).as_posix(),
+        "size": path.stat().st_size,
+        "sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
+    })
+
+
+def test_prepare_keeps_only_dpapi_ciphertext_and_sanitized_public_contract(monkeypatch, tmp_path):
+    root = tmp_path
+    _patch_prepare_dependencies(monkeypatch, root)
+    restored = []
+    manifest_path = root / ".reqsys-recovery" / f"public-dev-{CORRELATION}.manifest.json"
+    manifest = guard.prepare(
+        SHA,
+        CORRELATION,
+        manifest_path,
+        root=root,
+        hostname=guard.HOST,
+        runner=object(),
+        protect=lambda value, *, encrypt: b"ciphertext:" + value[::-1],
+        restore=lambda dump, image, correlation, expected: restored.append(
+            (dump, image, correlation, expected)
+        ),
+    )
+    backup = root / manifest["database"]["backup"]["relative_path"]
+    assert backup.read_bytes().startswith(b"ciphertext:")
+    assert b"private-postgres-dump" not in backup.read_bytes()
+    assert restored and restored[0][1:3] == (IMAGE, CORRELATION)
+    assert manifest["database"]["isolated_restore_verified"] is True
+    assert manifest["production_touched"] is False
+    assert manifest_path.is_file()
+    rendered = json.dumps(manifest)
+    assert "POSTGRES_PASSWORD" not in rendered
+
+
+def test_validate_rejects_outer_manifest_tamper(monkeypatch, tmp_path):
+    root = tmp_path
+    _patch_prepare_dependencies(monkeypatch, root)
+    manifest_path = root / ".reqsys-recovery" / f"public-dev-{CORRELATION}.manifest.json"
+    def protect(value, *, encrypt):
+        return value[::-1]
+    manifest = guard.prepare(
+        SHA, CORRELATION, manifest_path, root=root, hostname=guard.HOST,
+        runner=object(), protect=protect, restore=lambda *_args: None,
+    )
+    external = manifest["fingerprint"]
+    manifest["expected_sha"] = "f" * 40
+    manifest["fingerprint"] = guard._outer_fingerprint(
+        {key: value for key, value in manifest.items() if key != "fingerprint"}
+    )
+    with pytest.raises(guard.CutoverBlocked, match="external_fingerprint_mismatch"):
+        guard.validate(
+            manifest, external, SHA, root=root, runner=object(),
+            unprotect=lambda value, *, encrypt: value[::-1],
+        )
+
+
+def test_isolated_restore_uses_pinned_image_no_network_and_cleans_owned_resources(monkeypatch):
+    calls = []
+
+    def fake_text(argv, *, timeout=120):
+        calls.append((tuple(argv), None))
+        return ""
+
+    def fake_docker(argv, *, data=None, timeout=120, can_fail=False):
+        calls.append((tuple(argv), data))
+        if argv[:2] == ["exec", "reqsys-public-dev-restore-" + __import__("hashlib").sha256(CORRELATION.encode()).hexdigest()[:16]] and "pg_isready" in argv:
+            return b"accepting connections"
+        return b""
+
+    monkeypatch.setattr(guard, "_text", fake_text)
+    monkeypatch.setattr(guard, "_docker", fake_docker)
+    expected = {"table_count": 4, "row_count_total": 19, "fingerprint": "e" * 64}
+    monkeypatch.setattr(guard, "database_snapshot", lambda *_args, **_kwargs: expected)
+    guard._isolated_restore(b"dump", IMAGE, CORRELATION, expected, sleeper=lambda _value: None)
+    argv = [item[0] for item in calls]
+    create = next(item for item in argv if item and item[0] == "create")
+    assert "--network" in create and create[create.index("--network") + 1] == "none"
+    assert create[-1] == IMAGE
+    restore = next(item for item in calls if "pg_restore" in item[0])
+    assert restore[1] == b"dump"
+    assert any(item[:2] == ("rm", "-f") for item in argv)
+    assert any(item[:3] == ("volume", "rm", "-f") for item in argv)
+
+
+def test_workflow_never_uploads_private_manifest_or_backup():
+    raw = (Path(__file__).resolve().parents[1] / ".github" / "workflows" /
+           "noteri-study-mode-dev-reconcile.yml").read_text(encoding="utf-8")
+    upload = raw.split("- name: Upload public DEV physical evidence", 1)[1].split(
+        "- name: Recover and validate Engineering Orchestrator DEV", 1
+    )[0]
+    assert "artifacts/pc24x7-public-dev/evidence.json" in upload
+    assert ".reqsys-recovery" not in upload
+    assert "pgdump" not in upload
+
+
+def test_public_receipt_allows_only_sanitized_contract_in_fixed_directory(tmp_path):
+    receipt = tmp_path / "artifacts" / "pc24x7-public-dev" / "cutover-prepare.json"
+    guard.write_public_receipt(
+        receipt,
+        {
+            "status": "prepared",
+            "fingerprint": "f" * 64,
+            "backup_verified": True,
+            "isolated_restore_verified": True,
+            "rollback_images_prepared": True,
+            "production_touched": False,
+        },
+        root=tmp_path,
+    )
+    assert json.loads(receipt.read_text(encoding="utf-8"))["status"] == "prepared"
+
+    with pytest.raises(guard.CutoverBlocked, match="private_fields"):
+        guard.write_public_receipt(
+            tmp_path / "artifacts" / "pc24x7-public-dev" / "cutover-private.json",
+            {"status": "prepared", "database": {"private": True}},
+            root=tmp_path,
+        )
+    with pytest.raises(guard.CutoverBlocked, match="path_refused"):
+        guard.write_public_receipt(
+            tmp_path / ".reqsys-recovery" / "cutover-prepare.json",
+            {"status": "prepared"},
+            root=tmp_path,
+        )
+
+
+def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
+    root = Path(__file__).resolve().parents[1]
+    raw = (root / ".github" / "workflows" / "noteri-study-mode-dev-reconcile.yml").read_text(
+        encoding="utf-8"
+    )
+    ignore = (root / ".gitignore").read_text(encoding="utf-8")
+    public_static = raw.split("- name: Prepare protected PostgreSQL backup", 1)[1].split(
+        "- name: Recover and validate Engineering Orchestrator DEV", 1
+    )[0]
+    assert "owner_risk3_gateway.py" in public_static
+    assert "'--risk', '3'" not in public_static
+    assert "'--timeout', '1200'" not in public_static
+    assert "'--timeout', '1500'" not in public_static
+    assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in public_static
+    assert ".reqsys-recovery/" in ignore
+    assert "artifacts/pc24x7-public-dev/evidence.json" in ignore
+    assert "artifacts/pc24x7-public-dev/cutover-*.json" in ignore

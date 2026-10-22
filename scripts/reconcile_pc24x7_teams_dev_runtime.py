@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+
 def _load_provision_module():
     module_path = Path(__file__).resolve().with_name("provision_pc24x7_teams_bot_runtime.py")
     spec = importlib.util.spec_from_file_location("reqsys_pc24x7_teams_provision", module_path)
@@ -159,7 +160,18 @@ def _validate_public_override(
         raise ReconcileError("public_override_outside_runtime")
     head = expected_sha or _git(runtime_root, "rev-parse", "HEAD").stdout.strip()
     tracked = _git(runtime_root, "rev-parse", f"{head}:{PUBLIC_OVERRIDE_NAME}", check=False)
-    observed = _git(runtime_root, "hash-object", "--no-filters", str(candidate_abs), check=False)
+    # Compare the working-tree file with the committed blob using the same
+    # clean filters Git applies for this repository path. On Windows,
+    # --no-filters hashes CRLF bytes directly and can report a false mismatch
+    # even when `git status` considers the file clean.
+    observed = _git(
+        runtime_root,
+        "hash-object",
+        "--path",
+        PUBLIC_OVERRIDE_NAME,
+        str(candidate_abs),
+        check=False,
+    )
     if (
         tracked.returncode != 0
         or observed.returncode != 0
@@ -184,6 +196,101 @@ def _require_local_docker(cwd: Path) -> None:
         raise ReconcileError("docker_context_invalid") from exc
     if endpoint != "npipe:////./pipe/docker_engine":
         raise ReconcileError("docker_remote_context_blocked")
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return os.path.normcase(str(Path(os.path.abspath(left)))) == os.path.normcase(
+        str(Path(os.path.abspath(right)))
+    )
+
+
+def _compose_paths(raw: str, runtime_root: Path) -> list[Path]:
+    paths: list[Path] = []
+    for item in raw.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        path = _windows_path(value)
+        if not path.is_absolute():
+            path = runtime_root / path
+        paths.append(path)
+    return paths
+
+
+def _recover_public_override_from_siblings(
+    runtime_root: Path,
+    admin_override: Path,
+    cwd: Path,
+) -> Path:
+    """Prove the public DEV identity from unchanged sibling services.
+
+    A narrowly scoped recovery is allowed only when both frontend and nginx still
+    carry the same canonical, last-applied public overlay and the same external
+    admin override as the API. This repairs the known API-only Compose drift
+    without accepting a project name or port binding as sufficient identity.
+    """
+    proven: list[Path] = []
+    for service in ("frontend", "nginx"):
+        result = _run(
+            [
+                _tool("docker"),
+                "ps",
+                "--filter", f"label=com.docker.compose.project={EXPECTED_PROJECT}",
+                "--filter", f"label=com.docker.compose.service={service}",
+                "--format", "{{.ID}}",
+            ],
+            cwd=cwd,
+            timeout=60,
+        )
+        ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if len(ids) != 1:
+            raise ReconcileError("public_dev_runtime_identity_not_proven")
+
+        labels = {
+            name: _inspect_value(ids[0], f'{{{{index .Config.Labels "{name}"}}}}', cwd)
+            for name in (
+                "com.docker.compose.project",
+                "com.docker.compose.service",
+                "com.docker.compose.project.working_dir",
+                "com.docker.compose.project.config_files",
+            )
+        }
+        sibling_root = _windows_path(
+            labels["com.docker.compose.project.working_dir"].strip()
+        )
+        if (
+            labels["com.docker.compose.project"].strip() != EXPECTED_PROJECT
+            or labels["com.docker.compose.service"].strip() != service
+            or not _same_path(sibling_root, runtime_root)
+        ):
+            raise ReconcileError("public_dev_runtime_identity_not_proven")
+
+        paths = _compose_paths(
+            labels["com.docker.compose.project.config_files"], runtime_root
+        )
+        admins = [
+            path.resolve()
+            for path in paths
+            if path.name.casefold() == ADMIN_OVERRIDE_NAME.casefold() and path.is_file()
+        ]
+        publics = [
+            path
+            for path in paths
+            if path.name.casefold() == PUBLIC_OVERRIDE_NAME.casefold() and path.is_file()
+        ]
+        if (
+            len(admins) != 1
+            or not _same_path(admins[0], admin_override)
+            or len(publics) != 1
+            or not paths
+            or not _same_path(paths[-1], publics[0])
+        ):
+            raise ReconcileError("public_dev_runtime_identity_not_proven")
+        proven.append(_validate_public_override(runtime_root, publics[0]))
+
+    if len(proven) != 2 or not _same_path(proven[0], proven[1]):
+        raise ReconcileError("public_dev_runtime_identity_not_proven")
+    return proven[0]
 
 
 def _discover_runtime() -> tuple[Path, Path, Path, str]:
@@ -238,26 +345,26 @@ def _discover_runtime() -> tuple[Path, Path, Path, str]:
     config_raw = labels["com.docker.compose.project.config_files"]
     admin_candidates: list[Path] = []
     public_candidates: list[Path] = []
-    ordered_paths: list[Path] = []
-    for raw in config_raw.split(","):
-        value = raw.strip()
-        if not value:
-            continue
-        path = _windows_path(value)
-        if not path.is_absolute():
-            path = runtime_root / path
-        ordered_paths.append(path)
+    ordered_paths = _compose_paths(config_raw, runtime_root)
+    for path in ordered_paths:
         if path.name.casefold() == ADMIN_OVERRIDE_NAME.casefold() and path.is_file():
             admin_candidates.append(path.resolve())
         if path.name.casefold() == PUBLIC_OVERRIDE_NAME.casefold() and path.is_file():
             public_candidates.append(path)
     if len(admin_candidates) != 1:
         raise ReconcileError("admin_override_not_unique")
-    if len(public_candidates) != 1:
+    if len(public_candidates) > 1:
         raise ReconcileError("public_dev_runtime_identity_not_proven")
-    public_override = _validate_public_override(runtime_root, public_candidates[0])
-    if not ordered_paths or Path(os.path.abspath(ordered_paths[-1])) != Path(os.path.abspath(public_candidates[0])):
-        raise ReconcileError("public_dev_override_not_last")
+    if public_candidates:
+        public_override = _validate_public_override(runtime_root, public_candidates[0])
+        if not ordered_paths or not _same_path(ordered_paths[-1], public_candidates[0]):
+            raise ReconcileError("public_dev_override_not_last")
+    else:
+        public_override = _recover_public_override_from_siblings(
+            runtime_root,
+            admin_candidates[0],
+            cwd,
+        )
     return runtime_root.resolve(strict=True), admin_candidates[0], public_override, project
 
 
@@ -604,3 +711,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

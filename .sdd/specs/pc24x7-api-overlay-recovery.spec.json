@@ -1,0 +1,15 @@
+{
+  "feature_name": "Recuperação governada de drift do overlay público da API PC24x7 DEV",
+  "approvals": {
+    "requirements": true
+  },
+  "acceptance_criteria": [
+    "A comparação do overlay com o blob esperado deve aplicar os mesmos clean filters do Git para o caminho canônico em todas as camadas de reconciliação e recriação, evitando falso mismatch por CRLF no Windows.",
+    "A API sem overlay público só pode ser recriada quando frontend e nginx comprovarem independentemente a mesma identidade DEV, o mesmo override administrativo e o overlay público canônico por último."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reconcile_pc24x7_teams_dev_runtime.py"
+    ]
+  }
+}
