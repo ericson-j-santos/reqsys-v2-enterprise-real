@@ -215,7 +215,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
+    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "watchdog-readback", "alm-runner-bootstrap", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -238,20 +238,20 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 13
+    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 15
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
-    assert raw.count("Prepare pinned portable Python 3.12") == 6
-    assert raw.count("python-3.12.10-embed-amd64.zip") == 6
-    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 6
-    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 6
+    assert raw.count("Prepare pinned portable Python 3.12") == 7
+    assert raw.count("python-3.12.10-embed-amd64.zip") == 7
+    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 7
+    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 7
     assert "Get-FileHash" not in raw
-    assert raw.count("REQSYS_PYTHON=$python") == 6
-    assert raw.count("python312._pth") == 6
-    assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
-    assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 6
-    assert raw.count("--require-runner-version-preflight") == 5
-    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 7
+    assert raw.count("REQSYS_PYTHON=$python") == 7
+    assert raw.count("python312._pth") == 7
+    assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 7
+    assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 7
+    assert raw.count("--require-runner-version-preflight") == 6
+    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 8
 
     # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
     assert "inputs.mode == 'watchdog-uac'" in raw
