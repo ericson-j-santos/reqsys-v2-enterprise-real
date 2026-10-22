@@ -11,6 +11,14 @@ on:
         options:
           - study-mode
           - public-static
+      authorization_comment_id:
+        description: 'Comentário exato do owner no gateway; obrigatório em public-static'
+        required: false
+        type: string
+      expected_sha:
+        description: 'SHA de main capturado pelo gateway; obrigatório em public-static'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -30,8 +38,10 @@ on:
       - 'frontend/src/services/hostProfileLocalAgent.js'
       - 'frontend/src/views/TaskConsoleView.vue'
       - 'scripts/noteri_study_mode_dev_reconcile.py'
+      - 'scripts/pc24x7_public_dev_cutover_guard.py'
       - 'scripts/provision_pc24x7_teams_bot_runtime.py'
       - 'scripts/reconcile_pc24x7_public_dev_runtime.py'
+      - 'scripts/dev_runtime_recovery.py'
       - 'scripts/recover_reqsys_engineering_orchestrator_dev.py'
       - 'tests/test_noteri_study_mode_dev_reconcile.py'
       - 'tests/test_pc24x7_public_dev_static_runtime.py'
@@ -51,8 +61,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      issues: read
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
-    timeout-minutes: 25
+    timeout-minutes: 45
     environment: development
     env:
       RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
@@ -62,10 +73,44 @@ jobs:
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
+      - name: Verify owner authorization and exact public DEV SHA
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          EXPECTED_DISPATCH_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:AUTHORIZATION_COMMENT_ID -notmatch '^[0-9]+$') { throw 'PUBLIC_DEV_AUTHORIZATION_COMMENT_INVALID' }
+          if ($env:EXPECTED_DISPATCH_SHA -notmatch '^[0-9a-f]{40}$') { throw 'PUBLIC_DEV_EXPECTED_SHA_INVALID' }
+          if ($env:EXPECTED_DISPATCH_SHA -ne '${{ github.sha }}') { throw 'PUBLIC_DEV_DISPATCH_SHA_MISMATCH' }
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/comments/$env:AUTHORIZATION_COMMENT_ID"
+          try { $comment = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 30 } catch {
+            throw 'PUBLIC_DEV_AUTHORIZATION_READBACK_FAILED'
+          }
+          $expectedIssue = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/1705"
+          if ($comment.user.login -ne 'ericson-j-santos' -or
+              $comment.issue_url -ne $expectedIssue -or
+              $comment.body -cne '/reqsys run pc24x7-public-dev-reconcile') {
+            throw 'PUBLIC_DEV_AUTHORIZATION_MISMATCH'
+          }
+          $created = [DateTimeOffset]::Parse($comment.created_at).ToUniversalTime()
+          $age = [DateTimeOffset]::UtcNow - $created
+          if ($age.TotalSeconds -lt -300 -or $age.TotalMinutes -gt 30) {
+            throw 'PUBLIC_DEV_AUTHORIZATION_EXPIRED'
+          }
+          Write-Host 'Owner authorization, issue, command and exact SHA verified.'
+
       - name: Checkout immutable source SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.mode == 'public-static' && inputs.expected_sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -140,8 +185,6 @@ jobs:
           "session_id=$($session.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "gateway_python=$python" | Add-Content $env:GITHUB_OUTPUT
 
-      # Existing quarantine remains mandatory: this path collects only
-      # read-only DEV inventory. No Key Vault, Docker Compose up or locator change.
       - name: Inventory public DEV through governed Gateway (read-only)
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
@@ -210,19 +253,53 @@ jobs:
             [System.Text.UTF8Encoding]::new($false)
           )
 
-      - name: Quarantine legacy public-static without governed backup and rollback
+      - name: Prepare protected PostgreSQL backup and image rollback
+        id: recovery
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
         run: |
-          # Fail AFTER read-only inventory and BEFORE Azure OIDC, Compose or locator.
-          throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID -or -not $env:GATEWAY_PYTHON) {
+            throw 'PUBLIC_DEV_RECOVERY_SESSION_MISSING'
+          }
+          $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
+          $script = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
+          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $manifest = Join-Path $runtimeRoot ('.reqsys-recovery\public-dev-' + $env:CORRELATION_ID + '.manifest.json')
+          $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-prepare-' + $env:CORRELATION_ID + '.json')
+          $argv = @(
+            '--action-id', 'reqsys.pc24x7.public_dev.cutover.prepare',
+            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+            '--cwd', $env:TARGET_PATH, '--timeout', '900',
+            '--correlation-id', $env:CORRELATION_ID,
+            '--', $env:GATEWAY_PYTHON, $script, 'prepare',
+            '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
+            '--manifest', $manifest, '--receipt-file', $receiptFile,
+            '--confirm', 'PREPARE-PC24X7-PUBLIC-DEV-CUTOVER'
+          )
+          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECOVERY_PREPARE_BLOCKED' }
+          try { $receipt = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_RECOVERY_RECEIPT_INVALID' }
+          if ($receipt.status -ne 'prepared' -or $receipt.backup_verified -ne $true -or
+              $receipt.isolated_restore_verified -ne $true -or
+              $receipt.rollback_images_prepared -ne $true -or
+              $receipt.production_touched -ne $false -or
+              $receipt.fingerprint -notmatch '^[0-9a-f]{64}$') {
+            throw 'PUBLIC_DEV_RECOVERY_CONTRACT_INVALID'
+          }
+          "manifest_path=$manifest" | Add-Content $env:GITHUB_OUTPUT
+          "fingerprint=$($receipt.fingerprint)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Validate public static reconciler syntax
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/provision_pc24x7_teams_bot_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
+          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/pc24x7_public_dev_cutover_guard.py scripts/dev_runtime_recovery.py scripts/provision_pc24x7_teams_bot_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
 
       - name: Validate governed Azure OIDC configuration
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
@@ -244,25 +321,124 @@ jobs:
           subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
 
       - name: Reconcile full DEV runtime and static frontend
+        id: deploy
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
         env:
-          PUBLIC_DEV_EVIDENCE_FILE: artifacts/pc24x7-public-dev/evidence.json
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
+          CUTOVER_MANIFEST: ${{ steps.recovery.outputs.manifest_path }}
+          CUTOVER_FINGERPRINT: ${{ steps.recovery.outputs.fingerprint }}
           PUBLIC_DEV_CORRELATION_ID: pc24x7-public-dev-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           $ErrorActionPreference = 'Stop'
-          python scripts/reconcile_pc24x7_public_dev_runtime.py --confirm RECONCILE-PC24X7-PUBLIC-DEV --environment dev --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --expected-tenant-id "$env:CCP_AZURE_TENANT_ID" --correlation-id "$env:PUBLIC_DEV_CORRELATION_ID" --evidence-file "$env:PUBLIC_DEV_EVIDENCE_FILE"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
+          $script = Join-Path $env:TARGET_PATH 'scripts\reconcile_pc24x7_public_dev_runtime.py'
+          $evidence = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
+          $argv = @(
+            '--action-id', 'reqsys.pc24x7.public_dev.runtime.reconcile',
+            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+            '--cwd', $env:TARGET_PATH, '--timeout', '900',
+            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID,
+            '--', $env:GATEWAY_PYTHON, $script,
+            '--confirm', 'RECONCILE-PC24X7-PUBLIC-DEV', '--environment', 'dev',
+            '--expected-sha', '${{ github.sha }}', '--vault-name', $env:REQSYS_KEY_VAULT_NAME,
+            '--expected-tenant-id', $env:CCP_AZURE_TENANT_ID,
+            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID, '--evidence-file', $evidence,
+            '--cutover-manifest', $env:CUTOVER_MANIFEST,
+            '--cutover-fingerprint', $env:CUTOVER_FINGERPRINT
+          )
+          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECONCILE_BLOCKED' }
+          try { $receipt = Get-Content -LiteralPath $evidence -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_RECONCILE_RECEIPT_INVALID' }
+          if ($receipt.status -ne 'ready' -or $receipt.environment -ne 'dev' -or
+              $receipt.runtime.build_sha -ne '${{ github.sha }}' -or
+              $receipt.backup_verified -ne $true -or
+              $receipt.isolated_restore_verified -ne $true -or
+              $receipt.rollback_images_prepared -ne $true -or
+              $receipt.production_touched -ne $false) {
+            throw 'PUBLIC_DEV_RECONCILE_CONTRACT_INVALID'
+          }
+          $publicEvidence = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $publicEvidence) | Out-Null
+          Copy-Item -LiteralPath $evidence -Destination $publicEvidence -Force
+
+      - name: Roll back DEV images after failed cutover
+        if: always() && steps.deploy.outcome == 'failure' && github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static' && steps.recovery.outputs.fingerprint != ''
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
+          CUTOVER_MANIFEST: ${{ steps.recovery.outputs.manifest_path }}
+          CUTOVER_FINGERPRINT: ${{ steps.recovery.outputs.fingerprint }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
+          $script = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
+          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-rollback-' + $env:CORRELATION_ID + '.json')
+          $argv = @(
+            '--action-id', 'reqsys.pc24x7.public_dev.cutover.rollback',
+            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+            '--cwd', $env:TARGET_PATH, '--timeout', '600',
+            '--correlation-id', $env:CORRELATION_ID,
+            '--', $env:GATEWAY_PYTHON, $script, 'rollback',
+            '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
+            '--manifest', $env:CUTOVER_MANIFEST, '--expected-fingerprint', $env:CUTOVER_FINGERPRINT,
+            '--receipt-file', $receiptFile,
+            '--confirm', 'ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER'
+          )
+          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          $gatewayExit = $LASTEXITCODE
+          $rollbackOk = $false
+          if ($gatewayExit -eq 0) {
+            try {
+              $receipt = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json
+              $rollbackOk = ($receipt.rollback_ok -eq $true -and $receipt.database_unchanged -eq $true -and
+                $receipt.production_touched -eq $false)
+            } catch { $rollbackOk = $false }
+          }
+          $publicEvidence = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $publicEvidence) | Out-Null
+          $sanitized = [ordered]@{
+            status = $(if ($rollbackOk) { 'deploy_failed_rollback_completed' } else { 'deploy_failed_rollback_unverified' })
+            environment = 'dev'; source_sha = '${{ github.sha }}'; correlation_id = $env:CORRELATION_ID
+            backup_verified = $true; isolated_restore_verified = $true
+            rollback_verified = $rollbackOk; production_touched = $false
+          }
+          [System.IO.File]::WriteAllText($publicEvidence, (($sanitized | ConvertTo-Json) + [Environment]::NewLine), [System.Text.UTF8Encoding]::new($false))
+          if (-not $rollbackOk) { throw 'PUBLIC_DEV_ROLLBACK_NOT_VERIFIED' }
 
       - name: Reconcile public tunnels and publish signed locator
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
         shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
         run: |
           $ErrorActionPreference = 'Stop'
-          python scripts/pc24x7_public_dev_tunnel.py --apply
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/pc24x7_dev_locator_publisher.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
+          foreach ($command in @(
+            @((Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_tunnel.py'), '--apply'),
+            @((Join-Path $env:TARGET_PATH 'scripts\pc24x7_dev_locator_publisher.py'))
+          )) {
+            $actionId = 'reqsys.pc24x7.public_dev.locator.publish'
+            if ($command[0] -like '*pc24x7_public_dev_tunnel.py') {
+              $actionId = 'reqsys.pc24x7.public_dev.tunnel.reconcile'
+            }
+            $argv = @(
+              '--action-id', $actionId,
+              '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+              '--cwd', $env:TARGET_PATH, '--timeout', '180',
+              '--correlation-id', $env:CORRELATION_ID,
+              '--', $env:GATEWAY_PYTHON
+            ) + $command
+            & $env:GATEWAY_PYTHON $ownerGateway @argv
+            if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_LOCATOR_GATEWAY_BLOCKED' }
+          }
 
       - name: Upload public DEV physical evidence
         if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'

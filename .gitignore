@@ -91,6 +91,12 @@ compose.pc24x7-local.yml
 # Saída temporária de scripts do runtime (diagnósticos OpenAPI, estado de E2E)
 runtime/.tmp/
 
+# Estado privado e evidência efêmera do cutover público DEV no PC24x7.
+# O Owner Risk 3 Gateway exige o worktree limpo entre as etapas.
+.reqsys-recovery/
+artifacts/pc24x7-public-dev/evidence.json
+artifacts/pc24x7-public-dev/cutover-*.json
+
 # Pacote OCR privado preparado efemeramente para o contexto Docker
 backend/vendor/ocr-evidence-engine/*
 !backend/vendor/ocr-evidence-engine/.gitkeep

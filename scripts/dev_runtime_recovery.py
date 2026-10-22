@@ -258,7 +258,7 @@ def observe_identity():
     return build
 
 
-def live_guard(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
+def static_live_guard(runner, root=ROOT, hostname=None):
     observed_scope(hostname)
     root_abs = Path(os.path.abspath(root))
     if _reparse(root_abs) or root_abs.resolve(strict=True) != root_abs:
@@ -274,9 +274,14 @@ def live_guard(runner, root=ROOT, identity_probe=observe_identity, hostname=None
     return {
         "host": HOST,
         "root": str(root_abs),
-        "runtime_sha": identity_probe(),
         "containers": containers,
     }
+
+
+def live_guard(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
+    live = static_live_guard(runner, root, hostname)
+    live["runtime_sha"] = identity_probe()
+    return live
 
 
 def fingerprint(body):
@@ -368,7 +373,21 @@ def validate(manifest, runner, expected_fingerprint, root=ROOT, require_prepared
         checked(runner, ("docker", "image", "inspect", expected))
         if require_prepared:
             verify_tag(runner, str(services[service].get("rollback_tag", "")), expected)
-    for group in ("compose_files", "environment_files"):
+    groups = ["environment_files"]
+    if require_prepared:
+        originals = manifest.get("compose_files")
+        rollback_files = manifest.get("rollback_compose_files")
+        if (
+            not isinstance(originals, list)
+            or not isinstance(rollback_files, list)
+            or len(rollback_files) != len(originals)
+            or not rollback_files
+        ):
+            raise RecoveryError("rollback_compose_files_invalid")
+        groups.append("rollback_compose_files")
+    else:
+        groups.append("compose_files")
+    for group in groups:
         records = manifest.get(group)
         if not isinstance(records, list):
             raise RecoveryError("file_metadata_invalid")
@@ -434,6 +453,27 @@ def prepare(manifest, runner, expected_fingerprint, root=ROOT):
     if recovery_dir.exists() and (_reparse(recovery_dir) or not recovery_dir.is_dir()):
         raise RecoveryError("recovery_dir_refused")
     recovery_dir.mkdir(exist_ok=True)
+    rollback_compose_files = []
+    for index, record in enumerate(manifest["compose_files"]):
+        source = root / record["relative_path"]
+        snapshot = recovery_dir / f"compose-{index:02d}-{expected_fingerprint}.yaml"
+        try:
+            payload = source.read_bytes()
+            if snapshot.exists():
+                if _reparse(snapshot) or snapshot.read_bytes() != payload:
+                    raise RecoveryError("compose_snapshot_collision")
+            else:
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+                descriptor = os.open(snapshot, flags, 0o600)
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(payload)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+        except RecoveryError:
+            raise
+        except OSError as exc:
+            raise RecoveryError("compose_snapshot_write_failed") from exc
+        rollback_compose_files.append(file_meta(snapshot, root))
     path = recovery_dir / f"rollback-{expected_fingerprint}.json"
     payload = json.dumps(override, sort_keys=True, separators=(",", ":"))
     if path.exists():
@@ -446,6 +486,7 @@ def prepare(manifest, runner, expected_fingerprint, root=ROOT):
         {
             "state": "prepared",
             "services": services,
+            "rollback_compose_files": rollback_compose_files,
             "rollback_override": file_meta(path, root),
             "capture_fingerprint": expected_fingerprint,
         }
@@ -592,15 +633,31 @@ def rollback(
     wait_interval=2,
     clock=time.monotonic,
     sleeper=time.sleep,
+    allow_unhealthy_current=False,
 ):
     try:
         validate(manifest, runner, expected_fingerprint, root, True)
         old = manifest["runtime_sha"]
-        live_guard(runner, root, identity_probe, hostname)
-        base = ["docker", "compose", "--project-name", PROJECT]
+        try:
+            live_guard(runner, root, identity_probe, hostname)
+        except RecoveryError as exc:
+            if not allow_unhealthy_current or str(exc).split(":", 1)[0] not in {
+                "live_probe_unavailable",
+                "live_identity_invalid",
+                "live_readiness_invalid",
+                "live_liveness_invalid",
+            }:
+                raise
+            # A candidate API indisponível não pode impedir o rollback. Ainda
+            # exigimos host, raiz, projeto, cardinalidade e imagens observadas.
+            static_live_guard(runner, root, hostname)
+        base = [
+            "docker", "compose", "--project-name", PROJECT,
+            "--project-directory", str(root),
+        ]
         for record in manifest["environment_files"]:
             base.extend(("--env-file", str(root / record["relative_path"])))
-        for record in manifest["compose_files"]:
+        for record in manifest["rollback_compose_files"]:
             base.extend(("--file", str(root / record["relative_path"])))
         base.extend(
             ("--file", str(root / manifest["rollback_override"]["relative_path"]))

@@ -34,6 +34,14 @@ except (ImportError, ModuleNotFoundError):
         "self_hosted_dev_maintenance",
     )
 
+try:
+    from scripts import pc24x7_public_dev_cutover_guard as cutover_guard
+except (ImportError, ModuleNotFoundError):
+    cutover_guard = _load_sibling_module(
+        "pc24x7_public_dev_cutover_guard.py",
+        "pc24x7_public_dev_cutover_guard",
+    )
+
 
 def _load_provision_module():
     module_path = Path(__file__).resolve().with_name("provision_pc24x7_teams_bot_runtime.py")
@@ -626,11 +634,23 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
         return evidence
-    # Legacy public-static Compose mutation is quarantined until a same-run,
-    # governed PostgreSQL backup, isolated restore and image rollback have
-    # been attested. A successful read-only portable runtime check is still
-    # allowed above. The old path must never infer cutover authorization.
-    raise ReconcileError("legacy_dev_backup_and_rollback_not_verified")
+
+    manifest_path = getattr(args, "cutover_manifest", None)
+    manifest_fingerprint = str(getattr(args, "cutover_fingerprint", "") or "")
+    if manifest_path is None or not manifest_fingerprint:
+        raise ReconcileError("governed_cutover_evidence_required")
+    try:
+        cutover_manifest = cutover_guard.load(manifest_path)
+        cutover_guard.validate(
+            cutover_manifest,
+            manifest_fingerprint,
+            args.expected_sha,
+            root=cutover_guard.ROOT,
+        )
+    except (cutover_guard.CutoverBlocked, cutover_guard.recovery.RecoveryError) as exc:
+        raise ReconcileError(
+            f"governed_cutover_evidence_invalid:{str(exc).split(':', 1)[0]}"
+        ) from None
 
     if not args.vault_name.strip():
         raise ReconcileError("vault_name_missing")
@@ -655,6 +675,18 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
     runtime = _verify(args.expected_sha)
 
+    try:
+        cutover_guard.validate(
+            cutover_manifest,
+            manifest_fingerprint,
+            args.expected_sha,
+            root=cutover_guard.ROOT,
+        )
+    except (cutover_guard.CutoverBlocked, cutover_guard.recovery.RecoveryError) as exc:
+        raise ReconcileError(
+            f"governed_cutover_evidence_changed:{str(exc).split(':', 1)[0]}"
+        ) from None
+
     evidence = {
         "schema_version": "1.0.0",
         "status": "ready",
@@ -670,6 +702,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "credentials": credentials,
         "frontend_mode": "static_nginx",
         "vite_hmr_exposed": False,
+        "backup_verified": True,
+        "isolated_restore_verified": True,
+        "rollback_images_prepared": True,
+        "cutover_fingerprint": manifest_fingerprint,
         "production_touched": False,
         "secrets_read": True,
         "secret_value_exposed": False,
@@ -692,6 +728,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-tenant-id", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--evidence-file", type=Path, required=True)
+    parser.add_argument("--cutover-manifest", type=Path)
+    parser.add_argument("--cutover-fingerprint")
     return parser.parse_args()
 
 
