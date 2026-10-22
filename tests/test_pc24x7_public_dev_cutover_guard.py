@@ -7,7 +7,6 @@ import pytest
 
 import scripts.pc24x7_public_dev_cutover_guard as guard
 
-
 SHA = "a" * 40
 IMAGE = "sha256:" + "b" * 64
 CORRELATION = "pc24x7-public-static-123-1"
@@ -81,7 +80,8 @@ def test_validate_rejects_outer_manifest_tamper(monkeypatch, tmp_path):
     root = tmp_path
     _patch_prepare_dependencies(monkeypatch, root)
     manifest_path = root / ".reqsys-recovery" / f"public-dev-{CORRELATION}.manifest.json"
-    protect = lambda value, *, encrypt: value[::-1]
+    def protect(value, *, encrypt):
+        return value[::-1]
     manifest = guard.prepare(
         SHA, CORRELATION, manifest_path, root=root, hostname=guard.HOST,
         runner=object(), protect=protect, restore=lambda *_args: None,

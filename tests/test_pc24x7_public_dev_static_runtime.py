@@ -1,13 +1,13 @@
 from __future__ import annotations
-import sys
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "reconcile_pc24x7_public_dev_runtime.py"
 OVERLAY = ROOT / "docker-compose.pc24x7-public-dev.yml"

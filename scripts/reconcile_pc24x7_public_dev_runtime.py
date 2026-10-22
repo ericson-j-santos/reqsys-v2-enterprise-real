@@ -16,6 +16,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+
 def _load_sibling_module(filename: str, module_name: str):
     module_path = Path(__file__).resolve().with_name(filename)
     spec = importlib.util.spec_from_file_location(module_name, module_path)

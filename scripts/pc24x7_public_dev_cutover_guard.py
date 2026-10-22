@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-from ctypes import wintypes
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import socket
 import subprocess
 import sys
 import time
+from ctypes import wintypes
+from pathlib import Path
 from typing import Any, Callable
 
 try:
