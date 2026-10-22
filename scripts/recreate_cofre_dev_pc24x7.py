@@ -187,7 +187,85 @@ def _clean_child_env(expected_sha: str) -> dict[str, str]:
     return child
 
 
-def validate_local_docker(container: str, *, cwd: Path, public_override: Path) -> None:
+def _same_path(left: Path, right: Path) -> bool:
+    return os.path.normcase(str(Path(os.path.abspath(left)))) == os.path.normcase(
+        str(Path(os.path.abspath(right)))
+    )
+
+
+def _compose_paths(raw: str, cwd: Path) -> list[Path]:
+    paths: list[Path] = []
+    for item in raw.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        path = Path(value)
+        if not path.is_absolute():
+            path = cwd / path
+        paths.append(path)
+    return paths
+
+
+def _prove_public_overlay_from_siblings(
+    *, cwd: Path, public_override: Path, admin_override: Path
+) -> None:
+    for service in ("frontend", "nginx"):
+        ids = [
+            line.strip()
+            for line in run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"label=com.docker.compose.project={DEFAULT_PROJECT}",
+                    "--filter",
+                    f"label=com.docker.compose.service={service}",
+                    "--format",
+                    "{{.ID}}",
+                ],
+                cwd=cwd,
+                timeout=60,
+                env=_clean_child_env(""),
+            ).stdout.splitlines()
+            if line.strip()
+        ]
+        if len(ids) != 1:
+            raise RecreateError("public_runtime_recovery_identity_not_proven")
+        labels = {
+            name: _inspect_value(
+                ids[0], f'{{{{index .Config.Labels "{name}"}}}}', cwd=cwd
+            )
+            for name in (
+                "com.docker.compose.project",
+                "com.docker.compose.service",
+                "com.docker.compose.project.working_dir",
+                "com.docker.compose.project.config_files",
+            )
+        }
+        files = _compose_paths(
+            labels["com.docker.compose.project.config_files"], cwd
+        )
+        if (
+            labels["com.docker.compose.project"] != DEFAULT_PROJECT
+            or labels["com.docker.compose.service"] != service
+            or not _same_path(
+                Path(labels["com.docker.compose.project.working_dir"]), cwd
+            )
+            or len([path for path in files if _same_path(path, public_override)]) != 1
+            or not files
+            or not _same_path(files[-1], public_override)
+            or len([path for path in files if _same_path(path, admin_override)]) != 1
+        ):
+            raise RecreateError("public_runtime_recovery_identity_not_proven")
+
+
+def validate_local_docker(
+    container: str,
+    *,
+    cwd: Path,
+    public_override: Path,
+    admin_override: Path | None = None,
+) -> None:
     if os.name != "nt" or socket.gethostname().casefold() != EXPECTED_HOST.casefold():
         raise RecreateError("public_runtime_host_not_allowed")
     if os.environ.get("DOCKER_HOST") or os.environ.get("DOCKER_CONTEXT"):
@@ -243,13 +321,26 @@ def validate_local_docker(container: str, *, cwd: Path, public_override: Path) -
     observed_root = Path(os.path.abspath(labels["com.docker.compose.project.working_dir"]))
     if os.path.normcase(str(observed_root)) != os.path.normcase(str(cwd)):
         raise RecreateError("public_runtime_working_dir_mismatch")
-    observed_files = [
-        Path(os.path.abspath(item.strip()))
-        for item in labels["com.docker.compose.project.config_files"].split(",")
-        if item.strip()
+    observed_files = _compose_paths(
+        labels["com.docker.compose.project.config_files"], cwd
+    )
+    public_files = [
+        path for path in observed_files if _same_path(path, public_override)
     ]
-    if not observed_files or os.path.normcase(str(observed_files[-1])) != os.path.normcase(str(public_override)):
+    if len(public_files) > 1 or (
+        public_files and not _same_path(observed_files[-1], public_override)
+    ):
         raise RecreateError("public_runtime_override_not_last")
+    if not public_files:
+        if admin_override is None or len(
+            [path for path in observed_files if _same_path(path, admin_override)]
+        ) != 1:
+            raise RecreateError("public_runtime_recovery_identity_not_proven")
+        _prove_public_overlay_from_siblings(
+            cwd=cwd,
+            public_override=public_override,
+            admin_override=admin_override,
+        )
     bindings = [
         line.strip()
         for line in run(
@@ -357,13 +448,16 @@ def execute(args: argparse.Namespace) -> dict:
         repo_root_lexical, args.public_dev_override, args.expected_sha
     )
     repo_root = repo_root_lexical.resolve(strict=True)
-    validate_local_docker(
-        args.container, cwd=repo_root, public_override=public_override
-    )
     if not args.secret_file.is_file():
         raise RecreateError("cofre_secret_file_missing")
     if not args.admin_override.is_file() or not args.teams_override.is_file():
         raise RecreateError("required_runtime_override_missing")
+    validate_local_docker(
+        args.container,
+        cwd=repo_root,
+        public_override=public_override,
+        admin_override=args.admin_override.resolve(),
+    )
 
     temp_dir = repo_root / ".tmp"
     temp_dir.mkdir(parents=True, exist_ok=True)
