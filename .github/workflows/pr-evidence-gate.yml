@@ -172,6 +172,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             let relevantWorkflowNames = new Set();
+            let requiredWorkflowNames = new Set();
 
             function parseList(value) {
               return String(value || '')
@@ -228,8 +229,15 @@ jobs:
               return data;
             }
 
-            async function listRuns(headSha, includeArtifacts = false) {
-              const runs = await github.paginate(
+            function matchesPullRequestRun(run, headSha, pullRequestNumber) {
+              const associatedPullRequests = Array.isArray(run.pull_requests) ? run.pull_requests : [];
+              return run.head_sha === headSha &&
+                run.event === 'pull_request' &&
+                associatedPullRequests.some((candidate) => Number(candidate.number) === Number(pullRequestNumber));
+            }
+
+            async function listRuns(headSha, pullRequestNumber, includeArtifacts = false) {
+              let runs = await github.paginate(
                 github.rest.actions.listWorkflowRunsForRepo,
                 {
                   owner,
@@ -239,6 +247,43 @@ jobs:
                   per_page: 100,
                 },
               );
+              runs = runs.filter((run) => matchesPullRequestRun(run, headSha, pullRequestNumber));
+
+              // GitHub can transiently return an empty list for the combined
+              // head_sha + event filter when this endpoint is called with the
+              // workflow GITHUB_TOKEN, even though the same runs are already
+              // visible without head_sha. Keep the exact query as the primary
+              // path, then use a bounded fallback and accept only runs whose
+              // event and full head SHA match locally.
+              const observedRequiredNames = new Set(runs.map((run) => run.name));
+              const exactLookupIncomplete = [...requiredWorkflowNames].some((name) => (
+                !observedRequiredNames.has(name)
+              ));
+              if (runs.length === 0 || exactLookupIncomplete) {
+                const fallbackMaxPages = 5;
+                const runsById = new Map(runs.map((run) => [run.id, run]));
+                core.warning('Filtered workflow lookup was empty or incomplete; using bounded SHA-verified fallback.');
+
+                for (let page = 1; page <= fallbackMaxPages; page += 1) {
+                  const response = await github.rest.actions.listWorkflowRunsForRepo({
+                    owner,
+                    repo,
+                    per_page: 100,
+                    page,
+                  });
+                  const batch = response.data.workflow_runs || [];
+                  for (const run of batch) {
+                    if (matchesPullRequestRun(run, headSha, pullRequestNumber)) {
+                      runsById.set(run.id, run);
+                    }
+                  }
+                  const mergedNames = new Set([...runsById.values()].map((run) => run.name));
+                  const foundAllRequired = [...requiredWorkflowNames].every((name) => mergedNames.has(name));
+                  if (foundAllRequired || batch.length < 100) break;
+                }
+
+                runs = [...runsById.values()];
+              }
 
               const runSummaries = [];
               for (const run of runs) {
@@ -376,13 +421,15 @@ jobs:
               if (gate.status === 'pending') return true;
               return failures.length > 0 && failures.every((failure) => (
                 failure.startsWith('No workflow runs found for PR head SHA') ||
-                failure.startsWith('Strict workflow has no run on current head SHA:')
+                failure.startsWith('Strict workflow has no run on current head SHA:') ||
+                failure.startsWith('Governed workflow has no run on current head SHA:')
               ));
             }
 
             function isTransientFailure(failure) {
               return failure.startsWith('No workflow runs found for PR head SHA') ||
-                failure.startsWith('Strict workflow has no run on current head SHA:');
+                failure.startsWith('Strict workflow has no run on current head SHA:') ||
+                failure.startsWith('Governed workflow has no run on current head SHA:');
             }
 
             function deferTransientState(
@@ -441,6 +488,10 @@ jobs:
                 ...governedWorkflowNames,
                 ...optionalWorkflowNames,
               ]);
+              requiredWorkflowNames = new Set([
+                ...strictWorkflowNames,
+                ...governedWorkflowNames,
+              ]);
               const stallAfterSeconds = Number(process.env.STALL_AFTER_SECONDS || '300');
               const maxTotalWaitSeconds = Number(process.env.MAX_TOTAL_WAIT_SECONDS || '900');
               const pollSeconds = Number(process.env.POLL_SECONDS || '15');
@@ -454,7 +505,7 @@ jobs:
               let gate = null;
 
               do {
-                runSummaries = await listRuns(headSha, false);
+                runSummaries = await listRuns(headSha, pr.number, false);
                 gate = evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
 
                 const fingerprint = progressFingerprint(runSummaries);
@@ -485,7 +536,7 @@ jobs:
               gate = deferTransientState(gate, deferredReason);
 
               if (gate.status === 'passed') {
-                const artifactRuns = await listRuns(headSha, true);
+                const artifactRuns = await listRuns(headSha, pr.number, true);
                 const artifactGate = evaluate({ headSha, runSummaries: artifactRuns, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
                 gate = { ...gate, observed_artifacts: artifactGate.observed_artifacts };
                 runSummaries = artifactRuns;
@@ -649,6 +700,7 @@ jobs:
                   token,
                   max_wait_seconds=0,
                   poll_seconds=1,
+                  pr_number=int(pr_number),
               )
           except AdmissionGuardError as exc:
               output.write_text(json.dumps({

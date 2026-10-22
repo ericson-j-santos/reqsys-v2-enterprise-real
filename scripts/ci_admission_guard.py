@@ -20,6 +20,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 WORKFLOW_NAME = "Pre-PR Readiness Gate"
 WORKFLOW_FILE = "pre-pr-readiness.yml"
+WORKFLOW_RUN_FALLBACK_MAX_PAGES = 5
 MANIFEST_SCHEMA_VERSION = "1.1.0"
 REQUIRED_PREVENTIVE_INVARIANTS = {
     "sdd:contract",
@@ -185,19 +186,104 @@ def load_and_validate_manifest(
     return validate_manifest_payload(manifest, head_sha, base_sha)
 
 
-def successful_pre_pr_runs(runs: list[dict[str, Any]], head_sha: str) -> list[dict[str, Any]]:
+def successful_pre_pr_runs(
+    runs: list[dict[str, Any]],
+    head_sha: str,
+    pr_number: int,
+) -> list[dict[str, Any]]:
     return sorted(
         [
             run for run in runs
-            if isinstance(run, dict)
-            and run.get("name") == WORKFLOW_NAME
-            and str(run.get("head_sha") or "").lower() == head_sha
+            if run_matches_pull_request(run, head_sha, pr_number)
             and run.get("status") == "completed"
             and run.get("conclusion") == "success"
         ],
         key=lambda item: str(item.get("updated_at") or ""),
         reverse=True,
     )
+
+
+def run_matches_pull_request(run: Any, head_sha: str, pr_number: int) -> bool:
+    if (
+        not isinstance(run, dict)
+        or run.get("name") != WORKFLOW_NAME
+        or str(run.get("head_sha") or "").lower() != head_sha
+        or run.get("event") != "pull_request"
+    ):
+        return False
+    pull_requests = run.get("pull_requests")
+    if not isinstance(pull_requests, list):
+        return False
+    return any(
+        isinstance(candidate, dict)
+        and isinstance(candidate.get("number"), int)
+        and not isinstance(candidate.get("number"), bool)
+        and candidate["number"] == pr_number
+        for candidate in pull_requests
+    )
+
+
+def matching_pre_pr_runs(
+    runs: list[dict[str, Any]],
+    head_sha: str,
+    pr_number: int,
+) -> list[dict[str, Any]]:
+    return [
+        run for run in runs
+        if run_matches_pull_request(run, head_sha, pr_number)
+    ]
+
+
+def list_pre_pr_runs(
+    repository: str,
+    head_sha: str,
+    pr_number: int,
+    token: str,
+) -> list[dict[str, Any]]:
+    """Busca runs do workflow e contorna respostas filtradas vazias sem relaxar o SHA."""
+    if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
+        raise AdmissionGuardError("pr_number_invalid")
+    workflow = quote(WORKFLOW_FILE, safe="")
+    exact_query = urlencode({"head_sha": head_sha, "per_page": 100})
+    exact_payload = github_json(
+        repository,
+        f"actions/workflows/{workflow}/runs?{exact_query}",
+        token,
+    )
+    exact_runs = (
+        exact_payload.get("workflow_runs")
+        if isinstance(exact_payload.get("workflow_runs"), list)
+        else []
+    )
+    matching = matching_pre_pr_runs(exact_runs, head_sha, pr_number)
+    if matching:
+        return matching
+
+    # A API do GitHub pode devolver zero (ou uma visão incompleta) quando
+    # head_sha é usado com o GITHUB_TOKEN do próprio workflow. O fallback é
+    # limitado, permanece no endpoint canônico e volta a impor localmente o
+    # nome do workflow e o SHA completo antes de qualquer artifact ser lido.
+    runs_by_id: dict[int, dict[str, Any]] = {}
+    for page in range(1, WORKFLOW_RUN_FALLBACK_MAX_PAGES + 1):
+        fallback_query = urlencode({"per_page": 100, "page": page})
+        fallback_payload = github_json(
+            repository,
+            f"actions/workflows/{workflow}/runs?{fallback_query}",
+            token,
+        )
+        batch = (
+            fallback_payload.get("workflow_runs")
+            if isinstance(fallback_payload.get("workflow_runs"), list)
+            else []
+        )
+        for run in matching_pre_pr_runs(batch, head_sha, pr_number):
+            run_id = int(run.get("id") or 0)
+            if run_id > 0:
+                runs_by_id[run_id] = run
+        matching = list(runs_by_id.values())
+        if matching or len(batch) < 100:
+            break
+    return matching
 
 
 def matching_artifact(artifacts: list[dict[str, Any]], head_sha: str) -> dict[str, Any] | None:
@@ -233,18 +319,15 @@ def assert_base_freshness(repository: str, base_ref: str, head_sha: str, token: 
     return {"base_ref": base_ref, "base_sha": base_sha, **state}
 
 
-def verify_evidence(repository: str, head_sha: str, base_sha: str, token: str) -> dict[str, Any]:
-    query = urlencode({"head_sha": head_sha, "per_page": 100})
-    workflow = quote(WORKFLOW_FILE, safe="")
-    runs_payload = github_json(repository, f"actions/workflows/{workflow}/runs?{query}", token)
-    runs = runs_payload.get("workflow_runs") if isinstance(runs_payload.get("workflow_runs"), list) else []
-    matching = [
-        run for run in runs
-        if isinstance(run, dict)
-        and run.get("name") == WORKFLOW_NAME
-        and str(run.get("head_sha") or "").lower() == head_sha
-    ]
-    candidates = successful_pre_pr_runs(runs, head_sha)
+def verify_evidence(
+    repository: str,
+    head_sha: str,
+    base_sha: str,
+    token: str,
+    pr_number: int,
+) -> dict[str, Any]:
+    matching = list_pre_pr_runs(repository, head_sha, pr_number, token)
+    candidates = successful_pre_pr_runs(matching, head_sha, pr_number)
     if not candidates:
         if any(run.get("status") != "completed" for run in matching):
             raise AdmissionGuardError("pre_pr_pending_for_head_sha")
@@ -281,12 +364,21 @@ def wait_for_admission(
     token: str,
     max_wait_seconds: int,
     poll_seconds: int,
+    pr_number: int,
 ) -> dict[str, Any]:
+    if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
+        raise AdmissionGuardError("pr_number_invalid")
     freshness = assert_base_freshness(repository, base_ref, head_sha, token)
     deadline = time.monotonic() + max(0, max_wait_seconds)
     while True:
         try:
-            evidence = verify_evidence(repository, head_sha, freshness["base_sha"], token)
+            evidence = verify_evidence(
+                repository,
+                head_sha,
+                freshness["base_sha"],
+                token,
+                pr_number,
+            )
             return {
                 "schema_version": "1.1.0",
                 "result": "ADMISSION_ACCEPTED",
@@ -308,6 +400,7 @@ def main() -> int:
     parser.add_argument("--head-sha", default=os.getenv("GITHUB_SHA", ""))
     parser.add_argument("--event-name", default=os.getenv("GITHUB_EVENT_NAME", ""))
     parser.add_argument("--base-ref", default="main")
+    parser.add_argument("--pr-number", type=int, default=0)
     parser.add_argument("--max-wait-seconds", type=int, default=120)
     parser.add_argument("--poll-seconds", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True)
@@ -347,6 +440,7 @@ def main() -> int:
             os.getenv("GITHUB_TOKEN", "").strip(),
             args.max_wait_seconds,
             args.poll_seconds,
+            args.pr_number,
         )
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(result, sort_keys=True))

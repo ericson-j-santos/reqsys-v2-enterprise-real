@@ -32,15 +32,15 @@ def test_pr_evidence_gate_uses_progress_watchdog_with_bounded_total_wait():
 def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
     text = read_workflow()
 
-    assert 'async function listRuns(headSha, includeArtifacts = false)' in text
+    assert 'async function listRuns(headSha, pullRequestNumber, includeArtifacts = false)' in text
     assert "if (includeArtifacts && run.status === 'completed')" in text
-    assert 'runSummaries = await listRuns(headSha, false);' in text
+    assert 'runSummaries = await listRuns(headSha, pr.number, false);' in text
     assert "if (gate.status === 'passed')" in text
-    assert 'const artifactRuns = await listRuns(headSha, true);' in text
+    assert 'const artifactRuns = await listRuns(headSha, pr.number, true);' in text
     assert 'runSummaries = artifactRuns;' in text
 
-    polling_index = text.index('runSummaries = await listRuns(headSha, false);')
-    artifact_index = text.index('const artifactRuns = await listRuns(headSha, true);')
+    polling_index = text.index('runSummaries = await listRuns(headSha, pr.number, false);')
+    artifact_index = text.index('const artifactRuns = await listRuns(headSha, pr.number, true);')
     assert polling_index < artifact_index
 
 
@@ -48,10 +48,55 @@ def test_pr_evidence_gate_paginates_workflow_lookup():
     text = read_workflow()
 
     assert 'github.rest.actions.listWorkflowRunsForRepo' in text
-    assert 'const runs = await github.paginate(' in text
+    assert 'let runs = await github.paginate(' in text
     assert '(response) => response.data.workflow_runs || []' not in text
     assert "event: 'pull_request'" in text
     assert 'per_page: 100' in text
+
+
+def test_pr_evidence_gate_has_bounded_sha_verified_lookup_fallback():
+    text = read_workflow()
+
+    assert 'const exactLookupIncomplete' in text
+    assert 'if (runs.length === 0 || exactLookupIncomplete)' in text
+    assert 'const fallbackMaxPages = 5;' in text
+    assert 'page <= fallbackMaxPages' in text
+    assert 'response.data.workflow_runs || []' in text
+    assert 'run.head_sha === headSha' in text
+    assert "run.event === 'pull_request'" in text
+    assert 'Number(candidate.number) === Number(pullRequestNumber)' in text
+    assert 'runs = [...runsById.values()];' in text
+    assert 'runsById.set(run.id, run);' in text
+    assert 'foundAllRequired || batch.length < 100' in text
+    assert 'bounded SHA-verified fallback' in text
+    assert 'requiredWorkflowNames = new Set([' in text
+
+    fallback_request = text.split(
+        'const response = await github.rest.actions.listWorkflowRunsForRepo({', 1
+    )[1].split('});', 1)[0]
+    assert 'head_sha:' not in fallback_request
+    assert 'event:' not in fallback_request
+
+
+def test_pr_evidence_gate_treats_missing_required_runs_as_transient_only():
+    text = read_workflow()
+
+    polling = text.split('function shouldKeepPolling(gate)', 1)[1].split(
+        'function isTransientFailure(failure)', 1
+    )[0]
+    transient = text.split('function isTransientFailure(failure)', 1)[1].split(
+        'function deferTransientState(', 1
+    )[0]
+
+    for missing in (
+        'Strict workflow has no run on current head SHA:',
+        'Governed workflow has no run on current head SHA:',
+    ):
+        assert missing in polling
+        assert missing in transient
+
+    assert 'Governed workflow failed on current head SHA:' not in transient
+    assert 'Governed workflow was skipped or neutral on current head SHA:' not in transient
 
 
 def test_pr_evidence_gate_reruns_after_required_workflows_complete():

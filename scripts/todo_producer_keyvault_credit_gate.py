@@ -4,6 +4,9 @@
 Only callable after the owner command is authenticated by the existing Actions
 Gateway and re-verified from the GitHub issue-comment API on the main branch.
 No secret values, raw CLI responses, credentials or token URLs are logged.
+
+``spendingLimit=On`` is only an Azure overage hard-stop. It is never treated as
+proof that a Key Vault operation has literal zero cost.
 """
 from __future__ import annotations
 
@@ -22,6 +25,8 @@ from urllib.request import Request, urlopen
 
 REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 OWNER = "ericson-j-santos"
+WORKFLOW_PATH = ".github/workflows/todo-global-hourly-cycle.yml"
+WORKFLOW_REF = f"{REPOSITORY}/{WORKFLOW_PATH}@refs/heads/main"
 AUTHORIZATION_ISSUE = 1705
 COMMAND = "/reqsys run todo-producer-keyvault-dev"
 OPERATION = "producer-credit-gated"
@@ -29,8 +34,11 @@ DISPATCH_ACTOR = "github-actions[bot]"
 VAULT = "kv-reqsys-ccp"
 RESOURCE_GROUP = "rg-reqsys-ccp"
 SECRET = "reqsys-pc24x7-todo-runtime-producer-token"
+HARD_STOP_DECISION = "AZURE_SPENDING_LIMIT_ON_CONFIRMED"
+DATA_PLANE_BLOCKED_DECISION = "KEYVAULT_DATA_PLANE_BLOCKED"
 SHA = re.compile(r"^[0-9a-f]{40}$")
 GUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+RUNTIME_TOKEN = re.compile(r"^(?:[A-Za-z0-9_-]{43}|[A-Za-z0-9_-]{64})$")
 
 
 class Blocked(RuntimeError):
@@ -42,6 +50,17 @@ def require(condition: object, code: str) -> None:
         raise Blocked(code)
 
 
+def workflow_identity_valid(env: dict[str, str]) -> bool:
+    """Bind privileged phases to this exact workflow file and checked-out SHA."""
+    workflow_sha = env.get("GITHUB_WORKFLOW_SHA", "")
+    return bool(
+        env.get("GITHUB_WORKFLOW_REF") == WORKFLOW_REF
+        and SHA.fullmatch(workflow_sha) is not None
+        and workflow_sha == env.get("GITHUB_SHA")
+        and re.fullmatch(r"[1-9][0-9]{0,9}", env.get("GITHUB_RUN_ATTEMPT", ""))
+    )
+
+
 def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
     """Re-attest immutable action context in both phases; never trust CLI inputs."""
     require(env.get("GITHUB_ACTIONS") == "true"
@@ -50,7 +69,8 @@ def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
             and env.get("GITHUB_ACTOR") == DISPATCH_ACTOR
             and env.get("GITHUB_REF") == "refs/heads/main"
             and SHA.fullmatch(env.get("GITHUB_SHA", "")) is not None
-            and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None,
+            and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None
+            and workflow_identity_valid(env),
             "github_context_invalid")
     inputs = event.get("inputs") or {}
     comment_id = inputs.get("authorization_comment_id")
@@ -71,17 +91,15 @@ def validate_context(env: dict[str, str], event: dict) -> dict[str, str]:
             "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"],
             "authorization_comment_id": comment_id}
 
-
-
-
 def validate_cycle_cost_context(env: dict[str, str], event: dict) -> dict[str, str]:
-    """ARM-only credit check for the existing TODO cycle, not a secret grant."""
+    """Attest the scheduled or owner-dispatched cycle before any Azure read."""
     event_name = env.get("GITHUB_EVENT_NAME", "")
     require(env.get("GITHUB_ACTIONS") == "true"
             and env.get("GITHUB_REPOSITORY") == REPOSITORY
             and env.get("GITHUB_REF") == "refs/heads/main"
             and SHA.fullmatch(env.get("GITHUB_SHA", "")) is not None
             and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None
+            and workflow_identity_valid(env)
             and event_name in {"schedule", "workflow_dispatch"},
             "cycle_cost_context_invalid")
     require(isinstance(event, dict)
@@ -91,8 +109,8 @@ def validate_cycle_cost_context(env: dict[str, str], event: dict) -> dict[str, s
     if event_name == "workflow_dispatch":
         sender = (event.get("sender") or {}).get("login")
         require((event.get("inputs") or {}).get("operation") == "cycle"
-                and sender in {OWNER, DISPATCH_ACTOR}
-                and env.get("GITHUB_ACTOR") == sender,
+                and sender == OWNER
+                and env.get("GITHUB_ACTOR") == OWNER,
                 "cycle_cost_event_invalid")
     else:
         require(not event.get("inputs"), "cycle_cost_event_invalid")
@@ -103,7 +121,36 @@ def validate_cycle_cost_context(env: dict[str, str], event: dict) -> dict[str, s
             and env.get("REQSYS_KEY_VAULT_NAME") == VAULT,
             "dev_scope_configuration_invalid")
     return {"subscription": subscription.lower(), "tenant": tenant.lower(),
-            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"]}
+            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"],
+            "run_attempt": env["GITHUB_RUN_ATTEMPT"]}
+
+
+def validate_runtime_context(env: dict[str, str], event: dict) -> dict[str, str]:
+    """Bind the manual runtime path to this workflow, SHA and DEV scope."""
+    actor = env.get("GITHUB_ACTOR", "")
+    require(env.get("GITHUB_ACTIONS") == "true"
+            and env.get("GITHUB_REPOSITORY") == REPOSITORY
+            and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+            and env.get("GITHUB_REF") == "refs/heads/main"
+            and SHA.fullmatch(env.get("GITHUB_SHA", "")) is not None
+            and re.fullmatch(r"[1-9][0-9]{0,19}", env.get("GITHUB_RUN_ID", "")) is not None
+            and workflow_identity_valid(env),
+            "runtime_context_invalid")
+    require(isinstance(event, dict)
+            and event.get("repository", {}).get("full_name") == REPOSITORY
+            and (event.get("inputs") or {}).get("operation") == "reconcile-runtime"
+            and actor == OWNER
+            and (event.get("sender") or {}).get("login") == OWNER,
+            "runtime_event_invalid")
+    subscription = env.get("CCP_AZURE_SUBSCRIPTION_ID", "")
+    tenant = env.get("CCP_AZURE_TENANT_ID", "")
+    require(GUID.fullmatch(subscription) is not None
+            and GUID.fullmatch(tenant) is not None
+            and env.get("REQSYS_KEY_VAULT_NAME") == VAULT,
+            "dev_scope_configuration_invalid")
+    return {"subscription": subscription.lower(), "tenant": tenant.lower(),
+            "sha": env["GITHUB_SHA"], "run_id": env["GITHUB_RUN_ID"],
+            "run_attempt": env["GITHUB_RUN_ATTEMPT"]}
 
 
 def validate_comment_record(value: dict, comment_id: str, now: datetime) -> None:
@@ -144,6 +191,7 @@ def verify_owner_comment(ctx: dict[str, str], env: dict[str, str]) -> None:
         raise Blocked("github_owner_comment_read_unavailable") from None
     validate_comment_record(item, ctx["authorization_comment_id"],
                             datetime.now(timezone.utc))
+
 
 def cli(arguments: list[str]) -> tuple[int, str, str]:
     """Bounded non-shell Azure CLI call. Keep stdout and stderr private."""
@@ -202,6 +250,7 @@ def assess_vault(value: dict, subscription: str, tenant: str) -> None:
 
 
 def cost_preflight(ctx: dict[str, str]) -> dict:
+    """Observe Azure hard-stop state; do not infer literal transaction cost."""
     sub = ctx["subscription"]
     subscription = read_arm(
         f"https://management.azure.com/subscriptions/{sub}?api-version=2022-12-01",
@@ -215,13 +264,26 @@ def cost_preflight(ctx: dict[str, str]) -> dict:
         "vault_arm_read_unavailable",
     )
     assess_vault(vault, sub, ctx["tenant"])
-    return {"schema_version": 1, "decision": "COST_ZERO_CONFIRMED",
+    return {"schema_version": 2, "decision": HARD_STOP_DECISION,
             "run_id": ctx["run_id"], "head_sha": ctx["sha"],
             "subscription_state": "Enabled", "spending_limit": "On",
+            "overage_hard_stop_present": True,
+            "literal_zero_cost_verified": False,
+            "keyvault_data_plane_allowed": False,
             "existing_vault_verified": True, "vault": VAULT,
             "keyvault_data_plane_attempted": False,
             "production_touched": False,
             "evaluated_at": datetime.now(timezone.utc).isoformat()}
+
+
+def require_literal_zero(proof: dict) -> None:
+    """Fail closed unless an authoritative, non-user-controlled proof exists."""
+    require(isinstance(proof, dict)
+            and proof.get("decision") == HARD_STOP_DECISION
+            and proof.get("overage_hard_stop_present") is True
+            and proof.get("literal_zero_cost_verified") is True
+            and proof.get("keyvault_data_plane_allowed") is True,
+            "literal_zero_cost_unproven")
 
 
 def receipt_path(path: Path, env: dict[str, str]) -> Path:
@@ -251,13 +313,72 @@ def read_receipt(path: Path, ctx: dict[str, str]) -> None:
     except (ValueError, OSError):
         raise Blocked("cost_receipt_not_trusted") from None
     require(isinstance(doc, dict)
-            and doc.get("decision") == "COST_ZERO_CONFIRMED"
+            and doc.get("schema_version") == 2
+            and doc.get("decision") == HARD_STOP_DECISION
             and doc.get("run_id") == ctx["run_id"]
             and doc.get("head_sha") == ctx["sha"]
             and doc.get("vault") == VAULT
             and doc.get("spending_limit") == "On"
+            and doc.get("overage_hard_stop_present") is True
+            and doc.get("literal_zero_cost_verified") is True
+            and doc.get("keyvault_data_plane_allowed") is True
             and doc.get("existing_vault_verified") is True,
             "cost_receipt_not_trusted")
+
+
+def validate_runtime_token(value: str) -> str:
+    """Enforce the exact token contract immediately before any sensitive sink."""
+    require(isinstance(value, str)
+            and not any(character in value for character in ("\r", "\n", "\x00"))
+            and RUNTIME_TOKEN.fullmatch(value) is not None,
+            "keyvault_secret_value_invalid")
+    return value
+
+
+def canonical_runtime_token(stdout: str) -> str:
+    """Remove one Azure CLI record terminator, then validate the token itself."""
+    require(isinstance(stdout, str) and 0 < len(stdout) <= 65,
+            "keyvault_secret_value_invalid")
+    value = stdout[:-1] if stdout.endswith("\n") else stdout
+    return validate_runtime_token(value)
+
+
+def read_runtime_token() -> str:
+    """Read one existing value without ever placing it in a shell variable."""
+    rc, stdout, _stderr = cli([
+        "keyvault", "secret", "show", "--vault-name", VAULT,
+        "--name", SECRET, "--query", "value", "--output", "tsv",
+        "--only-show-errors",
+    ])
+    require(rc == 0, "keyvault_secret_read_blocked")
+    return canonical_runtime_token(stdout)
+
+
+def export_runtime_token(token: str, env: dict[str, str]) -> None:
+    """Validate again before registering a mask or appending to GITHUB_ENV."""
+    canonical = validate_runtime_token(token)
+    root = Path(env["RUNNER_TEMP"]).resolve(strict=True)
+    destination = Path(env["GITHUB_ENV"])
+    info = destination.lstat()
+    resolved = destination.resolve(strict=True)
+    require(root in resolved.parents
+            and stat.S_ISREG(info.st_mode)
+            and info.st_uid == os.getuid(),
+            "github_env_not_trusted")
+    flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(destination, flags)
+    try:
+        opened = os.fstat(descriptor)
+        require(stat.S_ISREG(opened.st_mode)
+                and opened.st_ino == info.st_ino
+                and opened.st_dev == info.st_dev,
+                "github_env_not_trusted")
+        print(f"::add-mask::{canonical}")
+        encoded = f"TODO_GLOBAL_RUNTIME_TOKEN={canonical}\n".encode("ascii")
+        require(os.write(descriptor, encoded) == len(encoded),
+                "github_env_write_failed")
+    finally:
+        os.close(descriptor)
 
 
 def missing_secret_error(stderr: str) -> bool:
@@ -296,10 +417,9 @@ def metadata_lookup(*, deleted: bool = False) -> dict | None:
 
 def recover_or_provision(ctx: dict[str, str], proof: Path) -> dict:
     read_receipt(proof, ctx)
-    # Fresh ARM policy and vault readback: a prior receipt cannot bypass costs.
+    # A receipt is never enough: re-attest immediately before the first data-plane call.
     fresh = cost_preflight(ctx)
-    require(fresh["decision"] == "COST_ZERO_CONFIRMED",
-            "cost_preflight_changed")
+    require_literal_zero(fresh)
     active = metadata_lookup()
     if active is not None:
         state = "ACTIVE_ALREADY_PRESENT"
@@ -340,7 +460,8 @@ def recover_or_provision(ctx: dict[str, str], proof: Path) -> dict:
                 state = "PROVISIONED_RUNTIME_BINDING_PENDING"
     require(metadata_lookup() is not None, "keyvault_secret_readback_failed")
     return {
-        "schema_version": 1, "decision": "COST_ZERO_CONFIRMED",
+        "schema_version": 2, "decision": HARD_STOP_DECISION,
+        "literal_zero_cost_verified": True,
         "result": state, "run_id": ctx["run_id"], "head_sha": ctx["sha"],
         "metadata_readback": True, "secret_value_exposed": False,
         "runtime_binding_verified": False,
@@ -352,18 +473,43 @@ def recover_or_provision(ctx: dict[str, str], proof: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["cost", "secret", "cycle-cost"])
+    parser.add_argument("phase", choices=[
+        "cost", "secret", "cycle-secret", "runtime-cost", "export-token",
+    ])
     parser.add_argument("--receipt", type=Path)
     args = parser.parse_args()
     try:
         context_file = Path(os.environ["GITHUB_EVENT_PATH"])
         require(context_file.stat().st_size <= 262144, "github_event_too_large")
         event = json.loads(context_file.read_text(encoding="utf-8"))
-        if args.phase == "cycle-cost":
+        if args.phase == "cycle-secret":
             ctx = validate_cycle_cost_context(os.environ, event)
             proof = cost_preflight(ctx)
+            require_literal_zero(proof)
+            token = read_runtime_token()
+            export_runtime_token(token, os.environ)
             print(json.dumps({"decision": proof["decision"],
                               "spending_limit": proof["spending_limit"],
+                              "literal_zero_cost_verified": True,
+                              "secret_read": True,
+                              "secret_value_exposed": False}, sort_keys=True))
+            return 0
+        if args.phase == "export-token":
+            ctx = validate_runtime_context(os.environ, event)
+            proof = cost_preflight(ctx)
+            require_literal_zero(proof)
+            token = read_runtime_token()
+            export_runtime_token(token, os.environ)
+            print(json.dumps({"decision": "TOKEN_EXPORTED",
+                              "token_contract_valid": True,
+                              "secret_value_exposed": False}, sort_keys=True))
+            return 0
+        if args.phase == "runtime-cost":
+            ctx = validate_runtime_context(os.environ, event)
+            proof = cost_preflight(ctx)
+            require_literal_zero(proof)
+            print(json.dumps({"decision": proof["decision"],
+                              "literal_zero_cost_verified": True,
                               "secret_touched": False}, sort_keys=True))
             return 0
         ctx = validate_context(os.environ, event)
@@ -372,10 +518,12 @@ def main() -> int:
         path = receipt_path(args.receipt, os.environ)
         if args.phase == "cost":
             proof = cost_preflight(ctx)
+            require_literal_zero(proof)
             write_receipt(path, proof)
             print(json.dumps({"decision": proof["decision"],
                               "subscription_state": proof["subscription_state"],
                               "spending_limit": proof["spending_limit"],
+                              "literal_zero_cost_verified": True,
                               "existing_vault_verified": True, "secret_touched": False},
                              sort_keys=True))
         else:
@@ -383,9 +531,24 @@ def main() -> int:
             print(json.dumps(result, sort_keys=True))
         return 0
     except Blocked as exc:
-        print(json.dumps({"decision": "COST_UNKNOWN_BLOCKED" if args.phase in ("cost", "cycle-cost") else "BLOCKED",
-                          "reason": str(exc), "secret_value_exposed": False},
-                         sort_keys=True))
+        reason = str(exc)
+        if reason == "literal_zero_cost_unproven":
+            payload = {
+                "decision": DATA_PLANE_BLOCKED_DECISION,
+                "hard_stop_decision": HARD_STOP_DECISION,
+                "literal_zero_cost_verified": False,
+                "reason": reason,
+                "secret_value_exposed": False,
+            }
+        else:
+            payload = {
+                "decision": "COST_UNKNOWN_BLOCKED"
+                if args.phase in ("cost", "cycle-secret", "runtime-cost", "export-token")
+                else "BLOCKED",
+                "reason": reason,
+                "secret_value_exposed": False,
+            }
+        print(json.dumps(payload, sort_keys=True))
         return 2
     except (KeyError, OSError, ValueError, TypeError):
         print(json.dumps({"decision": "BLOCKED", "reason": "guard_internal_error",
