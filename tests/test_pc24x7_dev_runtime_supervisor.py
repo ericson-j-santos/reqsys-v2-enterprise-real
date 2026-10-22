@@ -76,6 +76,8 @@ def test_task_hardening_uses_dedicated_runtime_python(monkeypatch, tmp_path):
         "StopIfGoingOnBatteries": False,
         "StartWhenAvailable": True,
         "ExecutionTimeLimit": "PT10M",
+        "LogonType": 3,
+        "InteractiveSessionRequired": True,
     }
 
     def fake_run(args):
@@ -89,6 +91,7 @@ def test_task_hardening_uses_dedicated_runtime_python(monkeypatch, tmp_path):
     assert installer.harden_task_settings(runtime_python) == expected
     assert calls[0][0] == str(runtime_python)
     assert "import win32com.client" in calls[0][2]
+    assert "registered.Definition.Principal.LogonType" in calls[0][2]
     assert calls[0][-1] == installer.TASK_NAME
 
 
@@ -136,3 +139,88 @@ def test_supervisor_requires_runtime_health_and_build_info_before_publication():
     assert 'for key in ("frontend", "health", "runtime_health", "runtime_readiness", "build_info")' in raw
     assert 'payload["local_after"]["vite_client"].get("status") == 404' in raw
     assert 'locator_ready if args.apply else True' in raw
+
+
+def _run_installer_case(monkeypatch, capsys, *, create_rc=0, trigger_rc=0, logon_type=3):
+    """Simula apenas o Schtasks; nunca toca a tarefa real ou a identidade DPAPI."""
+    calls = []
+    monkeypatch.setattr(installer, "materialize_runtime", lambda: {})
+    monkeypatch.setattr(installer, "ensure_runtime_python", lambda: Path("C:/runtime/python.exe"))
+    monkeypatch.setattr(installer, "write_wrapper", lambda _: None)
+    monkeypatch.setattr(
+        installer,
+        "harden_task_settings",
+        lambda _: {"LogonType": logon_type, "InteractiveSessionRequired": logon_type == 3},
+    )
+
+    def fake_run(args):
+        calls.append(args)
+        assert args[0] == "schtasks"
+        if "/Create" in args:
+            code = create_rc
+        elif "/Run" in args:
+            code = trigger_rc
+        else:
+            raise AssertionError("unexpected schtasks command")
+        return SimpleNamespace(returncode=code, stdout="", stderr="")
+
+    monkeypatch.setattr(installer, "run", fake_run)
+    exit_code = installer.install()
+    output = capsys.readouterr()
+    payload = json.loads(output.out) if output.out.strip() else None
+    return exit_code, payload, output.err, calls
+
+
+def test_installer_trigger_failure_must_not_be_reported_as_success(monkeypatch, capsys):
+    code, payload, _, calls = _run_installer_case(
+        monkeypatch, capsys, trigger_rc=5,
+    )
+    assert code == 2
+    assert payload["status"] == "trigger_failed"
+    assert payload["trigger_returncode"] == 5
+    assert payload["trigger_accepted"] is False
+    assert payload["task_registered"] is True
+    assert payload["runtime_verified"] is False
+    assert len(calls) == 2
+    # Controle negativo: implementação antiga retornava 0 e status=installed.
+    assert payload["status"] != "installed"
+
+
+def test_installer_accepted_trigger_is_registration_only(monkeypatch, capsys):
+    code, payload, _, calls = _run_installer_case(monkeypatch, capsys)
+    assert code == 0
+    assert payload["status"] == "registered_pending_runtime_verification"
+    assert payload["trigger_accepted"] is True
+    assert payload["runtime_verified"] is False
+    assert payload["independent_of_user_logon"] is False
+    assert payload["requires_interactive_session"] is True
+    assert len(calls) == 2
+
+
+def test_installer_mismatched_logon_mode_fails_before_trigger(monkeypatch, capsys):
+    code, payload, stderr, calls = _run_installer_case(
+        monkeypatch, capsys, logon_type=2,
+    )
+    assert code == 2
+    assert payload is None
+    assert "task_logon_mode_readback_mismatch" in stderr
+    assert len(calls) == 1
+    assert "/Run" not in calls[0]
+
+
+def test_installer_create_failure_prevents_start_and_success(monkeypatch, capsys):
+    code, payload, _, calls = _run_installer_case(
+        monkeypatch, capsys, create_rc=7,
+    )
+    assert code == 2
+    assert payload is None
+    assert len(calls) == 1
+    assert "/Create" in calls[0]
+
+
+def test_installer_decision_replay_does_not_create_new_effect(monkeypatch, capsys):
+    first = _run_installer_case(monkeypatch, capsys, trigger_rc=5)
+    second = _run_installer_case(monkeypatch, capsys, trigger_rc=5)
+    assert first[:3] == second[:3]
+    assert first[3] == second[3]
+    assert all(call[0] == "schtasks" for call in first[3])
