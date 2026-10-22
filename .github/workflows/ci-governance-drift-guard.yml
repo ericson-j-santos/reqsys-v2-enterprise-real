@@ -9,6 +9,12 @@ on:
       - main
     paths:
       - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-governance-drift-guard.yml'
+      - 'scripts/ci_governance_permissions.py'
+      - 'tests/test_ci_governance_permissions.py'
 
 permissions:
   actions: read
@@ -27,6 +33,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Validar parser e controles negativos de permissoes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+          python -m unittest tests/test_ci_governance_permissions.py -q
+
       - name: Build drift report
         shell: bash
         run: |
@@ -36,45 +49,37 @@ jobs:
           from pathlib import Path
           import json
           from datetime import datetime, timezone
+          from scripts.ci_governance_permissions import audit_permissions
 
           critical = {
               '.github/workflows/ci.yml': {
                   'triggers_any': ['pull_request', 'push', 'workflow_dispatch'],
                   'artifact_required': False,
-                  'allowed_write_permissions': {},
               },
               '.github/workflows/pr-evidence-gate.yml': {
                   'triggers_any': ['pull_request', 'workflow_dispatch'],
                   'artifact_required': True,
-                  'allowed_write_permissions': {},
               },
               '.github/workflows/pr-governed-ci-validation.yml': {
                   'triggers_any': ['pull_request', 'workflow_dispatch'],
                   'artifact_required': True,
-                  'allowed_write_permissions': {},
               },
               '.github/workflows/pr-ci-watch.yml': {
                   'triggers_any': ['pull_request', 'workflow_dispatch', 'workflow_run'],
                   'artifact_required': True,
-                  'allowed_write_permissions': {
-                      'actions: write': 'Necessário somente para POST /actions/runs/{run_id}/rerun-failed-jobs na remediação transitória governada.',
-                  },
               },
               '.github/workflows/pr-conflict-guard.yml': {
                   'triggers_any': ['pull_request', 'workflow_dispatch'],
                   'artifact_required': False,
-                  'allowed_write_permissions': {},
               },
               '.github/workflows/ci-runtime-health-summary.yml': {
                   'triggers_any': ['workflow_dispatch', 'schedule'],
                   'artifact_required': True,
-                  'allowed_write_permissions': {},
               },
           }
 
           failures = []
           observations = []
-          risky_tokens = ['write-all', 'contents: write', 'actions: write', 'pull-requests: write']
 
           for file_name, rules in critical.items():
               path = Path(file_name)
@@ -93,15 +98,10 @@ jobs:
               if rules['artifact_required'] and 'actions/upload-artifact' not in lowered:
                   file_failures.append('missing required artifact upload')
 
-              allowed_write_permissions = rules.get('allowed_write_permissions', {})
-              observed_write_permissions = [token for token in risky_tokens if token in lowered]
-              unexpected_write_permissions = [
-                  token for token in observed_write_permissions if token not in allowed_write_permissions
-              ]
-              if unexpected_write_permissions:
-                  file_failures.append(
-                      'unexpected elevated permission: ' + ', '.join(unexpected_write_permissions)
-                  )
+              permission_result = audit_permissions(text, file_name)
+              allowed_write_permissions = permission_result['allowed']
+              observed_write_permissions = permission_result['observed']
+              file_failures.extend(permission_result['violations'])
 
               for item in file_failures:
                   failures.append(f'{file_name}: {item}')
