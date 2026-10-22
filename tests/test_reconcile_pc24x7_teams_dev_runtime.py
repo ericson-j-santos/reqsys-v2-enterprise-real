@@ -157,6 +157,97 @@ def test_docker_environment_override_blocks_before_commands(monkeypatch, tmp_pat
         reconcile._require_local_docker(tmp_path)
 
 
+def _discovery_fixture(monkeypatch, tmp_path: Path, *, nginx_has_public: bool = True):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    admin = tmp_path / reconcile.ADMIN_OVERRIDE_NAME
+    admin.write_text("services: {}\n", encoding="utf-8")
+    public = runtime / reconcile.PUBLIC_OVERRIDE_NAME
+    public.write_text("services: {}\n", encoding="utf-8")
+    base = runtime / "docker-compose.yml"
+    base.write_text("services: {}\n", encoding="utf-8")
+
+    api_files = f"{base},{admin},{runtime / '.tmp' / 'cofre-runtime-sha.override.yml'}"
+    sibling_files = f"{base},{admin},{public}"
+    labels = {
+        "api-id": {
+            "com.docker.compose.project": reconcile.EXPECTED_PROJECT,
+            "com.docker.compose.service": "api",
+            "com.docker.compose.project.working_dir": str(runtime),
+            "com.docker.compose.project.config_files": api_files,
+        },
+        "frontend-id": {
+            "com.docker.compose.project": reconcile.EXPECTED_PROJECT,
+            "com.docker.compose.service": "frontend",
+            "com.docker.compose.project.working_dir": str(runtime),
+            "com.docker.compose.project.config_files": sibling_files,
+        },
+        "nginx-id": {
+            "com.docker.compose.project": reconcile.EXPECTED_PROJECT,
+            "com.docker.compose.service": "nginx",
+            "com.docker.compose.project.working_dir": str(runtime),
+            "com.docker.compose.project.config_files": (
+                sibling_files if nginx_has_public else f"{base},{admin}"
+            ),
+        },
+    }
+
+    def fake_run(args, **_kwargs):
+        if args[1] == "ps":
+            service_filter = next(
+                value for value in args if str(value).startswith("label=com.docker.compose.service=")
+            )
+            service = service_filter.rsplit("=", 1)[-1]
+            return SimpleNamespace(stdout=f"{service}-id\n", returncode=0)
+        if args[1] == "port":
+            return SimpleNamespace(
+                stdout="8000/tcp -> 0.0.0.0:8210\n8000/tcp -> [::]:8210\n",
+                returncode=0,
+            )
+        raise AssertionError(args)
+
+    def fake_inspect(container_id, template, _cwd):
+        name = template.split('"')[1]
+        return labels[container_id][name]
+
+    monkeypatch.setattr(reconcile, "_require_local_docker", lambda _cwd: None)
+    monkeypatch.setattr(reconcile, "_tool", lambda name: name)
+    monkeypatch.setattr(reconcile, "_run", fake_run)
+    monkeypatch.setattr(reconcile, "_inspect_value", fake_inspect)
+    monkeypatch.setattr(
+        reconcile,
+        "_validate_public_override",
+        lambda _root, candidate, *_args: candidate.resolve(),
+    )
+    return runtime, admin, public
+
+
+def test_discovery_recovers_api_only_public_overlay_drift_from_two_siblings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runtime, admin, public = _discovery_fixture(monkeypatch, tmp_path)
+
+    observed = reconcile._discover_runtime()
+
+    assert observed == (
+        runtime.resolve(),
+        admin.resolve(),
+        public.resolve(),
+        reconcile.EXPECTED_PROJECT,
+    )
+
+
+def test_discovery_refuses_api_drift_without_both_sibling_proofs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _discovery_fixture(monkeypatch, tmp_path, nginx_has_public=False)
+
+    with pytest.raises(
+        reconcile.ReconcileError, match="public_dev_runtime_identity_not_proven"
+    ):
+        reconcile._discover_runtime()
+
+
 
 def test_recreate_invalid_json_preserves_unknown_mutation(monkeypatch, tmp_path: Path) -> None:
     runtime = tmp_path / "runtime"
@@ -243,3 +334,4 @@ def test_run_never_embeds_subprocess_output(monkeypatch, tmp_path: Path) -> None
     with pytest.raises(reconcile.ReconcileError, match="^command_failed$") as captured:
         reconcile._run(["tool"], cwd=tmp_path)
     assert "SECRET" not in str(captured.value)
+
