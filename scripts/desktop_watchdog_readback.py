@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import ctypes
-from ctypes import wintypes
+import ctypes.wintypes as wintypes
 from datetime import datetime, timezone
 import io
 import json
