@@ -4,7 +4,7 @@
     "requirements": true
   },
   "acceptance_criteria": [
-    "A comparação do overlay com o blob esperado deve aplicar os mesmos clean filters do Git para o caminho canônico, evitando falso mismatch por CRLF no Windows."
+    "A comparação do overlay com o blob esperado deve aplicar os mesmos clean filters do Git para o caminho canônico em todas as camadas de reconciliação e recriação, evitando falso mismatch por CRLF no Windows."
   ],
   "sdd_gate": {
     "tests": [

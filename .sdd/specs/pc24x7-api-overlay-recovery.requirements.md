@@ -22,8 +22,9 @@ qualquer identidade ambígua.
    SHA pertencente a `origin/main`, a recriação verificada e o readback do mesmo
    SHA com autenticação pública sem login demo.
 6. Staging e produção não podem ser tocados.
-7. A comparação do overlay de trabalho com o blob versionado deve aplicar os
-   mesmos `clean filters` do Git para o caminho canônico, sem falso bloqueio por
+7. A comparação do overlay de trabalho com o blob versionado, tanto no
+   reconciliador quanto no recriador interno, deve aplicar os mesmos
+   `clean filters` do Git para o caminho canônico, sem falso bloqueio por
    conversão CRLF/LF no Windows.
 
 ## Evidência de teste

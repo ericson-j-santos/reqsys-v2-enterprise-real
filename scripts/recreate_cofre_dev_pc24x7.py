@@ -5,8 +5,8 @@ import argparse
 import json
 import os
 import re
-import stat
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -163,7 +163,11 @@ def validate_public_override(repo_root: Path, candidate: Path, expected_sha: str
         raise RecreateError("public_dev_override_outside_repo")
     rel = PUBLIC_DEV_OVERRIDE_REL.as_posix()
     tracked_blob = run(["git", "rev-parse", f"{expected_sha}:{rel}"], cwd=resolved_root, timeout=30).stdout.strip()
-    observed_blob = run(["git", "hash-object", "--no-filters", str(lexical)], cwd=resolved_root, timeout=30).stdout.strip()
+    observed_blob = run(
+        ["git", "hash-object", "--path", rel, str(lexical)],
+        cwd=resolved_root,
+        timeout=30,
+    ).stdout.strip()
     if not re.fullmatch(r"[0-9a-f]{40}", tracked_blob) or observed_blob != tracked_blob:
         raise RecreateError("public_dev_override_head_mismatch")
     return resolved
