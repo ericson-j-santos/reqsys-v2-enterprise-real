@@ -2,17 +2,15 @@
 
 ## Objetivo
 
-Eliminar a dependência circular em que o Remote Desktop Commander (RDC) depende do GitHub Actions self-hosted runner para ser recuperado e o runner, quando indisponível junto com o RDC, impede qualquer recuperação remota.
+Manter o GitHub Actions self-hosted runner recuperável no boot sem reativar o Remote Desktop Commander externo, aposentado em modo fail-closed.
 
-O estado alvo é um supervisor Windows local que inicia no boot e recupera de forma independente:
-- o RDC governado;
-- o GitHub Actions runner PC24x7.
+O estado alvo é um supervisor Windows local que inicia no boot, recupera o GitHub Actions runner PC24x7 e registra explicitamente o RDC externo como \`retired_fail_closed\`, sem sondagem ou tentativa de recuperação.
 
 ## Classificação do incremento
 
 \`gap_fix\`.
 
-Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #1818. O workflow \`desktop-rdc-recovery.yml\` permanece como rota secundária e evidência externa, não como mecanismo primário de disponibilidade.
+Esta mudança corrige a lacuna comprovada da recuperação integrada pela PR #1818 e alinha o watchdog ao marcador canônico \`EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003\`. Fluxos legados de recuperação RDC ficam fora do ciclo ativo.
 
 ## Requisitos
 
@@ -25,14 +23,14 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 7. Descobrir ou receber uma única vez o diretório do GitHub Actions runner e validar apenas a presença de \`.runner\`, \`run.cmd\` e \`bin\\Runner.Listener.exe\`; o conteúdo de \`.runner\` não pode ser lido nem registrado.
 8. Considerar o runner local saudável quando \`Runner.Listener.exe\` estiver ativo.
 9. Quando o runner estiver inativo, iniciá-lo pelo \`run.cmd\` local já configurado, sem token, segredo ou nova configuração.
-10. Considerar RDC headless saudável somente com claim V4 \`ready=true\` fresco.
-11. Quando o claim RDC estiver ausente/stale/inválido, chamar o \`pc24x7_rdc_recovery.py\` versionado com a confirmação fixa \`RECOVER-GOVERNED-RDC\`.
+10. Registrar o RDC externo como \`status=retired_fail_closed\`, \`enabled=false\`, \`recovered=false\` e marcador \`EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003\`.
+11. Não ler claim RDC, copiar ou executar \`pc24x7_rdc_recovery.py\`, nem iniciar tarefa ou processo do RDC aposentado.
 12. Não aceitar task name, host, executável RDC, comando arbitrário ou segredo como entrada do ciclo de recuperação.
 13. Persistir somente estado sanitizado em \`%LOCALAPPDATA%\\ReqSys\\DesktopControlPlaneWatchdog\`.
 14. Toda evidência deve declarar \`production_touched=false\`, \`secrets_read=false\` e \`reboot_performed=false\`.
 15. A instalação exige confirmação exata \`INSTALL-DESKTOP-CONTROL-PLANE-WATCHDOG\` e SHA fonte completo.
-16. A release local deve copiar somente os scripts versionados necessários; não deve depender do checkout permanecer presente.
-17. O workflow \`desktop-rdc-recovery.yml\` continua válido como fallback externo, mas sua indisponibilidade não pode interromper o watchdog local.
+16. A release local deve copiar somente o watchdog e o launcher UAC necessários; não deve copiar recuperadores RDC nem depender do checkout permanecer presente.
+17. Workflows legados de RDC não podem ser chamados pelo watchdog local e não participam da disponibilidade do runner.
 18. Se o registro COM `AtStartup + S4U` não estiver disponível ou retornar `Access Denied`, a instalação deve tentar uma única alternativa nativa e local, restrita à tarefa exata, com `schtasks /Create /SC ONSTART /RL LIMITED /NP`; o resultado só é aceito após leitura XML independente comprovar tarefa habilitada, `AtStartup` e `S4U`.
 19. A elevação deve usar somente `desktop_control_plane_watchdog_uac_launcher.py`, restrito ao host exato, Windows e confirmação `LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC`.
 20. O launcher UAC só pode elevar o subcomando fixo `register-task-com --metadata <metadata governada>` da release imutável instalada. Não pode aceitar task name, comando arbitrário, executável arbitrário, senha, token ou segredo.
@@ -46,8 +44,8 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 - host diferente de \`DESKTOP-PDQK954\` deve falhar fechado;
 - diretório de runner incompleto deve ser recusado;
 - confirmação de instalação incorreta deve ser recusada;
-- claim RDC stale não pode ser interpretado como saudável;
-- ausência/falha da recuperação RDC deve deixar \`ok=false\`;
+- claim, tarefa ou processo RDC não pode ser consultado ou reativado pelo watchdog;
+- a aposentadoria RDC só é aceita quando o marcador canônico está presente no estado sanitizado;
 - nenhuma leitura do conteúdo de \`.runner\` é permitida;
 - nenhuma chamada a \`github.com\`/GitHub API pode existir no watchdog;
 - nenhum reboot ou shutdown pode ser disparado.
@@ -56,7 +54,7 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 
 - testes unitários positivos e negativos verdes;
 - \`desktop_control_plane_watchdog.py\` compilável;
-- \`pc24x7_rdc_recovery.py\` reutilizado, sem duplicar sua allowlist RDC;
+- ausência de dependência ou chamada a \`pc24x7_rdc_recovery.py\` comprovada por teste;
 - CI do PR verde no SHA atual.
 
 ## Critérios de aceite runtime
@@ -66,8 +64,8 @@ A correção só pode ser classificada como totalmente ativada no Desktop quando
 1. tarefa \`ReqSysDesktopControlPlaneWatchdog\` existente com \`AtStartup\`;
 2. estado local do watchdog \`ok=true\`;
 3. \`Runner.Listener.exe\` recuperável após ausência controlada;
-4. RDC recuperável após claim stale/ausente controlado;
-5. leitura independente do RDC indicando \`DESKTOP-PDQK954\` online com \`transport_broadcast_v1=true\`;
+4. RDC externo registrado como \`retired_fail_closed\` com o marcador canônico e sem tentativa de recuperação;
+5. controle negativo comprovando que claim, tarefa e processo RDC não são acionados;
 6. um workflow self-hosted novo sair de \`pending/queued\` e ser executado no runner PC24x7;
 7. nenhum reboot, segredo ou produção tocados.
 
@@ -83,10 +81,10 @@ Se a recuperação RDC falhar, o ciclo falha e nem tenta o runner.
 Requisitos adicionais de recuperação sem login:
 
 25. A tentativa de iniciar ou observar `Runner.Listener.exe` deve ocorrer **antes e independentemente** de recuperar o RDC, sem depender de GUI, sessão interativa ou acesso remoto.
-26. Uma falha ou ausência de script RDC não deve suprimir a tentativa de recuperação do runner. Uma falha do runner também não deve suprimir a tentativa de diagnóstico e recuperação RDC.
-27. A evidência local deve publicar separadamente `runner_recovery_ok`, `rdc_recovery_ok`, `partial` e `github_pickup_required`, sem declarar `ok=true` quando qualquer dos componentes obrigatórios estiver falho.
+26. A ausência do script RDC é o estado esperado e não deve suprimir a tentativa de recuperação do runner. Uma falha do runner não autoriza sondagem, diagnóstico ou recuperação do RDC aposentado.
+27. A evidência local deve publicar separadamente `runner_recovery_ok`, `rdc_recovery_ok`, `partial` e `github_pickup_required`; `rdc_recovery_ok=true` significa conformidade com a aposentadoria fail-closed, e `ok=true` continua condicionado ao runner local saudável.
 28. Erros devem ser categorizados por tipo e não podem publicar a mensagem original de exceção, argumentos, tokens ou caminhos sensíveis no artefato.
-29. A validação em runner hospedado deve testar controles positivos e negativos: RDC falha, runner falha e script de RDC ausente, todos sem impedir a outra tentativa.
+29. A validação em runner hospedado deve testar controles positivos e negativos: runner saudável, runner falho, script RDC ausente e marcador fail-closed, sem qualquer chamada ao recuperador aposentado.
 30. A correção em GitHub, isoladamente, não comprova a instalação física. O reboot só pode ocorrer após atualização imutável e reversível do watchdog instalado e readback independente de recuperação do runner sem RDC, preservando capacidade de rollback e o login humano desnecessário para o runtime.
 
 ### Critérios de aceite adicionais

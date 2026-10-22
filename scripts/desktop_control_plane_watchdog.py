@@ -2,10 +2,10 @@
 """Supervisor autônomo do plano de controle local do Desktop PC24x7.
 
 Objetivo:
-- recuperar RDC e GitHub Actions runner sem depender de nenhum dos dois;
+- recuperar o GitHub Actions runner sem depender do RDC externo aposentado;
 - iniciar no boot via tarefa Windows S4U;
 - manter evidência local sanitizada;
-- não ler nem registrar segredos do runner/RDC;
+- não ler nem registrar segredos do runner;
 - operar somente em DESKTOP-PDQK954 e local/DEV.
 """
 from __future__ import annotations
@@ -40,17 +40,13 @@ TASK_RUNLEVEL_LUA = 0
 TASK_INSTANCES_IGNORE_NEW = 2
 CONFIRM = "INSTALL-DESKTOP-CONTROL-PLANE-WATCHDOG"
 
-RDC_RECOVERY_CONFIRM = "RECOVER-GOVERNED-RDC"
-RDC_RECOVERY_SCRIPT = "pc24x7_rdc_recovery.py"
+RDC_RETIREMENT_MARKER = "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003"
 UAC_LAUNCHER_SCRIPT = "desktop_control_plane_watchdog_uac_launcher.py"
-RDC_HEADLESS_CLAIM = Path(r"C:\ProgramData\ReqSys\RdcSvc\rdc-headless-owner.json")
-RDC_CLAIM_MAX_AGE_SECONDS = 20.0
 
 RUNNER_PROCESS = "Runner.Listener.exe"
 RUNNER_REQUIRED = ((".runner",), ("run.cmd",), ("bin", "Runner.Listener.exe"))
 DEFAULT_WATCH_SECONDS = 30
 RUNNER_START_TIMEOUT_SECONDS = 30
-RDC_RECOVERY_TIMEOUT_SECONDS = 60
 
 
 class WatchdogError(RuntimeError):
@@ -347,110 +343,34 @@ def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
     }
 
 
-def read_rdc_claim() -> dict[str, Any]:
-    if not RDC_HEADLESS_CLAIM.is_file():
-        return {"fresh": False, "reason": "claim_missing"}
-    try:
-        payload = json.loads(RDC_HEADLESS_CLAIM.read_text(encoding="utf-8"))
-        if payload.get("ready") is not True:
-            return {"fresh": False, "reason": "claim_not_ready"}
-        raw_updated = str(payload.get("updated_at") or "")
-        updated = datetime.fromisoformat(raw_updated.replace("Z", "+00:00"))
-        if updated.tzinfo is None:
-            raise ValueError("updated_at sem timezone")
-        age = (datetime.now(timezone.utc) - updated.astimezone(timezone.utc)).total_seconds()
-        fresh = 0 <= age <= RDC_CLAIM_MAX_AGE_SECONDS
-        return {
-            "fresh": fresh,
-            "reason": "fresh" if fresh else "claim_stale",
-            "age_seconds": round(age, 3),
-            "ready": True,
-        }
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        return {"fresh": False, "reason": "claim_invalid", "error_type": type(exc).__name__}
-
-
-def recover_rdc(*, python_executable: Path, recovery_script: Path, evidence_path: Path) -> dict[str, Any]:
-    claim = read_rdc_claim()
-    if claim.get("fresh"):
-        return {"status": "healthy", "recovered": False, "claim": claim}
-
-    correlation_id = f"desktop-watchdog-rdc-{int(time.time())}"
-    completed = subprocess.run(
-        [
-            str(python_executable),
-            str(recovery_script),
-            "--confirm",
-            RDC_RECOVERY_CONFIRM,
-            "--correlation-id",
-            correlation_id,
-            "--evidence-file",
-            str(evidence_path),
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=RDC_RECOVERY_TIMEOUT_SECONDS,
-        check=False,
-    )
-    evidence: dict[str, Any] = {}
-    if evidence_path.is_file():
-        try:
-            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            evidence = {}
-    if completed.returncode != 0 or evidence.get("ok") is not True:
-        raise WatchdogError(
-            "recuperação RDC falhou: "
-            + str(evidence.get("error") or completed.stderr or completed.stdout)[-500:]
-        )
+def retired_rdc_state() -> dict[str, Any]:
+    """Expose the intentional fail-closed retirement without probing or recovery."""
     return {
-        "status": "recovered",
-        "recovered": True,
-        "mode": evidence.get("mode"),
-        "owner": evidence.get("owner"),
-        "fallback_armed": bool(evidence.get("fallback_armed")),
+        "status": "retired_fail_closed",
+        "enabled": False,
+        "recovered": False,
+        "marker": RDC_RETIREMENT_MARKER,
     }
 
 
 def cycle(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Independently recover the GitHub runner and RDC; never gate one on the other.
-
-    In particular, a degraded remote GUI controller must not prevent the runner
-    from starting during a headless Windows boot before interactive login.
-    """
+    """Recover the runner and record the external RDC as intentionally retired."""
     host = require_windows_desktop()
     runtime_root = Path(metadata["runtime_root"])
-    release_root = Path(metadata["release_root"])
     runner_home = validate_runner_home(Path(metadata["runner_home"]))
-    python_executable = Path(metadata["python_executable"])
-    recovery_script = release_root / "scripts" / RDC_RECOVERY_SCRIPT
 
-    # The runner is first. Errors are categorized without logging exception text,
-    # and RDC recovery is still attempted independently.
+    # Errors are categorized without logging exception text. The retired RDC is
+    # never probed, recovered, or allowed to gate the runner.
     try:
         runner = start_runner(runner_home, runtime_root / "logs" / "github-runner.log")
     except Exception as exc:
         runner = {"status": "failed", "component": "github_runner",
                   "error_code": type(exc).__name__, "started": False}
 
-    if recovery_script.is_file():
-        try:
-            rdc = recover_rdc(
-                python_executable=python_executable,
-                recovery_script=recovery_script,
-                evidence_path=runtime_root / "evidence" / "rdc-recovery-last.json",
-            )
-        except Exception as exc:
-            rdc = {"status": "failed", "component": "rdc",
-                   "error_code": type(exc).__name__, "recovered": False}
-    else:
-        rdc = {"status": "failed", "component": "rdc",
-               "error_code": "rdc_recovery_script_missing", "recovered": False}
+    rdc = retired_rdc_state()
 
     runner_ok = runner.get("status") in {"process_running", "recovered"}
-    rdc_ok = rdc.get("status") in {"healthy", "recovered"}
+    rdc_ok = rdc.get("status") == "retired_fail_closed"
     payload = {
         "schema_version": "2",
         "service": SERVICE_NAME,
@@ -525,11 +445,10 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
     scripts = release_root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(__file__).resolve(), scripts / Path(__file__).name)
-    for required_name in (RDC_RECOVERY_SCRIPT, UAC_LAUNCHER_SCRIPT):
-        required = source_root / "scripts" / required_name
-        if not required.is_file():
-            raise WatchdogError(f"script obrigatório ausente: {required}")
-        shutil.copy2(required, scripts / required_name)
+    required = source_root / "scripts" / UAC_LAUNCHER_SCRIPT
+    if not required.is_file():
+        raise WatchdogError(f"script obrigatório ausente: {required}")
+    shutil.copy2(required, scripts / UAC_LAUNCHER_SCRIPT)
 
 
 def _write_launcher(runtime_root: Path) -> Path:
@@ -624,7 +543,7 @@ def _register_boot_task_com(*, python_executable: Path, launcher: Path) -> dict[
 
     definition = service.NewTask(0)
     definition.RegistrationInfo.Description = (
-        "ReqSys Desktop control-plane watchdog: RDC + GitHub Actions runner"
+        "ReqSys Desktop control-plane watchdog: GitHub Actions runner; external RDC retired fail-closed"
     )
     definition.Settings.Enabled = True
     definition.Settings.StartWhenAvailable = True
@@ -792,6 +711,23 @@ def run_watchdog_task() -> dict[str, Any]:
     return {"run_returncode": completed.returncode}
 
 
+def restart_watchdog_task() -> dict[str, Any]:
+    """Replace any in-memory watchdog so it loads the staged release metadata."""
+    ended = subprocess.run(
+        [str(_schtasks()), "/End", "/TN", TASK_NAME],
+        capture_output=True,
+        text=True,
+        encoding=locale.getpreferredencoding(False) or "utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    if ended.returncode == 0:
+        time.sleep(1.0)
+    started = run_watchdog_task()
+    return {"end_returncode": ended.returncode, **started}
+
+
 def task_status() -> dict[str, Any]:
     if os.name != "nt":
         return {"exists": False, "enabled": False, "trigger_at_startup": False}
@@ -873,7 +809,7 @@ def install(
             python_executable=python_executable.resolve(),
             launcher=launcher,
         )
-        started = run_watchdog_task()
+        started = restart_watchdog_task()
         headless_boot_ready = bool(
             task.get("trigger") == "AtStartup"
             and str(task.get("logon_type") or "").casefold() == "s4u"
