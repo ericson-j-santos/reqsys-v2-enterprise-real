@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
   "feature_name": "PC24x7 public DEV governed reconciliation",
-  "increment_type": "fix",
+  "increment_type": "gap_fix",
   "status": "implementation",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-02",
-  "updated_at": "2026-10-02",
+  "updated_at": "2026-10-22",
   "approvals": {
     "requirements": true,
     "design": true,
@@ -14,16 +14,18 @@
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_public_dev_static_runtime.py",
+      "tests/test_pc24x7_public_dev_cutover_guard.py",
       "tests/test_provision_pc24x7_teams_bot_runtime.py"
     ],
-    "evidence_contract": "O reconcile public-static preserva o checkout DEV encontrado, usa worktree governado em SHA da main, resolve a credencial Teams DEV por OIDC e Key Vault sem expor valor e valida runtime estatico no mesmo SHA."
+    "evidence_contract": "O reconcile public-static preserva o checkout DEV encontrado, usa worktree governado em SHA da main, materializa somente autorizacoes Risk3 especificas e temporarias sem ativar modo amplo, resolve a credencial Teams DEV por OIDC e Key Vault sem expor valor e valida runtime estatico no mesmo SHA."
   },
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-public-dev-governed-reconcile.requirements.md",
     "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py",
     "workflow": ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     "regression_tests": "tests/test_pc24x7_public_dev_static_runtime.py",
-    "failed_run": "37077425714"
+    "failed_run": "39868046622",
+    "gap_reference": "OPS-GAP-PC24X7-RISK3-ALLOWLIST"
   },
   "risk": {
     "production": false,
@@ -40,6 +42,7 @@
     "A permissao id-token: write fica limitada ao job reconcile; o smoke publico recebe somente contents: read.",
     "A ausencia do servico opcional reqsys-runtime nao impede o nginx publico de iniciar; apenas as rotas runtime-core falham fechadas com HTTP 502.",
     "O proxy TODO events preserva o sufixo de caminho e a query ao encaminhar uma rota runtime-core permitida.",
+    "Cada mutacao Risk3 usa uma autorizacao DEV especifica, de curta duracao, vinculada ao SHA, script e argumentos exatos; o owner gateway nao aceita override ad-hoc e o modo amplo nao e alterado.",
     "Somente api, frontend e nginx DEV sao recriados; HML e PROD permanecem fora de escopo.",
     "Health, readiness, build-info, frontend estatico e controle negativo de Vite validam o SHA exato antes de publicar o locator."
   ]

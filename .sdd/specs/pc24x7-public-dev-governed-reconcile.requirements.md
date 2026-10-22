@@ -34,6 +34,11 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
     quando uma rota `/runtime-core/` permitida for acessada; a ausência do serviço
     deve retornar HTTP 502 nessas rotas sem impedir o gateway público de iniciar.
     Quando presente, o proxy de TODO events deve preservar sufixo de caminho e query.
+11. Depois de reler a autorização recente do owner e antes de qualquer mutação, o
+    workflow deve criar somente autorizações Risk3 específicas, temporárias e
+    vinculadas ao ambiente DEV, scope, worktree limpo, SHA, script rastreado e
+    argumentos exatos. O gateway deve executar o comando cadastrado sem override
+    ad-hoc; o modo amplo `standard_gold_development` não pode ser ativado ou alterado.
 
 ## Critérios de aceite
 
@@ -44,6 +49,8 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 - todos os actions externos do workflow ficam presos a SHAs imutáveis;
 - o artifact declara `production_touched=false` e `secret_value_exposed=false`;
 - o smoke independente confirma o mesmo SHA publicado antes de considerar DEV pronto.
+- o readback de cada autorização específica confirma ambiente DEV, SHA exato,
+  expiração curta e `broad_development_mode_changed=false` antes do gateway do owner;
 - sem `reqsys-runtime` na rede, o Nginx passa em `nginx -t`, atende frontend/API e
   mantém as rotas permitidas de `/runtime-core/` fechadas com HTTP 502.
 - com um upstream stub, `/runtime-core/api/todo-events/abc?x=1` chega ao serviço
@@ -55,3 +62,4 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 - rotacionar a identidade ou o segredo do bot Teams;
 - alterar o ambiente, credenciais ou runtime de HML/PROD;
 - promover o runtime após DEV.
+- ativar automaticamente o modo amplo privado `standard_gold_development`.

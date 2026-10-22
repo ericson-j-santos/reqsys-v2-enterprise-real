@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "reconcile_pc24x7_public_dev_runtime.py"
@@ -574,6 +575,34 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "isolated_restore_verified -ne $true" in before
 
 
+def test_public_static_risk3_actions_are_exact_short_lived_and_do_not_enable_broad_mode() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert yaml.safe_load(raw)["jobs"]["reconcile"]["environment"] == "development"
+    public_static = raw.split("- name: Prepare protected PostgreSQL backup", 1)[1].split(
+        "- name: Recover and validate Engineering Orchestrator DEV", 1
+    )[0]
+    assert "RULES_SHA: fabaccc32abbbf6f95be443629ef2ebb1246dad5" in raw
+    assert "set_owner_risk3_action.py" in public_static
+    assert "set_owner_risk3_development_mode.py" not in public_static
+    assert "AUTHORIZE-SPECIFIC-RISK3-ACTION" in public_static
+    assert "[AllowEmptyCollection()][string[]]$CommandArgs" in public_static
+    assert "'--expires-minutes', '45'" in public_static
+    assert "issue-comment:$env:AUTHORIZATION_COMMENT_ID:sha:${{ github.sha }}" in public_static
+    assert "'--repo-root', $env:TARGET_PATH" in public_static
+    assert "'--expected-head', '${{ github.sha }}'" in public_static
+    assert "broad_development_mode_changed -ne $false" in public_static
+    assert "$remaining.TotalMinutes -le 0 -or $remaining.TotalMinutes -gt 46" in public_static
+    for action_id in (
+        "reqsys.pc24x7.public_dev.cutover.prepare",
+        "reqsys.pc24x7.public_dev.runtime.reconcile",
+        "reqsys.pc24x7.public_dev.cutover.rollback",
+        "reqsys.pc24x7.public_dev.tunnel.reconcile",
+        "reqsys.pc24x7.public_dev.locator.publish",
+    ):
+        assert action_id in public_static
+    assert "'--', $env:GATEWAY_PYTHON" not in public_static
+
+
 def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
     """Prevent any public-static mutator running before governed inventory."""
     rules = raw.find("      - name: Checkout immutable rules for governed Desktop session")
@@ -607,6 +636,7 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "rollback_rehearsal_verified = $false" in inventory_step,
         "if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'" in guard_step,
         "owner_risk3_gateway.py" in guard_step,
+        "set_owner_risk3_action.py" in guard_step,
         "reqsys.pc24x7.public_dev.cutover.prepare" in guard_step,
         "repo://reqsys/environment/dev/host/desktop-pdqk954" in guard_step,
         "'--timeout', '900'" in guard_step,
@@ -639,10 +669,15 @@ def test_public_dev_governed_recovery_security_control_detects_bypass():
         1,
     )
     assert not _public_dev_governed_inventory_guard_active(without_owner_gateway)
+    without_specific_authorizer = raw.replace(
+        "_rules\\scripts\\set_owner_risk3_action.py",
+        "_rules\\scripts\\set_owner_risk3_development_mode.py",
+        1,
+    )
+    assert not _public_dev_governed_inventory_guard_active(without_specific_authorizer)
     without_dev_scope = raw.replace(
         "repo://reqsys/environment/dev/host/desktop-pdqk954",
         "repo://reqsys/environment/unknown/host/desktop-pdqk954",
-        1,
     )
     assert not _public_dev_governed_inventory_guard_active(without_dev_scope)
     without_gateway = raw.replace("'--risk', '1'", "'--risk', '2'", 1)
