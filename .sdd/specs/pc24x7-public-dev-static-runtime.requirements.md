@@ -100,3 +100,9 @@ configuração privada do modo temporário `standard_gold_development` ainda vá
 worktree limpo, script Python rastreado no SHA da sessão, timeout máximo de 900 s e
 auditoria por hash. Ausência ou expiração dessa configuração bloqueia antes de
 qualquer mutação; ela não é ativada automaticamente pelo workflow.
+
+Se o inventário read-only falhar, o workflow deve continuar fail-closed e publicar
+um receipt sanitizado com `status=inventory_blocked` e `reason_code` pertencente a
+uma allowlist fixa. O receipt não pode incluir stdout/stderr, IDs ou metadados de
+contêiner, paths privados ou credenciais. A ausência de inventário válido continua
+bloqueando backup, OIDC, Compose, locator e qualquer outra mutação.
