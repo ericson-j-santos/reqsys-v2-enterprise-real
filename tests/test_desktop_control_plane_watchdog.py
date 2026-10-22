@@ -47,63 +47,14 @@ def test_discovery_prefers_explicit_runner_home(tmp_path: Path) -> None:
     assert m.discover_runner_home(valid) == valid.resolve()
 
 
-def test_rdc_claim_missing_is_not_healthy(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(m, "RDC_HEADLESS_CLAIM", tmp_path / "missing.json")
-    assert m.read_rdc_claim() == {"fresh": False, "reason": "claim_missing"}
-
-
-def test_rdc_claim_fresh_is_accepted(monkeypatch, tmp_path: Path) -> None:
-    from datetime import datetime, timezone
-
-    claim = tmp_path / "claim.json"
-    claim.write_text(
-        json.dumps({"ready": True, "updated_at": datetime.now(timezone.utc).isoformat()}),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(m, "RDC_HEADLESS_CLAIM", claim)
-    result = m.read_rdc_claim()
-    assert result["fresh"] is True
-    assert result["reason"] == "fresh"
-
-
-def test_recover_rdc_skips_restart_when_claim_is_fresh(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(m, "read_rdc_claim", lambda: {"fresh": True, "reason": "fresh"})
-    result = m.recover_rdc(
-        python_executable=Path("python"),
-        recovery_script=tmp_path / "recovery.py",
-        evidence_path=tmp_path / "evidence.json",
-    )
-    assert result["status"] == "healthy"
-    assert result["recovered"] is False
-
-
-def test_recover_rdc_uses_governed_local_script(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(m, "read_rdc_claim", lambda: {"fresh": False, "reason": "stale"})
-    evidence = tmp_path / "evidence.json"
-
-    def fake_run(args, **kwargs):
-        assert m.RDC_RECOVERY_CONFIRM in args
-        evidence.write_text(
-            json.dumps(
-                {
-                    "ok": True,
-                    "mode": "headless_transport_proven_with_interactive_standby",
-                    "owner": "headless",
-                    "fallback_armed": True,
-                }
-            ),
-            encoding="utf-8",
-        )
-        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(m.subprocess, "run", fake_run)
-    result = m.recover_rdc(
-        python_executable=Path("python"),
-        recovery_script=tmp_path / "recovery.py",
-        evidence_path=evidence,
-    )
-    assert result["status"] == "recovered"
-    assert result["fallback_armed"] is True
+def test_rdc_is_explicitly_retired_fail_closed() -> None:
+    result = m.retired_rdc_state()
+    assert result == {
+        "status": "retired_fail_closed",
+        "enabled": False,
+        "recovered": False,
+        "marker": "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003",
+    }
 
 
 def test_start_runner_recovers_without_claiming_github_health(monkeypatch, tmp_path: Path) -> None:
@@ -201,21 +152,13 @@ def test_restart_runner_terminates_only_exact_governed_listener(monkeypatch, tmp
     assert result["pickup_required"] is True
 
 
-def test_cycle_recovers_rdc_and_runner_and_writes_sanitized_state(monkeypatch, tmp_path: Path) -> None:
+def test_cycle_keeps_rdc_retired_and_recovers_runner(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
     release = tmp_path / "release"
-    scripts = release / "scripts"
-    scripts.mkdir(parents=True)
-    (scripts / m.RDC_RECOVERY_SCRIPT).write_text("# stub\n", encoding="utf-8")
     runtime = tmp_path / "runtime"
 
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "validate_runner_home", lambda path: runner_home)
-    monkeypatch.setattr(
-        m,
-        "recover_rdc",
-        lambda **kwargs: {"status": "recovered", "recovered": True, "fallback_armed": True},
-    )
     monkeypatch.setattr(
         m,
         "start_runner",
@@ -231,7 +174,10 @@ def test_cycle_recovers_rdc_and_runner_and_writes_sanitized_state(monkeypatch, t
     }
     payload = m.cycle(metadata)
     assert payload["ok"] is True
-    assert payload["rdc"]["status"] == "recovered"
+    assert payload["rdc"]["status"] == "retired_fail_closed"
+    assert payload["rdc"]["enabled"] is False
+    assert payload["rdc"]["marker"] == "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003"
+    assert payload["rdc_recovery_ok"] is True
     assert payload["github_runner"]["status"] == "recovered"
     assert payload["production_touched"] is False
     assert payload["secrets_read"] is False
@@ -314,7 +260,6 @@ def test_load_installed_metadata_rejects_release_not_bound_to_sha(tmp_path: Path
 def test_install_stages_release_when_uac_activation_is_required(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "source"
     (source / "scripts").mkdir(parents=True)
-    (source / "scripts" / m.RDC_RECOVERY_SCRIPT).write_text("# recovery", encoding="utf-8")
     (source / "scripts" / m.UAC_LAUNCHER_SCRIPT).write_text("# uac", encoding="utf-8")
     runner = make_runner_home(tmp_path)
     runtime = tmp_path / "runtime"
@@ -407,13 +352,36 @@ def test_registration_falls_back_to_native_on_local_access_denied(monkeypatch, t
     assert result["registration_method"] == "schtasks_np"
 
 
+def test_restart_watchdog_ends_existing_task_before_run(monkeypatch, tmp_path: Path) -> None:
+    schtasks = tmp_path / "schtasks.exe"
+    schtasks.write_bytes(b"")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(m, "_schtasks", lambda: schtasks)
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    monkeypatch.setattr(m.time, "sleep", lambda seconds: None)
+
+    result = m.restart_watchdog_task()
+
+    assert calls == [
+        [str(schtasks), "/End", "/TN", m.TASK_NAME],
+        [str(schtasks), "/Run", "/TN", m.TASK_NAME],
+    ]
+    assert result == {"end_returncode": 0, "run_returncode": 0}
+
+
 def test_source_contract_is_independent_of_rdc_and_github_runner(tmp_path: Path) -> None:
     text = MODULE.read_text(encoding="utf-8")
     assert 'TASK_LEAF = "ReqSysDesktopControlPlaneWatchdog"' in text
     assert 'TASK_TRIGGER_BOOT = 8' in text
     assert 'TASK_LOGON_S4U = 2' in text
     assert 'definition.Settings.RestartCount = 999' in text
-    assert "pc24x7_rdc_recovery.py" in text
+    assert 'RDC_RETIREMENT_MARKER = "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003"' in text
+    assert "pc24x7_rdc_recovery.py" not in text
     assert "Runner.Listener.exe" in text
     assert "run.cmd" in text
     assert "github.com" not in text.casefold()
@@ -452,74 +420,74 @@ def test_stop_runner_terminates_only_exact_governed_listener(monkeypatch, tmp_pa
     assert result["termination_scope"] == "exact_runner_home"
 
 
-def test_cycle_runner_recovers_when_rdc_fails_without_exposing_exception(monkeypatch, tmp_path: Path) -> None:
+def test_cycle_runner_recovers_with_rdc_retired(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
-    release = tmp_path / "release"
-    (release / "scripts").mkdir(parents=True)
-    (release / "scripts" / m.RDC_RECOVERY_SCRIPT).write_text("# safe fixture", encoding="utf-8")
     runtime = tmp_path / "runtime"
     calls = []
 
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "validate_runner_home", lambda p: runner_home)
+
     def runner(*args, **kwargs):
         calls.append("runner")
         return {"status": "recovered", "started": True}
-    def broken_rdc(**kwargs):
-        calls.append("rdc")
-        raise m.WatchdogError("do-not-expose-private-diagnostic-text")
+
     monkeypatch.setattr(m, "start_runner", runner)
-    monkeypatch.setattr(m, "recover_rdc", broken_rdc)
-    metadata = {"runtime_root": str(runtime), "release_root": str(release),
-                "runner_home": str(runner_home), "python_executable": "python",
-                "source_sha": "b" * 40}
-    result = m.cycle(metadata)
-    assert calls == ["runner", "rdc"]
+    result = m.cycle({
+        "runtime_root": str(runtime),
+        "runner_home": str(runner_home),
+        "source_sha": "b" * 40,
+    })
+
+    assert calls == ["runner"]
     assert result["runner_recovery_ok"] is True
-    assert result["rdc_recovery_ok"] is False
-    assert result["partial"] is True and result["ok"] is False
+    assert result["rdc_recovery_ok"] is True
+    assert result["partial"] is False and result["ok"] is True
     assert result["github_pickup_required"] is True
-    assert "do-not-expose" not in json.dumps(result)
+    assert result["rdc"]["status"] == "retired_fail_closed"
     assert json.loads((runtime / "state.json").read_text(encoding="utf-8")) == result
 
 
-def test_cycle_attempts_rdc_when_runner_fails(monkeypatch, tmp_path: Path) -> None:
+def test_cycle_runner_failure_does_not_reactivate_rdc(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
-    release = tmp_path / "release"
-    (release / "scripts").mkdir(parents=True)
-    (release / "scripts" / m.RDC_RECOVERY_SCRIPT).write_text("safe", encoding="utf-8")
     runtime = tmp_path / "runtime"
-    calls = []
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "validate_runner_home", lambda p: runner_home)
+
     def broken_runner(*args, **kwargs):
-        calls.append("runner")
         raise RuntimeError("do-not-leak")
-    def rdc(**kwargs):
-        calls.append("rdc")
-        return {"status": "healthy", "recovered": False}
+
     monkeypatch.setattr(m, "start_runner", broken_runner)
-    monkeypatch.setattr(m, "recover_rdc", rdc)
-    result = m.cycle({"runtime_root": str(runtime), "release_root": str(release),
-                       "runner_home": str(runner_home), "python_executable": "python",
-                       "source_sha": "c" * 40})
-    assert calls == ["runner", "rdc"]
-    assert result["runner_recovery_ok"] is False and result["rdc_recovery_ok"] is True
+    result = m.cycle({
+        "runtime_root": str(runtime),
+        "runner_home": str(runner_home),
+        "source_sha": "c" * 40,
+    })
+
+    assert result["runner_recovery_ok"] is False
+    assert result["rdc_recovery_ok"] is True
     assert result["partial"] is True and result["ok"] is False
+    assert result["rdc"]["status"] == "retired_fail_closed"
     assert "do-not-leak" not in json.dumps(result)
 
 
-def test_cycle_missing_rdc_script_still_recovers_runner(monkeypatch, tmp_path: Path) -> None:
+def test_cycle_does_not_require_rdc_recovery_script(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
-    release = tmp_path / "release"
-    release.mkdir()
     runtime = tmp_path / "runtime"
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "validate_runner_home", lambda p: runner_home)
-    monkeypatch.setattr(m, "start_runner", lambda *a, **k: {"status": "process_running", "started": False})
-    monkeypatch.setattr(m, "recover_rdc", lambda **k: pytest.fail("RDC recovery must not run without script"))
-    result = m.cycle({"runtime_root": str(runtime), "release_root": str(release),
-                      "runner_home": str(runner_home), "python_executable": "python",
-                      "source_sha": "d" * 40})
-    assert result["runner_recovery_ok"] and not result["rdc_recovery_ok"]
-    assert result["rdc"]["error_code"] == "rdc_recovery_script_missing"
+    monkeypatch.setattr(
+        m,
+        "start_runner",
+        lambda *a, **k: {"status": "process_running", "started": False},
+    )
+
+    result = m.cycle({
+        "runtime_root": str(runtime),
+        "runner_home": str(runner_home),
+        "source_sha": "d" * 40,
+    })
+
+    assert result["runner_recovery_ok"] is True
+    assert result["rdc_recovery_ok"] is True
+    assert result["rdc"]["marker"] == "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003"

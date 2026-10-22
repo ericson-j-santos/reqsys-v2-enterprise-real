@@ -8,11 +8,16 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
-import desktop_control_plane_watchdog as watchdog
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+watchdog = __import__("desktop_control_plane_watchdog")
 
 LAUNCH_CONFIRM = "LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC"
 SW_SHOWNORMAL = 1
@@ -93,7 +98,7 @@ def finalize_activation(installation: dict[str, Any]) -> dict[str, Any]:
         }
     )
     watchdog.atomic_json(installation["metadata_path"], metadata)
-    started = watchdog.run_watchdog_task()
+    started = watchdog.restart_watchdog_task()
     return {"metadata": metadata, "task": task, "start": started}
 
 

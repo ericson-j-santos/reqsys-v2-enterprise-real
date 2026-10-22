@@ -8,33 +8,33 @@
   },
   "target_host": "DESKTOP-PDQK954",
   "scope": "local/dev",
-  "problem": "RDC recovery depended on the same self-hosted runner that can fail together with RDC.",
+  "problem": "The boot watchdog still attempted to recover an external RDC capability that had been formally retired fail-closed, causing false unhealthy state while the runner was available.",
   "solution": {
-    "primary": "Windows AtStartup S4U watchdog independent of RDC and GitHub Actions",
+    "primary": "Windows AtStartup S4U watchdog for the GitHub Actions runner with the external RDC explicitly retired fail-closed",
     "recovers": [
-      "Remote Desktop Commander",
       "GitHub Actions Runner.Listener"
     ],
-    "secondary_fallback": ".github/workflows/desktop-rdc-recovery.yml",
+    "retired_capability": "Remote Desktop Commander",
+    "retirement_marker": "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003",
+    "secondary_fallback": null,
     "reboot_required": false,
     "secrets_read": false,
     "production_touched": false,
     "uac_activation": "Last-resort governed launcher after a fixed local passwordless schtasks /NP registration attempt; restricted to immutable release register-task-com metadata",
-    "independent_runner_recovery": "Attempt start_runner first and independently; failing RDC must not suppress runner startup or publish a false full-success result.",
-    "partial_evidence": "Persist separate runner_recovery_ok, rdc_recovery_ok, partial, github_pickup_required; error types only, never exception text."
+    "independent_runner_recovery": "Attempt start_runner without probing, starting or recovering the retired RDC capability.",
+    "partial_evidence": "Persist separate runner_recovery_ok, rdc_recovery_ok, partial, github_pickup_required; rdc_recovery_ok means retirement-policy compliance, while errors expose types only and never exception text."
   },
   "sdd_gate": {
     "tests": [
       "tests/test_desktop_control_plane_watchdog.py",
-      "tests/test_desktop_control_plane_watchdog_uac_launcher.py",
-      "tests/test_pc24x7_rdc_recovery.py"
+      "tests/test_desktop_control_plane_watchdog_uac_launcher.py"
     ],
-    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If COM registration is unavailable or denied, one fixed local passwordless schtasks /NP registration is allowed for the exact task; independent XML must prove enabled+AtStartup+S4U. If native registration is also denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task. The runner is recovered first; failures of either component do not suppress the other. Persist independent health flags and require external runner pickup E2E before declaring runtime ready."
+    "evidence_contract": "The watchdog must recover the local GitHub runner and persist the external RDC as retired_fail_closed with the canonical marker, without reading claims or invoking any RDC recovery path. If COM registration is unavailable or denied, one fixed local passwordless schtasks /NP registration is allowed for the exact task; independent XML must prove enabled+AtStartup+S4U. If native registration is also denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task. Persist independent health flags and require external runner pickup E2E before declaring runtime ready."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
     "implementation": "scripts/desktop_control_plane_watchdog.py",
-    "rdc_recovery": "scripts/pc24x7_rdc_recovery.py",
+    "retirement_policy": "EXTERNAL_RDC_RETIRED_FAIL_CLOSED_20261003",
     "tests": "tests/test_desktop_control_plane_watchdog.py",
     "uac_launcher": "scripts/desktop_control_plane_watchdog_uac_launcher.py",
     "uac_tests": "tests/test_desktop_control_plane_watchdog_uac_launcher.py"
@@ -50,8 +50,8 @@
       "watchdog_task_atstartup",
       "watchdog_state_ok",
       "runner_recovery_proven",
-      "rdc_recovery_proven",
-      "independent_rdc_transport_broadcast_v1",
+      "rdc_retired_fail_closed_proven",
+      "retired_rdc_negative_control",
       "fresh_self_hosted_workflow_pickup"
     ],
     "runtime_status_until_evidence": "activation_pending"

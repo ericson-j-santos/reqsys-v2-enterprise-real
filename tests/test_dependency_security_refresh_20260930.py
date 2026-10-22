@@ -17,7 +17,7 @@ def test_current_dependency_security_floors_are_patched() -> None:
     assert "urllib3==2.8.0" in backend
     assert "urllib3==2.8.0" in audit
     assert package["dependencies"]["axios"] == "^1.20.0"
-    assert package["dependencies"]["dompurify"] == "^3.4.16"
+    assert package["dependencies"]["dompurify"] == "^3.4.17"
 
 
 def test_vulnerable_dependency_floors_do_not_return() -> None:

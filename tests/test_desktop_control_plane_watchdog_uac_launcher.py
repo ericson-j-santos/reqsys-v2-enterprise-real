@@ -115,8 +115,8 @@ def test_finalize_requires_verified_task_before_start(
     )
     monkeypatch.setattr(
         m.watchdog,
-        "run_watchdog_task",
-        lambda: started.update({"value": True}) or {"run_returncode": 0},
+        "restart_watchdog_task",
+        lambda: started.update({"value": True}) or {"end_returncode": 0, "run_returncode": 0},
     )
     result = m.finalize_activation(installation)
     assert result["metadata"]["headless_boot_ready"] is True
