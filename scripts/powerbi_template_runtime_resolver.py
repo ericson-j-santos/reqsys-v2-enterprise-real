@@ -18,8 +18,9 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 EXPECTED_TENANT = "6d09c88c-0617-490c-8329-305e577684bc"
 POWERBI_RESOURCE = "https://analysis.windows.net/powerbi/api"
@@ -867,3 +868,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
