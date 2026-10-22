@@ -1,0 +1,11 @@
+{
+  "feature_name": "Recuperação governada de drift do overlay público da API PC24x7 DEV",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reconcile_pc24x7_teams_dev_runtime.py"
+    ]
+  }
+}
