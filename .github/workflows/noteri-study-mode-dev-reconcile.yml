@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 45
     environment: development
     env:
-      RULES_SHA: f6ccb143a581e28650e9b640226f9ef671d469f2
+      RULES_SHA: fabaccc32abbbf6f95be443629ef2ebb1246dad5
       CORRELATION_ID: pc24x7-dev-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -312,27 +312,56 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not $env:TARGET_PATH -or -not $env:SESSION_ID -or -not $env:GATEWAY_PYTHON) {
             throw 'PUBLIC_DEV_RECOVERY_SESSION_MISSING'
           }
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
+          $authorizer = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\set_owner_risk3_action.py'
           $script = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
           $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
           $manifest = Join-Path $runtimeRoot ('.reqsys-recovery\public-dev-' + $env:CORRELATION_ID + '.manifest.json')
           $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-prepare-' + $env:CORRELATION_ID + '.json')
-          $argv = @(
-            '--action-id', 'reqsys.pc24x7.public_dev.cutover.prepare',
-            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
-            '--cwd', $env:TARGET_PATH, '--timeout', '900',
-            '--correlation-id', $env:CORRELATION_ID,
-            '--', $env:GATEWAY_PYTHON, $script, 'prepare',
+          $scope = 'repo://reqsys/environment/dev/host/desktop-pdqk954'
+          $commandArgs = @(
+            'prepare',
             '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
             '--manifest', $manifest, '--receipt-file', $receiptFile,
             '--confirm', 'PREPARE-PC24X7-PUBLIC-DEV-CUTOVER'
           )
-          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          $authorizeArgv = @(
+            '--action-id', 'reqsys.pc24x7.public_dev.cutover.prepare',
+            '--scope', $scope, '--environment', 'dev',
+            '--repo-root', $env:TARGET_PATH, '--expected-head', '${{ github.sha }}',
+            '--script', $script, '--expires-minutes', '45',
+            '--authorization-ref', "issue-comment:$env:AUTHORIZATION_COMMENT_ID:sha:${{ github.sha }}",
+            '--confirm', 'AUTHORIZE-SPECIFIC-RISK3-ACTION'
+          )
+          foreach ($item in $commandArgs) { $authorizeArgv += ("--arg=" + $item) }
+          $authorizationRaw = (& $env:GATEWAY_PYTHON $authorizer @authorizeArgv | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECOVERY_AUTHORIZATION_BLOCKED' }
+          try { $authorization = $authorizationRaw | ConvertFrom-Json } catch {
+            throw 'PUBLIC_DEV_RECOVERY_AUTHORIZATION_INVALID'
+          }
+          $expiresAt = [DateTimeOffset]::Parse($authorization.expires_at).ToUniversalTime()
+          $remaining = $expiresAt - [DateTimeOffset]::UtcNow
+          if ($authorization.status -ne 'authorized' -or
+              $authorization.action_id -ne 'reqsys.pc24x7.public_dev.cutover.prepare' -or
+              $authorization.environment -ne 'dev' -or
+              $authorization.git_head -ne '${{ github.sha }}' -or
+              $authorization.broad_development_mode_changed -ne $false -or
+              $remaining.TotalMinutes -le 0 -or $remaining.TotalMinutes -gt 46) {
+            throw 'PUBLIC_DEV_RECOVERY_AUTHORIZATION_INVALID'
+          }
+          $ownerArgv = @(
+            '--action-id', 'reqsys.pc24x7.public_dev.cutover.prepare',
+            '--scope', $scope,
+            '--cwd', $env:TARGET_PATH, '--timeout', '900',
+            '--correlation-id', $env:CORRELATION_ID
+          )
+          & $env:GATEWAY_PYTHON $ownerGateway @ownerArgv
           if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECOVERY_PREPARE_BLOCKED' }
           try { $receipt = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_RECOVERY_RECEIPT_INVALID' }
           if ($receipt.status -ne 'prepared' -or $receipt.backup_verified -ne $true -or
@@ -344,6 +373,76 @@ jobs:
           }
           "manifest_path=$manifest" | Add-Content $env:GITHUB_OUTPUT
           "fingerprint=$($receipt.fingerprint)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Authorize exact remaining public DEV Risk3 actions
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          GATEWAY_PYTHON: ${{ steps.session.outputs.gateway_python }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          CUTOVER_MANIFEST: ${{ steps.recovery.outputs.manifest_path }}
+          CUTOVER_FINGERPRINT: ${{ steps.recovery.outputs.fingerprint }}
+          PUBLIC_DEV_CORRELATION_ID: pc24x7-public-dev-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $authorizer = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\set_owner_risk3_action.py'
+          $scope = 'repo://reqsys/environment/dev/host/desktop-pdqk954'
+          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $evidence = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
+          $rollbackReceipt = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-rollback-' + $env:CORRELATION_ID + '.json')
+
+          function Grant-SpecificRisk3Action {
+            param(
+              [Parameter(Mandatory = $true)][string]$ActionId,
+              [Parameter(Mandatory = $true)][string]$Script,
+              [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$CommandArgs
+            )
+            $authorizeArgv = @(
+              '--action-id', $ActionId, '--scope', $scope, '--environment', 'dev',
+              '--repo-root', $env:TARGET_PATH, '--expected-head', '${{ github.sha }}',
+              '--script', $Script, '--expires-minutes', '45',
+              '--authorization-ref', "issue-comment:$env:AUTHORIZATION_COMMENT_ID:sha:${{ github.sha }}",
+              '--confirm', 'AUTHORIZE-SPECIFIC-RISK3-ACTION'
+            )
+            foreach ($item in $CommandArgs) { $authorizeArgv += ("--arg=" + $item) }
+            $authorizationRaw = (& $env:GATEWAY_PYTHON $authorizer @authorizeArgv | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RISK3_AUTHORIZATION_BLOCKED' }
+            try { $authorization = $authorizationRaw | ConvertFrom-Json } catch {
+              throw 'PUBLIC_DEV_RISK3_AUTHORIZATION_INVALID'
+            }
+            $expiresAt = [DateTimeOffset]::Parse($authorization.expires_at).ToUniversalTime()
+            $remaining = $expiresAt - [DateTimeOffset]::UtcNow
+            if ($authorization.status -ne 'authorized' -or
+                $authorization.action_id -ne $ActionId -or
+                $authorization.environment -ne 'dev' -or
+                $authorization.git_head -ne '${{ github.sha }}' -or
+                $authorization.broad_development_mode_changed -ne $false -or
+                $remaining.TotalMinutes -le 0 -or $remaining.TotalMinutes -gt 46) {
+              throw 'PUBLIC_DEV_RISK3_AUTHORIZATION_INVALID'
+            }
+          }
+
+          $cutoverScript = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
+          $reconcileScript = Join-Path $env:TARGET_PATH 'scripts\reconcile_pc24x7_public_dev_runtime.py'
+          $tunnelScript = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_tunnel.py'
+          $locatorScript = Join-Path $env:TARGET_PATH 'scripts\pc24x7_dev_locator_publisher.py'
+          Grant-SpecificRisk3Action -ActionId 'reqsys.pc24x7.public_dev.runtime.reconcile' -Script $reconcileScript -CommandArgs @(
+            '--confirm', 'RECONCILE-PC24X7-PUBLIC-DEV', '--environment', 'dev',
+            '--expected-sha', '${{ github.sha }}', '--vault-name', $env:REQSYS_KEY_VAULT_NAME,
+            '--expected-tenant-id', $env:CCP_AZURE_TENANT_ID,
+            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID, '--evidence-file', $evidence,
+            '--cutover-manifest', $env:CUTOVER_MANIFEST,
+            '--cutover-fingerprint', $env:CUTOVER_FINGERPRINT
+          )
+          Grant-SpecificRisk3Action -ActionId 'reqsys.pc24x7.public_dev.cutover.rollback' -Script $cutoverScript -CommandArgs @(
+            'rollback', '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
+            '--manifest', $env:CUTOVER_MANIFEST, '--expected-fingerprint', $env:CUTOVER_FINGERPRINT,
+            '--receipt-file', $rollbackReceipt,
+            '--confirm', 'ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER'
+          )
+          Grant-SpecificRisk3Action -ActionId 'reqsys.pc24x7.public_dev.tunnel.reconcile' -Script $tunnelScript -CommandArgs @('--apply')
+          Grant-SpecificRisk3Action -ActionId 'reqsys.pc24x7.public_dev.locator.publish' -Script $locatorScript -CommandArgs @()
 
       - name: Validate public static reconciler syntax
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
@@ -385,22 +484,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
-          $script = Join-Path $env:TARGET_PATH 'scripts\reconcile_pc24x7_public_dev_runtime.py'
           $evidence = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
-          $argv = @(
+          $ownerArgv = @(
             '--action-id', 'reqsys.pc24x7.public_dev.runtime.reconcile',
             '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
             '--cwd', $env:TARGET_PATH, '--timeout', '900',
-            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID,
-            '--', $env:GATEWAY_PYTHON, $script,
-            '--confirm', 'RECONCILE-PC24X7-PUBLIC-DEV', '--environment', 'dev',
-            '--expected-sha', '${{ github.sha }}', '--vault-name', $env:REQSYS_KEY_VAULT_NAME,
-            '--expected-tenant-id', $env:CCP_AZURE_TENANT_ID,
-            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID, '--evidence-file', $evidence,
-            '--cutover-manifest', $env:CUTOVER_MANIFEST,
-            '--cutover-fingerprint', $env:CUTOVER_FINGERPRINT
+            '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID
           )
-          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          & $env:GATEWAY_PYTHON $ownerGateway @ownerArgv
           if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECONCILE_BLOCKED' }
           try { $receipt = Get-Content -LiteralPath $evidence -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_RECONCILE_RECEIPT_INVALID' }
           if ($receipt.status -ne 'ready' -or $receipt.environment -ne 'dev' -or
@@ -427,21 +518,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
-          $script = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
           $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
           $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-rollback-' + $env:CORRELATION_ID + '.json')
-          $argv = @(
+          $ownerArgv = @(
             '--action-id', 'reqsys.pc24x7.public_dev.cutover.rollback',
             '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
             '--cwd', $env:TARGET_PATH, '--timeout', '600',
-            '--correlation-id', $env:CORRELATION_ID,
-            '--', $env:GATEWAY_PYTHON, $script, 'rollback',
-            '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
-            '--manifest', $env:CUTOVER_MANIFEST, '--expected-fingerprint', $env:CUTOVER_FINGERPRINT,
-            '--receipt-file', $receiptFile,
-            '--confirm', 'ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER'
+            '--correlation-id', $env:CORRELATION_ID
           )
-          & $env:GATEWAY_PYTHON $ownerGateway @argv
+          & $env:GATEWAY_PYTHON $ownerGateway @ownerArgv
           $gatewayExit = $LASTEXITCODE
           $rollbackOk = $false
           if ($gatewayExit -eq 0) {
@@ -472,22 +557,17 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
-          foreach ($command in @(
-            @((Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_tunnel.py'), '--apply'),
-            @((Join-Path $env:TARGET_PATH 'scripts\pc24x7_dev_locator_publisher.py'))
+          foreach ($actionId in @(
+            'reqsys.pc24x7.public_dev.tunnel.reconcile',
+            'reqsys.pc24x7.public_dev.locator.publish'
           )) {
-            $actionId = 'reqsys.pc24x7.public_dev.locator.publish'
-            if ($command[0] -like '*pc24x7_public_dev_tunnel.py') {
-              $actionId = 'reqsys.pc24x7.public_dev.tunnel.reconcile'
-            }
-            $argv = @(
+            $ownerArgv = @(
               '--action-id', $actionId,
               '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
               '--cwd', $env:TARGET_PATH, '--timeout', '180',
-              '--correlation-id', $env:CORRELATION_ID,
-              '--', $env:GATEWAY_PYTHON
-            ) + $command
-            & $env:GATEWAY_PYTHON $ownerGateway @argv
+              '--correlation-id', $env:CORRELATION_ID
+            )
+            & $env:GATEWAY_PYTHON $ownerGateway @ownerArgv
             if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_LOCATOR_GATEWAY_BLOCKED' }
           }
 

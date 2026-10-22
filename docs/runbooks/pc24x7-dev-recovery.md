@@ -100,11 +100,14 @@ image IDs continuam sendo revalidados antes da mutação.
 
 Não execute esses comandos fora do Session Launcher e da rota separada
 `owner_risk3_gateway.py`. O Command Gateway geral permanece fail-closed para
-Risk 3. A rota do owner exige modo privado `standard_gold_development` válido,
-worktree limpo, script rastreado no SHA da sessão e timeout de no máximo 900 s;
-o workflow não ativa esse modo. O modo `public-static` também exige comentário
-exato e recente do owner na issue `#1705`, além do SHA de `main` capturado pelo
-gateway; ambos são lidos novamente no job físico. O manifesto, ciphertext e override em
+Risk 3. Após reler o comentário exato e recente do owner na issue `#1705` e o SHA
+de `main` capturado pelo gateway, o modo `public-static` materializa autorizações
+privadas, específicas e temporárias com `set_owner_risk3_action.py`. Cada ação é
+vinculada ao ambiente DEV, scope, worktree limpo, SHA, script rastreado e argumentos
+exatos; o readback precisa confirmar que o modo amplo `standard_gold_development`
+não foi alterado. O `owner_risk3_gateway.py` executa então a ação cadastrada, sem
+aceitar comando ad-hoc. O workflow nunca ativa automaticamente o modo amplo, e
+qualquer divergência ou expiração bloqueia antes da mutação. O manifesto, ciphertext e override em
 `.reqsys-recovery` são privados e não devem ser anexados à execução. A base ativa
 não é restaurada automaticamente: qualquer mudança observada após rollback
 bloqueia o fluxo para avaliação específica.

@@ -177,6 +177,11 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
         "- name: Recover and validate Engineering Orchestrator DEV", 1
     )[0]
     assert "owner_risk3_gateway.py" in public_static
+    assert "set_owner_risk3_action.py" in public_static
+    assert "set_owner_risk3_development_mode.py" not in public_static
+    assert "AUTHORIZE-SPECIFIC-RISK3-ACTION" in public_static
+    assert "broad_development_mode_changed -ne $false" in public_static
+    assert "'--', $env:GATEWAY_PYTHON" not in public_static
     assert "'--risk', '3'" not in public_static
     assert "'--timeout', '1200'" not in public_static
     assert "'--timeout', '1500'" not in public_static
