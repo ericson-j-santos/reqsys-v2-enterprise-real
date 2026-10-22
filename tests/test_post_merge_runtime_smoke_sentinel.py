@@ -5,8 +5,8 @@ from dataclasses import asdict
 from scripts.post_merge_runtime_smoke_sentinel import (
     EXPECTED_ARTIFACT_NAME,
     EXPECTED_JOB_NAME,
-    EXPECTED_WORKFLOW_ID,
     EXPECTED_REPOSITORY,
+    EXPECTED_WORKFLOW_ID,
     EXPECTED_WORKFLOW_NAME,
     REQUIRED_STEPS,
     evaluate_event,
@@ -76,6 +76,7 @@ def _transport(
     artifact_name: str = EXPECTED_ARTIFACT_NAME,
     artifact_size: int = 100,
     artifact_expired: bool = False,
+    duplicate_artifact: bool = False,
     step_override: dict[str, str] | None = None,
     main_sha: str = SHA,
     job_conclusion: str = "success",
@@ -84,12 +85,15 @@ def _transport(
         assert token == "token"
         assert url.startswith("https://api.github.com/repos/ericson-j-santos/reqsys-v2-enterprise-real/")
         if url.endswith("/actions/runs/123/artifacts?per_page=100"):
+            artifacts = [{
+                "name": artifact_name,
+                "size_in_bytes": artifact_size,
+                "expired": artifact_expired,
+            }]
+            if duplicate_artifact:
+                artifacts.append(dict(artifacts[0]))
             return {
-                "artifacts": [{
-                    "name": artifact_name,
-                    "size_in_bytes": artifact_size,
-                    "expired": artifact_expired,
-                }]
+                "artifacts": artifacts
             }
         if url.endswith("/actions/runs/123/jobs?per_page=100"):
             return {
@@ -145,6 +149,13 @@ def test_expired_or_empty_artifact_blocks():
         result = _evaluate(**options)
         assert result.status == "blocked"
         assert "artifact_missing_or_invalid" in result.blocking_issues
+
+
+def test_rerun_accepts_multiple_valid_artifacts_with_the_same_name():
+    result = _evaluate(duplicate_artifact=True)
+    assert result.status == "ready"
+    assert result.blocking_issues == []
+    assert result.artifacts == [EXPECTED_ARTIFACT_NAME, EXPECTED_ARTIFACT_NAME]
 
 
 def test_runtime_artifact_value_not_equal_current_sha_blocks():
@@ -290,3 +301,4 @@ def test_http_transport_exception_blocks_and_does_not_claim_sentinel_ready():
     result = evaluate_event(_event(), repo=EXPECTED_REPOSITORY, token="token", request_json=failed_transport)
     assert result.status == "blocked"
     assert "github_read_unavailable" in result.blocking_issues
+
