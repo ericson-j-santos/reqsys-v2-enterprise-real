@@ -15,6 +15,12 @@ on:
       - 'runtime/**'
       - 'scripts/reconcile_pc24x7_todo_runtime.py'
       - 'scripts/todo_global_hourly_cycle.py'
+      - 'scripts/todo_producer_keyvault_credit_gate.py'
+      - 'tests/test_todo_global_hourly_cycle.py'
+      - 'tests/test_todo_producer_keyvault_credit_gate.py'
+      - 'tests/test_todo_producer_keyvault_credit_gate_workflow.py'
+      - '.sdd/specs/todo-producer-keyvault-credit-gate.requirements.md'
+      - '.sdd/specs/todo-producer-keyvault-credit-gate.spec.json'
   pull_request:
     paths:
       - '.github/workflows/todo-global-hourly-cycle.yml'
@@ -32,6 +38,8 @@ on:
       - 'scripts/todo_producer_keyvault_credit_gate.py'
       - 'tests/test_todo_producer_keyvault_credit_gate.py'
       - 'tests/test_todo_producer_keyvault_credit_gate_workflow.py'
+      - '.sdd/specs/todo-producer-keyvault-credit-gate.requirements.md'
+      - '.sdd/specs/todo-producer-keyvault-credit-gate.spec.json'
   workflow_dispatch:
     inputs:
       operation:
@@ -56,7 +64,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: todo-global-hourly-cycle-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'runtime' || format('{0}-{1}', github.event_name, github.ref) }}
@@ -69,6 +76,8 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
@@ -82,17 +91,19 @@ jobs:
 
   reconcile-runtime:
     name: Materializar TODO Runtime no Desktop PC24x7
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime' && github.actor == 'ericson-j-santos'
     needs: contract
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     environment: development
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       CORRELATION_ID: todo-runtime-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_FILE: artifacts/pc24x7-todo-runtime/evidence.json
     steps:
@@ -120,6 +131,13 @@ jobs:
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
           subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
 
+      - name: Bloquear reconciliação sem prova autoritativa de custo literal zero
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -B scripts/todo_producer_keyvault_credit_gate.py runtime-cost
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Preparar dependências do reconciliador
         shell: powershell
         run: |
@@ -128,6 +146,8 @@ jobs:
 
       - name: Reconciliar runtime, autenticação e E2E físico
         shell: powershell
+        env:
+          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
         run: |
           $ErrorActionPreference = 'Stop'
           python scripts/reconcile_pc24x7_todo_runtime.py --confirm RECONCILE-PC24X7-TODO-RUNTIME-DEV --environment dev --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --run-id "${{ github.run_id }}" --run-attempt "${{ github.run_attempt }}" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
@@ -144,11 +164,14 @@ jobs:
 
   public-e2e:
     name: E2E público TODO Runtime + Notion
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime' && github.actor == 'ericson-j-santos'
     needs: [contract, reconcile-runtime]
     runs-on: ubuntu-latest
     environment: development
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -158,6 +181,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "20"
@@ -181,14 +205,11 @@ jobs:
           node scripts/resolve_pc24x7_dev_locator.mjs --self-test
           node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-todo-runtime/locator.json
 
-      - name: Ler token de produtor sem expor valor
+      - name: Ler e validar token de produtor antes de exportar
         shell: bash
         run: |
           set -euo pipefail
-          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
-          test -n "$token"
-          echo "::add-mask::$token"
-          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py export-token
 
       - name: Validar same-SHA público
         shell: bash
@@ -236,11 +257,14 @@ jobs:
 
   cycle:
     name: Reconciliar TODO Global com E2E e replay
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'cycle')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'cycle' && github.actor == 'ericson-j-santos')
     needs: contract
     runs-on: ubuntu-latest
     environment: development
     timeout-minutes: 12
+    permissions:
+      contents: read
+      id-token: write
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -251,6 +275,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
@@ -287,14 +312,11 @@ jobs:
           esac
           printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${RESOLVED_BASE_URL%/}" >> "$GITHUB_ENV"
 
-      - name: Ler token de produtor no Key Vault sem expor valor
+      - name: Bloquear Key Vault sem prova autoritativa de custo literal zero
         shell: bash
         run: |
           set -euo pipefail
-          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
-          test -n "$token"
-          echo "::add-mask::$token"
-          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py cycle-secret
 
       - name: Validar runtime público no SHA corrente
         shell: bash
@@ -363,7 +385,7 @@ jobs:
           retention-days: 30
 
   credential-dev:
-    name: Comprovar hard stop Azure e recuperar somente produtor TODO DEV
+    name: Comprovar limite Azure e bloquear sem custo literal zero
     if: >-
       github.event_name == 'workflow_dispatch' &&
       inputs.operation == 'producer-credit-gated' &&
@@ -382,7 +404,6 @@ jobs:
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-      GH_TOKEN: ${{ github.token }}
       AZURE_CORE_OUTPUT: none
     steps:
       - name: Checkout imutável da main autorizada
@@ -396,14 +417,18 @@ jobs:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
           subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
-      - name: Validar autorização GitHub e hard stop de crédito via ARM
+      - name: Validar autorização e bloquear sem prova literal-zero
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           python3 -B scripts/todo_producer_keyvault_credit_gate.py cost --receipt "$proof"
-      - name: Recuperar/provisionar somente o segredo DEV após custo comprovado
+      - name: Recuperar/provisionar somente após prova literal-zero
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           proof="$RUNNER_TEMP/todo-producer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
@@ -417,7 +442,8 @@ jobs:
             echo '## TODO Producer Key Vault Credit Gate — DEV'
             echo "- Run: $GITHUB_RUN_ID"
             echo "- SHA: $GITHUB_SHA"
-            echo '- Cost gate: somente spendingLimit On permite operações de segredos'
+            echo '- Hard stop: spendingLimit On não comprova custo literal zero'
+            echo '- Data plane: bloqueado sem prova autoritativa de custo literal zero'
             echo '- Readback: metadados somente; binding ao runtime não validado'
             echo '- Docker/deploy/produção/RBAC: não executados'
             echo '- TODO-38 continua EM ANDAMENTO / E2E PARCIAL'

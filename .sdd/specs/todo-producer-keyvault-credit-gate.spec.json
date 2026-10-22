@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "feature_name": "todo-producer-keyvault-credit-gate",
   "increment_type": "fix",
   "approvals": {
@@ -21,7 +21,7 @@
       "tests/test_todo_producer_keyvault_credit_gate.py",
       "tests/test_todo_producer_keyvault_credit_gate_workflow.py"
     ],
-    "evidence_contract": "Owner command #1705 validated by existing Authorized Actions Gateway, typed workflow_dispatch operation producer-credit-gated with authorization_comment_id revalidated against exact owner comment by GitHub API, main/sha/OIDC DEV. ARM spendingLimit=On and vault identity before any Key Vault secret data-plane, secret metadata/recovery/provision only after recheck, private 0600 token, idempotency, readback. Zero new workflow files. No Docker/deploy/production/RBAC; product E2E remains partial."
+    "evidence_contract": "Owner command #1705 validated by existing Authorized Actions Gateway, typed workflow_dispatch operation producer-credit-gated with authorization_comment_id revalidated against exact owner comment by GitHub API, exact workflow ref/SHA, main and OIDC DEV. Manual cycle and reconcile-runtime accept only the owner; github-actions[bot] remains valid only for the comment-bound producer-credit-gated route, and any future bot runtime route requires equivalent comment/command binding. ARM spendingLimit=On proves only an Azure overage hard-stop and MUST NOT be represented as literal zero cost. The current observation records AZURE_SPENDING_LIMIT_ON_CONFIRMED, literal_zero_cost_verified=false and keyvault_data_plane_allowed=false; cost, secret, scheduled/manual cycle, runtime reconcile and public token-export paths block before all Key Vault data-plane until authoritative, non-input-controlled literal-zero evidence exists. The cycle uses a single cycle-secret helper, and canonical producer tokens accept only URL-safe 43- or 64-character values after one CLI record terminator; CR, LF, NUL, wrong alphabet and wrong size are rejected before add-mask or GITHUB_ENV. OIDC is job-scoped and checkout credentials are not persisted. Zero new workflow files. No Docker/deploy/production/RBAC; product E2E remains partial. Negative CLI tests attest zero Key Vault commands and unchanged GITHUB_ENV on blocked paths."
   },
   "risk": {
     "production": false,

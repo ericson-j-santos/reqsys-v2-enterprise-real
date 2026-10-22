@@ -96,7 +96,11 @@ def test_workflow_materializacao_dev_exige_dispatch_explicito() -> None:
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     jobs = workflow["jobs"]
 
-    expected = "github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'"
+    expected = (
+        "github.event_name == 'workflow_dispatch' && "
+        "inputs.operation == 'reconcile-runtime' && "
+        "github.actor == 'ericson-j-santos'"
+    )
     assert jobs["reconcile-runtime"]["if"] == expected
     assert jobs["public-e2e"]["if"] == expected
     assert "github.event_name == 'push'" not in jobs["reconcile-runtime"]["if"]

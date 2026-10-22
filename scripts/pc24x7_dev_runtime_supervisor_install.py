@@ -165,11 +165,14 @@ folder.RegisterTaskDefinition(
 )
 registered = folder.GetTask(task_name)
 current = registered.Definition.Settings
+observed_logon_type = int(registered.Definition.Principal.LogonType)
 print(json.dumps({
     "DisallowStartIfOnBatteries": bool(current.DisallowStartIfOnBatteries),
     "StopIfGoingOnBatteries": bool(current.StopIfGoingOnBatteries),
     "StartWhenAvailable": bool(current.StartWhenAvailable),
     "ExecutionTimeLimit": str(current.ExecutionTimeLimit),
+    "LogonType": observed_logon_type,
+    "InteractiveSessionRequired": observed_logon_type == TASK_LOGON_INTERACTIVE_TOKEN,
 }, sort_keys=True))
 '''
     completed = run([str(python), "-c", helper, TASK_NAME])
@@ -205,9 +208,19 @@ def install() -> int:
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    # Registro e aceite do trigger nao provam execucao ou renovacao no host.
+    if settings.get("LogonType") != 3 or settings.get("InteractiveSessionRequired") is not True:
+        print("task_logon_mode_readback_mismatch", file=sys.stderr)
+        return 2
     triggered = run(["schtasks", "/Run", "/TN", TASK_NAME])
+    accepted = triggered.returncode == 0
     print(json.dumps({
-        "status": "installed",
+        "status": "registered_pending_runtime_verification" if accepted else "trigger_failed",
+        "task_registered": True,
+        "trigger_accepted": accepted,
+        "runtime_verified": False,
+        "independent_of_user_logon": False,
+        "requires_interactive_session": True,
         "task": TASK_NAME,
         "wrapper": str(WRAPPER),
         "persistent_supervisor": str(PERSISTENT_SUPERVISOR),
@@ -217,7 +230,7 @@ def install() -> int:
         "settings": settings,
         "trigger_returncode": triggered.returncode,
     }, ensure_ascii=True, sort_keys=True))
-    return 0
+    return 0 if accepted else 2
 
 
 def uninstall() -> int:
