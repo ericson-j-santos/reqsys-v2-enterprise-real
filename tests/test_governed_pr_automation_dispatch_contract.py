@@ -77,20 +77,24 @@ def test_ci_driven_automerge_e_fail_closed_por_head_sha() -> None:
     assert 'current.base.sha !== currentBaseSha' in block
     assert 'currentComparison.behind_by > 0' in block
     assert "labelNames.includes('merge-queue:eligible')" in block
+    assert "AUTO_MERGE_APPROVAL_LABEL: governed-merge-approved" in text
+    assert "labelNames.includes(approvalLabel)" in block
     assert "merge_method: 'squash'" in block
     assert 'sha: triggerHeadSha' in block
     assert 'Deploy/promoção: não executados por este workflow.' in block
 
 
-def test_ci_driven_automerge_usa_autorizacao_operacional_permanente_do_owner() -> None:
+def test_ci_driven_automerge_exige_autorizacao_humana_explicita_por_pr() -> None:
     text = _text()
 
     marker = 'auto-merge-after-governed-queue:'
     block = text.split(marker, maxsplit=1)[1].split('  governed-pr-check:', maxsplit=1)[0]
     assert 'merge-queue:eligible' in block
-    assert 'governed-merge-approved' not in block
-    assert 'approvalLabel' not in block
-    assert 'autorizacao operacional permanente do owner' in block
+    assert 'AUTO_MERGE_APPROVAL_LABEL: governed-merge-approved' in text
+    assert 'const approvalLabel = process.env.AUTO_MERGE_APPROVAL_LABEL' in block
+    assert 'labelNames.includes(approvalLabel)' in block
+    assert 'currentLabelNames.includes(approvalLabel)' in block
+    assert 'autorização humana explícita' in block
 
 
 def test_ci_driven_automerge_revalida_estado_e_sha_imediatamente_antes_do_merge() -> None:
@@ -100,10 +104,12 @@ def test_ci_driven_automerge_revalida_estado_e_sha_imediatamente_antes_do_merge(
     block = text.split(marker, maxsplit=1)[1].split('  governed-pr-check:', maxsplit=1)[0]
     assert 'const currentLabels = await github.paginate' in block
     assert "currentLabelNames.includes('merge-queue:eligible')" in block
+    assert 'currentLabelNames.includes(approvalLabel)' in block
     assert 'current.head.sha !== triggerHeadSha' in block
     assert 'Estado mudou antes do merge' in block
     assert "github.rest.pulls.merge({" in block
     assert block.index("currentLabelNames.includes('merge-queue:eligible')") < block.index("github.rest.pulls.merge({")
+    assert block.index('currentLabelNames.includes(approvalLabel)') < block.index("github.rest.pulls.merge({")
 
 
 def test_governed_merge_materializa_validacao_pos_merge_nos_dois_caminhos() -> None:
