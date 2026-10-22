@@ -203,6 +203,38 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
           $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
           $probe = Join-Path $env:TARGET_PATH 'scripts\diagnose_pc24x7_public_dev.py'
+          $output = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
+          function Write-SanitizedInventoryReceipt {
+            param(
+              [string]$Status,
+              [string]$ReasonCode,
+              [bool]$GatewayVerified,
+              [bool]$InventoryCollected
+            )
+            $receipt = [ordered]@{
+              status = $Status
+              reason_code = $ReasonCode
+              host = 'DESKTOP-PDQK954'
+              environment = 'dev'
+              source_sha = '${{ github.sha }}'
+              correlation_id = $env:CORRELATION_ID
+              session_validated = $true
+              command_gateway_verified = $GatewayVerified
+              inventory_collected = $InventoryCollected
+              runtime_sha_verified = $false
+              database_result = 'unverified'
+              backup_verified = $false
+              rollback_rehearsal_verified = $false
+              deployment_performed = $false
+              runtime_mutated = $false
+              production_touched = $false
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
+            [System.IO.File]::WriteAllText(
+              $output, (($receipt | ConvertTo-Json -Depth 4) + [Environment]::NewLine),
+              [System.Text.UTF8Encoding]::new($false)
+            )
+          }
           $argv = @(
             '--policy', $policy, '--correlation-id', $env:CORRELATION_ID,
             'run', '--cwd', $env:TARGET_PATH, '--session-id', $env:SESSION_ID,
@@ -211,13 +243,54 @@ jobs:
             '--expected-sha', '${{ github.sha }}', '--stdout-only'
           )
           $raw = & $env:GATEWAY_PYTHON $gateway @argv
-          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_INVENTORY_GATEWAY_BLOCKED' }
-          try { $gate = @($raw)[-1] | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_GATEWAY_RECEIPT_INVALID' }
+          $gatewayExit = $LASTEXITCODE
+          try { $gate = @($raw)[-1] | ConvertFrom-Json } catch {
+            Write-SanitizedInventoryReceipt 'inventory_blocked' 'gateway_receipt_invalid' $false $false
+            throw 'PUBLIC_DEV_GATEWAY_RECEIPT_INVALID'
+          }
+          $gatewayReceiptVerified = (
+            $null -ne $gate -and $gate.state_changed -eq $false -and
+            $gate.session_id -eq $env:SESSION_ID
+          )
+          if ($gatewayExit -ne 0) {
+            $reasonCode = 'inventory_gateway_blocked'
+            if ($gatewayReceiptVerified -and $gate.result -eq 'command_failed') {
+              try {
+                $blocked = $gate.stdout | ConvertFrom-Json
+                $allowedReasons = @(
+                  'docker_target_override_blocked', 'docker_context_unavailable',
+                  'docker_context_not_local_dev', 'docker_read_unavailable',
+                  'docker_read_failed', 'docker_read_too_large',
+                  'container_inventory_invalid', 'container_metadata_invalid',
+                  'non_dev_or_unexpected_target', 'container_state_invalid',
+                  'container_health_invalid', 'container_counters_invalid',
+                  'container_oom_flag_invalid', 'environment_must_be_dev',
+                  'expected_sha_invalid', 'host_not_allowed',
+                  'dev_api_8210_not_unique', 'dev_api_identity_invalid',
+                  'dev_service_not_unique', 'api_identity_changed',
+                  'container_identity_changed'
+                )
+                if ($blocked.status -eq 'blocked' -and
+                    $blocked.runtime_mutated -eq $false -and
+                    $allowedReasons -contains [string]$blocked.reason) {
+                  $reasonCode = [string]$blocked.reason
+                }
+              } catch {
+                $reasonCode = 'inventory_payload_invalid'
+              }
+            }
+            Write-SanitizedInventoryReceipt 'inventory_blocked' $reasonCode $gatewayReceiptVerified $false
+            throw 'PUBLIC_DEV_INVENTORY_GATEWAY_BLOCKED'
+          }
           if ($gate.result -ne 'ok' -or $gate.command_exit_code -ne 0 -or
               $gate.state_changed -ne $false -or $gate.session_id -ne $env:SESSION_ID) {
+            Write-SanitizedInventoryReceipt 'inventory_blocked' 'inventory_gateway_not_verified' $false $false
             throw 'PUBLIC_DEV_INVENTORY_GATEWAY_NOT_VERIFIED'
           }
-          try { $inventory = $gate.stdout | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_INVENTORY_INVALID' }
+          try { $inventory = $gate.stdout | ConvertFrom-Json } catch {
+            Write-SanitizedInventoryReceipt 'inventory_blocked' 'inventory_payload_invalid' $true $false
+            throw 'PUBLIC_DEV_INVENTORY_INVALID'
+          }
           if ($inventory.status -ne 'diagnostic_collected' -or
               $inventory.environment -ne 'dev' -or
               $inventory.expected_sha -ne '${{ github.sha }}' -or
@@ -225,33 +298,11 @@ jobs:
               $inventory.production_touched -ne $false -or
               $inventory.runtime_sha_verified -ne $false -or
               $inventory.runtime_readiness_verified -ne $false) {
+            Write-SanitizedInventoryReceipt 'inventory_blocked' 'inventory_contract_invalid' $true $false
             throw 'PUBLIC_DEV_INVENTORY_CONTRACT_INVALID'
           }
           # Never upload raw Docker metadata, stdout/stderr, paths or credentials.
-          $receipt = [ordered]@{
-            status = 'preflight_only'
-            reason_code = 'cutover_backup_rollback_risk3_not_attested'
-            host = 'DESKTOP-PDQK954'
-            environment = 'dev'
-            source_sha = '${{ github.sha }}'
-            correlation_id = $env:CORRELATION_ID
-            session_validated = $true
-            command_gateway_verified = $true
-            inventory_collected = $true
-            runtime_sha_verified = $false
-            database_result = 'unverified'
-            backup_verified = $false
-            rollback_rehearsal_verified = $false
-            deployment_performed = $false
-            runtime_mutated = $false
-            production_touched = $false
-          }
-          $output = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
-          [System.IO.File]::WriteAllText(
-            $output, (($receipt | ConvertTo-Json -Depth 4) + [Environment]::NewLine),
-            [System.Text.UTF8Encoding]::new($false)
-          )
+          Write-SanitizedInventoryReceipt 'preflight_only' 'cutover_backup_rollback_risk3_not_attested' $true $true
 
       - name: Prepare protected PostgreSQL backup and image rollback
         id: recovery

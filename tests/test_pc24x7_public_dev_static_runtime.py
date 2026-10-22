@@ -600,7 +600,9 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "'--', $env:GATEWAY_PYTHON, '-B', $probe" in inventory_step,
         "state_changed -ne $false" in inventory_step,
         "session_id -ne $env:SESSION_ID" in inventory_step,
-        "inventory_collected = $true" in inventory_step,
+        "inventory_collected = $InventoryCollected" in inventory_step,
+        "Write-SanitizedInventoryReceipt 'preflight_only' "
+        "'cutover_backup_rollback_risk3_not_attested' $true $true" in inventory_step,
         "backup_verified = $false" in inventory_step,
         "rollback_rehearsal_verified = $false" in inventory_step,
         "if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'" in guard_step,
@@ -659,7 +661,8 @@ def test_public_dev_read_only_receipt_never_claims_backup_or_deploy():
     end = raw.index("      - name: Prepare protected PostgreSQL backup and image rollback")
     step = raw[start:end]
     for value in (
-        "status = 'preflight_only'",
+        "status = $Status",
+        "Write-SanitizedInventoryReceipt 'preflight_only'",
         "runtime_sha_verified = $false",
         "database_result = 'unverified'",
         "backup_verified = $false",
@@ -671,3 +674,37 @@ def test_public_dev_read_only_receipt_never_claims_backup_or_deploy():
         assert value in step
     assert "New-Item -ItemType Directory" in step
     assert "TEAMS_BOT_SECRET" not in step
+
+
+def test_public_dev_inventory_failure_uploads_only_allowlisted_reason():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    start = raw.index("      - name: Inventory public DEV through governed Gateway (read-only)")
+    end = raw.index("      - name: Prepare protected PostgreSQL backup and image rollback")
+    step = raw[start:end]
+    failure = step.index("if ($gatewayExit -ne 0)")
+    receipt = step.index(
+        "Write-SanitizedInventoryReceipt 'inventory_blocked' $reasonCode",
+        failure,
+    )
+    blocked = step.index("throw 'PUBLIC_DEV_INVENTORY_GATEWAY_BLOCKED'", failure)
+    assert failure < receipt < blocked
+    assert "gateway_receipt_invalid" in step
+    assert "inventory_gateway_not_verified" in step
+    assert "inventory_payload_invalid" in step
+    assert "inventory_contract_invalid" in step
+    for reason in (
+        "docker_context_unavailable",
+        "docker_context_not_local_dev",
+        "docker_read_failed",
+        "non_dev_or_unexpected_target",
+        "dev_api_8210_not_unique",
+        "dev_service_not_unique",
+        "container_identity_changed",
+    ):
+        assert f"'{reason}'" in step
+    assert "$allowedReasons -contains [string]$blocked.reason" in step
+    assert "Write-Host $raw" not in step
+    assert "Write-Output $raw" not in step
+    assert "stdout =" not in step
+    assert "stderr =" not in step
+    assert "containers =" not in step
