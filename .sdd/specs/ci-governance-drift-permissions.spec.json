@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "CI Governance Scoped Permissions Guard",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ci_governance_permissions.py"
+    ],
+    "evidence_contract": "Auditoria YAML por escopo e job com bloqueio de elevacao indevida, teste positivo dos 6 workflows canonicos, negativos root/job/write-all e CI real ligado ao SHA."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/ci-governance-drift-guard.yml",
+    "implementation": "scripts/ci_governance_permissions.py",
+    "tests": "tests/test_ci_governance_permissions.py",
+    "diagnostic_run": 39709299873
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "billing": false,
+    "cost_additional_brl": 0
+  }
+}
