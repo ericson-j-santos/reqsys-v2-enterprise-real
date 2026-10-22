@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Post-merge PC24x7 Public Runtime Smoke Evidence",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_post_merge_runtime_smoke_sentinel.py"
+    ],
+    "evidence_contract": "Origem DEV ativa, repo e SHA canônicos, job/steps positivos, artifact único baixado e conteúdo runtime-smoke.json validado independentemente: observed/final/expected SHA iguais, health/readiness 200, frontend Nginx estático e HMR 404. Drift físico, artifact ausente/duplicado, erro ou skipped bloqueiam. Sem Fly, deploy ou overage."
+  },
+  "traceability": {
+    "issue": 2120,
+    "source_workflow": ".github/workflows/validacao-acessos.yml",
+    "sentinel_workflow": ".github/workflows/post-merge-runtime-smoke-sentinel.yml",
+    "implementation": "scripts/post_merge_runtime_smoke_sentinel.py",
+    "regression_tests": "tests/test_post_merge_runtime_smoke_sentinel.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "billing": false,
+    "cost_additional_brl": 0
+  }
+}
