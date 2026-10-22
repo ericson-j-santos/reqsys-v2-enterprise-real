@@ -13,6 +13,11 @@ O run \`39709299873\`, SHA \`3e2c333c365f78b5bd6a69eaaa389611585e695d\`, falhou 
 7. Executar os testes de permissao no proprio workflow \`ci-governance-drift-guard.yml\`, inclusive em PR com diff destes arquivos; confirmar novamente em \`main\` apos integracao antes de declarar correcao operacional.
 8. Nenhum deploy, segredo, custo extra, compra, bypass, force-push ou publicacao produtiva.
 
+## Critérios de aceite
+- O parser rejeita campos YAML duplicados, inclusive `permissions` de root/job, e rejeita escopos de permissao desconhecidos mesmo somente leitura.
+- A suite valida 6 workflows reais e detecta elevacao global/job indevida sem reduzir funcionalidade do PR CI Watch.
+- O `READY_FOR_PR` no SHA final e o guard no CI PR realmente executam (sem skipped); a `main` pos-merge exige leitura independente.
+
 ## Testes
 - Positivo: seis workflows criticos da versao atual analisados estruturalmente; permissoes por job esperadas aceitas.
 - Negativos: root contents write, job nao autorizado, administration write, write-all global e de job, YAML invalido, falta do mapa global e troca indevida do Conflict Guard.

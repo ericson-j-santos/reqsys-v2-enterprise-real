@@ -53,9 +53,12 @@ class TestCIGovernanceScopedPermissions(unittest.TestCase):
         )
 
     def test_other_job_does_not_inherit_structural_queue_allowlist(self):
-        modified = self.watch_content().replace(
-            "  watch-pr:\n",
-            "  watch-pr:\n    permissions:\n      contents: write\n",
+        before, after = self.watch_content().split("  watch-pr:\n", 1)
+        expected = "    permissions:\n      contents: read\n      actions: read\n"
+        self.assertIn(expected, after)
+        modified = before + "  watch-pr:\n" + after.replace(
+            expected,
+            "    permissions:\n      contents: write\n      actions: read\n",
             1,
         )
         report = audit_permissions(modified, WATCH)
@@ -100,6 +103,40 @@ class TestCIGovernanceScopedPermissions(unittest.TestCase):
         self.assertIn(
             "workflow_permissions_missing",
             audit_permissions(content, WATCH)["violations"],
+        )
+
+    def test_duplicate_permission_mapping_keys_fail_closed(self):
+        original = self.watch_content()
+        duplicated_root = original.replace(
+            "permissions: {}",
+            "permissions:\n  contents: write\npermissions: {}",
+            1,
+        )
+        self.assertIn(
+            "workflow_yaml_invalid",
+            audit_permissions(duplicated_root, WATCH)["violations"],
+        )
+        duplicate_job = original.replace(
+            "    permissions:\n      contents: read\n      actions: read\n",
+            "    permissions:\n      contents: write\n    permissions:\n      contents: read\n      actions: read\n",
+            1,
+        )
+        self.assertIn(
+            "workflow_yaml_invalid",
+            audit_permissions(duplicate_job, WATCH)["violations"],
+        )
+
+    def test_unknown_permission_scope_even_read_only_fails_closed(self):
+        content = self.watch_content().replace(
+            "      actions: read",
+            "      unauthorized-test-scope: read",
+            1,
+        )
+        self.assertTrue(
+            any(
+                "invalid_permission_scope" in item
+                for item in audit_permissions(content, WATCH)["violations"]
+            )
         )
 
     def test_conflict_guard_known_issues_write_is_not_broadly_allowed(self):

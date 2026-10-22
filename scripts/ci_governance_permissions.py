@@ -33,6 +33,39 @@ ALLOWED_JOB_WRITES: dict[str, dict[str, frozenset[str]]] = {
 PERMISSION_VALUES = frozenset({"read", "write", "none"})
 
 
+class _StrictWorkflowLoader(yaml.BaseLoader):
+    """All keys remain text; duplicates fail closed instead of last-key-wins."""
+
+
+def _unique_mapping(loader: _StrictWorkflowLoader, node: yaml.MappingNode) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        if not isinstance(key, str) or key in result:
+            raise yaml.constructor.ConstructorError(
+                "invalid workflow mapping",
+                node.start_mark,
+                "duplicate_or_nonscalar_mapping_key",
+                key_node.start_mark,
+            )
+        result[key] = loader.construct_object(value_node, deep=True)
+    return result
+
+
+_StrictWorkflowLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _unique_mapping,
+)
+
+KNOWN_SCOPES = frozenset({
+    "actions", "attestations", "checks", "contents", "deployments",
+    "discussions", "id-token", "issues", "models", "packages",
+    "pages", "pull-requests", "repository-projects",
+    "security-events", "statuses",
+})
+
+
+
 def _parse_permissions(value: Any, *, location: str) -> tuple[set[str], list[str]]:
     if isinstance(value, str):
         if value == "read-all":
@@ -44,7 +77,7 @@ def _parse_permissions(value: Any, *, location: str) -> tuple[set[str], list[str
     writes: set[str] = set()
     errors: list[str] = []
     for key, level in value.items():
-        if not isinstance(key, str) or not key or not key.replace("-", "").isalnum():
+        if not isinstance(key, str) or key not in KNOWN_SCOPES:
             errors.append(f"{location}: invalid_permission_scope")
             continue
         if not isinstance(level, str) or level not in PERMISSION_VALUES:
@@ -70,7 +103,7 @@ def audit_permissions(source: str, path: str) -> dict[str, list[str]]:
     observed: list[str] = []
     failures: list[str] = []
     try:
-        document = yaml.load(source, Loader=yaml.BaseLoader)
+        document = yaml.load(source, Loader=_StrictWorkflowLoader)
     except yaml.YAMLError:
         return {
             "allowed": allowed,
