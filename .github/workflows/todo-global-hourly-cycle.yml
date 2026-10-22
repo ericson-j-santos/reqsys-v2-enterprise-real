@@ -287,6 +287,12 @@ jobs:
           esac
           printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${RESOLVED_BASE_URL%/}" >> "$GITHUB_ENV"
 
+      - name: Bloquear transacao Key Vault sem hard stop Azure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/todo_producer_keyvault_credit_gate.py cycle-cost
+
       - name: Ler token de produtor no Key Vault sem expor valor
         shell: bash
         run: |
