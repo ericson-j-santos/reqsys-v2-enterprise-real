@@ -26,6 +26,10 @@ qualquer identidade ambígua.
    reconciliador quanto no recriador interno, deve aplicar os mesmos
    `clean filters` do Git para o caminho canônico, sem falso bloqueio por
    conversão CRLF/LF no Windows.
+8. Quando a API antiga não declarar o overlay público, o recriador só pode
+   prosseguir após comprovar novamente que frontend e nginx têm cardinalidade
+   unitária, a mesma raiz e override administrativo e o overlay público
+   canônico aplicado por último.
 
 ## Evidência de teste
 
