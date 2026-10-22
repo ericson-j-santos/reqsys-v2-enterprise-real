@@ -164,6 +164,11 @@ def test_prepare_tags_images_readback_and_idempotence(root):
     p1 = prepare(m, runner, m["fingerprint"], root)
     p2 = prepare(m, runner, m["fingerprint"], root)
     assert p1 == p2 and (root / p1["rollback_override"]["relative_path"]).exists()
+    assert len(p1["rollback_compose_files"]) == len(p1["compose_files"])
+    assert all(
+        item["relative_path"].startswith(".reqsys-recovery/compose-")
+        for item in p1["rollback_compose_files"]
+    )
     validate(p1, runner, p1["fingerprint"], root, True)
 
 
@@ -237,6 +242,31 @@ def test_live_guard_runs_before_each_mutation(root):
         )
 
 
+def test_explicit_recovery_can_rollback_when_candidate_api_is_unavailable(root):
+    runner = Fake(root)
+    manifest = prepared(root, runner)
+    values = iter([RecoveryError("live_probe_unavailable"), OLD, OLD, OLD])
+
+    def probe():
+        value = next(values, OLD)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    result = rollback(
+        manifest,
+        runner,
+        manifest["fingerprint"],
+        root,
+        identity_probe=probe,
+        hostname=HOST,
+        allow_unhealthy_current=True,
+    )
+    assert result["rollback_ok"] is True
+    commands = [call[0] for call in runner.calls]
+    assert any("--force-recreate" in argv for argv in commands)
+
+
 def test_compose_argv_preserves_env_then_file_order(root):
     order = [root / "z-base.yaml", root / "a-override.yaml"]
     env = [root / "second.env", root / "runtime.env"]
@@ -261,16 +291,42 @@ def test_compose_argv_preserves_env_then_file_order(root):
         "compose",
         "--project-name",
         PROJECT,
+        "--project-directory",
+        str(root),
         "--env-file",
         str(root / "second.env"),
         "--env-file",
         str(root / "runtime.env"),
         "--file",
-        str(root / "z-base.yaml"),
+        str(root / p["rollback_compose_files"][0]["relative_path"]),
         "--file",
-        str(root / "a-override.yaml"),
+        str(root / p["rollback_compose_files"][1]["relative_path"]),
         "--file",
         str(root / p["rollback_override"]["relative_path"]),
+    )
+
+
+def test_rollback_uses_private_compose_snapshots_after_source_fast_forward(root):
+    order = [root / "z-base.yaml", root / "a-override.yaml"]
+    runner = Fake(root, config_orders={s: order for s in recovery.SERVICES})
+    p = prepared(root, runner)
+    for path in order:
+        path.write_text("services:\n  changed-by-fast-forward: {}\n", encoding="utf-8")
+
+    result = rollback(
+        p, runner, p["fingerprint"], root,
+        identity_probe=lambda: OLD, hostname=HOST,
+    )
+
+    assert result["rollback_ok"] is True
+    argv = next(
+        call[0] for call in runner.calls
+        if "--force-recreate" in call[0] and call[0][-2:] == ("api", "frontend")
+    )
+    assert str(order[0]) not in argv and str(order[1]) not in argv
+    assert all(
+        str(root / item["relative_path"]) in argv
+        for item in p["rollback_compose_files"]
     )
 
 
