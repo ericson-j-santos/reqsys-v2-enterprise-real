@@ -700,6 +700,7 @@ jobs:
                   token,
                   max_wait_seconds=0,
                   poll_seconds=1,
+                  pr_number=int(pr_number),
               )
           except AdmissionGuardError as exc:
               output.write_text(json.dumps({
