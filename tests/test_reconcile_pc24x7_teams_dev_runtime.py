@@ -365,4 +365,3 @@ def test_run_never_embeds_subprocess_output(monkeypatch, tmp_path: Path) -> None
         reconcile._run(["tool"], cwd=tmp_path)
     assert "SECRET" not in str(captured.value)
 
-
