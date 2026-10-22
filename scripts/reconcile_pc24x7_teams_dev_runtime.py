@@ -160,7 +160,18 @@ def _validate_public_override(
         raise ReconcileError("public_override_outside_runtime")
     head = expected_sha or _git(runtime_root, "rev-parse", "HEAD").stdout.strip()
     tracked = _git(runtime_root, "rev-parse", f"{head}:{PUBLIC_OVERRIDE_NAME}", check=False)
-    observed = _git(runtime_root, "hash-object", "--no-filters", str(candidate_abs), check=False)
+    # Compare the working-tree file with the committed blob using the same
+    # clean filters Git applies for this repository path. On Windows,
+    # --no-filters hashes CRLF bytes directly and can report a false mismatch
+    # even when `git status` considers the file clean.
+    observed = _git(
+        runtime_root,
+        "hash-object",
+        "--path",
+        PUBLIC_OVERRIDE_NAME,
+        str(candidate_abs),
+        check=False,
+    )
     if (
         tracked.returncode != 0
         or observed.returncode != 0
