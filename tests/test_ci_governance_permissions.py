@@ -75,14 +75,16 @@ class TestCIGovernanceScopedPermissions(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                "remediate-workflow-run:administration" in issue
+                "remediate-workflow-run: invalid_permission_scope" in issue
                 for issue in audit_permissions(modified, WATCH)["violations"]
             )
         )
         for source in (
             self.watch_content().replace("permissions: {}", "permissions: write-all", 1),
             self.watch_content().replace(
-                "      actions: write", "    permissions: write-all", 1
+                "    permissions:\n      contents: read\n      actions: write\n      pull-requests: read\n",
+                "    permissions: write-all\n",
+                1,
             ),
         ):
             with self.subTest(kind=source.count("write-all")):
@@ -143,7 +145,7 @@ class TestCIGovernanceScopedPermissions(unittest.TestCase):
         content = (ROOT / CONFLICT).read_text(encoding="utf-8")
         self.assertEqual(audit_permissions(content, CONFLICT)["violations"], [])
         mutated = content.replace(
-            "  issues: write", "  contents: write", 1
+            "  contents: read", "  contents: write", 1
         )
         self.assertIn(
             "workflow:contents: unexpected_elevated_permission",
