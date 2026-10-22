@@ -202,6 +202,8 @@ def test_state_allowlist_discards_errors_paths_and_unknown_fields():
     ("host", "Other"), ("service", "other-service"), ("source_sha", "private-secret"),
     ("generated_at", "bad-time"), ("generated_at", "2026-10-23T19:00:00+00:00"),
     ("generated_at", "2026-10-22T19:00:00"),
+    ("generated_at", "0001-01-01T00:00:00+01:00"),
+    ("generated_at", "9999-12-31T23:59:59-01:00"),
 ])
 def test_state_identity_and_timestamp_fail_closed(key, value):
     payload = state()

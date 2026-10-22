@@ -225,7 +225,8 @@ def sanitize_state(payload: dict, observed_at: datetime) -> dict:
         generated = datetime.fromisoformat(str(payload.get("generated_at", "")))
         if generated.tzinfo is None:
             raise ValueError
-        age = (observed_at - generated).total_seconds()
+        generated_utc = generated.astimezone(timezone.utc)
+        age = (observed_at - generated_utc).total_seconds()
         if age < -5:
             raise ValueError
     except (ValueError, OverflowError):
@@ -245,7 +246,7 @@ def sanitize_state(payload: dict, observed_at: datetime) -> dict:
         "status": "observed",
         "service": WATCHDOG_SERVICE,
         "last_cycle_source_sha": sha,
-        "last_cycle_generated_at": generated.astimezone(timezone.utc).isoformat(),
+        "last_cycle_generated_at": generated_utc.isoformat(),
         "age_seconds": max(0, int(age)),
         "fresh_within_120_seconds": age <= 120,
         "runner_status": runner_status if isinstance(runner_status, str) and runner_status in {"process_running", "recovered", "failed"} else "unknown",
