@@ -59,6 +59,36 @@ def test_sync_rejects_tracked_dirty_tree(monkeypatch, tmp_path: Path) -> None:
         reconcile._sync_runtime_repo(repo, "a" * 40)
 
 
+def test_public_override_hash_uses_git_path_filters(monkeypatch, tmp_path: Path) -> None:
+    repo = tmp_path / "runtime"
+    repo.mkdir()
+    public = repo / reconcile.PUBLIC_OVERRIDE_NAME
+    public.write_bytes(b"services:\r\n  api: {}\r\n")
+    blob = "1" * 40
+    observed_calls: list[tuple[str, ...]] = []
+
+    def fake_git(_repo: Path, *args: str, check: bool = True):
+        observed_calls.append(args)
+        if args == (
+            "rev-parse",
+            f"{'a' * 40}:{reconcile.PUBLIC_OVERRIDE_NAME}",
+        ):
+            return SimpleNamespace(stdout=f"{blob}\n", returncode=0)
+        if args == (
+            "hash-object",
+            "--path",
+            reconcile.PUBLIC_OVERRIDE_NAME,
+            str(public),
+        ):
+            return SimpleNamespace(stdout=f"{blob}\n", returncode=0)
+        raise AssertionError(args)
+
+    monkeypatch.setattr(reconcile, "_git", fake_git)
+
+    assert reconcile._validate_public_override(repo, public, "a" * 40) == public.resolve()
+    assert not any("--no-filters" in args for args in observed_calls)
+
+
 def test_execute_reconciles_then_recreates_and_verifies(monkeypatch, tmp_path: Path) -> None:
     args = _args(tmp_path)
     runtime_root = tmp_path / "runtime"
