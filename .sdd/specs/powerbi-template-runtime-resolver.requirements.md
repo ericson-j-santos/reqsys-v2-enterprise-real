@@ -48,6 +48,12 @@ persistir ou imprimir nomes/GUIDs remotos.
 22. O ExecuteQueries de `_Medidas[Meta]` deve usar exclusivamente o ID do
     sentinela sintético identificado no inventário; sentinela ausente/ambíguo
     bloqueia essa consulta e nunca é substituído pelo dataset empresarial.
+23. Papéis observados que divergem entre Power BI e Fabric devem produzir
+    `role_evidence_status=conflicting`, sem `effective_write_role` e com
+    `write_candidate=false`. Quando um token Fabric é fornecido mas nenhuma
+    das leituras Fabric confirma um papel, o estado deve ser
+    `fabric_unverified` e também falhar fechado, mesmo que o Power BI informe
+    um papel de escrita.
 
 ## Critérios de aceite
 

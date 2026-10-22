@@ -256,6 +256,7 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         self.assertEqual(workspace["fabric_role_filter_role"], "Contributor")
         self.assertEqual(workspace["fabric_role_filter_status"], "observed")
         self.assertEqual(workspace["fabric_role_assignments_status"], 200)
+        self.assertEqual(workspace["role_evidence_status"], "observed")
         self.assertFalse(workspace["is_read_only"])
         self.assertFalse(workspace["is_on_dedicated_capacity"])
         self.assertTrue(workspace["write_candidate"])
@@ -304,6 +305,37 @@ class TestPowerBiTemplateRuntimeResolver(unittest.TestCase):
         workspace = result["workspace_access"][0]
         self.assertEqual(workspace["fabric_principal_role_status"], "forbidden")
         self.assertIsNone(workspace["fabric_principal_role"])
+        self.assertFalse(workspace["write_candidate"])
+
+    def test_divergencia_powerbi_fabric_falha_fechado(self):
+        result = resolve_runtime(
+            token="token-x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            fabric_token="fabric-x",
+            requester=FakeRequester(principal_role="Viewer"),
+            fabric_requester=FakeFabricRequester(role="Contributor"),
+        )
+        workspace = result["workspace_access"][0]
+        self.assertEqual(workspace["powerbi_principal_role"], "Viewer")
+        self.assertEqual(workspace["fabric_principal_role"], "Contributor")
+        self.assertEqual(workspace["role_evidence_status"], "conflicting")
+        self.assertIsNone(workspace["effective_write_role"])
+        self.assertFalse(workspace["write_candidate"])
+
+    def test_powerbi_nao_suplanta_fabric_indisponivel(self):
+        result = resolve_runtime(
+            token="token-x",
+            principal_identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            fabric_token="fabric-x",
+            requester=FakeRequester(principal_role="Contributor"),
+            fabric_requester=FakeFabricRequester(
+                role=None, status=403, role_assignments_status=403
+            ),
+        )
+        workspace = result["workspace_access"][0]
+        self.assertEqual(workspace["powerbi_principal_role"], "Contributor")
+        self.assertEqual(workspace["role_evidence_status"], "fabric_unverified")
+        self.assertIsNone(workspace["effective_write_role"])
         self.assertFalse(workspace["write_candidate"])
 
     def test_binding_ambiguo_falha_fechado_e_nao_executa_query(self):
