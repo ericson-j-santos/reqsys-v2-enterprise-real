@@ -83,3 +83,28 @@ retag, rebuild, recreate, or prune images outside the reviewed command sequence.
 Record only command exit status, external fingerprint, sanitized phase category,
 observed runtime SHA, and test results. Never attach env-file contents, raw driver
 errors, connection strings, credentials, container logs, or database contents.
+
+## Public DEV cutover wrapper
+
+O workflow `Noteri Study Mode DEV Reconcile`, modo `public-static`, usa
+`scripts/pc24x7_public_dev_cutover_guard.py` para encadear este rollback com um
+backup PostgreSQL protegido. O modo `prepare` exige a confirmação literal
+`PREPARE-PC24X7-PUBLIC-DEV-CUTOVER`, cifra o dump com DPAPI e prova uma restauração
+em contêiner descartável, sem rede, usando a imagem PostgreSQL observada. Ele
+também preserva snapshots privados e ordenados apenas dos manifests Compose, para
+que o fast-forward do runtime não invalide o rollback; env-files não são copiados.
+O modo
+`rollback` exige `ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER` e pode restaurar as imagens
+mesmo quando a API candidata não responde; host, raiz, projeto, cardinalidade e
+image IDs continuam sendo revalidados antes da mutação.
+
+Não execute esses comandos fora do Session Launcher e da rota separada
+`owner_risk3_gateway.py`. O Command Gateway geral permanece fail-closed para
+Risk 3. A rota do owner exige modo privado `standard_gold_development` válido,
+worktree limpo, script rastreado no SHA da sessão e timeout de no máximo 900 s;
+o workflow não ativa esse modo. O modo `public-static` também exige comentário
+exato e recente do owner na issue `#1705`, além do SHA de `main` capturado pelo
+gateway; ambos são lidos novamente no job físico. O manifesto, ciphertext e override em
+`.reqsys-recovery` são privados e não devem ser anexados à execução. A base ativa
+não é restaurada automaticamente: qualquer mudança observada após rollback
+bloqueia o fluxo para avaliação específica.

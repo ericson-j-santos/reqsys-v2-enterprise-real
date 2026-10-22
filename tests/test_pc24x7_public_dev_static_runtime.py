@@ -1,13 +1,13 @@
 from __future__ import annotations
-import sys
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "reconcile_pc24x7_public_dev_runtime.py"
 OVERLAY = ROOT / "docker-compose.pc24x7-public-dev.yml"
@@ -102,7 +102,8 @@ def test_workflow_has_physical_then_independent_public_evidence() -> None:
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "public-static" in raw
     assert "Reconcile full DEV runtime and static frontend" in raw
-    assert "pc24x7_public_dev_tunnel.py --apply" in raw
+    assert "scripts\\pc24x7_public_dev_tunnel.py" in raw
+    assert "'--apply'" in raw
     assert "pc24x7_dev_locator_publisher.py" in raw
     assert "needs: reconcile" in raw
     assert "Independent public same-SHA smoke" in raw
@@ -116,8 +117,8 @@ def test_workflow_has_physical_then_independent_public_evidence() -> None:
     assert "actions/checkout@v4" not in raw
     assert "actions/setup-node@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert '--vault-name "$env:REQSYS_KEY_VAULT_NAME"' in raw
-    assert '--expected-tenant-id "$env:CCP_AZURE_TENANT_ID"' in raw
+    assert "'--vault-name', $env:REQSYS_KEY_VAULT_NAME" in raw
+    assert "'--expected-tenant-id', $env:CCP_AZURE_TENANT_ID" in raw
 
 
 def test_workflow_limits_oidc_permission_to_reconcile_job() -> None:
@@ -128,7 +129,7 @@ def test_workflow_limits_oidc_permission_to_reconcile_job() -> None:
 
     assert "contents: read" in workflow_permissions
     assert "id-token:" not in workflow_permissions
-    assert "permissions:\n      contents: read\n      id-token: write" in reconcile
+    assert "permissions:\n      contents: read\n      id-token: write\n      issues: read" in reconcile
     assert "permissions:\n      contents: read" in public_smoke
     assert "id-token:" not in public_smoke
 
@@ -395,7 +396,25 @@ def test_authorized_gateway_exposes_only_exact_static_reconcile_command() -> Non
     assert "target='noteri-study-mode-dev-reconcile.yml'" in raw
     assert "mode='public-static'" in raw
     assert "-f mode=public-static" in raw
+    assert '-f authorization_comment_id="$AUTHORIZED_COMMENT_ID"' in raw
+    assert '-f expected_sha="$EXPECTED_SHA"' in raw
     assert "-f environment=prod" not in raw
+
+
+def test_public_static_revalidates_owner_comment_freshness_and_exact_sha() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    step = raw.split("- name: Verify owner authorization and exact public DEV SHA", 1)[1].split(
+        "- name: Checkout immutable source SHA", 1
+    )[0]
+    assert "inputs.mode == 'public-static'" in step
+    assert "github.token" in step
+    assert "issues/comments/$env:AUTHORIZATION_COMMENT_ID" in step
+    assert "$comment.user.login -ne 'ericson-j-santos'" in step
+    assert "$comment.issue_url -ne $expectedIssue" in step
+    assert "$comment.body -cne '/reqsys run pc24x7-public-dev-reconcile'" in step
+    assert "$age.TotalMinutes -gt 30" in step
+    assert "PUBLIC_DEV_DISPATCH_SHA_MISMATCH" in step
+    assert "inputs.expected_sha || github.sha" in raw
 
 
 def test_reconciler_loads_maintenance_as_sibling_for_direct_script_execution() -> None:
@@ -479,7 +498,7 @@ def test_study_mode_loader_falls_back_on_explicit_import_error(monkeypatch):
 
 
 
-def test_legacy_public_static_reconcile_blocks_before_any_runtime_mutation(
+def test_public_static_reconcile_requires_governed_cutover_evidence_before_mutation(
     monkeypatch, tmp_path: Path,
 ) -> None:
     module = _load()
@@ -503,7 +522,7 @@ def test_legacy_public_static_reconcile_blocks_before_any_runtime_mutation(
     )
     with pytest.raises(
         module.ReconcileError,
-        match="^legacy_dev_backup_and_rollback_not_verified$",
+        match="^governed_cutover_evidence_required$",
     ):
         module.execute(args)
     assert not args.evidence_file.exists()
@@ -536,21 +555,23 @@ def test_existing_verified_portable_dev_remains_read_only(
     ) == observed
 
 
-def test_public_static_workflow_fails_closed_before_oidc_or_deploy() -> None:
+def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    guard = raw.index(
-        "Quarantine legacy public-static without governed backup and rollback"
-    )
+    guard = raw.index("Prepare protected PostgreSQL backup and image rollback")
     azure = raw.index("Login Azure by OIDC for DEV credential reuse")
     deploy = raw.index("Reconcile full DEV runtime and static frontend")
     locator = raw.index("Reconcile public tunnels and publish signed locator")
     assert guard < azure < deploy < locator
     before = raw[guard:raw.index("- name: Validate public static reconciler syntax")]
     assert "inputs.mode == 'public-static'" in before
-    assert (
-        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'"
-        in before
-    )
+    assert "owner_risk3_gateway.py" in before
+    assert "reqsys.pc24x7.public_dev.cutover.prepare" in before
+    assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in before
+    assert "'--timeout', '900'" in before
+    assert "'--risk', '3'" not in before
+    assert "C:\\dev\\chatgpt-workers\\wt-pc24x7-public-dev-governed" in before
+    assert "PREPARE-PC24X7-PUBLIC-DEV-CUTOVER" in before
+    assert "isolated_restore_verified -ne $true" in before
 
 
 def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
@@ -558,7 +579,7 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
     rules = raw.find("      - name: Checkout immutable rules for governed Desktop session")
     session = raw.find("      - name: Bootstrap isolated and governed Desktop session")
     inventory = raw.find("      - name: Inventory public DEV through governed Gateway (read-only)")
-    blockade = raw.find("      - name: Quarantine legacy public-static without governed backup and rollback")
+    blockade = raw.find("      - name: Prepare protected PostgreSQL backup and image rollback")
     azure = raw.find("      - name: Login Azure by OIDC for DEV credential reuse")
     deploy = raw.find("      - name: Reconcile full DEV runtime and static frontend")
     locator = raw.find("      - name: Reconcile public tunnels and publish signed locator")
@@ -583,30 +604,45 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "backup_verified = $false" in inventory_step,
         "rollback_rehearsal_verified = $false" in inventory_step,
         "if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'" in guard_step,
-        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'" in guard_step,
+        "owner_risk3_gateway.py" in guard_step,
+        "reqsys.pc24x7.public_dev.cutover.prepare" in guard_step,
+        "repo://reqsys/environment/dev/host/desktop-pdqk954" in guard_step,
+        "'--timeout', '900'" in guard_step,
+        "'--risk', '3'" not in guard_step,
+        "set_owner_risk3_development_mode.py" not in guard_step,
+        "PREPARE-PC24X7-PUBLIC-DEV-CUTOVER" in guard_step,
+        "backup_verified -ne $true" in guard_step,
+        "isolated_restore_verified -ne $true" in guard_step,
+        "rollback_images_prepared -ne $true" in guard_step,
         "always()" not in guard_step,
     ))
 
 
-def test_public_dev_release_collects_only_governed_inventory_before_quarantine():
+def test_public_dev_release_orders_inventory_recovery_deploy_and_locator():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert _public_dev_governed_inventory_guard_active(raw)
     inventory = raw.index("Inventory public DEV through governed Gateway (read-only)")
-    blockade = raw.index("Quarantine legacy public-static")
+    blockade = raw.index("Prepare protected PostgreSQL backup and image rollback")
     assert inventory < blockade < raw.index("Login Azure by OIDC")
     assert blockade < raw.index("Reconcile full DEV runtime")
-    assert blockade < raw.index("pc24x7_public_dev_tunnel.py --apply")
+    assert blockade < raw.index("scripts\\pc24x7_public_dev_tunnel.py")
 
 
-def test_public_dev_governed_inventory_security_control_detects_bypass():
+def test_public_dev_governed_recovery_security_control_detects_bypass():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert _public_dev_governed_inventory_guard_active(raw)
-    without_quarantine = raw.replace(
-        "throw 'PUBLIC_STATIC_REQUIRES_GOVERNED_SESSION_BACKUP_AND_ROLLBACK'",
-        "Write-Host 'unsafe bypass'",
+    without_owner_gateway = raw.replace(
+        "_rules\\scripts\\owner_risk3_gateway.py",
+        "_rules\\scripts\\command_gateway.py",
         1,
     )
-    assert not _public_dev_governed_inventory_guard_active(without_quarantine)
+    assert not _public_dev_governed_inventory_guard_active(without_owner_gateway)
+    without_dev_scope = raw.replace(
+        "repo://reqsys/environment/dev/host/desktop-pdqk954",
+        "repo://reqsys/environment/unknown/host/desktop-pdqk954",
+        1,
+    )
+    assert not _public_dev_governed_inventory_guard_active(without_dev_scope)
     without_gateway = raw.replace("'--risk', '1'", "'--risk', '2'", 1)
     assert not _public_dev_governed_inventory_guard_active(without_gateway)
     without_session = raw.replace(
@@ -620,7 +656,7 @@ def test_public_dev_governed_inventory_security_control_detects_bypass():
 def test_public_dev_read_only_receipt_never_claims_backup_or_deploy():
     raw = WORKFLOW.read_text(encoding="utf-8")
     start = raw.index("      - name: Inventory public DEV through governed Gateway (read-only)")
-    end = raw.index("      - name: Quarantine legacy public-static")
+    end = raw.index("      - name: Prepare protected PostgreSQL backup and image rollback")
     step = raw[start:end]
     for value in (
         "status = 'preflight_only'",

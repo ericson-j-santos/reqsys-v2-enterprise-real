@@ -62,5 +62,11 @@ Até existirem sessão/Gateway governados, backup PostgreSQL restaurado em cópi
 isolada e ensaio de rollback real de api/frontend/nginx, o modo `public-static`
 falha explicitamente e o reconciliador Python recusa o caminho legado. A
 consulta read-only do runtime portátil já atestado continua preservada.
-A recuperação física, incluindo eventual deploy DEV, permanece um incremento
-separado que exige autorização e E2E no mesmo SHA.
+A recuperação física foi materializada em incremento separado em 22/10/2026. O
+comando autorizado continua exigindo autorização explícita e executa, no mesmo
+SHA, inventário read-only, backup PostgreSQL cifrado, restauração isolada sem
+rede, preparação de imagens de rollback, deploy pelo Owner Risk 3 Gateway,
+validação same-SHA e smoke público. O manifesto e o dump não são enviados como
+artifacts. Qualquer
+prova ausente bloqueia antes do Compose; falha do cutover aciona rollback das
+imagens e exige confirmação de que a base permaneceu inalterada.

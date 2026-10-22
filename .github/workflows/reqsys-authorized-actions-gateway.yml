@@ -575,7 +575,9 @@ jobs:
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
-              -f mode=public-static)"
+              -f mode=public-static \
+              -f authorization_comment_id="$AUTHORIZED_COMMENT_ID" \
+              -f expected_sha="$EXPECTED_SHA")"
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
