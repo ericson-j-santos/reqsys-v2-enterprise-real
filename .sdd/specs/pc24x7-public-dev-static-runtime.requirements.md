@@ -145,3 +145,10 @@ env-files da mesma raiz legada são materializados dentro do worktree governado.
 plano executado recebe somente caminhos internos, de modo que os novos labels não
 dependam do checkout legado. Arquivos externos não allowlisted, raízes múltiplas,
 links/reparse points e env-files sem âncora Compose permitida falham fechados.
+
+## Quinto incremento — diagnóstico público limitado — 23/10/2026
+
+Cada bloqueio conhecido de escopo durante a migração legada produz somente um
+`scope_diagnostic_code` estático allowlisted. Erros de leitura, colisão e gravação
+são reduzidos a categorias públicas agregadas. Nenhum receipt pode incluir path,
+stderr, nome de env-file, valor de configuração ou detalhe da exceção original.

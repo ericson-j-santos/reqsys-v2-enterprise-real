@@ -77,6 +77,9 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
   código desconhecido ou motivo não relacionado reduz para `not_applicable`.
 - caminhos externos não allowlisted, origens múltiplas ou env-file sem override
   Compose allowlisted na mesma raiz falham antes de backup, tags ou deploy.
+- bloqueios conhecidos da migração legada preservam somente o código estático da
+  regra de escopo; falhas de leitura, colisão ou gravação permanecem agregadas e
+  nunca publicam path, stderr, nome de env-file ou conteúdo.
 
 ## Fora de escopo
 

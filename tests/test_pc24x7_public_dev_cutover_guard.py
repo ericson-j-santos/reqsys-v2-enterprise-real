@@ -244,6 +244,33 @@ def test_unknown_failure_is_reduced_to_allowlisted_generic_reason():
     assert "credential" not in json.dumps(payload)
 
 
+def test_legacy_source_failures_have_bounded_public_classification():
+    scope_codes = {
+        "external_source_parent_refused",
+        "external_compose_not_allowlisted",
+        "external_source_scope_refused",
+        "external_source_file_refused",
+        "external_source_root_ambiguous",
+        "external_environment_scope_refused",
+        "external_snapshot_scope_refused",
+        "external_snapshot_dir_refused",
+    }
+    aggregate_codes = {
+        "external_source_read_failed": "recovery_source_invalid",
+        "external_snapshot_collision": "recovery_source_invalid",
+        "external_snapshot_write_failed": "private_recovery_storage_failed",
+    }
+
+    for code in scope_codes:
+        payload = guard.public_failure_receipt(guard.recovery.RecoveryError(code))
+        assert payload["reason_code"] == "runtime_scope_invalid"
+        assert payload["scope_diagnostic_code"] == code
+    for code, reason in aggregate_codes.items():
+        payload = guard.public_failure_receipt(guard.recovery.RecoveryError(code))
+        assert payload["reason_code"] == reason
+        assert payload["scope_diagnostic_code"] == "not_applicable"
+
+
 @pytest.mark.parametrize("code", sorted(
     guard.PUBLIC_SCOPE_DIAGNOSTIC_CODES - {"not_applicable"}
 ))
