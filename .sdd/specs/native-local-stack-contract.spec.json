@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Native bounded local-stack production contract",
+  "status": "prepared_not_executed",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_local_docker_restart_guard.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_local_docker_restart_guard.py"
+    ],
+    "evidence_contract": "Evaluate the two versioned YAML inputs using explicit synthetic environment values and a bounded SafeLoader-based projection. Preserve original production assertions, seven missing-required cases, and real preflight negatives. Run added interpolation and mutation controls in the existing selected target. This is not a Docker Compose differential or container/runtime acceptance; no captured Compose output fixture was located and no tests were executed during preparation."
+  },
+  "traceability": {
+    "implementation": "scripts/validate_local_stack_contract.py",
+    "tests": "tests/test_local_docker_restart_guard.py",
+    "inputs": [
+      "docker-compose.yml",
+      "docker-compose.prod.yml"
+    ],
+    "existing_ci_selection": ".github/workflows/ci-fast-operational.yml",
+    "requirements": ".sdd/specs/native-local-stack-contract.requirements.md",
+    "prior_validated_sha": "2b5fa2a8ab628b9b8b661823b1b863385ff21759",
+    "existing_gate": {
+      "run_id": 39962211237,
+      "reference": "OPS-GAP-TEAMS-NATIVE-CI-BOOTSTRAP",
+      "artifact_id": 12505321847,
+      "artifact_digest": "bda7319a84af293b6ed6d3e6e93edb5c855ae4498506fba5b61a3164e4cdfb39",
+      "scope": "The four-file delta removes Docker CLI only from validation required by the same native CI effort. No new workflow, gate, runtime or workstream.",
+      "file_allowlist": false,
+      "new_workstreams_allowed": false,
+      "new_test_results_claimed": false,
+      "merge_authorization_claimed": false,
+      "publication": "pending_explicit_release"
+    }
+  },
+  "supported_projection": [
+    "restart",
+    "environment",
+    "depends_on",
+    "profiles",
+    "ports",
+    "healthcheck",
+    "build"
+  ],
+  "limitations": {
+    "general_compose_parser": false,
+    "captured_compose_fixture": false,
+    "runtime_validation": false,
+    "opaque_fields": [
+      "logging",
+      "volumes",
+      "networks",
+      "image",
+      "expose",
+      "command"
+    ],
+    "synthetic_environment_only": true,
+    "unchanged_platform_skips": true
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "persistent_secrets": false,
+    "host_environment_access": false,
+    "docker_execution": false,
+    "workflow_changes": false
+  }
+}
