@@ -75,7 +75,10 @@ is ambiguous, any service lacks an ordered Compose source, a source changes afte
 capture, a reparse point is found, a deterministic tag points to another image,
 evidence fingerprint differs, readiness reaches its deadline, or the sanitized
 database probe fails. Ordered sources may differ between services after a governed
-partial recreation; schema 3 preserves and replays each chain separately.
+partial recreation; schema 4 preserves and replays each chain separately. Generic
+capture continues to refuse external paths. Only the public DEV cutover wrapper may
+snapshot the two allowlisted legacy overrides and same-root env-files into private
+storage before mutation.
 
 Do not delete `.reqsys-recovery` while containers reference its override. Do not
 retag, rebuild, recreate, or prune images outside the reviewed command sequence.

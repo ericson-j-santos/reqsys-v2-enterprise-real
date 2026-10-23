@@ -137,3 +137,11 @@ schema 2 com cadeia única permanecem aceitos para compatibilidade.
 Este incremento não executa captura física, backup, Docker Compose, deploy, locator
 ou E2E. Nova tentativa física continua condicionada a merge governado, validação
 pós-merge e autorização owner específica no SHA então vigente.
+
+## Quarto incremento — internalização de inputs do runtime — 23/10/2026
+
+Após o snapshot privado e antes do novo Compose, overrides locais allowlisted e
+env-files da mesma raiz legada são materializados dentro do worktree governado. O
+plano executado recebe somente caminhos internos, de modo que os novos labels não
+dependam do checkout legado. Arquivos externos não allowlisted, raízes múltiplas,
+links/reparse points e env-files sem âncora Compose permitida falham fechados.

@@ -171,6 +171,106 @@ def test_capture_preserves_order_and_service_specific_sources(root):
     ] == ["a-override.yaml", "z-base.yaml"]
 
 
+def test_cutover_capture_migrates_only_allowlisted_sibling_legacy_sources(root):
+    legacy = root.parent / f"legacy-{root.name}"
+    legacy.mkdir()
+    admin = legacy / "docker-compose.admin-dev.override.yml"
+    env = legacy / ".env"
+    admin.write_text("services: {}\n", encoding="utf-8")
+    env.write_text("PRIVATE_VALUE=never-in-manifest\n", encoding="utf-8")
+    runner = Fake(
+        root,
+        config_orders={s: [root / "compose.yaml", admin] for s in recovery.SERVICES},
+        env_orders={s: [env] for s in recovery.SERVICES},
+    )
+
+    with pytest.raises(RecoveryError, match="external_path_refused"):
+        captured(root, runner)
+
+    snapshot_dir = (
+        root / ".reqsys-recovery" / "public-dev-test.runtime-sources"
+    )
+    manifest = capture(
+        runner,
+        root=root,
+        identity_probe=lambda: OLD,
+        hostname=HOST,
+        external_snapshot_dir=snapshot_dir,
+    )
+
+    assert manifest["schema"] == 4
+    assert manifest["legacy_sources_migrated"] is True
+    rendered = json.dumps(manifest)
+    assert "PRIVATE_VALUE" not in rendered
+    assert str(legacy) not in rendered
+    assert all(
+        record["relative_path"].startswith(
+            ".reqsys-recovery/public-dev-test.runtime-sources/"
+        )
+        for record in manifest["environment_files"]
+    )
+    assert any(
+        record["relative_path"].startswith(
+            ".reqsys-recovery/public-dev-test.runtime-sources/"
+        )
+        for record in manifest["compose_files"]
+    )
+    prepared_manifest = prepare(
+        manifest, runner, manifest["fingerprint"], root
+    )
+    validate(
+        prepared_manifest,
+        runner,
+        prepared_manifest["fingerprint"],
+        root,
+        True,
+    )
+
+
+def test_cutover_capture_rejects_unallowlisted_or_split_external_sources(root):
+    legacy = root.parent / f"legacy-{root.name}"
+    other = root.parent / f"other-{root.name}"
+    legacy.mkdir()
+    other.mkdir()
+    bad = legacy / "docker-compose.unbounded.yml"
+    bad.write_text("services: {}\n", encoding="utf-8")
+    env = legacy / ".env"
+    env.write_text("VALUE=private\n", encoding="utf-8")
+    snapshot_dir = root / ".reqsys-recovery" / "public-dev-test.runtime-sources"
+
+    bad_runner = Fake(
+        root,
+        config_orders={s: [root / "compose.yaml", bad] for s in recovery.SERVICES},
+        env_orders={s: [env] for s in recovery.SERVICES},
+    )
+    with pytest.raises(RecoveryError, match="external_compose_not_allowlisted"):
+        capture(
+            bad_runner,
+            root=root,
+            identity_probe=lambda: OLD,
+            hostname=HOST,
+            external_snapshot_dir=snapshot_dir,
+        )
+
+    admin = legacy / "docker-compose.admin-dev.override.yml"
+    admin.write_text("services: {}\n", encoding="utf-8")
+    split_env = other / ".env"
+    split_env.write_text("VALUE=private\n", encoding="utf-8")
+    split_runner = Fake(
+        root,
+        config_orders={s: [root / "compose.yaml", admin] for s in recovery.SERVICES},
+        env_orders={s: [split_env] for s in recovery.SERVICES},
+    )
+    with pytest.raises(RecoveryError, match="external_environment_scope_refused"):
+        capture(
+            split_runner,
+            root=root,
+            identity_probe=lambda: OLD,
+            hostname=HOST,
+            external_snapshot_dir=snapshot_dir,
+        )
+
+
 def test_rollback_replays_each_distinct_service_source(root):
     api_order = [root / "z-base.yaml", root / "a-override.yaml"]
     sibling_order = list(reversed(api_order))
