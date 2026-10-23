@@ -28,6 +28,7 @@ asyncio_mode = "auto"
 source_paths = ["app"]
 only_mutate = ["app/core/*"]
 pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-o", "pythonpath=../.."]
 also_copy = [
   "copilot_memory_core",
   "copilot_memory_powerautomate_complete.py",
