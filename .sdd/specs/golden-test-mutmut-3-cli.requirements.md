@@ -16,11 +16,13 @@ comando.
 6. Dependências locais importadas durante a coleta da suíte devem ser declaradas em `also_copy`, sem copiar o repositório inteiro para o sandbox.
 7. Testes que importam o pacote operacional `scripts` devem resolver a raiz do repositório via `pythonpath`, sem substituir o pacote `app` mutado.
 8. Testes estruturais que dependem de `parents[2]` devem ficar fora da coleta isolada, pois validam assets externos a `app/core` e calculam outra raiz no sandbox.
-9. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
+9. O teste do registro Agile deve gerar um identificador de pacote exclusivo por execução e reutilizar o mesmo payload dentro do cenário de idempotência, evitando vazamento de estado entre as fases repetidas do Mutmut.
+10. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
 
 ## Critérios de aceite
 
 - `tests/test_golden_test_advanced_contract.py` passa integralmente.
+- `backend/tests/test_agile_package_registry.py` passa em execuções consecutivas contra o banco de teste persistente.
 - O carregador de configuração do Mutmut 3.8.0 reconhece `source_paths`, `only_mutate` e `pytest_add_cli_args_test_selection`.
 - O Pre-PR Readiness admite o SHA final sem bloqueio `SDD_SPEC_REQUIRED`.
 - O workflow `Golden Test Advanced` conclui com sucesso no GitHub Actions para o SHA final.
