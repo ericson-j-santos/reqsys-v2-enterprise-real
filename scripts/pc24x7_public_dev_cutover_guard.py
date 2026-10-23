@@ -44,6 +44,7 @@ ROLLBACK_CONFIRM = "ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER"
 PUBLIC_RECEIPT_KEYS = {
     "status",
     "reason_code",
+    "scope_diagnostic_code",
     "fingerprint",
     "backup_verified",
     "isolated_restore_verified",
@@ -125,6 +126,20 @@ PUBLIC_FAILURE_REASON_MAP = {
 PUBLIC_FAILURE_REASON_CODES = frozenset(PUBLIC_FAILURE_REASON_MAP.values()) | {
     "cutover_failure_unclassified",
 }
+PUBLIC_SCOPE_DIAGNOSTIC_CODES = frozenset({
+    "host_identity_refused",
+    "runtime_root_invalid",
+    "root_reparse_refused",
+    "external_path_refused",
+    "traversal_refused",
+    "link_refused",
+    "non_file_refused",
+    "compose_identity_mismatch",
+    "working_dir_mismatch",
+    "database_working_dir_invalid",
+    "database_working_dir_mismatch",
+    "not_applicable",
+})
 MAX_DUMP_BYTES = 512 * 1024 * 1024
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CORRELATION = re.compile(r"[a-z0-9][a-z0-9-]{7,139}\Z")
@@ -517,9 +532,16 @@ def public_failure_receipt(exc: Exception) -> dict[str, Any]:
     reason_code = PUBLIC_FAILURE_REASON_MAP.get(raw_code, "cutover_failure_unclassified")
     if reason_code not in PUBLIC_FAILURE_REASON_CODES:
         reason_code = "cutover_failure_unclassified"
+    scope_diagnostic_code = (
+        raw_code
+        if reason_code == "runtime_scope_invalid"
+        and raw_code in PUBLIC_SCOPE_DIAGNOSTIC_CODES
+        else "not_applicable"
+    )
     return {
         "status": "blocked",
         "reason_code": reason_code,
+        "scope_diagnostic_code": scope_diagnostic_code,
         "backup_verified": False,
         "isolated_restore_verified": False,
         "rollback_images_prepared": False,
