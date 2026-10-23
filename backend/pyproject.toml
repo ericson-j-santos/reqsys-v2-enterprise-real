@@ -24,5 +24,36 @@ testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "auto"
 
+[tool.mutmut]
+source_paths = ["app"]
+only_mutate = ["app/core/*"]
+pytest_add_cli_args_test_selection = [
+  "tests",
+  "--ignore=tests/test_change_impact_analysis.py",
+  "--ignore=tests/test_cofre_runtime_evidence_script.py",
+  "--ignore=tests/test_copilot_hitl_agent_network_blueprint.py",
+  "--ignore=tests/test_generated_minimum_controlled_version_manifest.py",
+  "--ignore=tests/test_lowcode_teams_notification_profile.py",
+  "--ignore=tests/test_materialize_copilot_hitl_solution.py",
+  "--ignore=tests/test_operational_observability_hub.py",
+  "--ignore=tests/test_operational_orchestrator.py",
+  "--ignore=tests/test_performance_slo_observability_integration.py",
+  "--ignore=tests/test_resolve_lifecycle_requirement_codes.py",
+  "--ignore=tests/test_trilha_e_arquitetura_viva.py",
+  "--ignore=tests/test_wsjf_excel_workbook_api.py",
+  "--ignore=tests/test_wsjf_workbook_package.py",
+]
+pytest_add_cli_args = ["-o", "pythonpath=../.."]
+also_copy = [
+  "copilot_memory_core",
+  "copilot_memory_powerautomate_complete.py",
+  "copilot_memory_simple_package.py",
+  "data",
+  "diagram_generator_portable",
+  "ocr_evidencia",
+  "token_broker",
+  "wsjf_workbook_package.py",
+]
+
 [tool.ruff.lint.per-file-ignores]
 "app/core/runtime_analytics.py" = ["E303", "E305"]
