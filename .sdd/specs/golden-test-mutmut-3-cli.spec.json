@@ -9,7 +9,7 @@
     "tests": [
       "tests/test_golden_test_advanced_contract.py"
     ],
-    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia explicitamente as dependências locais e expõe a raiz do repositório somente ao pytest do sandbox."
+    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia dependências locais e exclui da coleta isolada apenas testes estruturais dependentes da raiz externa ao sandbox."
   },
   "traceability": {
     "workflow": ".github/workflows/golden-test-advanced.yml",
