@@ -173,6 +173,11 @@ class TeamsNotificationWorkflowAdmissionTests(unittest.TestCase):
         self.assertIn('["skipped","cancelled","neutral"]', before_steps)
         self.assertIn("github.event.workflow_run.conclusion", before_steps)
         self.assertNotIn("secrets.", before_steps)
+        self.assertNotIn("${{ runner.", before_steps)
+        self.assertIn("PREPARED_NOTIFICATION: ${{ github.workspace }}/", before_steps)
+        # Negative control: an unsupported runner context must fail this guard.
+        invalid = before_steps.replace("${{ github.workspace }}", "${{ runner.temp }}")
+        self.assertIn("${{ runner.", invalid)
 
     def test_admission_precedes_locator_and_has_no_delivery_secret(self):
         self.assertNotIn("secrets.", self.preparation)

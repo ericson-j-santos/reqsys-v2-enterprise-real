@@ -342,7 +342,7 @@ jobs:
     timeout-minutes: 5
     env:
       PYTHONUNBUFFERED: "1"
-      PREPARED_NOTIFICATION: ${{ runner.temp }}/teams-commit-notification-${{ github.run_id }}.json
+      PREPARED_NOTIFICATION: ${{ github.workspace }}/teams-commit-notification-${{ github.run_id }}.json
 
     steps:
       - name: Checkout
