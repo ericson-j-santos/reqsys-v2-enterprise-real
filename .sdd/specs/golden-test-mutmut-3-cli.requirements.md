@@ -22,7 +22,8 @@ comando.
 12. Cada cenário de memória Planner/Copilot deve gerar um `planner_task_id` novo no momento da execução, inclusive quando o Mutmut repete a suíte no mesmo processo.
 13. Mocks que retornam coleções mutáveis no sync Figma/GitHub devem criar uma coleção nova dentro de cada execução do teste.
 14. Cenários parametrizados de monitoramento GovBI devem construir uma resposta HTTP nova por execução, sem reutilizar streams consumidos ou fechados.
-15. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
+15. O teste do worker operacional deve usar correlação e chave idempotente exclusivas por execução para sempre enfileirar uma nova tarefa.
+16. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
 
 ## Critérios de aceite
 
@@ -33,6 +34,7 @@ comando.
 - `backend/tests/test_copilot_memory_service.py` passa quando executado duas vezes no mesmo processo sem reutilizar `planner_task_id`.
 - `backend/tests/test_figma_github_sync_critical_paths.py` passa quando executado duas vezes no mesmo processo sem reaproveitar comentários adicionados ao mock.
 - `backend/tests/test_monitoramento_snapshot_critical_paths.py` passa quando executado duas vezes no mesmo processo sem reaproveitar respostas HTTP consumidas.
+- `backend/tests/test_operational_worker.py` passa quando executado duas vezes no mesmo processo sem reaproveitar uma tarefa já concluída.
 - O carregador de configuração do Mutmut 3.8.0 reconhece `source_paths`, `only_mutate` e `pytest_add_cli_args_test_selection`.
 - O Pre-PR Readiness admite o SHA final sem bloqueio `SDD_SPEC_REQUIRED`.
 - O workflow `Golden Test Advanced` conclui com sucesso no GitHub Actions para o SHA final.
