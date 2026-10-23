@@ -72,7 +72,9 @@ manual produz e valida as seguintes provas antes de OIDC/Compose/locator:
 - captura selada das imagens correntes de api/frontend/nginx e criação de tags de
   rollback com readback do image ID;
 - snapshots privados e imutáveis, na ordem observada, somente dos manifests
-  Compose; env-files continuam no local original e não são duplicados;
+  Compose por serviço; cadeias distintas após recriação parcial governada são
+  preservadas e reaplicadas separadamente, sem reordenar ou sintetizar uma cadeia
+  comum; env-files continuam no local original e não são duplicados;
 - `pg_dump` da base DEV executado dentro do contêiner PostgreSQL observado, mantido
   em disco apenas como ciphertext DPAPI de escopo do usuário;
 - restauração do dump em contêiner descartável da mesma imagem PostgreSQL, sem rede,
@@ -113,3 +115,25 @@ por `DOCKER_HOST`/`DOCKER_CONTEXT`, TCP e qualquer named pipe não allowlisted
 continuam bloqueados. Independentemente do contexto local ativo, toda leitura do
 inventário permanece explicitamente presa ao pipe Linux
 `dockerDesktopLinuxEngine`.
+
+## Terceiro incremento — fontes Compose por serviço — 23/10/2026
+
+O run físico `39965334691` falhou fechado antes de OIDC/deploy com a categoria
+sanitizada `recovery_source_invalid`. A análise somente leitura do código encontrou
+uma incompatibilidade determinística: o contrato já testado de recriação pública
+aceita que a API tenha uma cadeia Compose própria após atualização parcial, desde
+que frontend e nginx comprovem o overlay público, enquanto a captura de rollback
+recusava qualquer diferença entre os três serviços com
+`compose_config_order_mismatch`.
+
+O manifesto privado passa ao schema 3 e sela, por serviço, a ordem de manifests e
+env-files observada. Arquivos Compose são copiados para snapshots privados,
+imutáveis e deduplicados; valores de env-file continuam sem leitura ou cópia. O
+rollback agrupa serviços somente quando as cadeias são idênticas. Quando divergem,
+cada serviço é restaurado com sua cadeia exata, sempre com `--no-build`,
+`--no-deps`, imagem imutável verificada e o mesmo override de rollback. Manifestos
+schema 2 com cadeia única permanecem aceitos para compatibilidade.
+
+Este incremento não executa captura física, backup, Docker Compose, deploy, locator
+ou E2E. Nova tentativa física continua condicionada a merge governado, validação
+pós-merge e autorização owner específica no SHA então vigente.
