@@ -21,6 +21,7 @@ Aplicar proteção real na branch `main` de `ericson-j-santos/observability-plat
 13. A evidência registra somente estado sanitizado, target SHA, host e flags de segurança, nunca material de autenticação.
 14. A autorização Risk3 temporária é removida em `always()` após a tentativa.
 15. A automação não toca deploy, produção, banco, RBAC externo, STG/PROD nem conteúdo da branch alvo.
+16. A concorrência do workflow deve isolar `workflow_dispatch` por modo: modos administrativos diferentes na mesma `main` não podem cancelar uns aos outros; somente uma nova execução do mesmo evento, ref e modo pode substituir a anterior.
 
 ## Critérios de aceite
 
@@ -33,3 +34,4 @@ Aplicar proteção real na branch `main` de `ericson-j-santos/observability-plat
 - Nenhum valor de segredo aparece em log, artifact, commit ou argumento.
 - O fluxo é idempotente e publica evidência independente de readback.
 - A solução usa somente infraestrutura existente e custo adicional zero.
+- Execuções simultâneas para alvos/modos administrativos diferentes não se cancelam entre si.
