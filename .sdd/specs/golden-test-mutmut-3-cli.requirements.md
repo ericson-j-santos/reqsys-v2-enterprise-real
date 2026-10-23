@@ -15,7 +15,8 @@ comando.
 5. Um teste de contrato deve falhar se a versão deixar de ser fixada, se os argumentos legados voltarem ou se o escopo configurado mudar.
 6. Dependências locais importadas durante a coleta da suíte devem ser declaradas em `also_copy`, sem copiar o repositório inteiro para o sandbox.
 7. Testes que importam o pacote operacional `scripts` devem resolver a raiz do repositório via `pythonpath`, sem substituir o pacote `app` mutado.
-8. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
+8. Testes estruturais que dependem de `parents[2]` devem ficar fora da coleta isolada, pois validam assets externos a `app/core` e calculam outra raiz no sandbox.
+9. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
 
 ## Critérios de aceite
 
