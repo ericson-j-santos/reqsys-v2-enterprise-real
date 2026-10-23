@@ -12,6 +12,17 @@ def test_mutmut_configuration_keeps_the_golden_test_focused() -> None:
     assert mutmut["source_paths"] == ["app"]
     assert mutmut["only_mutate"] == ["app/core/*"]
     assert mutmut["pytest_add_cli_args_test_selection"] == ["tests"]
+    assert mutmut["also_copy"] == [
+        "copilot_memory_core",
+        "copilot_memory_powerautomate_complete.py",
+        "copilot_memory_simple_package.py",
+        "data",
+        "diagram_generator_portable",
+        "ocr_evidencia",
+        "token_broker",
+        "wsjf_workbook_package.py",
+    ]
+    assert all((ROOT / "backend" / path).exists() for path in mutmut["also_copy"])
 
 
 def test_golden_test_uses_the_pinned_mutmut_3_cli() -> None:
