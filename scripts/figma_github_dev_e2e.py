@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import os
-import socket
 import subprocess
 import time
 from pathlib import Path

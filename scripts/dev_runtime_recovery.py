@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import socket
 import stat
 import subprocess
 import time

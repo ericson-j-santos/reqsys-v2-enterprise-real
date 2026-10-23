@@ -85,8 +85,8 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-runner-registry-repair.yml'" in content
     assert "'/reqsys run noteri-alm-runner-bootstrap')" in content
     assert "mode='alm-runner-bootstrap'" in content
-    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap" in content
-    assert "target='reqsys-dev-runner-pool-canary.yml'" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|reboot-once|alm-runner-bootstrap" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "'/reqsys run report-builder-email-e2e-dev')" in content
     assert "mode='report-builder'" in content
@@ -440,7 +440,9 @@ def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -
     assert "github.event.comment.body == '/reqsys run desktop-runner-pickup-canary'" in content
     assert "'/reqsys run desktop-runner-pickup-canary')" in content
     assert "mode='runner-pool-canary'" in content
-    assert "target='reqsys-dev-runner-pool-canary.yml'" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert '-f expected_sha="$EXPECTED_SHA"' in content
+    assert '-f authorization_comment_id="$AUTHORIZED_COMMENT_ID"' in content
 
     assert "runner-bootstrap|runner-canary" in content
     assert '-f mode="$recovery_mode"' in content
@@ -551,7 +553,7 @@ def test_gateway_desktop_one_time_reboot_dev_is_exact_inputless_and_fail_closed(
     assert "'/reqsys run desktop-one-time-reboot-dev')" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "mode='reboot-once'" in content
-    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|reboot-once" in content
     assert '-f mode="$recovery_mode"' in content
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f target_host=" not in content
