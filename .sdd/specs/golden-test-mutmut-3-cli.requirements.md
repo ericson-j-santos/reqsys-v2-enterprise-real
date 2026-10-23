@@ -19,7 +19,8 @@ comando.
 9. O teste do registro Agile deve gerar um identificador de pacote exclusivo por execução e reutilizar o mesmo payload dentro do cenário de idempotência, evitando vazamento de estado entre as fases repetidas do Mutmut.
 10. Os testes de qualidade de IA devem usar o `db_session` isolado em memória, sem compartilhar o banco global carregado por outros módulos da suíte.
 11. Tokens escopados gravados diretamente pelo teste do cofre devem ter valor exclusivo por execução para não colidir com o hash único persistido por fases anteriores.
-12. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
+12. Cada cenário de memória Planner/Copilot deve gerar um `planner_task_id` novo no momento da execução, inclusive quando o Mutmut repete a suíte no mesmo processo.
+13. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
 
 ## Critérios de aceite
 
@@ -27,6 +28,8 @@ comando.
 - `backend/tests/test_agile_package_registry.py` passa em execuções consecutivas contra o banco de teste persistente.
 - `backend/tests/test_ai_quality_critical_paths.py` passa independentemente dos dados gravados por outros testes.
 - O cenário `test_token_escopado_precisa_autorizar_chave_alvo` passa em execuções consecutivas sem reutilizar `token_hash`.
+- `backend/tests/test_copilot_memory_service.py` passa quando executado duas vezes no mesmo processo sem reutilizar `planner_task_id`.
 - O carregador de configuração do Mutmut 3.8.0 reconhece `source_paths`, `only_mutate` e `pytest_add_cli_args_test_selection`.
 - O Pre-PR Readiness admite o SHA final sem bloqueio `SDD_SPEC_REQUIRED`.
 - O workflow `Golden Test Advanced` conclui com sucesso no GitHub Actions para o SHA final.
+
