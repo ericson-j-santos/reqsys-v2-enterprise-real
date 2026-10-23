@@ -2,20 +2,20 @@
   "feature_name": "pc24x7-dev-recovery-safety",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-12",
-  "updated_at": "2026-10-12",
+  "updated_at": "2026-10-23",
   "phase": "dev_runtime_recovery_protection",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Protege a reconciliação do runtime PC24x7 DEV com captura sanitizada, preservação de imagens, rollback determinístico e verificação read-only do SHA e banco antes do E2E da issue #1532.",
+  "description": "Protege a reconciliação do runtime PC24x7 DEV com captura sanitizada, migração fechada de fontes legadas allowlisted, preservação de imagens, rollback determinístico e verificação read-only do SHA e banco antes do E2E da issue #1532.",
   "sdd_gate": {
     "tests": [
       "tests/test_dev_runtime_recovery_executor.py",
       "tests/test_probe_pc24x7_dev_runtime_identity.py"
     ],
-    "evidence_contract": "Toda operação permanece restrita ao host DESKTOP-PDQK954, ambiente DEV, projeto wt-pc24x7-piloto e raiz Compose canônica. O deploy-check é somente leitura e exige identidade do runtime, readiness e SELECT 1 sanitizado. Preparação e rollback exigem confirmação explícita, fingerprint íntegro e imagens preservadas. Segredos, logs, TEST, HML e PROD permanecem fora do escopo."
+    "evidence_contract": "Toda operação permanece restrita ao host DESKTOP-PDQK954, ambiente DEV, projeto wt-pc24x7-piloto e raiz Compose canônica. O deploy-check é somente leitura e exige identidade do runtime, readiness e SELECT 1 sanitizado. Preparação e rollback exigem confirmação explícita, fingerprint íntegro e imagens preservadas. A captura genérica recusa paths externos; somente o cutover público DEV pode migrar os dois overrides allowlisted e env-files da mesma raiz irmã para snapshots privados internos do schema 4. Segredos, logs, TEST, HML e PROD permanecem fora do escopo."
   },
   "runtime_validation": {
     "host": "DESKTOP-PDQK954",

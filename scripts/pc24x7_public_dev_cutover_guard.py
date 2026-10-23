@@ -405,9 +405,21 @@ def prepare(expected_sha: str, correlation_id: str, manifest_path: Path, *, root
     expected_sha = expected_sha.lower()
     if not SHA40.fullmatch(expected_sha):
         raise CutoverBlocked("expected_sha_invalid")
+    if not CORRELATION.fullmatch(correlation_id):
+        raise CutoverBlocked("correlation_id_invalid")
     recovery.observed_scope(hostname or socket.gethostname())
     runner = runner or recovery.SubprocessRunner()
-    captured = recovery.capture(runner, root=root, hostname=HOST)
+    external_snapshot_dir = (
+        root
+        / ".reqsys-recovery"
+        / f"public-dev-{correlation_id}.runtime-sources"
+    )
+    captured = recovery.capture(
+        runner,
+        root=root,
+        hostname=HOST,
+        external_snapshot_dir=external_snapshot_dir,
+    )
     prepared = recovery.prepare(captured, runner, captured["fingerprint"], root)
     db = _unique_container(DB_SERVICE)
     db_image = _db_identity(db, root)

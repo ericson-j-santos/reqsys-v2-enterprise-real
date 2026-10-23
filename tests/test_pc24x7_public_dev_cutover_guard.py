@@ -288,5 +288,6 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     for diagnostic_code in guard.PUBLIC_SCOPE_DIAGNOSTIC_CODES:
         assert f"'{diagnostic_code}'" in public_static
     assert ".reqsys-recovery/" in ignore
+    assert ".reqsys-runtime-inputs/" in ignore
     assert "artifacts/pc24x7-public-dev/evidence.json" in ignore
     assert "artifacts/pc24x7-public-dev/cutover-*.json" in ignore

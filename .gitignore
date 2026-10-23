@@ -94,6 +94,7 @@ runtime/.tmp/
 # Estado privado e evidência efêmera do cutover público DEV no PC24x7.
 # O Owner Risk 3 Gateway exige o worktree limpo entre as etapas.
 .reqsys-recovery/
+.reqsys-runtime-inputs/
 artifacts/pc24x7-public-dev/evidence.json
 artifacts/pc24x7-public-dev/cutover-*.json
 

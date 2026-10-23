@@ -48,6 +48,10 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
     somente um `scope_diagnostic_code` estático da allowlist versionada. Para todos
     os demais motivos, o diagnóstico deve ser `not_applicable`. Caminhos, mensagens,
     stdout, stderr, credenciais e dados do banco permanecem proibidos na evidência.
+14. A transição do runtime legado pode copiar somente os overrides locais
+    allowlisted e env-files da mesma raiz irmã para snapshots privados dentro do
+    worktree governado. O Compose reconciliado deve receber exclusivamente caminhos
+    internos ao worktree, eliminando a dependência externa nos labels seguintes.
 
 ## Critérios de aceite
 
@@ -71,6 +75,8 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
   `reason_code=cutover_failure_unclassified`, sem ecoar a mensagem original.
 - cada falha de escopo conhecida preserva apenas seu código estático allowlisted;
   código desconhecido ou motivo não relacionado reduz para `not_applicable`.
+- caminhos externos não allowlisted, origens múltiplas ou env-file sem override
+  Compose allowlisted na mesma raiz falham antes de backup, tags ou deploy.
 
 ## Fora de escopo
 

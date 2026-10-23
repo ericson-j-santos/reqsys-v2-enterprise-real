@@ -27,6 +27,12 @@ IMAGE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 PREPARE_CONFIRM = "PREPARE-ROLLBACK-PC24X7-PUBLIC-DEV"
 ROLLBACK_CONFIRM = "ROLLBACK-PC24X7-PUBLIC-DEV"
+LEGACY_COMPOSE_ALLOWLIST = frozenset(
+    {
+        "docker-compose.admin-dev.override.yml",
+        "docker-compose.pages-stable.override.yml",
+    }
+)
 LEGACY_DB_PROBE = """import json
 from app.db import SessionLocal
 from sqlalchemy import text
@@ -149,6 +155,101 @@ def file_meta(path, root):
         "size": path.stat().st_size,
         "sha256": h.hexdigest(),
     }
+
+
+def _label_path(value, root):
+    path = Path(str(value))
+    return path if path.is_absolute() else Path(root) / path
+
+
+def _is_external(path, root):
+    try:
+        Path(os.path.abspath(path)).relative_to(Path(os.path.abspath(root)))
+    except ValueError:
+        return True
+    return False
+
+
+def _legacy_source_root(config_paths, environment_paths, root):
+    external_configs = [path for path in config_paths if _is_external(path, root)]
+    external_env = [path for path in environment_paths if _is_external(path, root)]
+    if not external_configs and not external_env:
+        return None
+    if not external_configs:
+        raise RecoveryError("external_path_refused")
+
+    root_abs = Path(os.path.abspath(root))
+    parent = root_abs.parent
+    if _reparse(parent):
+        raise RecoveryError("external_source_parent_refused")
+    source_roots = set()
+    for path in external_configs:
+        source = Path(os.path.abspath(path))
+        if source.name.casefold() not in LEGACY_COMPOSE_ALLOWLIST:
+            raise RecoveryError("external_compose_not_allowlisted")
+        source_root = source.parent
+        if source_root.parent != parent or source_root == root_abs:
+            raise RecoveryError("external_source_scope_refused")
+        if _reparse(source_root) or _reparse(source) or not source.is_file():
+            raise RecoveryError("external_source_file_refused")
+        source_roots.add(source_root.resolve(strict=True))
+    if len(source_roots) != 1:
+        raise RecoveryError("external_source_root_ambiguous")
+    source_root = next(iter(source_roots))
+    for path in external_env:
+        source = Path(os.path.abspath(path))
+        if source.parent.resolve(strict=True) != source_root:
+            raise RecoveryError("external_environment_scope_refused")
+        if _reparse(source) or not source.is_file():
+            raise RecoveryError("external_source_file_refused")
+    return source_root
+
+
+def _private_snapshot_directory(path, root):
+    root_abs = Path(os.path.abspath(root))
+    recovery_dir = root_abs / ".reqsys-recovery"
+    snapshot_dir = Path(os.path.abspath(path))
+    if snapshot_dir.parent != recovery_dir or not re.fullmatch(
+        r"public-dev-[A-Za-z0-9._-]+\.runtime-sources", snapshot_dir.name
+    ):
+        raise RecoveryError("external_snapshot_scope_refused")
+    if recovery_dir.exists() and (
+        _reparse(recovery_dir) or not recovery_dir.is_dir()
+    ):
+        raise RecoveryError("recovery_dir_refused")
+    recovery_dir.mkdir(mode=0o700, exist_ok=True)
+    if snapshot_dir.exists() and (
+        _reparse(snapshot_dir) or not snapshot_dir.is_dir()
+    ):
+        raise RecoveryError("external_snapshot_dir_refused")
+    snapshot_dir.mkdir(mode=0o700, exist_ok=True)
+    return snapshot_dir
+
+
+def _snapshot_external_source(source, root, snapshot_dir, kind):
+    try:
+        payload = source.read_bytes()
+    except OSError as exc:
+        raise RecoveryError("external_source_read_failed") from exc
+    digest = hashlib.sha256(payload).hexdigest()
+    suffix = "env" if kind == "env" else "yaml"
+    snapshot = snapshot_dir / f"{kind}-{digest}.{suffix}"
+    try:
+        if snapshot.exists():
+            if _reparse(snapshot) or snapshot.read_bytes() != payload:
+                raise RecoveryError("external_snapshot_collision")
+        else:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+            descriptor = os.open(snapshot, flags, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+    except RecoveryError:
+        raise
+    except OSError as exc:
+        raise RecoveryError("external_snapshot_write_failed") from exc
+    return file_meta(snapshot, root)
 
 
 def image_id(value):
@@ -305,30 +406,75 @@ def ordered_label(value):
     return result
 
 
-def capture(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
+def capture(
+    runner,
+    root=ROOT,
+    identity_probe=observe_identity,
+    hostname=None,
+    external_snapshot_dir=None,
+):
     live = live_guard(runner, root, identity_probe, hostname)
-    configs_by_service = {}
-    envfiles_by_service = {}
+    config_paths_by_service = {}
+    env_paths_by_service = {}
+    all_config_paths = []
+    all_env_paths = []
     for service in SERVICES:
         _, labels = inspect_container(
             runner, live["containers"][service]["container_id"], service, root
         )
-        current_configs = ordered_label(
-            labels.get("com.docker.compose.project.config_files", "")
-        )
-        current_env = ordered_label(
-            labels.get("com.docker.compose.project.environment_file", "")
-        )
+        current_configs = [
+            _label_path(item, root)
+            for item in ordered_label(
+                labels.get("com.docker.compose.project.config_files", "")
+            )
+        ]
+        current_env = [
+            _label_path(item, root)
+            for item in ordered_label(
+                labels.get("com.docker.compose.project.environment_file", "")
+            )
+        ]
         if not current_configs:
             raise RecoveryError("compose_config_missing")
+        config_paths_by_service[service] = current_configs
+        env_paths_by_service[service] = current_env
+        all_config_paths.extend(current_configs)
+        all_env_paths.extend(current_env)
+
+    legacy_root = _legacy_source_root(all_config_paths, all_env_paths, root)
+    snapshot_dir = None
+    if legacy_root is not None:
+        if external_snapshot_dir is None:
+            raise RecoveryError("external_path_refused")
+        snapshot_dir = _private_snapshot_directory(external_snapshot_dir, root)
+
+    snapshot_cache = {}
+
+    def source_meta(path, kind):
+        if not _is_external(path, root):
+            return file_meta(path, root)
+        source = Path(os.path.abspath(path))
+        if source.parent.resolve(strict=True) != legacy_root:
+            raise RecoveryError("external_source_scope_refused")
+        cache_key = (kind, str(source).casefold())
+        if cache_key not in snapshot_cache:
+            snapshot_cache[cache_key] = _snapshot_external_source(
+                source, root, snapshot_dir, kind
+            )
+        return snapshot_cache[cache_key]
+
+    configs_by_service = {}
+    envfiles_by_service = {}
+    for service in SERVICES:
         configs_by_service[service] = [
-            file_meta(Path(item), root) for item in current_configs
+            source_meta(path, "compose")
+            for path in config_paths_by_service[service]
         ]
         envfiles_by_service[service] = [
-            file_meta(Path(item), root) for item in current_env
+            source_meta(path, "env") for path in env_paths_by_service[service]
         ]
     body = {
-        "schema": 3,
+        "schema": 4,
         "state": "captured",
         "host": live["host"],
         "environment": ENV,
@@ -338,6 +484,7 @@ def capture(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
         "services": live["containers"],
         "compose_files_by_service": configs_by_service,
         "environment_files_by_service": envfiles_by_service,
+        "legacy_sources_migrated": legacy_root is not None,
     }
     # Keep the schema-2 projection only when one ordered source really applies
     # to every service.  Older private manifests remain readable, while a

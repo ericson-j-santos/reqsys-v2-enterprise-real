@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import time
 import urllib.error
@@ -69,6 +71,7 @@ TEAMS_OVERRIDE = Path("config/pc24x7-teams-bot-runtime.override.yml")
 CLEAN_RUNTIME_DIRNAME = "wt-pc24x7-public-dev-governed"
 ADMIN_OVERRIDE_NAME = "docker-compose.admin-dev.override.yml"
 PAGES_OVERRIDE_NAME = "docker-compose.pages-stable.override.yml"
+RUNTIME_INPUTS_DIRNAME = ".reqsys-runtime-inputs"
 
 
 class ReconcileError(RuntimeError):
@@ -384,6 +387,120 @@ def _select_compose_files(
     return [path.resolve() for path in files]
 
 
+def _is_reparse(path: Path) -> bool:
+    attrs = getattr(path.lstat(), "st_file_attributes", 0)
+    return path.is_symlink() or bool(
+        attrs & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    )
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve(strict=True).relative_to(root.resolve(strict=True))
+    except ValueError:
+        return False
+    return True
+
+
+def _stage_runtime_input(source: Path, destination_dir: Path, kind: str) -> Path:
+    if _is_reparse(source) or not source.is_file():
+        raise ReconcileError("runtime_input_file_refused")
+    try:
+        payload = source.read_bytes()
+    except OSError:
+        raise ReconcileError("runtime_input_read_failed") from None
+    digest = hashlib.sha256(payload).hexdigest()
+    if kind == "compose":
+        bucket = destination_dir / digest
+        if bucket.exists() and (_is_reparse(bucket) or not bucket.is_dir()):
+            raise ReconcileError("runtime_input_directory_refused")
+        bucket.mkdir(mode=0o700, exist_ok=True)
+        destination = bucket / source.name
+    else:
+        destination = destination_dir / f"env-{digest}.env"
+    try:
+        if destination.exists():
+            if _is_reparse(destination) or destination.read_bytes() != payload:
+                raise ReconcileError("runtime_input_collision")
+        else:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+            descriptor = os.open(destination, flags, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+    except ReconcileError:
+        raise
+    except OSError:
+        raise ReconcileError("runtime_input_write_failed") from None
+    return destination.resolve()
+
+
+def _localize_runtime_inputs(
+    governed_root: Path,
+    config_files: list[Path],
+    env_files: list[Path],
+) -> tuple[list[Path], list[Path], int]:
+    governed_root = governed_root.resolve(strict=True)
+    external_configs = [
+        path.resolve(strict=True)
+        for path in config_files
+        if not _is_within(path, governed_root)
+    ]
+    external_env = [
+        path.resolve(strict=True)
+        for path in env_files
+        if not _is_within(path, governed_root)
+    ]
+    if not external_configs and not external_env:
+        return config_files, env_files, 0
+    if not external_configs:
+        raise ReconcileError("external_runtime_input_without_compose_anchor")
+
+    allowed = {ADMIN_OVERRIDE_NAME.casefold(), PAGES_OVERRIDE_NAME.casefold()}
+    source_roots = set()
+    for source in external_configs:
+        if source.name.casefold() not in allowed:
+            raise ReconcileError("external_compose_input_not_allowlisted")
+        if source.parent.parent != governed_root.parent or _is_reparse(source.parent):
+            raise ReconcileError("external_runtime_input_scope_refused")
+        source_roots.add(source.parent.resolve(strict=True))
+    if len(source_roots) != 1:
+        raise ReconcileError("external_runtime_input_root_ambiguous")
+    source_root = next(iter(source_roots))
+    for source in external_env:
+        if source.parent.resolve(strict=True) != source_root or _is_reparse(source):
+            raise ReconcileError("external_environment_input_scope_refused")
+
+    destination_dir = governed_root / RUNTIME_INPUTS_DIRNAME
+    if destination_dir.exists() and (
+        _is_reparse(destination_dir) or not destination_dir.is_dir()
+    ):
+        raise ReconcileError("runtime_input_directory_refused")
+    destination_dir.mkdir(mode=0o700, exist_ok=True)
+    cache: dict[tuple[str, str], Path] = {}
+
+    def localize(path: Path, kind: str) -> Path:
+        resolved = path.resolve(strict=True)
+        if _is_within(resolved, governed_root):
+            return resolved
+        if resolved.parent.resolve(strict=True) != source_root:
+            raise ReconcileError("external_runtime_input_scope_refused")
+        key = (kind, str(resolved).casefold())
+        if key not in cache:
+            cache[key] = _stage_runtime_input(resolved, destination_dir, kind)
+        return cache[key]
+
+    localized_configs = [localize(path, "compose") for path in config_files]
+    localized_env = [localize(path, "env") for path in env_files]
+    if any(
+        not _is_within(path, governed_root)
+        for path in (*localized_configs, *localized_env)
+    ):
+        raise ReconcileError("runtime_input_localization_failed")
+    return localized_configs, localized_env, len(cache)
+
+
 def _compose_base(
     runtime_root: Path,
     project: str,
@@ -665,6 +782,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         args.expected_sha,
     )
     config_files = _select_compose_files(governed_root, discovered_config_files)
+    config_files, env_files, localized_count = _localize_runtime_inputs(
+        governed_root,
+        config_files,
+        env_files,
+    )
+    sync["runtime_inputs_localized"] = localized_count
     credentials = _recreate_public_stack(
         governed_root,
         project,
