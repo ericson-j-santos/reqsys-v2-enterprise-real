@@ -558,12 +558,13 @@ def main() -> int:
             write_public_receipt(args.receipt_file, result)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except (CutoverBlocked, recovery.RecoveryError, OSError, subprocess.SubprocessError) as exc:
+    # Fail closed for unexpected operational/library errors without exposing details.
+    except Exception as exc:  # noqa: BLE001
         result = public_failure_receipt(exc)
         if args.receipt_file is not None:
             try:
                 write_public_receipt(args.receipt_file, result)
-            except (CutoverBlocked, OSError):
+            except Exception:  # noqa: BLE001
                 result = public_failure_receipt(RuntimeError("cutover_failure_unclassified"))
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 1
