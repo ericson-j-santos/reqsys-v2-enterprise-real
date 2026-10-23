@@ -22,6 +22,7 @@
     ".github/workflows/report-factory-fabric-dev-access-bootstrap.yml",
     ".github/workflows/report-factory-fabric-fic-bootstrap.yml",
     ".github/workflows/report-factory-fabric-fic-preflight.yml",
+    ".github/workflows/reqsys-dev-runner-pool-canary.yml",
     ".github/workflows/teams-bot-dev-provision.yml",
     ".github/workflows/todo-global-hourly-cycle.yml"
   ],
@@ -36,6 +37,7 @@
       ".github/workflows/noteri-study-mode-dev-reconcile.yml",
       ".github/workflows/ollama-ci-triage.yml",
       ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+      ".github/workflows/reqsys-dev-runner-pool-canary.yml",
       ".github/workflows/todo-global-hourly-cycle.yml"
     ],
     "forbidden_hostnames": ["DESKTOP-PDQK954"],

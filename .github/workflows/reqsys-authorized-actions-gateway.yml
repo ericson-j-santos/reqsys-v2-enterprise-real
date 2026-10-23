@@ -252,8 +252,8 @@ jobs:
               mode='alm-runner-bootstrap'
               ;;
             '/reqsys run desktop-runner-pickup-canary')
-              target='noteri-desktop-watchdog-recovery.yml'
-              mode='runner-canary'
+              target='reqsys-dev-runner-pool-canary.yml'
+              mode='runner-pool-canary'
               ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
@@ -578,6 +578,12 @@ jobs:
               -f mode=public-static \
               -f authorization_comment_id="$AUTHORIZED_COMMENT_ID" \
               -f expected_sha="$EXPECTED_SHA")"
+          elif [ "$TARGET_WORKFLOW" = "reqsys-dev-runner-pool-canary.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f expected_sha="$EXPECTED_SHA" \
+              -f authorization_comment_id="$AUTHORIZED_COMMENT_ID")"
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;

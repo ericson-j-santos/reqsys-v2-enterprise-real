@@ -14,6 +14,7 @@
     "scripts/validate_reqsys_dev_runner.py",
     "scripts/onboard_reqsys_dev_runner.ps1",
     ".github/actions/reqsys-dev-runner-preflight/action.yml",
+    ".github/workflows/reqsys-dev-runner-pool-canary.yml",
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
     "docs/runbooks/reqsys-dev-runner-pool.md"
   ],

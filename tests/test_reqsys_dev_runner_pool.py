@@ -16,6 +16,7 @@ PORTABLE = (
     ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     ".github/workflows/ollama-ci-triage.yml",
     ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    ".github/workflows/reqsys-dev-runner-pool-canary.yml",
     ".github/workflows/todo-global-hourly-cycle.yml",
 )
 
@@ -103,3 +104,18 @@ def test_onboarding_does_not_register_or_reconfigure_github_runner():
     assert "remove.cmd" not in raw
     assert "REQSYS_DEV_RUNNER_MANIFEST" in raw
     assert "reqsys-dev-pool-v1" not in raw  # labels come from the versioned policy
+
+
+def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
+    canary = (ROOT / ".github/workflows/reqsys-dev-runner-pool-canary.yml").read_text(encoding="utf-8")
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN" in canary
+    assert "authorization_comment_id" in canary
+    assert "expected_sha" in canary
+    assert "runtime_mutated = $false" in canary
+    assert "deploy_performed = $false" in canary
+    assert "production_touched = $false" in canary
+    assert "DESKTOP-PDQK954" not in canary
+    assert "target='reqsys-dev-runner-pool-canary.yml'" in gateway
+    assert "-f expected_sha=\"$EXPECTED_SHA\"" in gateway
+    assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway

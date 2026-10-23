@@ -86,6 +86,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "'/reqsys run noteri-alm-runner-bootstrap')" in content
     assert "mode='alm-runner-bootstrap'" in content
     assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap" in content
+    assert "target='reqsys-dev-runner-pool-canary.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "'/reqsys run report-builder-email-e2e-dev')" in content
     assert "mode='report-builder'" in content
@@ -438,7 +439,8 @@ def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -
 
     assert "github.event.comment.body == '/reqsys run desktop-runner-pickup-canary'" in content
     assert "'/reqsys run desktop-runner-pickup-canary')" in content
-    assert "mode='runner-canary'" in content
+    assert "mode='runner-pool-canary'" in content
+    assert "target='reqsys-dev-runner-pool-canary.yml'" in content
 
     assert "runner-bootstrap|runner-canary" in content
     assert '-f mode="$recovery_mode"' in content

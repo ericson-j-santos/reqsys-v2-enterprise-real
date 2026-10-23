@@ -18,6 +18,8 @@ O preflight exige `allowed_environments` exatamente igual a `['dev']` e as quatr
 
 Workflows de manutenção de equipamento que realmente têm um Desktop como alvo permanecem fora do contrato portável. Essa exceção não permite que um fluxo DEV portável volte a depender do equipamento.
 
+A adoção é faseada: a primeira entrega cobre o contrato, reconcile, gateway e canário do pool; a segunda migra probes/inventários sintéticos legados; a terceira reduz os workflows de recuperação aos únicos passos realmente host-bound; a quarta realiza onboarding e drenagem físicos sob autorização owner específica.
+
 ## Consequências
 
 - um PC novo só entra no pool depois do onboarding e preflight positivo;
