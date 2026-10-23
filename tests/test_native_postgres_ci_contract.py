@@ -96,8 +96,11 @@ class NativePostgresWorkflowContractTests(unittest.TestCase):
 
     def test_expected_job_names_and_gates_remain(self):
         source = WORKFLOW.read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r"^  ([a-z][a-z0-9-]+):$", source, re.MULTILINE), [
-            "workflow_dispatch", "push", "pull_request", "ci-admission", "ci-router",
+        marker = "\njobs:\n"
+        self.assertIn(marker, source)
+        jobs = source.split(marker, 1)[1]
+        self.assertEqual(re.findall(r"^  ([a-z][a-z0-9-]+):$", jobs, re.MULTILINE), [
+            "ci-admission", "ci-router",
             "ci-budget-guard", "backend-lint", "backend-test", "frontend-build",
             "frontend-e2e-responsive", "deploy-check-wrapper-powershell-51",
             "pipeline-governance", "ci-result",
