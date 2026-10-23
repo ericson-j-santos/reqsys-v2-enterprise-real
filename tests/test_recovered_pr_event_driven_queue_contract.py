@@ -49,3 +49,14 @@ def test_persistent_blocker_is_checkpointed_and_notified_without_fly() -> None:
     assert 'false &&' not in notify
     assert 'reqsys-api.fly.dev' not in notify
     assert 'REQSYS_LOG_STRICT: "true"' in notify
+
+
+def test_cancelled_pr_ci_watch_is_neutral_for_log_notification() -> None:
+    notify = read('.github/workflows/notify-teams-reqsys-logs.yml')
+    condition = notify.split('jobs:\n  notify:', 1)[1].split('    runs-on:', 1)[0]
+    assert "github.event.workflow_run.name == 'PR CI Watch'" in condition
+    assert "github.event.workflow_run.conclusion == 'failure'" in condition
+    assert "github.event.workflow_run.conclusion == 'timed_out'" in condition
+    assert "github.event.workflow_run.conclusion == 'action_required'" in condition
+    assert "github.event.workflow_run.conclusion != 'success'" not in condition
+    assert "github.event.workflow_run.conclusion == 'cancelled'" not in condition
