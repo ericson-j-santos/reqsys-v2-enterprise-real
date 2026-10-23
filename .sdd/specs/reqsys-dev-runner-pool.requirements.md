@@ -1,5 +1,7 @@
 # Requisitos — pool compartilhado de runners ReqSys DEV
 
+## Critérios de aceite
+
 - R1: workflows DEV portáveis não podem selecionar um hostname ou `runner_id` fixo.
 - R2: elegibilidade deve ser expressa por labels compartilhadas e manifesto local versionado por esquema.
 - R3: o preflight deve falhar fechado para OS, ferramentas, capacidade, origem Git, runtime root, identidade DEV e salvaguardas.

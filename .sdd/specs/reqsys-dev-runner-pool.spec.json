@@ -1,7 +1,13 @@
 {
   "schema_version": 1,
-  "name": "reqsys-dev-runner-pool",
-  "status": "implemented_for_review",
+  "feature_name": "ReqSys DEV runner pool by capability",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
   "environment": "dev",
   "files": [
     "config/reqsys-dev-runner-pool.json",
@@ -17,6 +23,18 @@
     "environment_mutated": false,
     "allowed_environments": ["dev"]
   },
+  "traceability": {
+    "requirements": ".sdd/specs/reqsys-dev-runner-pool.requirements.md",
+    "implementation": "scripts/validate_reqsys_dev_runner.py",
+    "tests": "tests/test_reqsys_dev_runner_pool.py"
+  },
+  "acceptance_criteria": [
+    "Portable DEV workflows use shared capability labels and a fail-closed preflight",
+    "No portable critical workflow depends on DESKTOP-PDQK954 or a fixed runner_id",
+    "Runtime root and evidence identity come from the validated local manifest",
+    "HML, STG, PROD and automatic retry remain disabled",
+    "Onboarding validation does not register or reconfigure the GitHub runner service"
+  ],
   "sdd_gate": {
     "tests": [
       "tests/test_reqsys_dev_runner_pool.py",
