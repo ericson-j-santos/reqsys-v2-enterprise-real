@@ -174,7 +174,6 @@ def test_not_parameters_alone_open_a_new_probe() -> None:
 
 
 def test_noteri_circuit_breaker_half_open_and_positive_recovery() -> None:
-    from datetime import datetime, timezone
 
     code, output = _run_preflight_case(history=[_prior_probe(minutes_ago=90)])
     assert code == 0 and output["blocked"] == "false"
