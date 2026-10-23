@@ -407,7 +407,7 @@ jobs:
             } catch {
               $reasonCode = 'prepare_failure_receipt_missing_or_invalid'
             }
-            $evidenceFile = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
+            $evidenceFile = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
             $evidenceDirectory = Split-Path -Parent $evidenceFile
             $directoryItem = Get-Item -LiteralPath $evidenceDirectory -Force
             $evidenceItem = Get-Item -LiteralPath $evidenceFile -Force

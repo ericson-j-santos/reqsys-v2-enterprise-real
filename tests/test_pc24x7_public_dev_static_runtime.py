@@ -575,6 +575,10 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "isolated_restore_verified -ne $true" in before
     assert "prepare_failure_receipt_missing_or_invalid" in before
     assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in before
+    assert "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE " \
+        "'artifacts\\pc24x7-public-dev\\evidence.json'" in before
+    assert "$evidenceFile = Join-Path $env:TARGET_PATH " \
+        "'artifacts\\pc24x7-public-dev\\evidence.json'" not in before
     assert "runtime_mutated = $false" in before
     assert "production_touched = $false" in before
 
@@ -652,6 +656,10 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "rollback_images_prepared -ne $true" in guard_step,
         "prepare_failure_receipt_missing_or_invalid" in guard_step,
         "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in guard_step,
+        "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE "
+        "'artifacts\\pc24x7-public-dev\\evidence.json'" in guard_step,
+        "$evidenceFile = Join-Path $env:TARGET_PATH "
+        "'artifacts\\pc24x7-public-dev\\evidence.json'" not in guard_step,
         "status = 'preflight_only'" in guard_step,
         "runtime_mutated = $false" in guard_step,
         "production_touched = $false" in guard_step,
