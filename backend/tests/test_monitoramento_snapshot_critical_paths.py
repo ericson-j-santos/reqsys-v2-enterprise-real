@@ -351,4 +351,3 @@ def test_estado_ci_verde_exige_sem_falhas_e_sem_execucoes():
     assert estado == 'verde'
     assert detalhes['modo'] == 'live'
     assert detalhes['falhas'] == 0
-
