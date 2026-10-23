@@ -28,10 +28,18 @@ All post-rollback identity, readiness and database checks remain mandatory.
 
 The fingerprint supplied by the operator is evidence external to the manifest.
 Recalculating a fingerprint inside a modified manifest cannot satisfy the gate.
-Prepared recovery state includes immutable private snapshots of the ordered Compose
-manifests and fixes Compose `--project-directory` to the canonical runtime root.
-Environment files stay in their original location and are never duplicated. This
-keeps rollback valid after a tracked-source fast-forward without copying secrets.
+Prepared recovery state includes immutable private snapshots of each service's
+ordered Compose manifests and fixes Compose `--project-directory` to the canonical
+runtime root. A partial, previously governed recreation can legitimately leave the
+API with a different ordered source chain from frontend and nginx; schema 4 seals
+those chains separately instead of flattening them. Rollback groups services only
+when their sources are identical and otherwise replays each exact chain. Normal
+captures keep environment files in their original internal location. The explicitly
+approved public DEV cutover may migrate a legacy env-file only when an allowlisted
+Compose override anchors one sibling checkout; the private copy is stored with mode
+`0600` under `.reqsys-recovery` and only its internal path, size and hash are sealed.
+This keeps rollback valid after a tracked-source fast-forward and removes the next
+runtime's dependency on the legacy checkout without exposing secret values.
 
 ## Rollback phases
 
@@ -70,10 +78,13 @@ terminal.
 ## Path and secret controls
 
 Paths are checked lexically for traversal and reparse points before canonical
-resolution. Compose config and env-file order must match across all three services.
-Env-file values are never read for execution or emitted; only file metadata is
-sealed. The durable override contains image tags only and must remain present while
-containers can reference it through Compose labels.
+resolution. Compose config and env-file order must be present and internally stable
+for each service; cross-service differences are preserved, never reordered or
+merged. Generic capture refuses external paths. The public DEV cutover exception is
+limited to the two named local overrides and env-files directly under that same
+sibling root; it never emits values or source paths. The durable override contains
+image tags only and must remain present while containers can reference it through
+Compose labels.
 
 ## Non-goals
 

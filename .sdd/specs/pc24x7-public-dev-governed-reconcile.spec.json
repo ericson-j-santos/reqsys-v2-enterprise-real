@@ -17,15 +17,15 @@
       "tests/test_pc24x7_public_dev_cutover_guard.py",
       "tests/test_provision_pc24x7_teams_bot_runtime.py"
     ],
-    "evidence_contract": "O reconcile public-static preserva o checkout DEV encontrado, usa worktree governado em SHA da main, materializa somente autorizacoes Risk3 especificas e temporarias sem ativar modo amplo, resolve a credencial Teams DEV por OIDC e Key Vault sem expor valor e valida runtime estatico no mesmo SHA. Falha do prepare sobrescreve a evidencia publica no GITHUB_WORKSPACE consumido pelo artifact; excecao inesperada vira motivo generico allowlisted sem detalhes privados."
+    "evidence_contract": "O reconcile public-static preserva o checkout DEV encontrado, usa worktree governado em SHA da main, materializa somente autorizacoes Risk3 especificas e temporarias sem ativar modo amplo, resolve a credencial Teams DEV por OIDC e Key Vault sem expor valor e valida runtime estatico no mesmo SHA. A transicao do runtime legado aceita somente os overrides locais allowlisted e env-files da mesma raiz irma, cria snapshots privados e executa o novo Compose exclusivamente com caminhos internos ao worktree governado. Falha do prepare sobrescreve a evidencia publica no GITHUB_WORKSPACE consumido pelo artifact e pode incluir somente scope_diagnostic_code estatico allowlisted quando reason_code=runtime_scope_invalid; falhas de I/O sao agregadas e excecao inesperada vira motivo generico sem paths, stderr ou detalhes privados."
   },
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-public-dev-governed-reconcile.requirements.md",
     "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py + scripts/pc24x7_public_dev_cutover_guard.py",
     "workflow": ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     "regression_tests": "tests/test_pc24x7_public_dev_static_runtime.py",
-    "failed_run": "39957492724",
-    "gap_reference": "OPS-GAP-PC24X7-PREPARE-EVIDENCE-WORKSPACE"
+    "failed_run": "39983597247",
+    "gap_reference": "OPS-GAP-PC24X7-RUNTIME-SCOPE-DIAGNOSTIC"
   },
   "risk": {
     "production": false,
@@ -44,7 +44,9 @@
     "O proxy TODO events preserva o sufixo de caminho e a query ao encaminhar uma rota runtime-core permitida.",
     "Cada mutacao Risk3 usa uma autorizacao DEV especifica, de curta duracao, vinculada ao SHA, script e argumentos exatos; o owner gateway nao aceita override ad-hoc e o modo amplo nao e alterado.",
     "Falha no prepare persiste apenas um reason_code publico allowlisted e flags negativas; recibo ausente, extra, malformado ou fora da allowlist usa fallback generico, preserva a evidencia preflight e bloqueia antes de OIDC ou deploy.",
+    "Quando reason_code for runtime_scope_invalid, o recibo pode propagar somente um scope_diagnostic_code estatico allowlisted; para qualquer outro motivo o valor deve ser not_applicable.",
     "O handler de falha do prepare sobrescreve o mesmo evidence.json no GITHUB_WORKSPACE consumido pelo upload; TARGET_PATH nao e usado para o artifact publico e excecao inesperada persiste cutover_failure_unclassified sem detalhes.",
+    "A migracao aceita somente os overrides locais allowlisted e env-files da mesma raiz irma, persiste snapshots privados e faz o Compose seguinte registrar apenas paths internos ao worktree governado.",
     "Somente api, frontend e nginx DEV sao recriados; HML e PROD permanecem fora de escopo.",
     "Health, readiness, build-info, frontend estatico e controle negativo de Vite validam o SHA exato antes de publicar o locator."
   ]

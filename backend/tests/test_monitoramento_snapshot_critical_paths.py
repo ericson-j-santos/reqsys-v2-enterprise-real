@@ -149,15 +149,16 @@ def test_estado_govbi_verde_quando_actuator_confirma_up(mock_client_cls):
 
 
 @pytest.mark.parametrize(
-    ('response', 'motivo'),
+    ('body', 'motivo'),
     [
-        (httpx.Response(200, stream=httpx.ByteStream(b'not-json')), 'resposta_json_invalida'),
-        (httpx.Response(200, stream=httpx.ByteStream(b'{"status":"DOWN"}')), 'contrato_health_invalido'),
-        (httpx.Response(200, stream=httpx.ByteStream(b'["UP"]')), 'contrato_health_invalido'),
+        (b'not-json', 'resposta_json_invalida'),
+        (b'{"status":"DOWN"}', 'contrato_health_invalido'),
+        (b'["UP"]', 'contrato_health_invalido'),
     ],
 )
 @patch('app.services.monitoramento_snapshot.httpx.AsyncClient')
-def test_estado_govbi_rejeita_resposta_200_fora_do_contrato(mock_client_cls, response, motivo):
+def test_estado_govbi_rejeita_resposta_200_fora_do_contrato(mock_client_cls, body, motivo):
+    response = httpx.Response(200, stream=httpx.ByteStream(body))
     mock_client = _stream_client(response)
     mock_client_cls.return_value = mock_client
 

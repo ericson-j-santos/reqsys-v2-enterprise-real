@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "tool": "mutmut",
+  "tool_version": "3.8.0",
+  "scope": "backend/app/core/*",
+  "baseline": {
+    "source_run_id": 39962908518,
+    "source_sha": "4fa7f66e387c806ccfc73a3c196fc703af829398"
+  },
+  "max_counts": {
+    "survived": 591,
+    "no tests": 5827,
+    "timeout": 0,
+    "suspicious": 0
+  }
+}

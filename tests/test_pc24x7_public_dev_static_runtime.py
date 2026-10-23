@@ -217,6 +217,60 @@ def test_compose_plan_uses_governed_sources_and_only_safe_local_overrides(
     assert pages in selected
 
 
+def test_external_runtime_inputs_are_snapshotted_inside_governed_root(
+    tmp_path: Path,
+) -> None:
+    module = _load()
+    governed = tmp_path / "governed"
+    legacy = tmp_path / "legacy"
+    governed.mkdir()
+    legacy.mkdir()
+    base = governed / "docker-compose.yml"
+    admin = legacy / module.ADMIN_OVERRIDE_NAME
+    env = legacy / ".env"
+    base.write_text("services: {}\n", encoding="utf-8")
+    admin.write_text("services: {}\n", encoding="utf-8")
+    env.write_text("PRIVATE_VALUE=not-logged\n", encoding="utf-8")
+
+    configs, envs, count = module._localize_runtime_inputs(
+        governed,
+        [base, admin],
+        [env],
+    )
+
+    assert count == 2
+    assert configs[0] == base.resolve()
+    assert configs[1].parent.parent == governed / module.RUNTIME_INPUTS_DIRNAME
+    assert configs[1].name == module.ADMIN_OVERRIDE_NAME
+    assert envs[0].parent == governed / module.RUNTIME_INPUTS_DIRNAME
+    assert configs[1].read_bytes() == admin.read_bytes()
+    assert envs[0].read_bytes() == env.read_bytes()
+    assert all(
+        path.is_relative_to(governed)
+        for path in (*configs, *envs)
+    )
+
+
+def test_external_environment_without_allowlisted_compose_anchor_is_refused(
+    tmp_path: Path,
+) -> None:
+    module = _load()
+    governed = tmp_path / "governed"
+    legacy = tmp_path / "legacy"
+    governed.mkdir()
+    legacy.mkdir()
+    base = governed / "docker-compose.yml"
+    env = legacy / ".env"
+    base.write_text("services: {}\n", encoding="utf-8")
+    env.write_text("PRIVATE_VALUE=not-logged\n", encoding="utf-8")
+
+    with pytest.raises(
+        module.ReconcileError,
+        match="external_runtime_input_without_compose_anchor",
+    ):
+        module._localize_runtime_inputs(governed, [base], [env])
+
+
 def test_recreate_resolves_teams_secret_only_in_child_environment(
     monkeypatch,
     tmp_path: Path,
@@ -575,6 +629,8 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "isolated_restore_verified -ne $true" in before
     assert "prepare_failure_receipt_missing_or_invalid" in before
     assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in before
+    assert "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in before
+    assert "scope_diagnostic_code = $scopeDiagnosticCode" in before
     assert "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE " \
         "'artifacts\\pc24x7-public-dev\\evidence.json'" in before
     assert "$evidenceFile = Join-Path $env:TARGET_PATH " \
@@ -656,6 +712,8 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "rollback_images_prepared -ne $true" in guard_step,
         "prepare_failure_receipt_missing_or_invalid" in guard_step,
         "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in guard_step,
+        "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in guard_step,
+        "scope_diagnostic_code = $scopeDiagnosticCode" in guard_step,
         "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE "
         "'artifacts\\pc24x7-public-dev\\evidence.json'" in guard_step,
         "$evidenceFile = Join-Path $env:TARGET_PATH "

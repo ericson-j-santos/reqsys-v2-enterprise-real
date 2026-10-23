@@ -1,6 +1,6 @@
 """Testes de caminhos críticos — figma_github_sync."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.models.integracao_figma_github import IntegracaoFigmaGithub
 from app.services import figma_github_sync as sync
@@ -112,9 +112,10 @@ def test_sync_figma_to_github_cria_issue(mock_create_issue, mock_comments, db_se
     mock_create_issue.assert_called_once()
 
 
-@patch('app.services.figma_github_sync.figma_client.get_comments', return_value=[])
+@patch('app.services.figma_github_sync.figma_client.get_comments')
 @patch('app.services.figma_github_sync.figma_client.create_comment')
 def test_sync_github_to_figma_atualiza_link(mock_create_comment, mock_get_comments, db_session):
+    mock_get_comments.return_value = []
     link = IntegracaoFigmaGithub(
         figma_file_key='fk',
         figma_node_id='1:1',
@@ -192,8 +193,9 @@ def test_sync_figma_to_github_registra_warning_quando_create_issue_falha(mock_co
     assert any('github down' in warning for warning in result.warnings)
 
 
-@patch('app.services.figma_github_sync.figma_client.get_comments', return_value=[])
+@patch('app.services.figma_github_sync.figma_client.get_comments')
 def test_sync_figma_to_github_sem_dev_resources(mock_comments, db_session):
+    mock_comments.return_value = []
     result = sync.sync_figma_to_github(
         db_session,
         file_key='fk',
@@ -219,9 +221,10 @@ def test_sync_github_to_figma_pula_sem_issue_number(db_session):
     assert result.skipped == 1
 
 
-@patch('app.services.figma_github_sync.figma_client.get_comments', return_value=[])
+@patch('app.services.figma_github_sync.figma_client.get_comments')
 @patch('app.services.figma_github_sync.figma_client.create_comment', side_effect=RuntimeError('figma down'))
 def test_sync_github_to_figma_registra_warning_quando_comentario_falha(mock_comment, mock_get_comments, db_session):
+    mock_get_comments.return_value = []
     link = IntegracaoFigmaGithub(
         figma_file_key='fk',
         figma_node_id='1:1',

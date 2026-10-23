@@ -71,9 +71,20 @@ python -B scripts/dev_runtime_recovery.py rollback \
 ## Stop conditions
 
 Stop without improvising if host/root/project identity differs, service cardinality
-is ambiguous, ordered Compose metadata differs between services, a reparse point is
-found, a deterministic tag points to another image, evidence fingerprint differs,
-readiness reaches its deadline, or the sanitized database probe fails.
+is ambiguous, any service lacks an ordered Compose source, a source changes after
+capture, a reparse point is found, a deterministic tag points to another image,
+evidence fingerprint differs, readiness reaches its deadline, or the sanitized
+database probe fails. Ordered sources may differ between services after a governed
+partial recreation; schema 4 preserves and replays each chain separately. Generic
+capture continues to refuse external paths. Only the public DEV cutover wrapper may
+snapshot the two allowlisted legacy overrides and same-root env-files into private
+storage before mutation.
+
+Quando essa migração é bloqueada, a evidência pública pode expor somente um código
+estático allowlisted para a regra de escopo violada (por exemplo, raiz ambígua,
+override fora da allowlist ou env-file fora da mesma raiz). Paths, nomes de arquivos
+de ambiente, stderr e conteúdo permanecem privados. Falhas de I/O são agregadas em
+categorias públicas e não carregam detalhe operacional.
 
 Do not delete `.reqsys-recovery` while containers reference its override. Do not
 retag, rebuild, recreate, or prune images outside the reviewed command sequence.

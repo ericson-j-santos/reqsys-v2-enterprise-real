@@ -44,6 +44,7 @@ ROLLBACK_CONFIRM = "ROLLBACK-PC24X7-PUBLIC-DEV-CUTOVER"
 PUBLIC_RECEIPT_KEYS = {
     "status",
     "reason_code",
+    "scope_diagnostic_code",
     "fingerprint",
     "backup_verified",
     "isolated_restore_verified",
@@ -60,6 +61,14 @@ PUBLIC_FAILURE_REASON_MAP = {
     "runtime_root_invalid": "runtime_scope_invalid",
     "root_reparse_refused": "runtime_scope_invalid",
     "external_path_refused": "runtime_scope_invalid",
+    "external_source_parent_refused": "runtime_scope_invalid",
+    "external_compose_not_allowlisted": "runtime_scope_invalid",
+    "external_source_scope_refused": "runtime_scope_invalid",
+    "external_source_file_refused": "runtime_scope_invalid",
+    "external_source_root_ambiguous": "runtime_scope_invalid",
+    "external_environment_scope_refused": "runtime_scope_invalid",
+    "external_snapshot_scope_refused": "runtime_scope_invalid",
+    "external_snapshot_dir_refused": "runtime_scope_invalid",
     "traversal_refused": "runtime_scope_invalid",
     "link_refused": "runtime_scope_invalid",
     "non_file_refused": "runtime_scope_invalid",
@@ -96,6 +105,9 @@ PUBLIC_FAILURE_REASON_MAP = {
     "scope_refused": "recovery_source_invalid",
     "runtime_root_mismatch": "recovery_source_invalid",
     "runtime_sha_invalid": "recovery_source_invalid",
+    "external_source_read_failed": "recovery_source_invalid",
+    "external_snapshot_collision": "recovery_source_invalid",
+    "external_snapshot_write_failed": "private_recovery_storage_failed",
     "rollback_tag_missing": "rollback_image_prepare_failed",
     "rollback_tag_collision": "rollback_image_prepare_failed",
     "recovery_dir_refused": "rollback_image_prepare_failed",
@@ -125,6 +137,28 @@ PUBLIC_FAILURE_REASON_MAP = {
 PUBLIC_FAILURE_REASON_CODES = frozenset(PUBLIC_FAILURE_REASON_MAP.values()) | {
     "cutover_failure_unclassified",
 }
+PUBLIC_SCOPE_DIAGNOSTIC_CODES = frozenset({
+    "host_identity_refused",
+    "runtime_root_invalid",
+    "root_reparse_refused",
+    "external_path_refused",
+    "external_source_parent_refused",
+    "external_compose_not_allowlisted",
+    "external_source_scope_refused",
+    "external_source_file_refused",
+    "external_source_root_ambiguous",
+    "external_environment_scope_refused",
+    "external_snapshot_scope_refused",
+    "external_snapshot_dir_refused",
+    "traversal_refused",
+    "link_refused",
+    "non_file_refused",
+    "compose_identity_mismatch",
+    "working_dir_mismatch",
+    "database_working_dir_invalid",
+    "database_working_dir_mismatch",
+    "not_applicable",
+})
 MAX_DUMP_BYTES = 512 * 1024 * 1024
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CORRELATION = re.compile(r"[a-z0-9][a-z0-9-]{7,139}\Z")
@@ -390,9 +424,21 @@ def prepare(expected_sha: str, correlation_id: str, manifest_path: Path, *, root
     expected_sha = expected_sha.lower()
     if not SHA40.fullmatch(expected_sha):
         raise CutoverBlocked("expected_sha_invalid")
+    if not CORRELATION.fullmatch(correlation_id):
+        raise CutoverBlocked("correlation_id_invalid")
     recovery.observed_scope(hostname or socket.gethostname())
     runner = runner or recovery.SubprocessRunner()
-    captured = recovery.capture(runner, root=root, hostname=HOST)
+    external_snapshot_dir = (
+        root
+        / ".reqsys-recovery"
+        / f"public-dev-{correlation_id}.runtime-sources"
+    )
+    captured = recovery.capture(
+        runner,
+        root=root,
+        hostname=HOST,
+        external_snapshot_dir=external_snapshot_dir,
+    )
     prepared = recovery.prepare(captured, runner, captured["fingerprint"], root)
     db = _unique_container(DB_SERVICE)
     db_image = _db_identity(db, root)
@@ -517,9 +563,16 @@ def public_failure_receipt(exc: Exception) -> dict[str, Any]:
     reason_code = PUBLIC_FAILURE_REASON_MAP.get(raw_code, "cutover_failure_unclassified")
     if reason_code not in PUBLIC_FAILURE_REASON_CODES:
         reason_code = "cutover_failure_unclassified"
+    scope_diagnostic_code = (
+        raw_code
+        if reason_code == "runtime_scope_invalid"
+        and raw_code in PUBLIC_SCOPE_DIAGNOSTIC_CODES
+        else "not_applicable"
+    )
     return {
         "status": "blocked",
         "reason_code": reason_code,
+        "scope_diagnostic_code": scope_diagnostic_code,
         "backup_verified": False,
         "isolated_restore_verified": False,
         "rollback_images_prepared": False,

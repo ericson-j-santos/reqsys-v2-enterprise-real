@@ -1,16 +1,7 @@
 """Caminhos críticos — serviço ai_quality."""
 
-import os
-
-import pytest
-
-os.environ.setdefault('APP_ENV', 'test')
-os.environ.setdefault('DATABASE_URL', 'sqlite:///./test_reqsys_ai_quality.db')
-os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length')
-
 from datetime import datetime, timedelta, timezone
 
-from app.db import Base, SessionLocal, engine
 from app.models.auditoria import AuditoriaEvento
 from app.models.requisito import Requisito
 from app.services.ai_quality import (
@@ -24,12 +15,6 @@ from app.services.ai_quality import (
 )
 
 
-@pytest.fixture(scope='module', autouse=True)
-def _setup_db():
-    Base.metadata.create_all(bind=engine)
-    yield
-
-
 def test_safe_pct_e_clip_limites():
     assert _safe_pct(0, 0) == 0.0
     assert _safe_pct(2, 4) == 50.0
@@ -37,8 +22,8 @@ def test_safe_pct_e_clip_limites():
     assert _clip(-5) == 0.0
 
 
-def test_calcular_resumo_qualidade_ia_com_requisitos_e_incidentes():
-    db = SessionLocal()
+def test_calcular_resumo_qualidade_ia_com_requisitos_e_incidentes(db_session):
+    db = db_session
     codigos = ['REQ-AI-001', 'REQ-AI-002']
     try:
         db.query(AuditoriaEvento).filter(AuditoriaEvento.correlation_id == 'corr-ai-quality').delete()
@@ -91,11 +76,10 @@ def test_calcular_resumo_qualidade_ia_com_requisitos_e_incidentes():
         db.query(AuditoriaEvento).filter(AuditoriaEvento.correlation_id == 'corr-ai-quality').delete()
         db.query(Requisito).filter(Requisito.codigo.in_(codigos)).delete()
         db.commit()
-        db.close()
 
 
-def test_calcular_resumo_qualidade_ia_recomendacao_manutencao_quando_saudavel():
-    db = SessionLocal()
+def test_calcular_resumo_qualidade_ia_recomendacao_manutencao_quando_saudavel(db_session):
+    db = db_session
     codigos = [f'REQ-AI-OK-{idx}' for idx in range(3)]
     try:
         db.query(Requisito).filter(Requisito.codigo.in_(codigos)).delete()
@@ -123,11 +107,10 @@ def test_calcular_resumo_qualidade_ia_recomendacao_manutencao_quando_saudavel():
     finally:
         db.query(Requisito).filter(Requisito.codigo.in_(codigos)).delete()
         db.commit()
-        db.close()
 
 
-def test_registrar_snapshot_e_exportacoes():
-    db = SessionLocal()
+def test_registrar_snapshot_e_exportacoes(db_session):
+    db = db_session
     codigo = 'REQ-AI-SNAPSHOT-001'
     try:
         db.query(Requisito).filter(Requisito.codigo == codigo).delete()
@@ -163,4 +146,3 @@ def test_registrar_snapshot_e_exportacoes():
     finally:
         db.query(Requisito).filter(Requisito.codigo == codigo).delete()
         db.commit()
-        db.close()

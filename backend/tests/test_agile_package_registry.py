@@ -1,3 +1,6 @@
+from uuid import uuid4
+
+
 def _payload() -> dict:
     return {
         'titulo': 'Planejar sprint Scrum e backlog Kanban do projeto',
@@ -13,11 +16,18 @@ def _payload() -> dict:
     }
 
 
+def _unique_payload() -> dict:
+    payload = _payload()
+    payload['titulo'] = f"{payload['titulo']} [{uuid4().hex}]"
+    return payload
+
+
 def test_orchestrator_persiste_pacote_agile_idempotente(client):
     headers = {'X-Correlation-ID': 'corr-agile-registry-001'}
+    payload = _unique_payload()
 
-    first = client.post('/v1/agents/orchestrator/route', json=_payload(), headers=headers)
-    second = client.post('/v1/agents/orchestrator/route', json=_payload(), headers=headers)
+    first = client.post('/v1/agents/orchestrator/route', json=payload, headers=headers)
+    second = client.post('/v1/agents/orchestrator/route', json=payload, headers=headers)
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -47,7 +57,11 @@ def test_orchestrator_persiste_pacote_agile_idempotente(client):
 
 def test_lista_pacotes_agile_por_correlation_id(client):
     headers = {'X-Correlation-ID': 'corr-agile-registry-list'}
-    response = client.post('/v1/agents/orchestrator/route', json=_payload(), headers=headers)
+    response = client.post(
+        '/v1/agents/orchestrator/route',
+        json=_unique_payload(),
+        headers=headers,
+    )
     assert response.status_code == 200
     assert response.json()['data']['tema'] == 'agile_scrum'
 

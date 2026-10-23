@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from base64 import b64decode, b64encode
+from uuid import uuid4
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
@@ -656,7 +657,7 @@ class TestCofreVerificar:
         self._setup(monkeypatch)
         db = SessionLocal()
         try:
-            token = 'token-verificar-escopado'
+            token = f'token-verificar-escopado-{uuid4().hex}'
             db.add(VaultToken(
                 label='verificador',
                 token_hash=_hash_token(token),
