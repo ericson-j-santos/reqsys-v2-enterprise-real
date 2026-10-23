@@ -11,9 +11,10 @@ os.environ.setdefault('APP_ENV', 'test')
 os.environ.setdefault('DATABASE_URL', f'sqlite:///{_DB_PATH.as_posix()}')
 os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length')
 
-from app.db import Base, SessionLocal, engine
-from app.models.copilot_memory import CopilotMemoryHistory, CopilotMemoryRecord
-from app.services import copilot_memory as svc
+from app.db import Base, SessionLocal, engine  # noqa: E402 -- env must precede app.db
+from app.models.copilot_memory import CopilotMemoryHistory  # noqa: E402
+from app.services import copilot_memory as svc  # noqa: E402
+
 
 @pytest.fixture(scope='module', autouse=True)
 def _setup_db():
