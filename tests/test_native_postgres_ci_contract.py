@@ -130,6 +130,7 @@ class NativePostgresWorkflowContractTests(unittest.TestCase):
         self.assertIn('os.geteuid() != 0', source)
         self.assertIn('ready_exit == 2 and sql_exit == 2', source)
         self.assertIn('160000 <= int(fields[1]) < 170000', source)
+        self.assertNotIn("::add-mask::", source)
 
 
 if __name__ == "__main__":

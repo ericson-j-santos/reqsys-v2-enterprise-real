@@ -210,7 +210,8 @@ class NativePostgresUnitTests(unittest.TestCase):
             state = pg.load_state(self.state_path)
             root = Path(state["root"])
             password = (root / "pgpass").read_text().strip().split(":")[-1]
-            self.assertIn("::add-mask::" + password, output.getvalue())
+            self.assertEqual(output.getvalue(), "")
+            self.assertNotIn(password, output.getvalue())
             self.assertFalse((root / "init-password").exists())
             self.assertEqual(stat.S_IMODE(root.stat().st_mode), 0o700)
             self.assertEqual(stat.S_IMODE((root / "socket").stat().st_mode), 0o700)
@@ -231,9 +232,10 @@ class NativePostgresUnitTests(unittest.TestCase):
                 patch.object(pg, "free_port", return_value=54321), \
                 patch.object(pg, "command", side_effect=pg.FixtureError("initdb_failed_exit_1")), \
                 patch.object(pg, "is_ready", return_value=2), \
-                contextlib.redirect_stdout(io.StringIO()):
+                contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaisesRegex(pg.FixtureError, "initdb_failed_exit_1"):
                 pg.create(self.state_path, self.env_file)
+        self.assertEqual(output.getvalue(), "")
         self.assertFalse(self.state_path.exists())
         self.assertEqual(list(self.temp.glob("reqsys-pg16-*")), [])
 

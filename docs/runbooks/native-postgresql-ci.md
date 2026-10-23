@@ -21,8 +21,9 @@ pacote e não inicia o serviço global do sistema.
 1. Executar unittest offline do helper e do contrato.
 2. Preservar instalação ODBC/Python e verificação anti-mojibake.
 3. Criar PGDATA/socket aleatórios 0700 em RUNNER_TEMP e arquivos privados 0600.
-4. Registrar somente a máscara da senha no canal de comandos do Actions;
-   autenticar por pgpass. DATABASE_URL não contém a senha.
+4. Gerar a senha apenas em memória e mantê-la em arquivos privados 0600;
+   autenticar por pgpass, sem emitir senha ou comandos de máscara nos logs.
+   DATABASE_URL não contém a senha.
 5. Iniciar apenas o cluster próprio e confirmar identidade, SELECT 1 e versão.
 6. Rejeitar senha incorreta por autenticação, escrever marcador, ler por outra conexão, parar, exigir falhas reais de
    conexão/probe, reiniciar e reler o marcador persistido.
@@ -30,7 +31,8 @@ pacote e não inicia o serviço global do sistema.
 8. Finalizar pelo trap; repetir cleanup idempotente em always.
 9. Publicar somente artifacts preexistentes e recibo sanitizado.
 
-A senha não vai para GITHUB_ENV, outputs, argumentos, URL ou artifact.
+A senha não vai para stdout/stderr do helper, comandos do Actions,
+GITHUB_ENV, outputs, argumentos, URL ou artifact.
 `PGPASSFILE` aponta para arquivo privado temporário; ele e o cluster são
 removidos no cleanup. Os testes unitários existentes que usam SQLite não são
 convertidos e não devem ser apresentados como testes PostgreSQL.

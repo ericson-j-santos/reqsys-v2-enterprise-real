@@ -286,7 +286,7 @@ def create(state_path: Path, env_file: Path) -> None:
         sock.mkdir(mode=0o700)
         require(len(os.fsencode(sock)) + 20 < 108, "unix_socket_path_too_long")
         password = secrets.token_hex(32)
-        print("::add-mask::" + password, flush=True)
+        # The password stays exclusively in private files; never emit it to CI logs.
         private_file(root / "init-password", password + "\n")
         private_file(root / "pgpass", f"127.0.0.1:{state['port']}:*:{USER}:{password}\n")
         del password
