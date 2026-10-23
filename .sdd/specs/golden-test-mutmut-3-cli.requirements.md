@@ -24,7 +24,9 @@ comando.
 14. Cenários parametrizados de monitoramento GovBI devem construir uma resposta HTTP nova por execução, sem reutilizar streams consumidos ou fechados.
 15. O teste do worker operacional deve usar correlação e chave idempotente exclusivas por execução para sempre enfileirar uma nova tarefa.
 16. Os testes de publicação Planner devem gerar `source_id` e chaves idempotentes exclusivas por invocação de teste, inclusive quando a suíte limpa é repetida no mesmo processo.
-17. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
+17. O resultado real de mutação deve ser comparado com um baseline versionado que bloqueie aumento de sobreviventes, ausência de testes, timeouts ou resultados suspeitos.
+18. O gate deve produzir um resumo JSON auditável e preservar a listagem completa do Mutmut como artefato.
+19. O ajuste não deve executar deploy, alterar ambientes, acessar segredos ou realizar merge.
 
 ## Critérios de aceite
 
@@ -37,7 +39,8 @@ comando.
 - `backend/tests/test_monitoramento_snapshot_critical_paths.py` passa quando executado duas vezes no mesmo processo sem reaproveitar respostas HTTP consumidas.
 - `backend/tests/test_operational_worker.py` passa quando executado duas vezes no mesmo processo sem reaproveitar uma tarefa já concluída.
 - `backend/tests/test_planner_publish_service.py` passa quando executado duas vezes no mesmo processo sem reutilizar tentativas persistidas.
+- `tests/test_mutation_quality_gate.py` prova que o baseline atual passa e qualquer regressão acima do teto falha.
 - O carregador de configuração do Mutmut 3.8.0 reconhece `source_paths`, `only_mutate` e `pytest_add_cli_args_test_selection`.
+- O workflow publica `mutation-results.txt` e `mutation-quality-summary.json`, usando como baseline inicial o run `39962908518` no SHA `4fa7f66e387c806ccfc73a3c196fc703af829398`.
 - O Pre-PR Readiness admite o SHA final sem bloqueio `SDD_SPEC_REQUIRED`.
 - O workflow `Golden Test Advanced` conclui com sucesso no GitHub Actions para o SHA final.
-
