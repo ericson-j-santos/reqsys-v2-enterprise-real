@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Golden Test compatível com Mutmut 3.8",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_golden_test_advanced_contract.py"
+    ],
+    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada e mantém o escopo de mutação em backend/app/core por configuração versionada no pyproject.toml."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/golden-test-advanced.yml",
+    "configuration": "backend/pyproject.toml",
+    "pull_request": "3068"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}
