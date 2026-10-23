@@ -286,4 +286,3 @@ def test_reprocessar_tentativa_inexistente():
             _run(svc.reprocessar_tentativa(db, 999999, 'corr-inexistente'))
     finally:
         db.close()
-
