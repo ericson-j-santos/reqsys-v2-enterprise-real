@@ -35,4 +35,3 @@ async def test_worker_run_once_processes_generic_task():
 async def test_worker_run_once_returns_false_when_queue_is_empty():
     processed = await operational_worker.run_once()
     assert processed is False
-
