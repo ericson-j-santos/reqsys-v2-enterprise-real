@@ -14,6 +14,7 @@ from app.services.ai_quality import (
     registrar_snapshot_qualidade_ia,
 )
 
+
 def test_safe_pct_e_clip_limites():
     assert _safe_pct(0, 0) == 0.0
     assert _safe_pct(2, 4) == 50.0
