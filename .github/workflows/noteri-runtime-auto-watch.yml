@@ -2,6 +2,12 @@ name: Noteri Runtime Auto Watch
 
 on:
   workflow_dispatch:
+    inputs:
+      probe_after_change:
+        description: 'Um probe após mudança material comprovada no host, somente pelo owner'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '*/10 * * * *'
 
@@ -35,7 +41,8 @@ jobs:
           test -n "$sha"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
-      # Reuse a pending job rather than dispatch every 10 minutes while the runner is unavailable.
+      # An active probe is reused; a terminal no-pickup result opens a bounded circuit breaker.
+      # The hourly half-open probe is the only automatic retry while the host state is unchanged.
       - name: Avoid duplicate active Noteri probe
         id: preflight
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
@@ -57,13 +64,68 @@ jobs:
             const existing = active[0];
             if (existing) {
               core.setOutput('blocked', 'true');
+              core.setOutput('block_reason', 'existing_probe_active');
               core.setOutput('run_id', String(existing.id));
               core.setOutput('run_url', String(existing.html_url));
               core.setOutput('head_sha', String(existing.head_sha));
               core.setOutput('status', String(existing.status));
               core.info(`Existing active Noteri probe ${existing.id}; dispatch suppressed`);
             } else {
-              core.setOutput('blocked', 'false');
+              // No new physical effect: suppress the ten-minute dispatch storm.
+              // Read only GitHub's trusted run/job records, never logs or private host data.
+              const { data: history } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: process.env.TARGET_WORKFLOW,
+                status: 'completed',
+                per_page: 30,
+              });
+              const recent = (history.workflow_runs || [])
+                .filter(run => run.event === 'workflow_dispatch' && run.head_branch === 'main')
+                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+              const latest = recent[0];
+              const ownerRecoverySignal = context.eventName === 'workflow_dispatch'
+                && context.actor === 'ericson-j-santos'
+                && String(context.payload.inputs?.probe_after_change || '').toLowerCase() === 'true';
+              const cooldownMs = 60 * 60 * 1000;
+              let defer = false;
+              if (latest && !ownerRecoverySignal) {
+                const timestamp = Date.parse(latest.created_at);
+                if (!Number.isFinite(timestamp) || timestamp > Date.now()) {
+                  throw new Error('NOTERI_PROBE_TIMESTAMP_UNTRUSTED');
+                }
+                if (Date.now() - timestamp < cooldownMs) {
+                  const { data: detail } = await github.rest.actions.listJobsForWorkflowRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: latest.id,
+                    filter: 'latest',
+                    per_page: 100,
+                  });
+                  const pickedUp = (detail.jobs || []).some(job =>
+                    Number.isSafeInteger(job.runner_id)
+                    && job.runner_id > 0
+                    && typeof job.runner_name === 'string'
+                    && job.runner_name.trim().length > 0
+                    && Boolean(job.started_at)
+                  );
+                  defer = !pickedUp;
+                }
+              }
+              if (defer) {
+                core.setOutput('blocked', 'true');
+                core.setOutput('block_reason', 'runner_unavailable_cooldown');
+                core.setOutput('run_id', String(latest.id));
+                core.setOutput('run_url', String(latest.html_url));
+                core.setOutput('head_sha', String(latest.head_sha));
+                core.setOutput('status', String(latest.status));
+                core.setOutput('conclusion', String(latest.conclusion || 'unknown'));
+                core.info(`Noteri probe ${latest.id} had no physical pickup; cooldown active`);
+              } else {
+                core.setOutput('blocked', 'false');
+                core.setOutput('block_reason', '');
+                if (ownerRecoverySignal) core.info('Owner attested a changed host precondition; one probe admitted');
+              }
             }
       - name: Dispatch fixed Noteri probe
         if: steps.preflight.outputs.blocked != 'true'
@@ -218,9 +280,9 @@ jobs:
         id: monitor
         shell: bash
         env:
-          PICKUP_STATE: ${{ steps.preflight.outputs.blocked == 'true' && 'existing_probe_active' || steps.pickup.outputs.state }}
+          PICKUP_STATE: ${{ steps.preflight.outputs.block_reason || steps.pickup.outputs.state }}
           PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status || steps.preflight.outputs.status }}
-          PICKUP_CONCLUSION: ${{ steps.pickup.outputs.conclusion }}
+          PICKUP_CONCLUSION: ${{ steps.pickup.outputs.conclusion || steps.preflight.outputs.conclusion }}
           PROBE_CONCLUSION: ${{ steps.completion.outputs.conclusion }}
           EVIDENCE_STATE: ${{ steps.evidence.outputs.state }}
           HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
