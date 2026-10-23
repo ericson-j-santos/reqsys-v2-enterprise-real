@@ -573,6 +573,10 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "C:\\dev\\chatgpt-workers\\wt-pc24x7-public-dev-governed" in before
     assert "PREPARE-PC24X7-PUBLIC-DEV-CUTOVER" in before
     assert "isolated_restore_verified -ne $true" in before
+    assert "prepare_failure_receipt_missing_or_invalid" in before
+    assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in before
+    assert "runtime_mutated = $false" in before
+    assert "production_touched = $false" in before
 
 
 def test_public_static_risk3_actions_are_exact_short_lived_and_do_not_enable_broad_mode() -> None:
@@ -646,6 +650,13 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "backup_verified -ne $true" in guard_step,
         "isolated_restore_verified -ne $true" in guard_step,
         "rollback_images_prepared -ne $true" in guard_step,
+        "prepare_failure_receipt_missing_or_invalid" in guard_step,
+        "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in guard_step,
+        "status = 'preflight_only'" in guard_step,
+        "runtime_mutated = $false" in guard_step,
+        "production_touched = $false" in guard_step,
+        "Write-Host $blocked" not in guard_step,
+        "Write-Output $blocked" not in guard_step,
         "always()" not in guard_step,
     ))
 

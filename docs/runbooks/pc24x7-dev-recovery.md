@@ -111,3 +111,11 @@ qualquer divergência ou expiração bloqueia antes da mutação. O manifesto, c
 `.reqsys-recovery` são privados e não devem ser anexados à execução. A base ativa
 não é restaurada automaticamente: qualquer mudança observada após rollback
 bloqueia o fluxo para avaliação específica.
+
+Se o `prepare` falhar, o wrapper grava um recibo público mínimo com `status=blocked`,
+um `reason_code` normalizado por allowlist e somente flags de segurança negativas.
+O workflow valida esquema, tipos e allowlist antes de substituir o motivo placeholder
+da evidência pública. Recibo ausente, malformado, com campos extras ou código não
+permitido vira `prepare_failure_receipt_missing_or_invalid`; em todos os casos o job
+permanece bloqueado antes de OIDC, deploy, locator ou E2E. Saída bruta do processo,
+stderr, caminhos privados, credenciais e conteúdo do banco nunca são publicados.
