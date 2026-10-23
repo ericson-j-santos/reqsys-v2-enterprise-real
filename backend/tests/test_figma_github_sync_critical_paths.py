@@ -1,6 +1,6 @@
 """Testes de caminhos críticos — figma_github_sync."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.models.integracao_figma_github import IntegracaoFigmaGithub
 from app.services import figma_github_sync as sync
