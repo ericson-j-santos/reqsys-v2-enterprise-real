@@ -58,7 +58,6 @@ def _load_provision_module():
 
 provision = _load_provision_module()
 
-EXPECTED_HOST = "DESKTOP-PDQK954"
 EXPECTED_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEV_API_PORT = "8210"
 DEV_GATEWAY_PORT = "8083"
@@ -144,8 +143,8 @@ def _windows_path(raw: str) -> Path:
 def _require_host() -> None:
     if os.name != "nt":
         raise ReconcileError("windows_required")
-    if socket.gethostname().casefold() != EXPECTED_HOST.casefold():
-        raise ReconcileError("host_not_allowed")
+    if not os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "").strip():
+        raise ReconcileError("runner_preflight_required")
 
 
 def _inspect(container_id: str, cwd: Path) -> dict[str, Any]:
@@ -815,7 +814,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": "1.0.0",
         "status": "ready",
         "environment": "dev",
-        "host": EXPECTED_HOST,
+        "runner_instance_id": os.environ["REQSYS_DEV_RUNNER_INSTANCE_ID"],
         "project": project,
         "expected_sha": args.expected_sha.lower(),
         "correlation_id": args.correlation_id,

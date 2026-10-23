@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reconcilia o ingresso HTTPS do MCP Ollama no Desktop PC24x7.
+"""Reconcilia o ingresso HTTPS do MCP Ollama em um runner elegível do pool DEV.
 
 Publica exclusivamente o bridge MCP loopback em 127.0.0.1:8010 sob /mcp por
 Tailscale Funnel. Ollama :11434 e o gateway :8008 permanecem privados.
@@ -20,7 +20,6 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-EXPECTED_HOST = "DESKTOP-PDQK954"
 MCP_TARGET = "http://127.0.0.1:8010"
 MCP_PORT = 8010
 MCP_PATH = "/mcp"
@@ -46,10 +45,10 @@ def run(args: list[str], timeout: int = 45) -> subprocess.CompletedProcess[str]:
 
 
 def require_host(hostname: str | None = None) -> str:
-    host = hostname or socket.gethostname()
-    if host.casefold() != EXPECTED_HOST.casefold():
-        raise IngressError("host_not_authorized")
-    return host
+    identity = str(hostname or os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "")).strip()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", identity):
+        raise IngressError("runner_preflight_required")
+    return identity
 
 
 def resolve_tailscale_cli(
@@ -222,7 +221,7 @@ def main() -> int:
     try:
         if not _SHA_RE.fullmatch(args.source_sha):
             raise IngressError("source_sha_invalid")
-        payload["host"] = require_host()
+        payload["runner_instance_id"] = require_host()
         tailscale_cli = resolve_tailscale_cli()
         payload["tailscale_cli_resolved"] = True
         status = tailscale_status(tailscale_cli)

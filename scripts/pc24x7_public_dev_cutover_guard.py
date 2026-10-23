@@ -34,7 +34,6 @@ except (ImportError, ModuleNotFoundError):
     _spec.loader.exec_module(recovery)
 
 
-HOST = recovery.HOST
 PROJECT = recovery.PROJECT
 ROOT = recovery.ROOT
 ENVIRONMENT = "dev"
@@ -57,7 +56,7 @@ PUBLIC_FAILURE_REASON_MAP = {
     "confirmation_refused": "request_contract_invalid",
     "expected_sha_invalid": "request_contract_invalid",
     "correlation_id_invalid": "request_contract_invalid",
-    "host_identity_refused": "runtime_scope_invalid",
+    "runner_identity_refused": "runtime_scope_invalid",
     "runtime_root_invalid": "runtime_scope_invalid",
     "root_reparse_refused": "runtime_scope_invalid",
     "external_path_refused": "runtime_scope_invalid",
@@ -138,7 +137,7 @@ PUBLIC_FAILURE_REASON_CODES = frozenset(PUBLIC_FAILURE_REASON_MAP.values()) | {
     "cutover_failure_unclassified",
 }
 PUBLIC_SCOPE_DIAGNOSTIC_CODES = frozenset({
-    "host_identity_refused",
+    "runner_identity_refused",
     "runtime_root_invalid",
     "root_reparse_refused",
     "external_path_refused",
@@ -426,7 +425,7 @@ def prepare(expected_sha: str, correlation_id: str, manifest_path: Path, *, root
         raise CutoverBlocked("expected_sha_invalid")
     if not CORRELATION.fullmatch(correlation_id):
         raise CutoverBlocked("correlation_id_invalid")
-    recovery.observed_scope(hostname or socket.gethostname())
+    identity = recovery.observed_scope(hostname)
     runner = runner or recovery.SubprocessRunner()
     external_snapshot_dir = (
         root
@@ -436,7 +435,7 @@ def prepare(expected_sha: str, correlation_id: str, manifest_path: Path, *, root
     captured = recovery.capture(
         runner,
         root=root,
-        hostname=HOST,
+        hostname=identity,
         external_snapshot_dir=external_snapshot_dir,
     )
     prepared = recovery.prepare(captured, runner, captured["fingerprint"], root)
@@ -451,7 +450,7 @@ def prepare(expected_sha: str, correlation_id: str, manifest_path: Path, *, root
     body = {
         "schema": 1,
         "state": "prepared",
-        "host": HOST,
+        "runner_instance_id": identity,
         "environment": ENVIRONMENT,
         "project": PROJECT,
         "expected_sha": expected_sha,
@@ -484,7 +483,7 @@ def validate(manifest: dict[str, Any], expected_fingerprint: str, expected_sha: 
     unsigned = {key: value for key, value in manifest.items() if key != "fingerprint"}
     if _outer_fingerprint(unsigned) != expected_fingerprint:
         raise CutoverBlocked("manifest_integrity_failed")
-    if (manifest.get("host") != HOST or manifest.get("environment") != ENVIRONMENT or
+    if (manifest.get("runner_instance_id") != recovery.runner_instance_id() or manifest.get("environment") != ENVIRONMENT or
             manifest.get("project") != PROJECT or manifest.get("expected_sha") != expected_sha.lower() or
             manifest.get("state") != "prepared" or manifest.get("production_touched") is not False):
         raise CutoverBlocked("manifest_scope_invalid")
@@ -520,7 +519,7 @@ def rollback(manifest: dict[str, Any], expected_fingerprint: str, expected_sha: 
         runner,
         nested["fingerprint"],
         root=root,
-        hostname=HOST,
+        hostname=recovery.runner_instance_id(),
         allow_unhealthy_current=True,
     )
     db = _unique_container(DB_SERVICE)

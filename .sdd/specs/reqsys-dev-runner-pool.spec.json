@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "reqsys-dev-runner-pool",
+  "status": "implemented_for_review",
+  "environment": "dev",
+  "files": [
+    "config/reqsys-dev-runner-pool.json",
+    "scripts/validate_reqsys_dev_runner.py",
+    "scripts/onboard_reqsys_dev_runner.ps1",
+    ".github/actions/reqsys-dev-runner-preflight/action.yml",
+    "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
+    "docs/runbooks/reqsys-dev-runner-pool.md"
+  ],
+  "safety": {
+    "dispatch_performed": false,
+    "deploy_performed": false,
+    "environment_mutated": false,
+    "allowed_environments": ["dev"]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_dev_runner_pool.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ]
+  }
+}
