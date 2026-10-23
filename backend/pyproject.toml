@@ -24,5 +24,10 @@ testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "auto"
 
+[tool.mutmut]
+source_paths = ["app"]
+only_mutate = ["app/core/*"]
+pytest_add_cli_args_test_selection = ["tests"]
+
 [tool.ruff.lint.per-file-ignores]
 "app/core/runtime_analytics.py" = ["E303", "E305"]
