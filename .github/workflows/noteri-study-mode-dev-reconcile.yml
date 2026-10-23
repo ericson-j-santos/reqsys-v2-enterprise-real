@@ -362,7 +362,83 @@ jobs:
             '--correlation-id', $env:CORRELATION_ID
           )
           & $env:GATEWAY_PYTHON $ownerGateway @ownerArgv
-          if ($LASTEXITCODE -ne 0) { throw 'PUBLIC_DEV_RECOVERY_PREPARE_BLOCKED' }
+          $gatewayExit = $LASTEXITCODE
+          if ($gatewayExit -ne 0) {
+            $reasonCode = 'prepare_failure_receipt_missing_or_invalid'
+            $allowedFailureReasons = @(
+              'request_contract_invalid',
+              'runtime_scope_invalid',
+              'governed_dependency_failed',
+              'runtime_metadata_invalid',
+              'runtime_container_cardinality_invalid',
+              'live_runtime_health_invalid',
+              'recovery_source_invalid',
+              'rollback_image_prepare_failed',
+              'database_identity_invalid',
+              'database_snapshot_invalid',
+              'database_backup_failed',
+              'isolated_restore_failed',
+              'backup_protection_failed',
+              'private_recovery_storage_failed',
+              'cutover_failure_unclassified'
+            )
+            $expectedKeys = @(
+              'status', 'reason_code', 'backup_verified',
+              'isolated_restore_verified', 'rollback_images_prepared',
+              'production_touched'
+            )
+            try {
+              $blocked = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json
+              $actualKeys = @($blocked.PSObject.Properties.Name)
+              $unexpectedKeys = @($actualKeys | Where-Object { $expectedKeys -notcontains $_ })
+              if ($actualKeys.Count -ne $expectedKeys.Count -or $unexpectedKeys.Count -ne 0 -or
+                  $blocked.status -ne 'blocked' -or $blocked.reason_code -isnot [string] -or
+                  $allowedFailureReasons -notcontains [string]$blocked.reason_code -or
+                  $blocked.backup_verified -isnot [bool] -or $blocked.backup_verified -ne $false -or
+                  $blocked.isolated_restore_verified -isnot [bool] -or
+                  $blocked.isolated_restore_verified -ne $false -or
+                  $blocked.rollback_images_prepared -isnot [bool] -or
+                  $blocked.rollback_images_prepared -ne $false -or
+                  $blocked.production_touched -isnot [bool] -or
+                  $blocked.production_touched -ne $false) {
+                throw 'PUBLIC_DEV_RECOVERY_FAILURE_RECEIPT_INVALID'
+              }
+              $reasonCode = [string]$blocked.reason_code
+            } catch {
+              $reasonCode = 'prepare_failure_receipt_missing_or_invalid'
+            }
+            $evidenceFile = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
+            $evidenceDirectory = Split-Path -Parent $evidenceFile
+            $directoryItem = Get-Item -LiteralPath $evidenceDirectory -Force
+            $evidenceItem = Get-Item -LiteralPath $evidenceFile -Force
+            if ((($directoryItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or
+                $evidenceItem.PSIsContainer -or
+                (($evidenceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+              throw 'PUBLIC_DEV_RECOVERY_EVIDENCE_PATH_INVALID'
+            }
+            $publicEvidence = [ordered]@{
+              status = 'preflight_only'
+              reason_code = $reasonCode
+              host = 'DESKTOP-PDQK954'
+              environment = 'dev'
+              source_sha = '${{ github.sha }}'
+              correlation_id = $env:CORRELATION_ID
+              session_validated = $true
+              command_gateway_verified = $true
+              inventory_collected = $true
+              runtime_sha_verified = $false
+              database_result = 'unverified'
+              backup_verified = $false
+              rollback_rehearsal_verified = $false
+              deployment_performed = $false
+              runtime_mutated = $false
+              production_touched = $false
+            }
+            $json = $publicEvidence | ConvertTo-Json -Compress
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [IO.File]::WriteAllText($evidenceFile, $json + [Environment]::NewLine, $utf8NoBom)
+            throw 'PUBLIC_DEV_RECOVERY_PREPARE_BLOCKED'
+          }
           try { $receipt = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw 'PUBLIC_DEV_RECOVERY_RECEIPT_INVALID' }
           if ($receipt.status -ne 'prepared' -or $receipt.backup_verified -ne $true -or
               $receipt.isolated_restore_verified -ne $true -or

@@ -52,6 +52,79 @@ PUBLIC_RECEIPT_KEYS = {
     "database_unchanged",
     "production_touched",
 }
+PUBLIC_FAILURE_REASON_MAP = {
+    "confirmation_refused": "request_contract_invalid",
+    "expected_sha_invalid": "request_contract_invalid",
+    "correlation_id_invalid": "request_contract_invalid",
+    "host_identity_refused": "runtime_scope_invalid",
+    "runtime_root_invalid": "runtime_scope_invalid",
+    "root_reparse_refused": "runtime_scope_invalid",
+    "external_path_refused": "runtime_scope_invalid",
+    "traversal_refused": "runtime_scope_invalid",
+    "link_refused": "runtime_scope_invalid",
+    "non_file_refused": "runtime_scope_invalid",
+    "compose_identity_mismatch": "runtime_scope_invalid",
+    "working_dir_mismatch": "runtime_scope_invalid",
+    "database_working_dir_invalid": "runtime_scope_invalid",
+    "database_working_dir_mismatch": "runtime_scope_invalid",
+    "command_failed": "governed_dependency_failed",
+    "docker_unavailable": "governed_dependency_failed",
+    "docker_command_failed": "governed_dependency_failed",
+    "docker_output_oversized": "governed_dependency_failed",
+    "docker_text_invalid": "governed_dependency_failed",
+    "invalid_metadata": "runtime_metadata_invalid",
+    "invalid_container_metadata": "runtime_metadata_invalid",
+    "invalid_image_id": "runtime_metadata_invalid",
+    "service_set_mismatch": "runtime_metadata_invalid",
+    "service_metadata_invalid": "runtime_metadata_invalid",
+    "container_cardinality": "runtime_container_cardinality_invalid",
+    "container_cardinality_db": "runtime_container_cardinality_invalid",
+    "live_probe_source_unavailable": "live_runtime_health_invalid",
+    "live_probe_loader_unavailable": "live_runtime_health_invalid",
+    "live_probe_contract_invalid": "live_runtime_health_invalid",
+    "live_probe_unavailable": "live_runtime_health_invalid",
+    "live_identity_invalid": "live_runtime_health_invalid",
+    "live_readiness_invalid": "live_runtime_health_invalid",
+    "live_liveness_invalid": "live_runtime_health_invalid",
+    "compose_config_order_mismatch": "recovery_source_invalid",
+    "environment_file_order_mismatch": "recovery_source_invalid",
+    "compose_config_missing": "recovery_source_invalid",
+    "file_metadata_invalid": "recovery_source_invalid",
+    "runtime_file_changed": "recovery_source_invalid",
+    "external_fingerprint_mismatch": "recovery_source_invalid",
+    "manifest_integrity_failed": "recovery_source_invalid",
+    "scope_refused": "recovery_source_invalid",
+    "runtime_root_mismatch": "recovery_source_invalid",
+    "runtime_sha_invalid": "recovery_source_invalid",
+    "rollback_tag_missing": "rollback_image_prepare_failed",
+    "rollback_tag_collision": "rollback_image_prepare_failed",
+    "recovery_dir_refused": "rollback_image_prepare_failed",
+    "compose_snapshot_collision": "rollback_image_prepare_failed",
+    "compose_snapshot_write_failed": "rollback_image_prepare_failed",
+    "override_collision": "rollback_image_prepare_failed",
+    "database_identity_invalid": "database_identity_invalid",
+    "database_identity_mismatch": "database_identity_invalid",
+    "database_identifier_invalid": "database_snapshot_invalid",
+    "database_table_inventory_invalid": "database_snapshot_invalid",
+    "database_table_inventory_empty": "database_snapshot_invalid",
+    "database_row_count_invalid": "database_snapshot_invalid",
+    "database_size_invalid": "database_backup_failed",
+    "database_size_out_of_policy": "database_backup_failed",
+    "database_dump_invalid": "database_backup_failed",
+    "isolated_restore_volume_collision": "isolated_restore_failed",
+    "isolated_restore_not_ready": "isolated_restore_failed",
+    "isolated_restore_mismatch": "isolated_restore_failed",
+    "dpapi_unavailable_or_oversized": "backup_protection_failed",
+    "dpapi_operation_failed": "backup_protection_failed",
+    "dpapi_empty_output": "backup_protection_failed",
+    "recovery_directory_invalid": "private_recovery_storage_failed",
+    "private_backup_write_failed": "private_recovery_storage_failed",
+    "manifest_collision": "private_recovery_storage_failed",
+    "manifest_path_refused": "private_recovery_storage_failed",
+}
+PUBLIC_FAILURE_REASON_CODES = frozenset(PUBLIC_FAILURE_REASON_MAP.values()) | {
+    "cutover_failure_unclassified",
+}
 MAX_DUMP_BYTES = 512 * 1024 * 1024
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CORRELATION = re.compile(r"[a-z0-9][a-z0-9-]{7,139}\Z")
@@ -439,6 +512,21 @@ def write_public_receipt(path: Path, value: dict[str, Any], *, root: Path = ROOT
     )
 
 
+def public_failure_receipt(exc: Exception) -> dict[str, Any]:
+    raw_code = str(exc).split(":", 1)[0]
+    reason_code = PUBLIC_FAILURE_REASON_MAP.get(raw_code, "cutover_failure_unclassified")
+    if reason_code not in PUBLIC_FAILURE_REASON_CODES:
+        reason_code = "cutover_failure_unclassified"
+    return {
+        "status": "blocked",
+        "reason_code": reason_code,
+        "backup_verified": False,
+        "isolated_restore_verified": False,
+        "rollback_images_prepared": False,
+        "production_touched": False,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("prepare", "validate", "rollback"))
@@ -470,9 +558,14 @@ def main() -> int:
             write_public_receipt(args.receipt_file, result)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except (CutoverBlocked, recovery.RecoveryError) as exc:
-        print(json.dumps({"status": "blocked", "reason_code": str(exc).split(":", 1)[0],
-                          "production_touched": False}, sort_keys=True, separators=(",", ":")))
+    except (CutoverBlocked, recovery.RecoveryError, OSError, subprocess.SubprocessError) as exc:
+        result = public_failure_receipt(exc)
+        if args.receipt_file is not None:
+            try:
+                write_public_receipt(args.receipt_file, result)
+            except (CutoverBlocked, OSError):
+                result = public_failure_receipt(RuntimeError("cutover_failure_unclassified"))
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 1
 
 

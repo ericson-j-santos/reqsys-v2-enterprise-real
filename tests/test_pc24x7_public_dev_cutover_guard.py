@@ -167,6 +167,58 @@ def test_public_receipt_allows_only_sanitized_contract_in_fixed_directory(tmp_pa
         )
 
 
+def test_main_persists_allowlisted_failure_receipt_without_private_detail(
+    monkeypatch, tmp_path, capsys,
+):
+    receipt = tmp_path / "artifacts" / "pc24x7-public-dev" / "cutover-prepare-test.json"
+    manifest = tmp_path / ".reqsys-recovery" / "private.manifest.json"
+    original_write = guard.write_public_receipt
+
+    def fail_prepare(*_args, **_kwargs):
+        raise guard.recovery.RecoveryError("command_failed:C:\\private\\docker.exe:secret-value")
+
+    monkeypatch.setattr(guard, "prepare", fail_prepare)
+    monkeypatch.setattr(
+        guard,
+        "write_public_receipt",
+        lambda path, value: original_write(path, value, root=tmp_path),
+    )
+    monkeypatch.setattr(
+        guard.sys,
+        "argv",
+        [
+            "pc24x7_public_dev_cutover_guard.py",
+            "prepare",
+            "--expected-sha", SHA,
+            "--correlation-id", CORRELATION,
+            "--manifest", str(manifest),
+            "--receipt-file", str(receipt),
+            "--confirm", guard.PREPARE_CONFIRM,
+        ],
+    )
+
+    assert guard.main() == 1
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload == {
+        "status": "blocked",
+        "reason_code": "governed_dependency_failed",
+        "backup_verified": False,
+        "isolated_restore_verified": False,
+        "rollback_images_prepared": False,
+        "production_touched": False,
+    }
+    rendered = receipt.read_text(encoding="utf-8") + capsys.readouterr().out
+    assert "private" not in rendered
+    assert "secret-value" not in rendered
+
+
+def test_unknown_failure_is_reduced_to_allowlisted_generic_reason():
+    payload = guard.public_failure_receipt(RuntimeError("credential=do-not-publish"))
+    assert payload["reason_code"] == "cutover_failure_unclassified"
+    assert payload["reason_code"] in guard.PUBLIC_FAILURE_REASON_CODES
+    assert "credential" not in json.dumps(payload)
+
+
 def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     root = Path(__file__).resolve().parents[1]
     raw = (root / ".github" / "workflows" / "noteri-study-mode-dev-reconcile.yml").read_text(
@@ -186,6 +238,13 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     assert "'--timeout', '1200'" not in public_static
     assert "'--timeout', '1500'" not in public_static
     assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in public_static
+    assert "prepare_failure_receipt_missing_or_invalid" in public_static
+    assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in public_static
+    assert "WriteAllText($evidenceFile" in public_static
+    assert "stdout =" not in public_static
+    assert "stderr =" not in public_static
+    for reason_code in guard.PUBLIC_FAILURE_REASON_CODES:
+        assert f"'{reason_code}'" in public_static
     assert ".reqsys-recovery/" in ignore
     assert "artifacts/pc24x7-public-dev/evidence.json" in ignore
     assert "artifacts/pc24x7-public-dev/cutover-*.json" in ignore
