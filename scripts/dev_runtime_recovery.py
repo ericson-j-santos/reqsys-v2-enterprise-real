@@ -307,8 +307,8 @@ def ordered_label(value):
 
 def capture(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
     live = live_guard(runner, root, identity_probe, hostname)
-    configs = None
-    envfiles = None
+    configs_by_service = {}
+    envfiles_by_service = {}
     for service in SERVICES:
         _, labels = inspect_container(
             runner, live["containers"][service]["container_id"], service, root
@@ -319,30 +319,49 @@ def capture(runner, root=ROOT, identity_probe=observe_identity, hostname=None):
         current_env = ordered_label(
             labels.get("com.docker.compose.project.environment_file", "")
         )
-        if configs is None:
-            configs = current_configs
-        elif configs != current_configs:
-            raise RecoveryError("compose_config_order_mismatch")
-        if envfiles is None:
-            envfiles = current_env
-        elif envfiles != current_env:
-            raise RecoveryError("environment_file_order_mismatch")
-    if not configs:
-        raise RecoveryError("compose_config_missing")
-    return seal(
-        {
-            "schema": 2,
-            "state": "captured",
-            "host": live["host"],
-            "environment": ENV,
-            "project": PROJECT,
-            "runtime_root": live["root"],
-            "runtime_sha": live["runtime_sha"],
-            "services": live["containers"],
-            "compose_files": [file_meta(Path(x), root) for x in configs],
-            "environment_files": [file_meta(Path(x), root) for x in envfiles],
-        }
-    )
+        if not current_configs:
+            raise RecoveryError("compose_config_missing")
+        configs_by_service[service] = [
+            file_meta(Path(item), root) for item in current_configs
+        ]
+        envfiles_by_service[service] = [
+            file_meta(Path(item), root) for item in current_env
+        ]
+    body = {
+        "schema": 3,
+        "state": "captured",
+        "host": live["host"],
+        "environment": ENV,
+        "project": PROJECT,
+        "runtime_root": live["root"],
+        "runtime_sha": live["runtime_sha"],
+        "services": live["containers"],
+        "compose_files_by_service": configs_by_service,
+        "environment_files_by_service": envfiles_by_service,
+    }
+    # Keep the schema-2 projection only when one ordered source really applies
+    # to every service.  Older private manifests remain readable, while a
+    # partially recreated stack can no longer be flattened into an unsafe
+    # synthetic Compose order.
+    if len({json.dumps(value, sort_keys=True) for value in configs_by_service.values()}) == 1:
+        body["compose_files"] = configs_by_service[SERVICES[0]]
+    if len({json.dumps(value, sort_keys=True) for value in envfiles_by_service.values()}) == 1:
+        body["environment_files"] = envfiles_by_service[SERVICES[0]]
+    return seal(body)
+
+
+def service_file_records(manifest, by_service_key, legacy_key):
+    grouped = manifest.get(by_service_key)
+    if grouped is None:
+        legacy = manifest.get(legacy_key)
+        if not isinstance(legacy, list):
+            raise RecoveryError("file_metadata_invalid")
+        return {service: legacy for service in SERVICES}
+    if not isinstance(grouped, dict) or set(grouped) != set(SERVICES):
+        raise RecoveryError("file_metadata_invalid")
+    if any(not isinstance(grouped.get(service), list) for service in SERVICES):
+        raise RecoveryError("file_metadata_invalid")
+    return grouped
 
 
 def validate(manifest, runner, expected_fingerprint, root=ROOT, require_prepared=False):
@@ -373,30 +392,40 @@ def validate(manifest, runner, expected_fingerprint, root=ROOT, require_prepared
         checked(runner, ("docker", "image", "inspect", expected))
         if require_prepared:
             verify_tag(runner, str(services[service].get("rollback_tag", "")), expected)
-    groups = ["environment_files"]
+    groups = [
+        service_file_records(
+            manifest, "environment_files_by_service", "environment_files"
+        )
+    ]
     if require_prepared:
-        originals = manifest.get("compose_files")
-        rollback_files = manifest.get("rollback_compose_files")
-        if (
-            not isinstance(originals, list)
-            or not isinstance(rollback_files, list)
-            or len(rollback_files) != len(originals)
-            or not rollback_files
+        originals = service_file_records(
+            manifest, "compose_files_by_service", "compose_files"
+        )
+        rollback_files = service_file_records(
+            manifest,
+            "rollback_compose_files_by_service",
+            "rollback_compose_files",
+        )
+        if any(
+            not rollback_files[service]
+            or len(rollback_files[service]) != len(originals[service])
+            for service in SERVICES
         ):
             raise RecoveryError("rollback_compose_files_invalid")
-        groups.append("rollback_compose_files")
+        groups.append(rollback_files)
     else:
-        groups.append("compose_files")
-    for group in groups:
-        records = manifest.get(group)
-        if not isinstance(records, list):
-            raise RecoveryError("file_metadata_invalid")
-        for record in records:
-            if (
-                not isinstance(record, dict)
-                or file_meta(root / str(record.get("relative_path")), root) != record
-            ):
-                raise RecoveryError("runtime_file_changed")
+        groups.append(
+            service_file_records(manifest, "compose_files_by_service", "compose_files")
+        )
+    for grouped in groups:
+        for records in grouped.values():
+            for record in records:
+                if (
+                    not isinstance(record, dict)
+                    or file_meta(root / str(record.get("relative_path")), root)
+                    != record
+                ):
+                    raise RecoveryError("runtime_file_changed")
     if require_prepared:
         if manifest.get("state") != "prepared":
             raise RecoveryError("manifest_not_prepared")
@@ -453,27 +482,48 @@ def prepare(manifest, runner, expected_fingerprint, root=ROOT):
     if recovery_dir.exists() and (_reparse(recovery_dir) or not recovery_dir.is_dir()):
         raise RecoveryError("recovery_dir_refused")
     recovery_dir.mkdir(exist_ok=True)
-    rollback_compose_files = []
-    for index, record in enumerate(manifest["compose_files"]):
-        source = root / record["relative_path"]
-        snapshot = recovery_dir / f"compose-{index:02d}-{expected_fingerprint}.yaml"
-        try:
-            payload = source.read_bytes()
-            if snapshot.exists():
-                if _reparse(snapshot) or snapshot.read_bytes() != payload:
-                    raise RecoveryError("compose_snapshot_collision")
-            else:
-                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-                descriptor = os.open(snapshot, flags, 0o600)
-                with os.fdopen(descriptor, "wb") as stream:
-                    stream.write(payload)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-        except RecoveryError:
-            raise
-        except OSError as exc:
-            raise RecoveryError("compose_snapshot_write_failed") from exc
-        rollback_compose_files.append(file_meta(snapshot, root))
+    compose_files_by_service = service_file_records(
+        manifest, "compose_files_by_service", "compose_files"
+    )
+    rollback_compose_files_by_service = {}
+    snapshot_cache = {}
+    for service in SERVICES:
+        rollback_compose_files_by_service[service] = []
+        for index, record in enumerate(compose_files_by_service[service]):
+            cache_key = json.dumps(record, sort_keys=True, separators=(",", ":"))
+            if cache_key in snapshot_cache:
+                rollback_compose_files_by_service[service].append(
+                    snapshot_cache[cache_key]
+                )
+                continue
+            source = root / record["relative_path"]
+            snapshot = recovery_dir / (
+                f"compose-{service}-{index:02d}-{expected_fingerprint}.yaml"
+            )
+            try:
+                payload = source.read_bytes()
+                if snapshot.exists():
+                    if _reparse(snapshot) or snapshot.read_bytes() != payload:
+                        raise RecoveryError("compose_snapshot_collision")
+                else:
+                    flags = (
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_BINARY", 0)
+                    )
+                    descriptor = os.open(snapshot, flags, 0o600)
+                    with os.fdopen(descriptor, "wb") as stream:
+                        stream.write(payload)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+            except RecoveryError:
+                raise
+            except OSError as exc:
+                raise RecoveryError("compose_snapshot_write_failed") from exc
+            snapshot_record = file_meta(snapshot, root)
+            snapshot_cache[cache_key] = snapshot_record
+            rollback_compose_files_by_service[service].append(snapshot_record)
     path = recovery_dir / f"rollback-{expected_fingerprint}.json"
     payload = json.dumps(override, sort_keys=True, separators=(",", ":"))
     if path.exists():
@@ -486,11 +536,18 @@ def prepare(manifest, runner, expected_fingerprint, root=ROOT):
         {
             "state": "prepared",
             "services": services,
-            "rollback_compose_files": rollback_compose_files,
+            "rollback_compose_files_by_service": rollback_compose_files_by_service,
             "rollback_override": file_meta(path, root),
             "capture_fingerprint": expected_fingerprint,
         }
     )
+    if len({
+        json.dumps(value, sort_keys=True)
+        for value in rollback_compose_files_by_service.values()
+    }) == 1:
+        body["rollback_compose_files"] = rollback_compose_files_by_service[
+            SERVICES[0]
+        ]
     return seal(body)
 
 
@@ -560,6 +617,48 @@ def restored(runner, manifest, root):
         item, _ = inspect_container(runner, cid, service, root)
         if image_id(item.get("Image")) != manifest["services"][service]["image_id"]:
             raise RecoveryError("restored_image_mismatch")
+
+
+def rollback_compose_base(manifest, service, root):
+    environment_files = service_file_records(
+        manifest, "environment_files_by_service", "environment_files"
+    )[service]
+    compose_files = service_file_records(
+        manifest,
+        "rollback_compose_files_by_service",
+        "rollback_compose_files",
+    )[service]
+    base = [
+        "docker",
+        "compose",
+        "--project-name",
+        PROJECT,
+        "--project-directory",
+        str(root),
+    ]
+    for record in environment_files:
+        base.extend(("--env-file", str(root / record["relative_path"])))
+    for record in compose_files:
+        base.extend(("--file", str(root / record["relative_path"])))
+    base.extend(
+        ("--file", str(root / manifest["rollback_override"]["relative_path"]))
+    )
+    return base
+
+
+def same_rollback_source(manifest, left, right):
+    environments = service_file_records(
+        manifest, "environment_files_by_service", "environment_files"
+    )
+    compose_files = service_file_records(
+        manifest,
+        "rollback_compose_files_by_service",
+        "rollback_compose_files",
+    )
+    return (
+        environments[left] == environments[right]
+        and compose_files[left] == compose_files[right]
+    )
 
 
 _DEV_READINESS_REASON_MAP = {
@@ -651,31 +750,27 @@ def rollback(
             # A candidate API indisponível não pode impedir o rollback. Ainda
             # exigimos host, raiz, projeto, cardinalidade e imagens observadas.
             static_live_guard(runner, root, hostname)
-        base = [
-            "docker", "compose", "--project-name", PROJECT,
-            "--project-directory", str(root),
-        ]
-        for record in manifest["environment_files"]:
-            base.extend(("--env-file", str(root / record["relative_path"])))
-        for record in manifest["rollback_compose_files"]:
-            base.extend(("--file", str(root / record["relative_path"])))
-        base.extend(
-            ("--file", str(root / manifest["rollback_override"]["relative_path"]))
-        )
-        checked(
-            runner,
-            (
-                *base,
-                "up",
-                "-d",
-                "--no-build",
-                "--no-deps",
-                "--force-recreate",
-                "api",
-                "frontend",
-            ),
-            300,
-        )
+        if same_rollback_source(manifest, "api", "frontend"):
+            application_phases = (("api", "frontend"),)
+        else:
+            # Restore frontend first so the API remains available until its own
+            # exact source chain is ready to be replayed.
+            application_phases = (("frontend",), ("api",))
+        for phase in application_phases:
+            base = rollback_compose_base(manifest, phase[0], root)
+            checked(
+                runner,
+                (
+                    *base,
+                    "up",
+                    "-d",
+                    "--no-build",
+                    "--no-deps",
+                    "--force-recreate",
+                    *phase,
+                ),
+                300,
+            )
         wait_live(
             runner,
             old,
@@ -690,6 +785,7 @@ def rollback(
         legacy_database_probe(runner, unique_container(runner, "api"))
         validate(manifest, runner, expected_fingerprint, root, True)
         live_guard(runner, root, identity_probe, hostname)
+        base = rollback_compose_base(manifest, "nginx", root)
         checked(
             runner,
             (*base, "up", "-d", "--no-build", "--no-deps", "--force-recreate", "nginx"),

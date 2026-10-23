@@ -28,10 +28,14 @@ All post-rollback identity, readiness and database checks remain mandatory.
 
 The fingerprint supplied by the operator is evidence external to the manifest.
 Recalculating a fingerprint inside a modified manifest cannot satisfy the gate.
-Prepared recovery state includes immutable private snapshots of the ordered Compose
-manifests and fixes Compose `--project-directory` to the canonical runtime root.
-Environment files stay in their original location and are never duplicated. This
-keeps rollback valid after a tracked-source fast-forward without copying secrets.
+Prepared recovery state includes immutable private snapshots of each service's
+ordered Compose manifests and fixes Compose `--project-directory` to the canonical
+runtime root. A partial, previously governed recreation can legitimately leave the
+API with a different ordered source chain from frontend and nginx; schema 3 seals
+those chains separately instead of flattening them. Rollback groups services only
+when their sources are identical and otherwise replays each exact chain. Environment
+files stay in their original location and are never duplicated. This keeps rollback
+valid after a tracked-source fast-forward without copying secrets.
 
 ## Rollback phases
 
@@ -70,10 +74,11 @@ terminal.
 ## Path and secret controls
 
 Paths are checked lexically for traversal and reparse points before canonical
-resolution. Compose config and env-file order must match across all three services.
-Env-file values are never read for execution or emitted; only file metadata is
-sealed. The durable override contains image tags only and must remain present while
-containers can reference it through Compose labels.
+resolution. Compose config and env-file order must be present and internally stable
+for each service; cross-service differences are preserved, never reordered or
+merged. Env-file values are never read for execution or emitted; only file metadata
+is sealed. The durable override contains image tags only and must remain present
+while containers can reference it through Compose labels.
 
 ## Non-goals
 
