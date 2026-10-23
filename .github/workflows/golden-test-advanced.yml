@@ -61,12 +61,17 @@ jobs:
         run: |
           mutmut run
           mutmut results > mutation-results.txt
-          test "$(mutmut results | grep -c 'survived')" -eq 0
+          python ../scripts/evaluate_mutation_quality.py \
+            --results mutation-results.txt \
+            --policy ../config/mutation-quality-policy.json \
+            --output mutation-quality-summary.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: mutation-evidence
-          path: backend/mutation-results.txt
+          path: |
+            backend/mutation-results.txt
+            backend/mutation-quality-summary.json
           retention-days: 30
 
   accessibility-visual:
