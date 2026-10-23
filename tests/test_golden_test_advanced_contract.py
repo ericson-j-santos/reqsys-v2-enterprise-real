@@ -1,6 +1,6 @@
-import tomllib
 from pathlib import Path
 
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,6 +58,9 @@ def test_golden_test_uses_the_pinned_mutmut_3_cli() -> None:
 
     assert "'mutmut==3.8.0'" in workflow
     assert "mutmut run\n" in workflow
+    assert "evaluate_mutation_quality.py" in workflow
+    assert "mutation-quality-summary.json" in workflow
+    assert "grep -c 'survived'" not in workflow
     assert "--paths-to-mutate" not in workflow
     assert "--tests-dir" not in workflow
     assert "--runner" not in workflow
