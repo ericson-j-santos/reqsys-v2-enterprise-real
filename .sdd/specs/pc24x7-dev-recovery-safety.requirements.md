@@ -24,3 +24,10 @@ governado. Env-files externos precisam estar diretamente nesse mesmo checkout.
 Todos são copiados, antes de qualquer mutação do runtime, para snapshots privados
 `0600` sob `.reqsys-recovery`; o manifesto contém somente caminho interno, tamanho
 e hash. O modo `capture` genérico continua recusando qualquer caminho externo.
+
+## Diagnóstico público limitado — 23/10/2026
+
+Cada bloqueio conhecido de escopo durante a migração legada produz somente um
+`scope_diagnostic_code` estático allowlisted. Erros de leitura, colisão e gravação
+são reduzidos a categorias públicas agregadas. Nenhum receipt pode incluir path,
+stderr, nome de env-file, valor de configuração ou detalhe da exceção original.

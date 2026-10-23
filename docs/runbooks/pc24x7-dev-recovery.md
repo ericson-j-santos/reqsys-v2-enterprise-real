@@ -80,6 +80,12 @@ capture continues to refuse external paths. Only the public DEV cutover wrapper 
 snapshot the two allowlisted legacy overrides and same-root env-files into private
 storage before mutation.
 
+Quando essa migração é bloqueada, a evidência pública pode expor somente um código
+estático allowlisted para a regra de escopo violada (por exemplo, raiz ambígua,
+override fora da allowlist ou env-file fora da mesma raiz). Paths, nomes de arquivos
+de ambiente, stderr e conteúdo permanecem privados. Falhas de I/O são agregadas em
+categorias públicas e não carregam detalhe operacional.
+
 Do not delete `.reqsys-recovery` while containers reference its override. Do not
 retag, rebuild, recreate, or prune images outside the reviewed command sequence.
 
