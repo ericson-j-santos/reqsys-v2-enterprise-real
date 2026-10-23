@@ -39,6 +39,11 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
     vinculadas ao ambiente DEV, scope, worktree limpo, SHA, script rastreado e
     argumentos exatos. O gateway deve executar o comando cadastrado sem override
     ad-hoc; o modo amplo `standard_gold_development` não pode ser ativado ou alterado.
+12. Se o prepare falhar, o handler deve substituir a evidência preflight no mesmo
+    `GITHUB_WORKSPACE/artifacts/pc24x7-public-dev/evidence.json` consumido pelo
+    upload. `TARGET_PATH` não pode ser usado como raiz do artifact público. Exceção
+    inesperada deve persistir somente `cutover_failure_unclassified` e flags
+    negativas, sem detalhes, antes de bloquear OIDC, deploy, locator e E2E.
 
 ## Critérios de aceite
 
@@ -55,6 +60,11 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
   mantém as rotas permitidas de `/runtime-core/` fechadas com HTTP 502.
 - com um upstream stub, `/runtime-core/api/todo-events/abc?x=1` chega ao serviço
   como `/api/todo-events/abc?x=1`.
+- os testes estruturais comprovam que o fallback e o upload usam o mesmo
+  `GITHUB_WORKSPACE`, recusam o caminho equivalente em `TARGET_PATH` e mantêm
+  `runtime_mutated=false` e `production_touched=false`;
+- uma exceção inesperada do prepare produz receipt público com
+  `reason_code=cutover_failure_unclassified`, sem ecoar a mensagem original.
 
 ## Fora de escopo
 
