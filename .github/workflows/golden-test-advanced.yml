@@ -55,11 +55,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
-      - run: pip install -r backend/requirements.txt mutmut
+      - run: pip install -r backend/requirements.txt 'mutmut==3.8.0'
       - name: Executar mutation testing focado
         working-directory: backend
         run: |
-          mutmut run --paths-to-mutate app/core --tests-dir tests --runner 'python -m pytest -q'
+          mutmut run
           mutmut results > mutation-results.txt
           test "$(mutmut results | grep -c 'survived')" -eq 0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
