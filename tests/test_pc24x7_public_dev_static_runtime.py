@@ -575,6 +575,8 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "isolated_restore_verified -ne $true" in before
     assert "prepare_failure_receipt_missing_or_invalid" in before
     assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in before
+    assert "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in before
+    assert "scope_diagnostic_code = $scopeDiagnosticCode" in before
     assert "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE " \
         "'artifacts\\pc24x7-public-dev\\evidence.json'" in before
     assert "$evidenceFile = Join-Path $env:TARGET_PATH " \
@@ -656,6 +658,8 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "rollback_images_prepared -ne $true" in guard_step,
         "prepare_failure_receipt_missing_or_invalid" in guard_step,
         "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in guard_step,
+        "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in guard_step,
+        "scope_diagnostic_code = $scopeDiagnosticCode" in guard_step,
         "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE "
         "'artifacts\\pc24x7-public-dev\\evidence.json'" in guard_step,
         "$evidenceFile = Join-Path $env:TARGET_PATH "

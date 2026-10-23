@@ -365,6 +365,7 @@ jobs:
           $gatewayExit = $LASTEXITCODE
           if ($gatewayExit -ne 0) {
             $reasonCode = 'prepare_failure_receipt_missing_or_invalid'
+            $scopeDiagnosticCode = 'not_applicable'
             $allowedFailureReasons = @(
               'request_contract_invalid',
               'runtime_scope_invalid',
@@ -383,9 +384,23 @@ jobs:
               'cutover_failure_unclassified'
             )
             $expectedKeys = @(
-              'status', 'reason_code', 'backup_verified',
+              'status', 'reason_code', 'scope_diagnostic_code', 'backup_verified',
               'isolated_restore_verified', 'rollback_images_prepared',
               'production_touched'
+            )
+            $allowedScopeDiagnosticCodes = @(
+              'host_identity_refused',
+              'runtime_root_invalid',
+              'root_reparse_refused',
+              'external_path_refused',
+              'traversal_refused',
+              'link_refused',
+              'non_file_refused',
+              'compose_identity_mismatch',
+              'working_dir_mismatch',
+              'database_working_dir_invalid',
+              'database_working_dir_mismatch',
+              'not_applicable'
             )
             try {
               $blocked = Get-Content -LiteralPath $receiptFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -394,6 +409,12 @@ jobs:
               if ($actualKeys.Count -ne $expectedKeys.Count -or $unexpectedKeys.Count -ne 0 -or
                   $blocked.status -ne 'blocked' -or $blocked.reason_code -isnot [string] -or
                   $allowedFailureReasons -notcontains [string]$blocked.reason_code -or
+                  $blocked.scope_diagnostic_code -isnot [string] -or
+                  $allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code -or
+                  ($blocked.reason_code -eq 'runtime_scope_invalid' -and
+                    $blocked.scope_diagnostic_code -eq 'not_applicable') -or
+                  ($blocked.reason_code -ne 'runtime_scope_invalid' -and
+                    $blocked.scope_diagnostic_code -ne 'not_applicable') -or
                   $blocked.backup_verified -isnot [bool] -or $blocked.backup_verified -ne $false -or
                   $blocked.isolated_restore_verified -isnot [bool] -or
                   $blocked.isolated_restore_verified -ne $false -or
@@ -404,8 +425,10 @@ jobs:
                 throw 'PUBLIC_DEV_RECOVERY_FAILURE_RECEIPT_INVALID'
               }
               $reasonCode = [string]$blocked.reason_code
+              $scopeDiagnosticCode = [string]$blocked.scope_diagnostic_code
             } catch {
               $reasonCode = 'prepare_failure_receipt_missing_or_invalid'
+              $scopeDiagnosticCode = 'not_applicable'
             }
             $evidenceFile = Join-Path $env:GITHUB_WORKSPACE 'artifacts\pc24x7-public-dev\evidence.json'
             $evidenceDirectory = Split-Path -Parent $evidenceFile
@@ -419,6 +442,7 @@ jobs:
             $publicEvidence = [ordered]@{
               status = 'preflight_only'
               reason_code = $reasonCode
+              scope_diagnostic_code = $scopeDiagnosticCode
               host = 'DESKTOP-PDQK954'
               environment = 'dev'
               source_sha = '${{ github.sha }}'

@@ -168,22 +168,29 @@ def test_public_receipt_allows_only_sanitized_contract_in_fixed_directory(tmp_pa
 
 
 @pytest.mark.parametrize(
-    ("failure", "expected_reason"),
+    ("failure", "expected_reason", "expected_scope_diagnostic"),
     (
         (
             guard.recovery.RecoveryError(
                 "command_failed:C:\\private\\docker.exe:secret-value"
             ),
             "governed_dependency_failed",
+            "not_applicable",
+        ),
+        (
+            guard.recovery.RecoveryError("working_dir_mismatch"),
+            "runtime_scope_invalid",
+            "working_dir_mismatch",
         ),
         (
             ValueError("credential=do-not-publish"),
             "cutover_failure_unclassified",
+            "not_applicable",
         ),
     ),
 )
 def test_main_persists_allowlisted_failure_receipt_without_private_detail(
-    monkeypatch, tmp_path, capsys, failure, expected_reason,
+    monkeypatch, tmp_path, capsys, failure, expected_reason, expected_scope_diagnostic,
 ):
     receipt = tmp_path / "artifacts" / "pc24x7-public-dev" / "cutover-prepare-test.json"
     manifest = tmp_path / ".reqsys-recovery" / "private.manifest.json"
@@ -217,6 +224,7 @@ def test_main_persists_allowlisted_failure_receipt_without_private_detail(
     assert payload == {
         "status": "blocked",
         "reason_code": expected_reason,
+        "scope_diagnostic_code": expected_scope_diagnostic,
         "backup_verified": False,
         "isolated_restore_verified": False,
         "rollback_images_prepared": False,
@@ -232,7 +240,17 @@ def test_unknown_failure_is_reduced_to_allowlisted_generic_reason():
     payload = guard.public_failure_receipt(RuntimeError("credential=do-not-publish"))
     assert payload["reason_code"] == "cutover_failure_unclassified"
     assert payload["reason_code"] in guard.PUBLIC_FAILURE_REASON_CODES
+    assert payload["scope_diagnostic_code"] == "not_applicable"
     assert "credential" not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("code", sorted(
+    guard.PUBLIC_SCOPE_DIAGNOSTIC_CODES - {"not_applicable"}
+))
+def test_runtime_scope_failure_preserves_only_allowlisted_diagnostic_code(code):
+    payload = guard.public_failure_receipt(guard.recovery.RecoveryError(code))
+    assert payload["reason_code"] == "runtime_scope_invalid"
+    assert payload["scope_diagnostic_code"] == code
 
 
 def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
@@ -256,6 +274,8 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in public_static
     assert "prepare_failure_receipt_missing_or_invalid" in public_static
     assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in public_static
+    assert "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in public_static
+    assert "scope_diagnostic_code = $scopeDiagnosticCode" in public_static
     assert "$evidenceFile = Join-Path $env:GITHUB_WORKSPACE " \
         "'artifacts\\pc24x7-public-dev\\evidence.json'" in public_static
     assert "$evidenceFile = Join-Path $env:TARGET_PATH " \
@@ -265,6 +285,8 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     assert "stderr =" not in public_static
     for reason_code in guard.PUBLIC_FAILURE_REASON_CODES:
         assert f"'{reason_code}'" in public_static
+    for diagnostic_code in guard.PUBLIC_SCOPE_DIAGNOSTIC_CODES:
+        assert f"'{diagnostic_code}'" in public_static
     assert ".reqsys-recovery/" in ignore
     assert "artifacts/pc24x7-public-dev/evidence.json" in ignore
     assert "artifacts/pc24x7-public-dev/cutover-*.json" in ignore

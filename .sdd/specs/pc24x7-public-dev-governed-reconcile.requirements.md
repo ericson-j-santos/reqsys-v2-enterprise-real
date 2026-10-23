@@ -44,6 +44,10 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
     upload. `TARGET_PATH` não pode ser usado como raiz do artifact público. Exceção
     inesperada deve persistir somente `cutover_failure_unclassified` e flags
     negativas, sem detalhes, antes de bloquear OIDC, deploy, locator e E2E.
+13. Quando o motivo público for `runtime_scope_invalid`, o receipt pode incluir
+    somente um `scope_diagnostic_code` estático da allowlist versionada. Para todos
+    os demais motivos, o diagnóstico deve ser `not_applicable`. Caminhos, mensagens,
+    stdout, stderr, credenciais e dados do banco permanecem proibidos na evidência.
 
 ## Critérios de aceite
 
@@ -65,6 +69,8 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
   `runtime_mutated=false` e `production_touched=false`;
 - uma exceção inesperada do prepare produz receipt público com
   `reason_code=cutover_failure_unclassified`, sem ecoar a mensagem original.
+- cada falha de escopo conhecida preserva apenas seu código estático allowlisted;
+  código desconhecido ou motivo não relacionado reduz para `not_applicable`.
 
 ## Fora de escopo
 
