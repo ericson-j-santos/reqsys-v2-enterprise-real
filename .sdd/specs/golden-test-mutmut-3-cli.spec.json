@@ -8,9 +8,10 @@
   "sdd_gate": {
     "tests": [
       "tests/test_golden_test_advanced_contract.py",
-      "backend/tests/test_agile_package_registry.py"
+      "backend/tests/test_agile_package_registry.py",
+      "backend/tests/test_ai_quality_critical_paths.py"
     ],
-    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia dependências locais, exclui da coleta isolada apenas testes estruturais dependentes da raiz externa ao sandbox e mantém o teste do registro Agile isolado entre processos repetidos."
+    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia dependências locais, exclui da coleta isolada apenas testes estruturais dependentes da raiz externa ao sandbox e mantém testes com escrita em banco isolados entre processos repetidos."
   },
   "traceability": {
     "workflow": ".github/workflows/golden-test-advanced.yml",
