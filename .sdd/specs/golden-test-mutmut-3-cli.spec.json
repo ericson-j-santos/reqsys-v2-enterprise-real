@@ -15,13 +15,16 @@
       "backend/tests/test_figma_github_sync_critical_paths.py",
       "backend/tests/test_monitoramento_snapshot_critical_paths.py",
       "backend/tests/test_operational_worker.py",
-      "backend/tests/test_planner_publish_service.py"
+      "backend/tests/test_planner_publish_service.py",
+      "tests/test_mutation_quality_gate.py"
     ],
-    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia dependências locais, exclui da coleta isolada apenas testes estruturais dependentes da raiz externa ao sandbox e mantém bancos, mocks, respostas HTTP consumíveis, source_ids e chaves idempotentes isolados entre execuções repetidas."
+    "evidence_contract": "O workflow Golden Test Advanced instala Mutmut 3.8.0 de forma determinística, usa somente a CLI suportada, mantém o escopo de mutação em backend/app/core, copia dependências locais, exclui da coleta isolada apenas testes estruturais dependentes da raiz externa ao sandbox, mantém estado de teste isolado entre execuções repetidas e aplica um ratchet versionado aos resultados reais de mutação."
   },
   "traceability": {
     "workflow": ".github/workflows/golden-test-advanced.yml",
     "configuration": "backend/pyproject.toml",
+    "mutation_policy": "config/mutation-quality-policy.json",
+    "mutation_gate": "scripts/evaluate_mutation_quality.py",
     "pull_request": "3068"
   },
   "risk": {
@@ -31,4 +34,3 @@
     "secrets": false
   }
 }
-
