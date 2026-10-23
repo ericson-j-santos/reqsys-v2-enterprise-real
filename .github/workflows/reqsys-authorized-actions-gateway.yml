@@ -253,7 +253,7 @@ jobs:
               ;;
             '/reqsys run desktop-runner-pickup-canary')
               target='noteri-desktop-watchdog-recovery.yml'
-              mode='runner-canary'
+              mode='runner-pool-canary'
               ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
@@ -581,13 +581,22 @@ jobs:
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
-              runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
+              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
               *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
             esac
-            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref main \
-              -f mode="$recovery_mode")"
+            if [ "$recovery_mode" = "runner-pool-canary" ]; then
+              run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main \
+                -f mode="$recovery_mode" \
+                -f expected_sha="$EXPECTED_SHA" \
+                -f authorization_comment_id="$AUTHORIZED_COMMENT_ID")"
+            else
+              run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main \
+                -f mode="$recovery_mode")"
+            fi
           elif [ "$TARGET_WORKFLOW" = "actions-dispatcher.yml" ]; then
             case "$TARGET_MODE" in
               post-merge-replay-control) test_case='replay' ;;

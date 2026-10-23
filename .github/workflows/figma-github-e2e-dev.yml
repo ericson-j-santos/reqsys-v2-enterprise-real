@@ -14,7 +14,7 @@ concurrency:
 jobs:
   e2e:
     name: Figma ↔ GitHub E2E on PC24x7 DEV
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
     timeout-minutes: 15
     env:
       CORRELATION_ID: figma-github-e2e-${{ github.run_id }}-${{ github.run_attempt }}
@@ -26,6 +26,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+          repository-path: .
 
       - name: Execute governed Figma GitHub E2E
         shell: powershell
@@ -45,7 +51,7 @@ jobs:
         shell: powershell
         run: |
           "## Figma GitHub E2E DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Host: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Runner do pool: $env:REQSYS_DEV_RUNNER_INSTANCE_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Figma file: SHA-256 only in artifact" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Repo: ericson-j-santos/reqsys-v2-enterprise-real" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Node controlado: 1:44" | Add-Content $env:GITHUB_STEP_SUMMARY

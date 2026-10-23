@@ -62,7 +62,7 @@ jobs:
       contents: read
       id-token: write
       issues: read
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
     timeout-minutes: 45
     environment: development
     env:
@@ -114,6 +114,12 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: runtime
+          repository-path: .
+
       - name: Require explicitly provisioned Microsoft test session
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'study-mode'
         shell: powershell
@@ -136,6 +142,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Validate governed rules repository access
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: runtime
+          repository-path: _rules
+
       - name: Bootstrap isolated and governed Desktop session
         if: github.event_name == 'workflow_dispatch'
         id: session
@@ -146,7 +159,6 @@ jobs:
           PYTHON_EXPECTED_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') { throw 'DESKTOP_HOST_MISMATCH' }
           if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'MAIN_ONLY' }
           $temp = Join-Path $env:RUNNER_TEMP ("noteri-e2e-python-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
           New-Item -ItemType Directory -Force -Path $temp | Out-Null
@@ -199,7 +211,6 @@ jobs:
               [string]::IsNullOrWhiteSpace($env:GATEWAY_PYTHON)) {
             throw 'PUBLIC_DEV_SESSION_MISSING'
           }
-          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') { throw 'PUBLIC_DEV_HOST_MISMATCH' }
           $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
           $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
           $probe = Join-Path $env:TARGET_PATH 'scripts\diagnose_pc24x7_public_dev.py'
@@ -214,7 +225,7 @@ jobs:
             $receipt = [ordered]@{
               status = $Status
               reason_code = $ReasonCode
-              host = 'DESKTOP-PDQK954'
+              runner_instance_id = $env:REQSYS_DEV_RUNNER_INSTANCE_ID
               environment = 'dev'
               source_sha = '${{ github.sha }}'
               correlation_id = $env:CORRELATION_ID
@@ -321,10 +332,10 @@ jobs:
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
           $authorizer = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\set_owner_risk3_action.py'
           $script = Join-Path $env:TARGET_PATH 'scripts\pc24x7_public_dev_cutover_guard.py'
-          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $runtimeRoot = $env:REQSYS_DEV_RUNTIME_ROOT
           $manifest = Join-Path $runtimeRoot ('.reqsys-recovery\public-dev-' + $env:CORRELATION_ID + '.manifest.json')
           $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-prepare-' + $env:CORRELATION_ID + '.json')
-          $scope = 'repo://reqsys/environment/dev/host/desktop-pdqk954'
+          $scope = 'repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1'
           $commandArgs = @(
             'prepare',
             '--expected-sha', '${{ github.sha }}', '--correlation-id', $env:CORRELATION_ID,
@@ -389,7 +400,7 @@ jobs:
               'production_touched'
             )
             $allowedScopeDiagnosticCodes = @(
-              'host_identity_refused',
+              'runner_identity_refused',
               'runtime_root_invalid',
               'root_reparse_refused',
               'external_path_refused',
@@ -451,7 +462,7 @@ jobs:
               status = 'preflight_only'
               reason_code = $reasonCode
               scope_diagnostic_code = $scopeDiagnosticCode
-              host = 'DESKTOP-PDQK954'
+              runner_instance_id = $env:REQSYS_DEV_RUNNER_INSTANCE_ID
               environment = 'dev'
               source_sha = '${{ github.sha }}'
               correlation_id = $env:CORRELATION_ID
@@ -495,8 +506,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $authorizer = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\set_owner_risk3_action.py'
-          $scope = 'repo://reqsys/environment/dev/host/desktop-pdqk954'
-          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $scope = 'repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1'
+          $runtimeRoot = $env:REQSYS_DEV_RUNTIME_ROOT
           $evidence = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
           $rollbackReceipt = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-rollback-' + $env:CORRELATION_ID + '.json')
 
@@ -595,7 +606,7 @@ jobs:
           $evidence = Join-Path $env:TARGET_PATH 'artifacts\pc24x7-public-dev\evidence.json'
           $ownerArgv = @(
             '--action-id', 'reqsys.pc24x7.public_dev.runtime.reconcile',
-            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+            '--scope', 'repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1',
             '--cwd', $env:TARGET_PATH, '--timeout', '900',
             '--correlation-id', $env:PUBLIC_DEV_CORRELATION_ID
           )
@@ -626,11 +637,11 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ownerGateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\owner_risk3_gateway.py'
-          $runtimeRoot = 'C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed'
+          $runtimeRoot = $env:REQSYS_DEV_RUNTIME_ROOT
           $receiptFile = Join-Path $runtimeRoot ('artifacts\pc24x7-public-dev\cutover-rollback-' + $env:CORRELATION_ID + '.json')
           $ownerArgv = @(
             '--action-id', 'reqsys.pc24x7.public_dev.cutover.rollback',
-            '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+            '--scope', 'repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1',
             '--cwd', $env:TARGET_PATH, '--timeout', '600',
             '--correlation-id', $env:CORRELATION_ID
           )
@@ -671,7 +682,7 @@ jobs:
           )) {
             $ownerArgv = @(
               '--action-id', $actionId,
-              '--scope', 'repo://reqsys/environment/dev/host/desktop-pdqk954',
+              '--scope', 'repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1',
               '--cwd', $env:TARGET_PATH, '--timeout', '180',
               '--correlation-id', $env:CORRELATION_ID
             )
@@ -754,7 +765,8 @@ jobs:
           $path = Join-Path $env:TARGET_PATH 'artifacts\noteri-study-mode-dev\evidence.json'
           if (-not (Test-Path -LiteralPath $path)) { throw 'NOTERI_E2E_EVIDENCE_MISSING' }
           $e = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
-          if ($e.ok -ne $true -or $e.environment -ne 'dev' -or $e.host -ne 'DESKTOP-PDQK954') {
+          if ($e.ok -ne $true -or $e.environment -ne 'dev' -or
+              $e.runner_instance_id -ne $env:REQSYS_DEV_RUNNER_INSTANCE_ID) {
             throw 'NOTERI_E2E_EVIDENCE_INVALID'
           }
           if ($e.source_sha -ne '${{ github.sha }}' -or $e.runtime_sha -ne '${{ github.sha }}') {
