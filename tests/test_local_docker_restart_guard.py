@@ -465,7 +465,7 @@ def test_native_profile_activation_is_explicit_not_a_production_acceptance() -> 
         ("prod", "depends_on: !override", "depends_on:", "active_dependency_has_disabled_profile"),
         ("prod", "profiles: [local-mail]", "profiles: [unexpected]", "mailhog_must_be_opt_in"),
         ("base", "  nginx:\n", '  nginx:\n    ports: ["18082:80"]\n', "gateway_publication_invalid"),
-        ("base", "  db:\n", '  db:\n    ports: ["15432:5432"]\n', "private_service_published"),
+        ("base", "\n  db:\n", '\n  db:\n    ports: ["15432:5432"]\n', "private_service_published"),
         ("prod", "http://127.0.0.1/healthz", "http://127.0.0.1/unready", "frontend_healthcheck_invalid"),
         ("prod", "http://127.0.0.1/api/health", "http://127.0.0.1/api/unready", "gateway_healthcheck_invalid"),
         ("prod", "frontend:\n        condition: service_healthy",

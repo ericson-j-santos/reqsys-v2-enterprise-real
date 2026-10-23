@@ -41,7 +41,7 @@ reachable.
 8. Errors expose diagnostic codes and variable names, never substituted values
    or YAML parser excerpts. Suppress the original YAML exception cause.
 
-## Acceptance and evidence limits
+## Acceptance criteria and evidence limits
 
 The existing pytest target must pass in CI without a Docker configuration
 subprocess. Added controls cover interpolation, explicit inputs, omitted
