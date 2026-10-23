@@ -2,7 +2,7 @@
   "feature_name": "recovered-pr-event-driven-queue",
   "project": "ReqSys v2 Enterprise — Engineering Control Plane",
   "created_at": "2026-10-04",
-  "updated_at": "2026-10-04",
+  "updated_at": "2026-10-23",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -21,7 +21,7 @@
       "tests/test_ollama_ci_triage.py",
       "tests/test_ollama_ci_triage_workflow.py"
     ],
-    "evidence_contract": "CI completion -> PR CI Remediation no PR/HEAD exatos; transitório allowlisted -> rerun; falha técnica determinística elegível -> Ollama CI Triage -> Worker Pool na mesma branch/base_sha; recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint/Teams -> próxima PR."
+    "evidence_contract": "CI completion -> PR CI Remediation no PR/HEAD exatos; transitório allowlisted -> rerun; falha técnica determinística elegível -> Ollama CI Triage -> Worker Pool na mesma branch/base_sha; recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint/Teams -> próxima PR. PR CI Watch cancelled é neutro e não gera checkpoint/Teams; apenas failure/timed_out/action_required são acionáveis."
   },
   "risk": {
     "production": false,
@@ -40,6 +40,7 @@
     "Teams Commit Notification observa Ollama CI Triage e PR CI Remediation e só envia mudança material.",
     "Push de merge governado na main é reconhecido como PR integrado.",
     "GitHub permanece fonte canônica e ChatGPT é apenas interface/watchdog opcional.",
-    "Nenhum novo workflow ativo é criado e não há dependência de ChatGPT Work."
+    "Nenhum novo workflow ativo é criado e não há dependência de ChatGPT Work.",
+    "PR CI Watch cancelled é neutro; Notify Teams - ReqSys Logs só reage a failure, timed_out e action_required."
   ]
 }
