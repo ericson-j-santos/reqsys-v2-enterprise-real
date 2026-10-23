@@ -241,4 +241,3 @@ def test_sync_github_to_figma_registra_warning_quando_comentario_falha(mock_comm
     assert result.updated == 0
     assert any('figma down' in warning for warning in result.warnings)
     mock_comment.assert_called_once()
-
