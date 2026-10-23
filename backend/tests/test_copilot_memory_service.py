@@ -15,13 +15,15 @@ from app.db import Base, SessionLocal, engine
 from app.models.copilot_memory import CopilotMemoryHistory, CopilotMemoryRecord
 from app.services import copilot_memory as svc
 
-_RUN_ID = uuid.uuid4().hex[:10]
-
-
 @pytest.fixture(scope='module', autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
     yield
+
+
+def _task_id(suffix: str) -> str:
+    """Gera um identificador novo a cada execução do cenário."""
+    return f'planner-{uuid.uuid4().hex}-{suffix}'
 
 
 def _planner_payload(task_id: str, **overrides):
@@ -39,7 +41,7 @@ def _planner_payload(task_id: str, **overrides):
 
 def test_planner_cria_memoria_e_historico():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-01'
+    task_id = _task_id('01')
     try:
         resultado = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-01')
 
@@ -59,7 +61,7 @@ def test_planner_cria_memoria_e_historico():
 
 def test_mesmo_payload_planner_e_idempotente():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-02'
+    task_id = _task_id('02')
     try:
         primeiro = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-02a')
         segundo = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-02b')
@@ -78,7 +80,7 @@ def test_mesmo_payload_planner_e_idempotente():
 
 def test_excel_solicita_atualizacao_planner_sem_loop():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-03'
+    task_id = _task_id('03')
     try:
         inicial = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-03a')
         memoria_id = inicial['memoryId']
@@ -126,7 +128,7 @@ def test_excel_solicita_atualizacao_planner_sem_loop():
 
 def test_atualizacao_apenas_de_memoria_nao_gera_comando_planner():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-04'
+    task_id = _task_id('04')
     try:
         inicial = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-04a')
         alterado = svc.sincronizar_item(db, {
@@ -149,7 +151,7 @@ def test_atualizacao_apenas_de_memoria_nao_gera_comando_planner():
 
 def test_alteracao_concorrente_no_planner_vira_conflito_fail_closed():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-05'
+    task_id = _task_id('05')
     try:
         inicial = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-05a')
         memoria_id = inicial['memoryId']
@@ -179,7 +181,7 @@ def test_alteracao_concorrente_no_planner_vira_conflito_fail_closed():
 
 def test_ack_falha_mantem_rastreabilidade_e_permitem_nova_solicitacao():
     db = SessionLocal()
-    task_id = f'planner-{_RUN_ID}-06'
+    task_id = _task_id('06')
     try:
         inicial = svc.sincronizar_item(db, _planner_payload(task_id), 'corr-06a')
         memoria_id = inicial['memoryId']
@@ -213,3 +215,4 @@ def test_ack_falha_mantem_rastreabilidade_e_permitem_nova_solicitacao():
         assert rearmado['plannerSyncStatus'] == svc.STATUS_PENDENTE
     finally:
         db.close()
+
