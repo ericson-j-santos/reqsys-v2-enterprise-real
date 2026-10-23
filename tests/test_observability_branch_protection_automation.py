@@ -41,3 +41,14 @@ def test_authorized_gateway_exposes_only_exact_command() -> None:
     assert "target='branch-protection-audit.yml'" in raw
     assert "mode='apply-observability-platform'" in raw
     assert '-f mode="$TARGET_MODE"' in raw
+
+
+def test_branch_protection_concurrency_isolated_by_mode() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    expected = (
+        "group: branch-protection-audit-${{ github.event_name }}-"
+        "${{ github.ref }}-${{ github.event.inputs.mode || 'audit' }}"
+    )
+    assert expected in raw
+    assert "cancel-in-progress: true" in raw
+    assert "group: branch-protection-audit-${{ github.ref }}\n" not in raw
