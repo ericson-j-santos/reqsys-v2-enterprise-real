@@ -12,6 +12,7 @@ def test_mutmut_configuration_keeps_the_golden_test_focused() -> None:
     assert mutmut["source_paths"] == ["app"]
     assert mutmut["only_mutate"] == ["app/core/*"]
     assert mutmut["pytest_add_cli_args_test_selection"] == ["tests"]
+    assert mutmut["pytest_add_cli_args"] == ["-o", "pythonpath=../.."]
     assert mutmut["also_copy"] == [
         "copilot_memory_core",
         "copilot_memory_powerautomate_complete.py",
