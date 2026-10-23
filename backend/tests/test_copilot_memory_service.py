@@ -215,4 +215,3 @@ def test_ack_falha_mantem_rastreabilidade_e_permitem_nova_solicitacao():
         assert rearmado['plannerSyncStatus'] == svc.STATUS_PENDENTE
     finally:
         db.close()
-
