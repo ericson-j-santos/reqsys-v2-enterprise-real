@@ -13,10 +13,10 @@ os.environ.setdefault('APP_ENV', 'test')
 os.environ.setdefault('DATABASE_URL', f'sqlite:///{_DB_PATH.as_posix()}')
 os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length')
 
-from app.db import Base, SessionLocal, engine
-from app.models.planner_publish_attempt import PlannerPublishAttempt
-from app.services import hub_lowcode as hub_svc
-from app.services import planner_publish as svc
+from app.db import Base, SessionLocal, engine  # noqa: E402 -- env must precede app.db
+from app.models.planner_publish_attempt import PlannerPublishAttempt  # noqa: E402
+from app.services import hub_lowcode as hub_svc  # noqa: E402
+from app.services import planner_publish as svc  # noqa: E402
 
 # O engine/DATABASE_URL da app é um singleton de módulo (app/db.py) — se este
 # arquivo não for o primeiro a importar app.db numa sessão pytest completa, o
