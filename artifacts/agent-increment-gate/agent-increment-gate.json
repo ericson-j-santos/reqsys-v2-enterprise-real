@@ -8,7 +8,7 @@
   "strict_blocked": false,
   "increment_type": "consolidate",
   "reference": null,
-  "intent": "consolidar autenticacao duravel do monitor e reconciliacao do pool DEV",
+  "intent": "substituir inventario administrativo do monitor por prova portatil de dois runners ativos sem PAT ou permissao de administracao",
   "coordenador_state": "yellow",
   "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {

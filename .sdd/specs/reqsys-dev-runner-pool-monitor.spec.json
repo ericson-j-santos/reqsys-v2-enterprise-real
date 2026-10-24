@@ -9,7 +9,7 @@
   "scope": {
     "environment": "dev",
     "minimum_online_runners": 2,
-    "execution": "github-hosted",
+    "execution": "github-hosted observer with two portable self-hosted leases",
     "schedule": "every_30_minutes",
     "mode": "report_only"
   },
@@ -18,12 +18,14 @@
     "policy": "config/reqsys-dev-runner-pool.json",
     "audit": "scripts/audit_reqsys_dev_runner_pool.py",
     "test": "tests/test_reqsys_dev_runner_pool_monitor.py",
-    "inventory_credential": "GH_PAT_ACTIONS",
+    "observation_credential": "github.token actions:read",
+    "observation_source": "current workflow run jobs",
     "new_workflow_surface": false
   },
   "safety": {
     "mutates_runner_registry": false,
-    "dispatches_self_hosted_jobs": false,
+    "dispatches_controlled_self_hosted_probes": true,
+    "fixed_hostname_or_runner_id": false,
     "automatic_retry": false,
     "deploy": false,
     "hml": false,
@@ -35,8 +37,12 @@
     "retention_days": 30,
     "sanitized": true,
     "finding_types": [
-      "runner_offline",
+      "probe_jobs_missing",
+      "probe_unassigned",
+      "probe_incomplete",
+      "probe_failed",
       "runner_labels_mismatch",
+      "probe_runner_reused",
       "insufficient_online_runners"
     ]
   },
@@ -45,7 +51,7 @@
       "tests/test_reqsys_dev_runner_pool_monitor.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "O monitor deve reutilizar o workflow canônico de governança, executar em infraestrutura GitHub-hosted, consultar o inventário com a credencial governada, reportar offline, drift de labels e capacidade insuficiente sem qualquer mutação, deploy, retry automático ou contato com HML, STG e PROD."
+    "evidence_contract": "O monitor deve reutilizar o workflow canônico de governança, observar em infraestrutura GitHub-hosted dois leases concorrentes enviados por labels portáteis, provar dois runners distintos pelos jobs da própria execução com github.token/actions:read e reportar falha, drift ou capacidade insuficiente sem endpoint administrativo, PAT pessoal, mutação, deploy, retry automático ou contato com HML, STG e PROD."
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-runner-pool-monitor.requirements.md",

@@ -89,34 +89,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-  monitor-pool:
-    name: Audit ReqSys DEV runner availability and labels
+  probe-pool:
+    name: ReqSys DEV runner lease probe (${{ matrix.slot }})
     if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]
     timeout-minutes: 5
+    concurrency:
+      group: reqsys-dev-runner-pool-probe-${{ matrix.slot }}
+      cancel-in-progress: true
     steps:
-      - name: Validate governed runner inventory app
-        shell: bash
-        env:
-          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
-          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${APP_ID:-}" ] || [ -z "${PRIVATE_KEY:-}" ]; then
-            echo "::error::Governed GitHub App is not configured."
-            exit 2
-          fi
-
-      - name: Generate short-lived runner inventory token
-        id: runner-inventory-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
-          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: reqsys-v2-enterprise-real
-          permission-administration: read
-
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -124,14 +109,51 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Read repository runner inventory
+      - name: Validate governed DEV base capability
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+
+      - name: Hold an observable pool lease
+        shell: powershell
+        run: Start-Sleep -Seconds 75
+
+  monitor-pool:
+    name: Audit ReqSys DEV runner lease evidence
+    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Observe the two portable runner leases
         env:
-          GH_TOKEN: ${{ steps.runner-inventory-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/reqsys-dev-runner-pool-monitor
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runners?per_page=100" \
-            > artifacts/reqsys-dev-runner-pool-monitor/inventory.json
+          jobs_file='artifacts/reqsys-dev-runner-pool-monitor/jobs.json'
+          for attempt in $(seq 1 43); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" > "$jobs_file"
+            completed="$(JOBS_FILE="$jobs_file" python - <<'PY'
+          import json
+          import os
+
+          jobs = json.load(open(os.environ['JOBS_FILE'], encoding='utf-8')).get('jobs') or []
+          probes = [job for job in jobs if str(job.get('name') or '').startswith('ReqSys DEV runner lease probe (')]
+          print(sum(job.get('status') == 'completed' for job in probes))
+          PY
+          )"
+            if [ "$completed" -ge 2 ]; then
+              break
+            fi
+            sleep 5
+          done
 
       - name: Build sanitized report-only evidence
         id: audit
@@ -139,7 +161,7 @@ jobs:
           set -euo pipefail
           python scripts/audit_reqsys_dev_runner_pool.py \
             --policy config/reqsys-dev-runner-pool.json \
-            --inventory artifacts/reqsys-dev-runner-pool-monitor/inventory.json \
+            --jobs artifacts/reqsys-dev-runner-pool-monitor/jobs.json \
             --output artifacts/reqsys-dev-runner-pool-monitor/evidence.json
           status="$(python -c "import json; print(json.load(open('artifacts/reqsys-dev-runner-pool-monitor/evidence.json'))['status'])")"
           echo "status=$status" >> "$GITHUB_OUTPUT"

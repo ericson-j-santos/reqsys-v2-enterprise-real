@@ -40,9 +40,11 @@ Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `
 
 ## Monitoramento
 
-O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels do `monitor_profile` (`base`), exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. Como as labels são cumulativas, runners `runtime` e `ollama` também contam para a disponibilidade de `base`. A leitura do inventário usa um token de instalação de curta duração da GitHub App governada (`REQSYS_STACK_REBASE_APP_ID` e `REQSYS_STACK_REBASE_PRIVATE_KEY`), sem PAT pessoal e sem depender de credencial armazenada em qualquer PC. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele envia simultaneamente dois leases efêmeros pelas labels portáteis do perfil `base`; cada PC executa o preflight e mantém o lease observável por 75 segundos. Um observador GitHub-hosted lê apenas os jobs da própria execução com `github.token` e `actions: read`, exige duas conclusões positivas em runners distintos e publica somente evidência sanitizada. Um único PC que execute os slots em sequência não satisfaz o requisito de capacidade dois.
 
-O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
+Esse desenho não consulta o endpoint administrativo de inventário, não usa PAT pessoal, não solicita `administration: read` e não depende de credencial armazenada em qualquer PC. Como as labels são cumulativas, runners `runtime` e `ollama` também podem atender o perfil `base`. Cada slot tem concurrency própria com cancelamento da medição anterior, limitando leases que permaneçam na fila quando não houver capacidade. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+
+Fora desses dois leases internos, o pool não autoriza dispatch arbitrário, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 
 ## Fases de adoção
 
