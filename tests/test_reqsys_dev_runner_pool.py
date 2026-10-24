@@ -219,7 +219,7 @@ def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
     assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway
 
 
-def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canary():
+def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_restart_or_canary():
     recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
     onboard = recovery.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
@@ -230,9 +230,11 @@ def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canar
     assert "expected_sha" in onboard
     assert "install_reqsys_dev_runner.ps1" in onboard
     assert "-Profile base" in onboard
-    assert "-ApplyGitHubLabels" in onboard
-    assert "-LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in onboard
-    assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in onboard
+    assert "-ApplyGitHubLabels" not in onboard
+    assert "-LabelConfirmation" not in onboard
+    assert "secrets." not in onboard
+    assert "labels_applied = $false" in onboard
+    assert "label_reconciliation_required = $true" in onboard
     assert "-RestartRunnerService" not in onboard
     assert "canary_dispatched = $false" in onboard
     assert "automatic_retry_enabled = $false" in onboard
