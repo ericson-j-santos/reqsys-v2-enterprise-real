@@ -63,7 +63,7 @@ def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
     token_job = text.index('  bootstrap-token-dev:')
     bootstrap_job = text.index('  bootstrap-dev:')
     assert reconcile_job < token_job < bootstrap_job
-    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in text
+    assert 'runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]' in text
     assert 'needs: [contract, reconcile-runtime-dev]' in text
     assert 'needs: [contract, reconcile-runtime-dev, bootstrap-token-dev]' in text
     assert 'reconcile_pc24x7_teams_dev_runtime.py' in text
@@ -92,10 +92,10 @@ def test_mint_roda_no_mesmo_job_self_hosted_que_le_o_cofre_local() -> None:
     reconcile = text.split('  reconcile-runtime-dev:', 1)[1].split('\n  bootstrap-token-dev:', 1)[0]
     token_job = text.split('  bootstrap-token-dev:', 1)[1].split('\n  bootstrap-dev:', 1)[0]
     bootstrap = text.split('  bootstrap-dev:', 1)[1]
-    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in reconcile
+    assert 'runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]' in reconcile
     assert 'Validar ou provisionar token S2S no PC24x7' not in reconcile
     assert "GetEnvironmentVariable('VAULT_API_TOKEN')" not in reconcile
-    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in token_job
+    assert 'runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]' in token_job
     assert 'PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1' in token_job
     assert "GetEnvironmentVariable('VAULT_API_TOKEN')" not in token_job
     assert 'Validar ou provisionar token S2S no PC24x7' in token_job

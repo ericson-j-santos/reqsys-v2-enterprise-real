@@ -7,6 +7,13 @@ import pytest
 
 import scripts.pc24x7_public_dev_cutover_guard as guard
 
+TEST_RUNNER_ID = "reqsys-pc-test01"
+
+
+@pytest.fixture(autouse=True)
+def runner_identity(monkeypatch):
+    monkeypatch.setenv("REQSYS_DEV_RUNNER_INSTANCE_ID", TEST_RUNNER_ID)
+
 SHA = "a" * 40
 IMAGE = "sha256:" + "b" * 64
 CORRELATION = "pc24x7-public-static-123-1"
@@ -16,7 +23,7 @@ def _prepared_runtime():
     return {
         "schema": 2,
         "state": "prepared",
-        "host": guard.HOST,
+        "runner_instance_id": TEST_RUNNER_ID,
         "environment": "dev",
         "project": guard.PROJECT,
         "runtime_root": str(guard.ROOT),
@@ -58,7 +65,7 @@ def test_prepare_keeps_only_dpapi_ciphertext_and_sanitized_public_contract(monke
         CORRELATION,
         manifest_path,
         root=root,
-        hostname=guard.HOST,
+        hostname=TEST_RUNNER_ID,
         runner=object(),
         protect=lambda value, *, encrypt: b"ciphertext:" + value[::-1],
         restore=lambda dump, image, correlation, expected: restored.append(
@@ -83,7 +90,7 @@ def test_validate_rejects_outer_manifest_tamper(monkeypatch, tmp_path):
     def protect(value, *, encrypt):
         return value[::-1]
     manifest = guard.prepare(
-        SHA, CORRELATION, manifest_path, root=root, hostname=guard.HOST,
+        SHA, CORRELATION, manifest_path, root=root, hostname=TEST_RUNNER_ID,
         runner=object(), protect=protect, restore=lambda *_args: None,
     )
     external = manifest["fingerprint"]
@@ -298,7 +305,7 @@ def test_owner_risk3_steps_keep_gateway_global_fail_closed_and_worktree_clean():
     assert "'--risk', '3'" not in public_static
     assert "'--timeout', '1200'" not in public_static
     assert "'--timeout', '1500'" not in public_static
-    assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in public_static
+    assert "repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1" in public_static
     assert "prepare_failure_receipt_missing_or_invalid" in public_static
     assert "$allowedFailureReasons -notcontains [string]$blocked.reason_code" in public_static
     assert "$allowedScopeDiagnosticCodes -notcontains [string]$blocked.scope_diagnostic_code" in public_static

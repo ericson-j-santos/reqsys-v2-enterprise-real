@@ -91,6 +91,7 @@ def test_public_override_hash_uses_git_path_filters(monkeypatch, tmp_path: Path)
 
 def test_execute_reconciles_then_recreates_and_verifies(monkeypatch, tmp_path: Path) -> None:
     args = _args(tmp_path)
+    monkeypatch.setenv("REQSYS_DEV_RUNNER_INSTANCE_ID", "reqsys-pc-test01")
     runtime_root = tmp_path / "runtime"
     runtime_root.mkdir()
     admin_override = tmp_path / "docker-compose.admin-dev.override.yml"

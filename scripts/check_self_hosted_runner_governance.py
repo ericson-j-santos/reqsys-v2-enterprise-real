@@ -108,8 +108,41 @@ def validate(root: Path, policy_path: Path) -> tuple[bool, dict]:
             if workflow not in approved_workflows:
                 violations.append(f"Workflow not allowlisted: {workflow}")
 
+    portable = policy.get("portable_dev_runner_contract", {})
+    if isinstance(portable, dict):
+        required_label = str(portable.get("label", ""))
+        preflight_action = str(portable.get("preflight_action", ""))
+        forbidden = [str(item) for item in portable.get("forbidden_hostnames", [])]
+        for workflow in portable.get("workflows", []):
+            path = root / str(workflow)
+            if not path.is_file():
+                violations.append(f"Portable DEV workflow not found: {workflow}")
+                continue
+            raw = path.read_text(encoding="utf-8")
+            if required_label not in raw:
+                violations.append(f"Portable DEV label missing: {workflow}")
+            if preflight_action not in raw:
+                violations.append(f"Portable DEV preflight missing: {workflow}")
+            pool_jobs = sum(
+                1
+                for line in raw.splitlines()
+                if RUNS_ON_PATTERN.match(line)
+                and required_label in RUNS_ON_PATTERN.match(line).group("value")
+            )
+            if raw.count(f"uses: {preflight_action}") < pool_jobs:
+                violations.append(f"Portable DEV job without preflight: {workflow}")
+            for hostname in forbidden:
+                if hostname and hostname.casefold() in raw.casefold():
+                    violations.append(f"Fixed runner hostname forbidden: {workflow}")
+            if portable.get("forbid_fixed_runner_id") and re.search(
+                r"\brunner_id\s*[:=]\s*[0-9]+", raw, re.IGNORECASE
+            ):
+                violations.append(f"Fixed runner id forbidden: {workflow}")
+
+    result_status = "pass" if not violations else "fail"
+
     result = {
-        "status": "pass" if not violations else "fail",
+        "status": result_status,
         "self_hosted_usages": findings,
         "violations": violations,
         "policy": policy,

@@ -56,7 +56,7 @@ jobs:
   enqueue:
     if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'legacy_pc24x7'
     name: Enfileirar fallback local no Worker Pool
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
     timeout-minutes: 10
     env:
       CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
@@ -68,6 +68,12 @@ jobs:
         with:
           ref: ${{ inputs.base_sha }}
           fetch-depth: 1
+
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+          repository-path: .
 
       - name: Handoff governado para o Worker Pool
         shell: powershell
