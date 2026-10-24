@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import socket
 import stat
 import subprocess
 import time
@@ -18,11 +17,10 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path, PurePath
 from typing import Protocol
 
-HOST = "DESKTOP-PDQK954"
 ENV = "dev"
 PROJECT = "wt-pc24x7-piloto"
 SERVICES = ("api", "frontend", "nginx")
-ROOT = Path(r"C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed")
+ROOT = Path(os.environ.get("REQSYS_DEV_RUNTIME_ROOT", "__REQSYS_DEV_RUNTIME_ROOT_REQUIRED__"))
 IMAGE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 PREPARE_CONFIRM = "PREPARE-ROLLBACK-PC24X7-PUBLIC-DEV"
@@ -105,9 +103,15 @@ def parsed(runner, argv):
     return parsed_output(invoke(runner, argv))
 
 
+def runner_instance_id(value=None):
+    observed = str(value or os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "")).strip()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", observed):
+        raise RecoveryError("runner_identity_refused")
+    return observed
+
+
 def observed_scope(hostname=None):
-    if (hostname or socket.gethostname()).upper() != HOST:
-        raise RecoveryError("host_identity_refused")
+    return runner_instance_id(hostname)
 
 
 def _reparse(path):
@@ -360,7 +364,7 @@ def observe_identity():
 
 
 def static_live_guard(runner, root=ROOT, hostname=None):
-    observed_scope(hostname)
+    identity = observed_scope(hostname)
     root_abs = Path(os.path.abspath(root))
     if _reparse(root_abs) or root_abs.resolve(strict=True) != root_abs:
         raise RecoveryError("runtime_root_invalid")
@@ -373,7 +377,7 @@ def static_live_guard(runner, root=ROOT, hostname=None):
             "image_id": image_id(item.get("Image")),
         }
     return {
-        "host": HOST,
+        "runner_instance_id": identity,
         "root": str(root_abs),
         "containers": containers,
     }
@@ -476,7 +480,7 @@ def capture(
     body = {
         "schema": 4,
         "state": "captured",
-        "host": live["host"],
+        "runner_instance_id": live["runner_instance_id"],
         "environment": ENV,
         "project": PROJECT,
         "runtime_root": live["root"],
@@ -518,7 +522,7 @@ def validate(manifest, runner, expected_fingerprint, root=ROOT, require_prepared
     if fingerprint(unsigned) != expected_fingerprint:
         raise RecoveryError("manifest_integrity_failed")
     if (
-        manifest.get("host") != HOST
+        manifest.get("runner_instance_id") != runner_instance_id()
         or manifest.get("environment") != ENV
         or manifest.get("project") != PROJECT
     ):
@@ -814,7 +818,7 @@ _DEV_READINESS_REASON_MAP = {
     "invalid_container_metadata": "container_unavailable",
     "invalid_image_id": "container_unavailable",
     "invalid_metadata": "container_unavailable",
-    "host_identity_refused": "scope_invalid",
+    "runner_identity_refused": "scope_invalid",
     "runtime_root_invalid": "scope_invalid",
     "compose_identity_mismatch": "scope_invalid",
     "working_dir_mismatch": "scope_invalid",

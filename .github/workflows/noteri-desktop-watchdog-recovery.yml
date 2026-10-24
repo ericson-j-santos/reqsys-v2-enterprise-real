@@ -15,12 +15,22 @@ on:
           - runner-recover
           - runner-bootstrap
           - runner-canary
+          - runner-pool-canary
           - watchdog-readback
           - alm-runner-bootstrap
           - reboot-once
+      expected_sha:
+        description: 'SHA exato autorizado em main (somente runner-pool-canary)'
+        required: false
+        type: string
+      authorization_comment_id:
+        description: 'Comentário owner consumido pelo gateway (somente runner-pool-canary)'
+        required: false
+        type: string
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: noteri-desktop-watchdog-recovery-${{ inputs.mode }}
@@ -950,6 +960,82 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  runner-pool-canary:
+    if: ${{ inputs.mode == 'runner-pool-canary' }}
+    name: Prove eligible ReqSys DEV pool pickup
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/reqsys-dev-runner-pool-canary/evidence.json
+    steps:
+      - name: Verify owner authorization and immutable SHA
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:AUTHORIZATION_COMMENT_ID -notmatch '^[0-9]+$') { throw 'AUTHORIZATION_COMMENT_INVALID' }
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$' -or $env:EXPECTED_SHA -ne '${{ github.sha }}') {
+            throw 'EXPECTED_SHA_INVALID'
+          }
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $comment = Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/comments/$env:AUTHORIZATION_COMMENT_ID" -Headers $headers -TimeoutSec 30
+          if ($comment.user.login -ne 'ericson-j-santos' -or
+              $comment.issue_url -ne "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/1705" -or
+              $comment.body -cne '/reqsys run desktop-runner-pickup-canary') {
+            throw 'AUTHORIZATION_MISMATCH'
+          }
+          $age = [DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($comment.created_at).ToUniversalTime()
+          if ($age.TotalSeconds -lt -300 -or $age.TotalMinutes -gt 30) { throw 'AUTHORIZATION_EXPIRED' }
+
+      - name: Checkout immutable authorized SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+          repository-path: .
+
+      - name: Write sanitized pickup evidence
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $observed = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne $env:EXPECTED_SHA) { throw 'CHECKOUT_SHA_MISMATCH' }
+          $directory = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          [ordered]@{
+            schema_version = 1
+            result = 'REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN'
+            pool = 'reqsys-dev-pc-pool-v1'
+            runner_instance_id = $env:REQSYS_DEV_RUNNER_INSTANCE_ID
+            environment = 'dev'
+            source_sha = $observed
+            runtime_mutated = $false
+            deploy_performed = $false
+            production_touched = $false
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+
+      - name: Upload sanitized pool canary evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-runner-pool-canary-${{ github.run_id }}
+          path: artifacts/reqsys-dev-runner-pool-canary/evidence.json
+          if-no-files-found: error
+          retention-days: 30
 
   runner-canary:
     if: ${{ inputs.mode == 'runner-canary' }}

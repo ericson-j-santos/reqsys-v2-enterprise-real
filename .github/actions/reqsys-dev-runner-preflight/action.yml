@@ -1,0 +1,21 @@
+name: ReqSys DEV runner pool preflight
+description: Valida, em fail-closed, a elegibilidade do PC para o pool DEV compartilhado.
+inputs:
+  profile:
+    description: Perfil mínimo de capacidades
+    required: false
+    default: base
+  repository-path:
+    description: Checkout ReqSys a validar
+    required: false
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Validar capacidade e isolamento DEV
+      shell: powershell
+      run: >-
+        python "${{ github.action_path }}\..\..\..\scripts\validate_reqsys_dev_runner.py"
+        --policy "${{ github.action_path }}\..\..\..\config\reqsys-dev-runner-pool.json"
+        --profile "${{ inputs.profile }}"
+        --repository "${{ inputs.repository-path }}"
