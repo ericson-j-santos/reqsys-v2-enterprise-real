@@ -66,6 +66,7 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap' ||
         github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run noteri-runner-pool-onboard' ||
+        github.event.comment.body == '/reqsys run noteri-runner-pool-label-reconcile' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
         github.event.comment.body == '/reqsys run todo-producer-keyvault-dev' ||
@@ -264,6 +265,10 @@ jobs:
             '/reqsys run noteri-runner-pool-onboard')
               target='noteri-desktop-watchdog-recovery.yml'
               mode='runner-pool-onboard-noteri'
+              ;;
+            '/reqsys run noteri-runner-pool-label-reconcile')
+              target='self-hosted-runner-governance-guard.yml'
+              mode='runner-pool-label-reconcile-noteri'
               ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
@@ -593,6 +598,26 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=preflight)"
+          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ]; then
+            onboarding_run_id=''
+            for candidate_run_id in $(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/noteri-desktop-watchdog-recovery.yml/runs?event=workflow_dispatch&status=success&per_page=30" \
+              --jq '.workflow_runs[].id'); do
+              artifact_count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}/artifacts" \
+                --jq "[.artifacts[] | select(.name == \"reqsys-dev-runner-pool-onboard-${candidate_run_id}\" and .expired == false)] | length")"
+              if [ "$artifact_count" = '1' ]; then
+                onboarding_run_id="$candidate_run_id"
+                break
+              fi
+            done
+            [ -n "$onboarding_run_id" ] || { echo 'successful_onboarding_evidence_not_found' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE" \
+              -f expected_sha="$EXPECTED_SHA" \
+              -f authorization_comment_id="$AUTHORIZED_COMMENT_ID" \
+              -f onboarding_run_id="$onboarding_run_id")"
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
