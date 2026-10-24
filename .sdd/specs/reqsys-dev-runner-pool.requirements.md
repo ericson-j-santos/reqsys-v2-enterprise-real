@@ -10,3 +10,5 @@
 - R6: onboarding e retirada de PCs devem ser documentados e automatizados sem registrar ou reconfigurar o serviço automaticamente.
 - R7: testes devem impedir a reintrodução de `DESKTOP-PDQK954` ou `runner_id` fixo nos workflows portáveis.
 - R8: esta evolução não executa dispatch, retry, deploy ou mutação de ambiente.
+
+- R9: scripts PowerShell com [CmdletBinding(SupportsShouldProcess)] não podem declarar parâmetro customizado Confirm, pois conflita com parâmetro comum automático; usar AuthorizationPhrase vinculada à literal de aceite de labels no workflow, validar parâmetro negativo e preservar WhatIf/Confirm nativos. Teste negativo em Windows deve executar apenas preflight com runner inexistente, sem alterar o ambiente.
