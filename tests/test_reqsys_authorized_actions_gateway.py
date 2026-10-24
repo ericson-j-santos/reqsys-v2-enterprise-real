@@ -452,6 +452,8 @@ def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -
     assert "mode='runner-pool-label-reconcile-noteri'" in content
     assert '-f onboarding_run_id="$onboarding_run_id"' in content
     assert "successful_onboarding_evidence_not_found" in content
+    dispatch = content.split("- name: Dispatch fixed workflow on main", 1)[1]
+    assert "branch-protection-audit.yml|self-hosted-runner-governance-guard.yml)" in dispatch
 
     assert "runner-bootstrap|runner-canary" in content
     assert '-f mode="$recovery_mode"' in content
