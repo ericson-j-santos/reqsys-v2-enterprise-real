@@ -3,6 +3,7 @@
   "pool": "reqsys-dev-pc-pool-v1",
   "environment": "dev",
   "minimum_online_runners": 2,
+  "monitor_profile": "base",
   "forbidden_environments": ["hml", "stg", "prod", "production"],
   "required_safeguards": {
     "hml_enabled": false,

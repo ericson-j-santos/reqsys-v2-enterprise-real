@@ -22,7 +22,9 @@ preflight.
    workflows mistos quando identidades fixas aparecem apenas em jobs legados não portáveis.
 8. O onboarding DEVE imprimir as labels definidas no perfil selecionado, sem registrar ou
    reconfigurar automaticamente o serviço GitHub Actions.
-9. A mudança DEVE permanecer restrita a DEV e NÃO DEVE habilitar HML, STG ou PROD.
+9. O monitor report-only do pool DEVE medir disponibilidade pelas labels do perfil `base`,
+   permitindo que runners `runtime` e `ollama` cumulativos também sejam contabilizados.
+10. A mudança DEVE permanecer restrita a DEV e NÃO DEVE habilitar HML, STG ou PROD.
 
 ## Evidência esperada
 

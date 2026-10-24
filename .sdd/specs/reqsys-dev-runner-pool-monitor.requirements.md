@@ -9,7 +9,7 @@ Detectar periodicamente indisponibilidade e desvio de labels no pool portátil d
 1. Executar em runner GitHub-hosted a cada 30 minutos e por acionamento manual.
 2. Reutilizar o workflow canônico `Self-Hosted Runner Governance Guard`, sem criar uma nova superfície de workflow.
 3. Consultar o inventário de runners com a credencial governada `GH_PAT_ACTIONS` e acesso somente de leitura durante o monitoramento.
-4. Considerar elegível somente runner online com todas as labels definidas em `config/reqsys-dev-runner-pool.json`.
+4. Considerar elegível somente runner online com todas as labels do perfil indicado por `monitor_profile` em `config/reqsys-dev-runner-pool.json`.
 5. Exigir ao menos dois runners elegíveis online.
 6. Registrar achados sanitizados para runner offline, desvio de labels e capacidade online insuficiente.
 7. Publicar artifact de evidência por 30 dias e resumo no job.
@@ -25,7 +25,7 @@ Detectar periodicamente indisponibilidade e desvio de labels no pool portátil d
 
 ## Critérios de aceite
 
-- testes unitários cobrem dois runners elegíveis e o cenário offline com drift de labels;
+- testes unitários cobrem dois runners elegíveis no perfil `base` e o cenário offline com drift de labels;
 - o workflow usa ações externas pinadas por SHA completo;
 - o workflow usa `GH_PAT_ACTIONS`, não `github.token`, para o endpoint administrativo de inventário;
 - a evidência declara `mode=report_only`, `mutated=false`, `deploy_performed=false` e `production_touched=false`;

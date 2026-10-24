@@ -12,6 +12,7 @@
   "sdd_gate": {
     "tests": [
       "tests/test_reqsys_dev_runner_pool.py",
+      "tests/test_reqsys_dev_runner_pool_monitor.py",
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_dev_runtime_cutover.py"
     ]

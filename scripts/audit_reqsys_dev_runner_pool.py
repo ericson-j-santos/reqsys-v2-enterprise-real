@@ -31,9 +31,16 @@ def _labels(runner: dict[str, Any]) -> list[str]:
 
 
 def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
-    required = policy.get("runner_labels")
+    profile_name = policy.get("monitor_profile")
+    profiles = policy.get("profiles")
+    if not isinstance(profile_name, str) or not isinstance(profiles, dict):
+        raise PoolAuditError("monitor_profile_invalid")
+    profile = profiles.get(profile_name)
+    if not isinstance(profile, dict):
+        raise PoolAuditError("monitor_profile_invalid")
+    required = profile.get("runner_labels")
     if not isinstance(required, list) or not required or not all(isinstance(item, str) and item for item in required):
-        raise PoolAuditError("runner_labels_invalid")
+        raise PoolAuditError("profile_runner_labels_invalid")
     minimum = policy.get("minimum_online_runners")
     if not isinstance(minimum, int) or minimum < 2:
         raise PoolAuditError("minimum_online_runners_invalid")
@@ -84,6 +91,7 @@ def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).isoformat(),
         "pool": policy.get("pool"),
         "environment": "dev",
+        "monitored_profile": profile_name,
         "status": "passed" if not findings else "degraded",
         "minimum_online_runners": minimum,
         "online_eligible_runners": online_eligible,
@@ -108,7 +116,7 @@ def main() -> int:
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps({"status": result["status"], "online_eligible_runners": result["online_eligible_runners"]}))
         return 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI must fail closed on malformed external inventory.
         print(json.dumps({"status": "blocked", "reason": str(exc)[:500], "production_touched": False}))
         return 2
 
