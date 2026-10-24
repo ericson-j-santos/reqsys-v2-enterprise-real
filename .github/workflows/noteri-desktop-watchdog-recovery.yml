@@ -1030,7 +1030,7 @@ jobs:
             -Profile base `
             -ManifestPath $manifestPath `
             -ApplyGitHubLabels `
-            -Confirm 'APPLY-REQSYS-DEV-RUNNER-LABELS'
+            -LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'
           if ($LASTEXITCODE -ne 0) { throw 'RUNNER_INSTALLER_BLOCKED' }
           python '.\scripts\validate_reqsys_dev_runner.py' `
             --manifest $manifestPath `

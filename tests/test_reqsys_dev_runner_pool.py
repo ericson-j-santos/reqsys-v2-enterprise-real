@@ -196,6 +196,8 @@ def test_installer_configures_runner_env_and_requires_explicit_label_confirmatio
     assert "DESKTOP-PDQK954" not in raw
     assert "automatic_retry_enabled = $false" in raw
     assert "production_touched = $false" in raw
+    assert "[string]$Confirm" not in raw
+    assert "[string]$LabelConfirmation" in raw
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
@@ -229,6 +231,7 @@ def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canar
     assert "install_reqsys_dev_runner.ps1" in onboard
     assert "-Profile base" in onboard
     assert "-ApplyGitHubLabels" in onboard
+    assert "-LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in onboard
     assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in onboard
     assert "-RestartRunnerService" not in onboard
     assert "canary_dispatched = $false" in onboard
