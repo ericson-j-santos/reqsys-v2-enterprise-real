@@ -8,6 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 SCRIPT = Path('scripts/cofre_human_token.py')
+SCRIPT_DIR = str(SCRIPT.parent.resolve())
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 spec = importlib.util.spec_from_file_location('cofre_human_token', SCRIPT)
 subject = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
