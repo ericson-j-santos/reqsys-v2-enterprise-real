@@ -261,4 +261,4 @@ def test_authorized_gateway_maps_exact_command_to_existing_workflow_mode() -> No
     assert "'/reqsys run noteri-alm-runner-bootstrap')" in raw
     assert "target='noteri-desktop-watchdog-recovery.yml'" in raw
     assert "mode='alm-runner-bootstrap'" in raw
-    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap" in raw
+    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|reboot-once|alm-runner-bootstrap" in raw

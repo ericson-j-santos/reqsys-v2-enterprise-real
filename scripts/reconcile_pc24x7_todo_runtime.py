@@ -349,7 +349,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": "1.0.0",
         "status": "passed",
         "environment": "dev",
-        "host": public_runtime.EXPECTED_HOST,
+        "runner_instance_id": os.environ["REQSYS_DEV_RUNNER_INSTANCE_ID"],
         "project": project,
         "runtime_sha": args.expected_sha,
         "correlation_id": args.correlation_id,

@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import os
-import socket
 import subprocess
 import time
 from pathlib import Path
@@ -18,7 +17,6 @@ BASE_URL = "http://127.0.0.1:8210"
 CONTAINER = "wt-pc24x7-piloto-api-1"
 PROJECT = "wt-pc24x7-piloto"
 SERVICE = "api"
-EXPECTED_HOST = "DESKTOP-PDQK954"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 FIGMA_FILE_ID = "1iA8PiHX7qMnYHBDTdt0fY"
 FIGMA_NODE_ID = "1:44"
@@ -106,8 +104,8 @@ def run_docker(args: list[str], timeout: int = 180) -> subprocess.CompletedProce
 
 
 def inspect_runtime(expected_sha: str) -> dict[str, Any]:
-    if socket.gethostname().casefold() != EXPECTED_HOST.casefold():
-        raise E2EError(f"host_mismatch:{socket.gethostname()}")
+    if not os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "").strip():
+        raise E2EError("runner_preflight_required")
     payload = json.loads(run_docker(["inspect", CONTAINER]).stdout)
     if not isinstance(payload, list) or len(payload) != 1:
         raise E2EError("container_inspect_invalid")
@@ -254,6 +252,9 @@ def sync_payload() -> dict[str, Any]:
 
 
 def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict[str, Any]:
+    runner_instance_id = os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "").strip()
+    if not runner_instance_id:
+        raise E2EError("runner_preflight_required")
     runtime_before = inspect_runtime(expected_sha)
     wait_runtime(expected_sha)
 
@@ -383,7 +384,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
             "status": "passed",
             "environment": "dev",
             "runtime_sha": expected_sha,
-            "host": EXPECTED_HOST,
+            "runner_instance_id": runner_instance_id,
             "correlation_id": correlation_id,
             "defaults_configured": True,
             "figma_file_key_sha256": _sha256(FIGMA_FILE_ID),

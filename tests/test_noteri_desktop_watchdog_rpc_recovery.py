@@ -210,14 +210,17 @@ def test_wrong_source_host_is_rejected(tmp_path: Path) -> None:
 def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
 
-    # Superfície única e explicitamente limitada: nenhum input livre além do modo.
+    # Superfície única e explicitamente limitada: modo fechado e vínculos do canário governado.
     assert "workflow_dispatch:" in raw
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "watchdog-readback", "alm-runner-bootstrap", "reboot-once"):
+    for mode in ("watchdog", "watchdog-uac", "watchdog-uac-stage", "runner-recover", "runner-bootstrap", "runner-canary", "runner-pool-canary", "runner-pool-onboard-noteri", "watchdog-readback", "alm-runner-bootstrap", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
+    assert "expected_sha:" in raw
+    assert "authorization_comment_id:" in raw
+    assert "runner-pool-canary/onboard" in raw
 
     # Permissões e invariantes comuns permanecem somente leitura/fail-closed.
     assert "contents: read" in raw
@@ -238,7 +241,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 15
+    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 17
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
     assert raw.count("Prepare pinned portable Python 3.12") == 7
@@ -251,7 +254,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 7
     assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 7
     assert raw.count("--require-runner-version-preflight") == 6
-    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 8
+    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 10
 
     # Modo watchdog executa localmente no Desktop e permanece restrito à tarefa fixa existente.
     assert "inputs.mode == 'watchdog-uac'" in raw

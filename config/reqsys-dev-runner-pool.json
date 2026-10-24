@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "pool": "reqsys-dev-pc-pool-v1",
+  "environment": "dev",
+  "minimum_online_runners": 2,
+  "monitor_profile": "base",
+  "forbidden_environments": ["hml", "stg", "prod", "production"],
+  "required_safeguards": {
+    "hml_enabled": false,
+    "stg_enabled": false,
+    "production_enabled": false,
+    "automatic_retry_enabled": false
+  },
+  "profiles": {
+    "base": {
+      "capabilities": ["git", "python", "reqsys-source"],
+      "tools": ["git", "python"],
+      "runner_labels": [
+        "self-hosted",
+        "Windows",
+        "X64",
+        "reqsys-dev",
+        "reqsys-dev-base-v1"
+      ]
+    },
+    "runtime": {
+      "capabilities": ["git", "python", "docker", "reqsys-source", "dev-runtime"],
+      "tools": ["git", "python", "docker"],
+      "runner_labels": [
+        "self-hosted",
+        "Windows",
+        "X64",
+        "reqsys-dev",
+        "reqsys-dev-base-v1",
+        "reqsys-dev-runtime-v1"
+      ]
+    },
+    "ollama": {
+      "capabilities": ["git", "python", "docker", "ollama", "reqsys-source", "dev-runtime"],
+      "tools": ["git", "python", "docker", "ollama"],
+      "runner_labels": [
+        "self-hosted",
+        "Windows",
+        "X64",
+        "reqsys-dev",
+        "reqsys-dev-base-v1",
+        "reqsys-dev-runtime-v1",
+        "reqsys-dev-ollama-v1"
+      ]
+    }
+  },
+  "repositories": [
+    "ericson-j-santos/reqsys-v2-enterprise-real",
+    "ericson-j-santos/engineering-rules",
+    "ericson-j-santos/chatgpt-operational-rules"
+  ]
+}

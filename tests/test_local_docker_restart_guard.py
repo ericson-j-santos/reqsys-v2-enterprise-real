@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -10,6 +9,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+
+from scripts.validate_local_stack_contract import (
+    ContractError,
+    evaluate_contract,
+    interpolate,
+    validate_production_contract,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,52 +52,25 @@ def _bash() -> str | None:
     return bash if probe.returncode == 0 else None
 
 
-def _production_compose_config(
-    overrides: dict[str, str] | None = None,
-    *,
-    config_args: tuple[str, ...] = ("--format", "json"),
-) -> subprocess.CompletedProcess[str]:
-    docker = shutil.which("docker")
-    if not docker:
-        pytest.skip("Docker Compose indisponivel")
-
-    environment = os.environ.copy()
-    environment.update(PRODUCTION_REQUIRED_ENV)
+def _production_contract(overrides: dict[str, str] | None = None) -> dict:
+    # Synthetic inputs only: never inherit host environment, .env or secrets.
+    environment = dict(PRODUCTION_REQUIRED_ENV)
     environment["GATEWAY_PORT"] = "18081"
-    if overrides:
-        environment.update(overrides)
-
-    return subprocess.run(
-        [
-            docker,
-            "compose",
-            "--project-directory",
-            str(ROOT),
-            "--project-name",
-            "reqsys-prod-contract",
-            "-f",
-            str(ROOT / "docker-compose.yml"),
-            "-f",
-            str(ROOT / "docker-compose.prod.yml"),
-            "config",
-            *config_args,
-        ],
-        cwd=ROOT,
-        env=environment,
-        check=False,
-        capture_output=True,
-        text=True,
+    environment.update(overrides or {})
+    model = evaluate_contract(
+        (ROOT / "docker-compose.yml").read_text(encoding="utf-8"),
+        (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"),
+        environment,
     )
+    validate_production_contract(model, environment)
+    return model
 
 
 def test_restart_policy_is_fail_fast_except_in_production() -> None:
     base_services = _yaml("docker-compose.yml")["services"]
-    result = _production_compose_config()
-    assert result.returncode == 0, result.stderr
-    prod_services = json.loads(result.stdout)["services"]
-    active_result = _production_compose_config(config_args=("--services",))
-    assert active_result.returncode == 0, active_result.stderr
-    active_services = set(active_result.stdout.splitlines())
+    model = _production_contract()
+    prod_services = model["services"]
+    active_services = set(model["active_services"])
 
     assert all(service.get("restart") == "no" for service in base_services.values())
     assert active_services == set(base_services) - {"mailhog"}
@@ -105,9 +84,8 @@ def test_restart_policy_is_fail_fast_except_in_production() -> None:
 
 
 def test_production_effective_contract_is_secure_and_reachable() -> None:
-    result = _production_compose_config()
-    assert result.returncode == 0, result.stderr
-    services = json.loads(result.stdout)["services"]
+    model = _production_contract()
+    services = model["services"]
 
     api = services["api"]
     environment = api["environment"]
@@ -119,9 +97,7 @@ def test_production_effective_contract_is_secure_and_reachable() -> None:
             assert environment[name] == value
     assert environment["MOVIMENTO_EMAIL_SMTP_HOST"] == ""
     assert "mailhog" not in api["depends_on"]
-    active_result = _production_compose_config(config_args=("--services",))
-    assert active_result.returncode == 0, active_result.stderr
-    assert "mailhog" not in active_result.stdout.splitlines()
+    assert "mailhog" not in model["active_services"]
     if "mailhog" in services:
         assert "local-mail" in services["mailhog"].get("profiles", [])
 
@@ -148,10 +124,8 @@ def test_production_effective_contract_is_secure_and_reachable() -> None:
 def test_production_compose_fails_fast_when_required_value_is_missing(
     required_name: str,
 ) -> None:
-    result = _production_compose_config({required_name: ""})
-
-    assert result.returncode != 0
-    assert required_name in result.stderr
+    with pytest.raises(ContractError, match=required_name):
+        _production_contract({required_name: ""})
 
 
 def test_frontend_production_target_serves_static_spa_and_preserves_dev_default() -> None:
@@ -386,3 +360,136 @@ def test_scheduler_refuses_creation_without_explicit_opt_in() -> None:
     output = result.stdout + result.stderr
     assert result.returncode != 0
     assert "HabilitarAgendamento" in output
+
+
+# Native projection controls run in this existing explicit Fast CI test target.
+# They are contract tests, not captured Docker output or container/runtime proof.
+@pytest.mark.parametrize(
+    ("value", "environment", "expected"),
+    [
+        ("${OUTER:-http://localhost:${PORT:-8081}}", {}, "http://localhost:8081"),
+        ("${OUTER:-http://localhost:${PORT:-8081}}", {"PORT": "18081"}, "http://localhost:18081"),
+        ("${VALUE:-fallback}", {"VALUE": ""}, "fallback"),
+        ("${VALUE-fallback}", {"VALUE": ""}, ""),
+        ("$VALUE/${ABSENT}", {"VALUE": "set"}, "set/"),
+        ("$${POSTGRES_USER:-reqsys_app}", {"POSTGRES_USER": "ignored"}, "${POSTGRES_USER:-reqsys_app}"),
+        ("$$VALUE", {"VALUE": "ignored"}, "$VALUE"),
+        ("${VALUE:?required}", {"VALUE": "explicit"}, "explicit"),
+    ],
+)
+def test_native_interpolation_contract(value, environment, expected) -> None:
+    assert interpolate(value, environment) == expected
+
+
+@pytest.mark.parametrize("required_name", sorted(PRODUCTION_REQUIRED_ENV))
+def test_native_contract_rejects_unset_required_values(required_name: str) -> None:
+    environment = dict(PRODUCTION_REQUIRED_ENV)
+    del environment[required_name]
+    with pytest.raises(ContractError, match=required_name):
+        evaluate_contract(
+            (ROOT / "docker-compose.yml").read_text(encoding="utf-8"),
+            (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"),
+            environment,
+        )
+
+
+def test_native_projection_uses_explicit_inputs_and_preserves_dollar_literal(monkeypatch) -> None:
+    def forbidden_process(*args, **kwargs):
+        raise AssertionError("native contract must not invoke a process")
+
+    monkeypatch.setattr(subprocess, "run", forbidden_process)
+    monkeypatch.setenv("POSTGRES_PASSWORD", "untrusted-host-synthetic")
+    monkeypatch.setenv("COMPOSE_PROFILES", "local-mail")
+    model = _production_contract()
+    assert model["scope"] == "reqsys-production-contract-v1"
+    assert model["active_services"] == ["api", "db", "frontend", "kb", "nginx"]
+    expected_url = (
+        "postgresql+psycopg2://reqsys_app:"
+        + PRODUCTION_REQUIRED_ENV["POSTGRES_PASSWORD"] + "@db:5432/reqsys"
+    )
+    assert model["services"]["api"]["environment"]["DATABASE_URL"] == expected_url
+    assert model["services"]["api"]["depends_on"] == {"db": {"condition": "service_healthy"}}
+    assert model["services"]["db"]["healthcheck"]["test"] == [
+        "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reqsys_app} -d ${POSTGRES_DB:-reqsys}"
+    ]
+    assert model["services"]["nginx"]["ports"] == [
+        {"target": 80, "published": "18081", "protocol": "tcp"}
+    ]
+
+
+def test_native_interpolates_each_file_before_merge() -> None:
+    base = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    original = "JWT_ISSUER=${JWT_ISSUER:-reqsys-api}"
+    assert original in base
+    base = base.replace(original, "JWT_ISSUER=${BASE_ONLY_REQUIRED:?must not be hidden}", 1)
+    with pytest.raises(ContractError, match="BASE_ONLY_REQUIRED"):
+        evaluate_contract(
+            base, (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"),
+            dict(PRODUCTION_REQUIRED_ENV),
+        )
+
+
+def test_native_replaces_healthcheck_test_and_merges_environment_maps() -> None:
+    base = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    base = base.replace(
+        "  frontend:\n",
+        '  frontend:\n    healthcheck:\n      test: ["CMD", "echo", "base-only"]\n',
+        1,
+    )
+    environment = {**PRODUCTION_REQUIRED_ENV, "GATEWAY_PORT": "18081"}
+    model = evaluate_contract(base, (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"), environment)
+    validate_production_contract(model, environment)
+    assert "base-only" not in model["services"]["frontend"]["healthcheck"]["test"]
+    assert model["services"]["api"]["environment"]["ALLOW_DEMO_LOGIN"] == "false"
+    assert model["services"]["api"]["environment"]["GEMINI_API_KEY"] == ""
+
+
+def test_native_profile_activation_is_explicit_not_a_production_acceptance() -> None:
+    model = evaluate_contract(
+        (ROOT / "docker-compose.yml").read_text(encoding="utf-8"),
+        (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"),
+        dict(PRODUCTION_REQUIRED_ENV),
+        profiles=("local-mail",),
+    )
+    assert "mailhog" in model["active_services"]
+    with pytest.raises(ContractError, match="production_service_set_invalid"):
+        validate_production_contract(model, dict(PRODUCTION_REQUIRED_ENV))
+
+
+@pytest.mark.parametrize(
+    ("target", "old", "new", "expected_error"),
+    [
+        ("base", 'restart: "no"', 'restart: "always"', "base_restart_not_fail_fast"),
+        ("prod", 'restart: "on-failure:5"', 'restart: "always"', "production_restart_not_bounded"),
+        ("prod", 'ALLOW_DEMO_LOGIN: "false"', 'ALLOW_DEMO_LOGIN: "true"', "production_identity_or_demo_invalid"),
+        ("prod", "depends_on: !override", "depends_on:", "active_dependency_has_disabled_profile"),
+        ("prod", "profiles: [local-mail]", "profiles: [unexpected]", "mailhog_must_be_opt_in"),
+        ("base", "  nginx:\n", '  nginx:\n    ports: ["18082:80"]\n', "gateway_publication_invalid"),
+        ("base", "\n  db:\n", '\n  db:\n    ports: ["15432:5432"]\n', "private_service_published"),
+        ("prod", "http://127.0.0.1/healthz", "http://127.0.0.1/unready", "frontend_healthcheck_invalid"),
+        ("prod", "http://127.0.0.1/api/health", "http://127.0.0.1/api/unready", "gateway_healthcheck_invalid"),
+        ("prod", "frontend:\n        condition: service_healthy",
+         "frontend:\n        condition: service_started", "gateway_frontend_dependency_invalid"),
+        ("prod", "  api:\n", "  api:\n    deploy:\n      restart_policy:\n        condition: any\n", "unsupported_service_field"),
+        ("prod", "services:\n", "include: other.yml\nservices:\n", "unsupported_top_level_field"),
+        ("prod", "  api:\n", "  api:\n    env_file: .env\n", "unsupported_service_field"),
+        ("prod", "  api:\n", "  api:\n    extends: {service: other}\n", "unsupported_service_field"),
+        ("prod", "    environment:\n", "    environment: !override\n", "override_outside_depends_on"),
+        ("prod", "${GATEWAY_PORT:-8081}:80", "18081-18082:80", "unsupported_port_syntax"),
+        ("prod", '    restart: "on-failure:5"', '    restart: "no"\n    restart: "on-failure:5"', "unsupported_or_duplicate_mapping_key"),
+        ("prod", "depends_on: !override", "depends_on: !reset", "unsupported_or_invalid_yaml"),
+        ("base", "JWT_SECRET=${JWT_SECRET:-trocar-em-producao}", "JWT_SECRET", "environment_entry_requires_explicit_value"),
+        ("prod", "    healthcheck:\n", "    healthcheck:\n      disable: true\n", "unsupported_healthcheck_field"),
+    ],
+)
+def test_native_contract_rejects_invariant_and_unsupported_mutations(target, old, new, expected_error) -> None:
+    base = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    prod = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    source = base if target == "base" else prod
+    assert old in source, "mutation must apply to the current versioned input"
+    mutated = source.replace(old, new, 1)
+    environment = {**PRODUCTION_REQUIRED_ENV, "GATEWAY_PORT": "18081"}
+    with pytest.raises(ContractError, match=expected_error):
+        model = evaluate_contract(mutated if target == "base" else base,
+                                  mutated if target == "prod" else prod, environment)
+        validate_production_contract(model, environment)
