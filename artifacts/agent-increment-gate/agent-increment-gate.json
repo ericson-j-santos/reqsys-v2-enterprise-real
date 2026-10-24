@@ -1,14 +1,14 @@
 {
   "allowed": true,
   "reason": "hotfix_escopo_fechado",
-  "detail": "Hotfix com referencia #2546.",
+  "detail": "Hotfix com referencia RUNNER-PROFILE-PARETO-20261024.",
   "strict_mode": false,
   "canonical_drift_count": 0,
   "contract_drift_count": 0,
   "strict_blocked": false,
   "increment_type": "hotfix",
-  "reference": "#2546",
-  "intent": "remover quarentena public-static somente após backup PostgreSQL, restore isolado e rollback DEV atestados",
+  "reference": "RUNNER-PROFILE-PARETO-20261024",
+  "intent": "Separar labels base runtime e ollama para impedir pickup incompatível",
   "coordenador_state": "yellow",
   "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {

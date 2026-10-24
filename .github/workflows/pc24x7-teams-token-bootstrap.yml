@@ -63,7 +63,7 @@ jobs:
   reconcile-runtime-dev:
     if: github.event_name != 'pull_request'
     needs: contract
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
     timeout-minutes: 25
     env:
@@ -123,7 +123,7 @@ jobs:
   bootstrap-token-dev:
     if: github.event_name != 'pull_request'
     needs: [contract, reconcile-runtime-dev]
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
     timeout-minutes: 15
     outputs:

@@ -12,7 +12,7 @@ SCRIPT = ROOT / "scripts/reconcile_pc24x7_todo_runtime.py"
 
 def test_workflow_is_dev_only_same_sha_and_self_hosted() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in text
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]" in text
     assert "./.github/actions/reqsys-dev-runner-preflight" in text
     assert "inputs.operation == 'reconcile-runtime'" in text
     assert "github.event_name == 'schedule'" in text

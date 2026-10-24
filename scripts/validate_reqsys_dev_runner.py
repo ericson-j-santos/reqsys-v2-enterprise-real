@@ -97,11 +97,14 @@ def validate(
     selected = profiles.get(profile) if isinstance(profiles, dict) else None
     if not isinstance(selected, dict):
         raise PreflightError("profile_invalid")
+    if manifest.get("profile") != profile:
+        raise PreflightError("profile_scope_invalid")
     capabilities = manifest.get("capabilities")
-    if not isinstance(capabilities, list) or any(
-        item not in capabilities for item in selected.get("capabilities", [])
-    ):
-        raise PreflightError("capability_missing")
+    if capabilities != selected.get("capabilities"):
+        raise PreflightError("capability_scope_invalid")
+    runner_labels = manifest.get("runner_labels")
+    if runner_labels != selected.get("runner_labels"):
+        raise PreflightError("runner_labels_invalid")
     missing_tools = [tool for tool in selected.get("tools", []) if not which(tool)]
     if missing_tools:
         raise PreflightError("required_tool_missing")
@@ -133,6 +136,7 @@ def validate(
         "schema_version": 1,
         "pool": policy["pool"],
         "profile": profile,
+        "runner_labels": runner_labels,
         "environment": "dev",
         "runner_instance_id": instance_id,
         "runtime_root_valid": True,

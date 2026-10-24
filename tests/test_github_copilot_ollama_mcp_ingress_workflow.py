@@ -18,7 +18,7 @@ def test_canonical_workflow_reuses_dev_runner_with_closed_mcp_mode() -> None:
     assert "- change-impact-pr2144" in raw
     assert "if: inputs.mode == 'mcp-ingress'" in raw
     assert "if: inputs.mode == 'change-impact-pr2144'" in raw
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-ollama-v1]" in raw
     assert "uses: ./.github/actions/reqsys-dev-runner-preflight" in raw
     assert "actions/setup-python@" not in raw
     assert raw.count("Get-Command python -CommandType Application -ErrorAction Stop") == 3

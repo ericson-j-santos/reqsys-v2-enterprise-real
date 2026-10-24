@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Native PostgreSQL 16 backend CI fixture",
+  "status": "prepared_not_executed",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_native_postgres_ci.py",
+      "tests/test_native_postgres_ci_contract.py",
+      "tests/test_backend_coverage_ci_contract.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_native_postgres_ci.py",
+      "tests/test_native_postgres_ci_contract.py",
+      "tests/test_backend_coverage_ci_contract.py"
+    ],
+    "evidence_contract": "Offline tests do not establish runtime acceptance. The admitted backend-test job must run native PostgreSQL 16 on Ubuntu 24.04, reject an incorrect password and verify independent persisted data and a real stopped-database rejection, restart, run all backend/tests with explicit pyproject.toml coverage and threshold 60, and prove owned-cluster cleanup in a sanitized current-SHA receipt."
+  },
+  "traceability": {
+    "implementation": "scripts/native_postgres_ci.py",
+    "workflow": ".github/workflows/ci.yml",
+    "runbook": "docs/runbooks/native-postgresql-ci.md"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "persistent_secrets": false,
+    "ephemeral_local_password": true
+  }
+}

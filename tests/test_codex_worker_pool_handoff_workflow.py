@@ -30,7 +30,7 @@ def test_worker_pool_handoff_preserves_legacy_default() -> None:
     assert "issues:" not in raw
     assert 'default: "legacy_pc24x7"' in raw
     assert "inputs.execution_mode == 'legacy_pc24x7'" in enqueue
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in enqueue
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in enqueue
     assert "./.github/actions/reqsys-dev-runner-preflight" in enqueue
     assert "ref: ${{ inputs.base_sha }}" in enqueue
     assert "pending_development_worker_pool_bridge.py" in enqueue

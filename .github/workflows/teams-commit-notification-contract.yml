@@ -8,6 +8,10 @@ on:
       - tools/geradores/teams_graph_gateway_autocontido.py
       - tests/test_teams_graph_gateway_autocontido.py
       - tests/test_teams_commit_notification_fallback_contract.py
+      - scripts/teams_notification_admission.py
+      - tests/test_teams_notification_admission.py
+      - .sdd/specs/teams-noop-notification-admission.requirements.md
+      - .sdd/specs/teams-noop-notification-admission.spec.json
       - tests/test_pc24x7_locator_watch_contract.py
       - .sdd/specs/teams-commit-canonical-gateway.requirements.md
       - .sdd/specs/teams-commit-canonical-gateway.spec.json
@@ -31,6 +35,8 @@ jobs:
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
           python tests/test_teams_graph_gateway_autocontido.py
           python tests/test_teams_commit_notification_fallback_contract.py
+          python -m py_compile scripts/teams_notification_admission.py
+          python -m unittest tests/test_teams_notification_admission.py -v
           python tests/test_pc24x7_locator_watch_contract.py
           grep -Fq "scripts/notificar_teams.py" .github/workflows/teams-commit-notification.yml
           grep -Fq -- "--modo" .github/workflows/teams-commit-notification.yml
