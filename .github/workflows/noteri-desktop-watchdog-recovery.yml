@@ -1077,7 +1077,7 @@ jobs:
     if: ${{ inputs.mode == 'runner-pool-onboard-pc24x7' }}
     name: Configure eligible ReqSys DEV base profile on a PC24x7 runner
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       EVIDENCE_FILE: artifacts/reqsys-dev-runner-pool-onboard/evidence.json
     steps:
@@ -1114,11 +1114,12 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Install and validate exact base profile without host affinity
+      - name: Stage and execute exact base profile through existing admin broker
         id: install
         shell: powershell
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          OWNER_COMMENT_ID: ${{ inputs.authorization_comment_id }}
         run: |
           $ErrorActionPreference = 'Stop'
           $observed = (git rev-parse HEAD).Trim()
@@ -1128,46 +1129,29 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $runnerRoot '.runner') -PathType Leaf)) {
             throw 'RUNNER_ROOT_DERIVATION_FAILED'
           }
-          $manifestPath = if ([string]::IsNullOrWhiteSpace($env:REQSYS_DEV_RUNNER_MANIFEST)) {
-            'C:\ProgramData\ReqSys\runner-pool.json'
-          } else {
-            $env:REQSYS_DEV_RUNNER_MANIFEST
+          $brokerOutput = @(
+            python '.\scripts\desktop_admin_broker.py' stage-runner-onboard `
+              --source-root '.' `
+              --source-sha $env:EXPECTED_SHA `
+              --runner-root $runnerRoot `
+              --owner-comment-id $env:OWNER_COMMENT_ID `
+              --confirm 'STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD' `
+              --timeout-seconds 360
+          )
+          $brokerExit = $LASTEXITCODE
+          $payloadLine = @($brokerOutput | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1)
+          if ($payloadLine.Count -ne 1) { throw 'ADMIN_BROKER_EVIDENCE_MISSING' }
+          $payload = $payloadLine[0] | ConvertFrom-Json
+          if ($brokerExit -ne 0 -or -not $payload.ok) { throw 'ADMIN_BROKER_ONBOARD_BLOCKED' }
+          if ([string]$payload.admin_route -cne 'scheduled_task_s4u_highest' -or $payload.admin_secret_supplied) {
+            throw 'ADMIN_BROKER_ROUTE_INVALID'
           }
-          $runtimeRoot = 'C:\ReqSysDev\Runtime'
-          $instanceId = ''
-          if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
-            $current = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ([string]$current.environment -eq 'dev' -and [string]$current.runner_instance_id -match '^reqsys-pc-[0-9a-f]{8,32}$') {
-              $instanceId = [string]$current.runner_instance_id
-            }
-            if (-not [string]::IsNullOrWhiteSpace([string]$current.runtime_root)) {
-              $runtimeRoot = [string]$current.runtime_root
-            }
+          $result = $payload.outcome.result
+          if ([string]$result.profile -cne 'base' -or [string]$result.environment -cne 'dev') {
+            throw 'ADMIN_BROKER_RESULT_INVALID'
           }
-          if ([string]::IsNullOrWhiteSpace($instanceId)) {
-            $seed = "$env:GITHUB_REPOSITORY|$env:RUNNER_NAME"
-            $bytes = [Text.Encoding]::UTF8.GetBytes($seed)
-            $hash = ([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
-            $instanceId = 'reqsys-pc-' + $hash.Substring(0, 12)
-          }
-          New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
-          & '.\scripts\install_reqsys_dev_runner.ps1' `
-            -RunnerInstanceId $instanceId `
-            -RuntimeRoot $runtimeRoot `
-            -RunnerRoot $runnerRoot `
-            -Profile base `
-            -ManifestPath $manifestPath
-          if ($LASTEXITCODE -ne 0) { throw 'RUNNER_INSTALLER_BLOCKED' }
-          python '.\scripts\validate_reqsys_dev_runner.py' `
-            --manifest $manifestPath `
-            --profile base `
-            --repository '.'
-          if ($LASTEXITCODE -ne 0) { throw 'RUNNER_POST_INSTALL_PREFLIGHT_BLOCKED' }
-          $services = @(Get-Service -Name 'actions.runner.*' -ErrorAction SilentlyContinue)
-          if ($services.Count -ne 1) { throw 'RUNNER_SERVICE_CARDINALITY_INVALID' }
-          "manifest_path=$manifestPath" | Add-Content $env:GITHUB_OUTPUT
-          "runner_instance_id=$instanceId" | Add-Content $env:GITHUB_OUTPUT
-          "runner_service_name=$($services[0].Name)" | Add-Content $env:GITHUB_OUTPUT
+          "runner_instance_id=$($result.runner_instance_id)" | Add-Content $env:GITHUB_OUTPUT
+          "admin_route=$($payload.admin_route)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Write sanitized onboarding evidence
         shell: powershell
@@ -1187,6 +1171,8 @@ jobs:
             source_sha = $env:EXPECTED_SHA
             runner_instance_id = $env:RUNNER_INSTANCE_ID
             bootstrap_selector = 'pc24x7'
+            admin_route = '${{ steps.install.outputs.admin_route }}'
+            admin_secret_supplied = $false
             manifest_updated = $true
             runner_env_updated = $true
             labels_applied = $false
@@ -1209,26 +1195,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Schedule one delayed runner service restart
-        shell: powershell
-        env:
-          RUNNER_SERVICE_NAME: ${{ steps.install.outputs.runner_service_name }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if ($env:RUNNER_SERVICE_NAME -notmatch '^actions\.runner\.[A-Za-z0-9_.-]+$') {
-            throw 'RUNNER_SERVICE_NAME_INVALID'
-          }
-          $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-          $escaped = $env:RUNNER_SERVICE_NAME.Replace("'", "''")
-          $command = "Start-Sleep -Seconds 20; Restart-Service -Name '$escaped' -Force"
-          $previousTrackingId = $env:RUNNER_TRACKING_ID
-          $env:RUNNER_TRACKING_ID = ''
-          try {
-            Start-Process -FilePath $powershell -ArgumentList @('-NoProfile', '-NonInteractive', '-Command', $command) -WindowStyle Hidden
-          } finally {
-            $env:RUNNER_TRACKING_ID = $previousTrackingId
-          }
-          Write-Host 'RUNNER_SERVICE_RESTART_SCHEDULED'
 
   runner-pool-canary:
     if: ${{ inputs.mode == 'runner-pool-canary' }}

@@ -247,7 +247,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("Prepare pinned portable Python 3.12") == 7
     assert raw.count("python-3.12.10-embed-amd64.zip") == 7
     assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 7
-    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 8
+    assert raw.count("[Security.Cryptography.SHA256]::Create()") == 7
     assert "Get-FileHash" not in raw
     assert raw.count("REQSYS_PYTHON=$python") == 7
     assert raw.count("python312._pth") == 7
