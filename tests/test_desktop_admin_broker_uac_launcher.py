@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -110,3 +111,31 @@ def test_finalize_requires_verified_privileged_task(monkeypatch, tmp_path: Path)
     assert result["metadata"]["activation_pending"] is False
     assert written["path"] == metadata_path
     assert started["value"] is True
+
+
+def test_launcher_surfaces_elevated_activation_failure(monkeypatch, tmp_path: Path) -> None:
+    metadata_path = tmp_path / "metadata.json"
+    evidence_path = tmp_path / m.broker.ACTIVATION_EVIDENCE_FILE
+    metadata_path.write_text("{}\n", encoding="utf-8")
+    installation = {
+        "metadata_path": metadata_path,
+        "python_executable": tmp_path / "python.exe",
+        "release_root": tmp_path,
+        "release_broker": tmp_path / "desktop_admin_broker.py",
+    }
+    monkeypatch.setattr(m, "validate_launcher", lambda **kwargs: None)
+    monkeypatch.setattr(m, "load_installation", lambda path: installation)
+    monkeypatch.setattr(m, "is_admin", lambda: False)
+    monkeypatch.setattr(m.broker, "task_status", lambda: {"exists": False})
+    monkeypatch.setattr(m, "shell_execute_runas", lambda *args: 42)
+
+    def fake_sleep(_seconds: float) -> None:
+        evidence_path.write_text(
+            json.dumps({"ok": False, "error_code": "task_scheduler_access_denied"}),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(m.time, "sleep", fake_sleep)
+
+    with pytest.raises(RuntimeError, match="uac_activation_failed:task_scheduler_access_denied"):
+        m.launch(metadata_path, confirm=m.LAUNCH_CONFIRM, timeout_seconds=5)
