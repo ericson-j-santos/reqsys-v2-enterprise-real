@@ -1,0 +1,20 @@
+{
+  "feature_name": "reqsys-dev-runner-profile-labels",
+  "project": "ReqSys DEV self-hosted runner pool",
+  "created_at": "2026-10-24",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Separa a seleção de runners DEV por capacidade, vincula exatamente perfil, capacidades e labels no manifesto e automatiza o onboarding seguro sem dependência do Registro.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_dev_runner_pool.py",
+      "tests/test_reqsys_dev_runner_pool_monitor.py",
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_dev_runtime_cutover.py"
+    ]
+  }
+}

@@ -16,7 +16,7 @@ def test_workflow_is_fixed_to_pc24x7_dev_and_sha_bound() -> None:
     assert "workflow_dispatch:" in raw
     assert "schedule:" not in raw
     assert "pull_request:" not in raw
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-ollama-v1]" in raw
     assert raw.count("./.github/actions/reqsys-dev-runner-preflight") == 3
     assert "actions/setup-python@" not in raw
     assert "Get-Command python -CommandType Application -ErrorAction Stop" in raw

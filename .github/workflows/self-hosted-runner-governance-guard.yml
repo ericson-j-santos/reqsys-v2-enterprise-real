@@ -120,6 +120,7 @@ jobs:
           print('## ReqSys DEV Runner Pool')
           print()
           print(f"- Status: `{value['status']}`")
+          print(f"- Profile: `{value['monitored_profile']}`")
           print(f"- Eligible online: `{value['online_eligible_runners']}/{value['minimum_online_runners']}`")
           print(f"- Findings: `{len(value['findings'])}`")
           print('- Mode: `report_only`')
