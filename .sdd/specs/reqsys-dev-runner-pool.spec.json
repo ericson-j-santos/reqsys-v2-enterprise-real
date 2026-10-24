@@ -37,7 +37,8 @@
     "Runtime root and evidence identity come from the validated local manifest",
     "HML, STG, PROD and automatic retry remain disabled",
     "Onboarding validation does not register or reconfigure the GitHub runner service",
-    "Explicit label reconciliation uses a dedicated confirmation parameter without colliding with PowerShell common parameters"
+    "Explicit label reconciliation uses a dedicated confirmation parameter without colliding with PowerShell common parameters",
+    "Physical onboarding receives no administrative secret and defers remote label reconciliation until after sanitized local-profile evidence"
   ],
   "sdd_gate": {
     "tests": [

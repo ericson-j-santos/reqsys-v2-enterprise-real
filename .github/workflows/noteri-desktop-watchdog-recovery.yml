@@ -1028,9 +1028,7 @@ jobs:
             -RuntimeRoot ([string]$current.runtime_root) `
             -RunnerRoot $runnerRoot `
             -Profile base `
-            -ManifestPath $manifestPath `
-            -ApplyGitHubLabels `
-            -LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'
+            -ManifestPath $manifestPath
           if ($LASTEXITCODE -ne 0) { throw 'RUNNER_INSTALLER_BLOCKED' }
           python '.\scripts\validate_reqsys_dev_runner.py' `
             --manifest $manifestPath `
@@ -1055,7 +1053,8 @@ jobs:
             source_sha = $env:EXPECTED_SHA
             manifest_updated = $true
             runner_env_updated = $true
-            labels_applied = $true
+            labels_applied = $false
+            label_reconciliation_required = $true
             service_restarted = $false
             canary_dispatched = $false
             automatic_retry_enabled = $false
