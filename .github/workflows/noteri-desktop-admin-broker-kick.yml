@@ -1,24 +1,36 @@
-name: Desktop Admin Broker Local Kick
+name: Desktop Admin Broker Governed Kick and Read-Only Recovery Preflight
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Fixed local recovery inspection or legacy task start'
+        required: false
+        type: choice
+        default: kick
+        options:
+          - kick
+          - preflight
 
 permissions:
   contents: read
 
 concurrency:
-  group: noteri-desktop-admin-broker-kick
+  group: noteri-desktop-admin-broker-kick-${{ inputs.mode || 'kick' }}
   cancel-in-progress: true
 
 jobs:
   kick:
     name: Start existing Desktop Admin Broker locally
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'kick' || inputs.mode == 'preflight' || inputs.mode == '') }}
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 5
     env:
       EVIDENCE_FILE: artifacts/noteri-desktop-admin-broker-kick/evidence.json
       EVALUATED_SHA: ${{ github.sha }}
+      RULES_SHA: 1c0ba29b2596562e1974a8ee8f9040b50dcf0987
+      CORRELATION_ID: desktop-broker-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+      PYTHONNOUSERSITE: '1'
 
     steps:
       - name: Checkout immutable workflow SHA
@@ -54,16 +66,89 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Run exact existing Desktop Admin Broker task
+        if: ${{ inputs.mode != 'preflight' }}
         shell: powershell
         run: |
           & "$env:REQSYS_PYTHON" scripts/noteri_desktop_admin_broker_kick.py --confirm KICK-EXISTING-DESKTOP-ADMIN-BROKER --evidence-file "$env:EVIDENCE_FILE"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload sanitized evidence
-        if: always()
+        if: ${{ always() && inputs.mode != 'preflight' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-desktop-admin-broker-kick-${{ github.run_id }}
           path: artifacts/noteri-desktop-admin-broker-kick/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Checkout pinned operational rules
+        if: ${{ inputs.mode == 'preflight' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory isolated session
+        if: ${{ inputs.mode == 'preflight' }}
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scripts = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts'
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) 'python312._pth'
+          if (-not (Test-Path -LiteralPath $pth)) { throw 'PORTABLE_PYTHON_PTH_MISSING' }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $scripts) {
+            Add-Content -LiteralPath $pth -Value $scripts
+          }
+          $launcher = Join-Path $scripts 'session_launcher.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $launcherArgs = @(
+            '--policy', $policy,
+            '--repo', $env:GITHUB_WORKSPACE,
+            '--session-prefix', 'desktop-broker-preflight',
+            '--correlation-id', $env:CORRELATION_ID,
+            '--expected-head', '${{ github.sha }}',
+            '--sync-ref', 'origin/main',
+            '--require-runner-version-preflight'
+          )
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { throw 'SESSION_LAUNCH_EXIT_NONZERO' }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne 'SESSION_LAUNCH_OK' -or $data.state_validated -ne $true) {
+            throw 'SESSION_LAUNCH_BLOCKED'
+          }
+          if ($data.head -ne '${{ github.sha }}') { throw 'SESSION_HEAD_MISMATCH' }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$($data.head)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Inspect native repair prerequisites through Command Gateway
+        if: ${{ inputs.mode == 'preflight' }}
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'GOVERNED_SESSION_MISSING' }
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $probe = Join-Path $env:TARGET_PATH 'scripts\desktop_admin_broker_recovery_preflight.py'
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'run',
+            '--cwd', $env:TARGET_PATH,
+            '--session-id', $env:SESSION_ID,
+            "--risk", "1",
+            '--timeout', '75',
+            '--expected-head', $env:ANCHOR_SHA,
+            '--', $env:REQSYS_PYTHON, $probe,
+            '--confirm', 'PROBE-DESKTOP-ADMIN-BROKER-REPAIR'
+          )
+          & $env:REQSYS_PYTHON $gateway @gatewayArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
