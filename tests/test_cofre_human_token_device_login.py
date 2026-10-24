@@ -1,10 +1,18 @@
+import importlib.util
 import json
+import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from scripts import cofre_human_token as subject
+SCRIPT = Path('scripts/cofre_human_token.py')
+spec = importlib.util.spec_from_file_location('cofre_human_token', SCRIPT)
+subject = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+sys.modules[spec.name] = subject
+spec.loader.exec_module(subject)
 
 
 def _sanitized_local_status(status="valid"):
