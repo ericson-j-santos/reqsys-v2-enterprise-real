@@ -21,7 +21,7 @@ Remova primeiro `reqsys-dev-pool-v1` no GitHub para drenar o PC. Não apague o m
 
 ## Monitoramento
 
-O workflow `ReqSys DEV Runner Pool Monitor` executa a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels da política versionada, exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels da política versionada, exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
 
 O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 

@@ -61,14 +61,16 @@ def test_audit_reports_offline_and_label_drift_without_mutation():
 
 
 def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
-    raw = (ROOT / ".github/workflows/reqsys-dev-runner-pool-monitor.yml").read_text(encoding="utf-8")
+    raw = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
     configured = json.loads((ROOT / "config/reqsys-dev-runner-pool.json").read_text(encoding="utf-8"))
 
     assert configured["minimum_online_runners"] == 2
-    assert "cron: '*/30 * * * *'" in raw
+    assert 'cron: "*/30 * * * *"' in raw
     assert "actions: read" in raw
     assert "contents: read" in raw
     assert "issues: write" not in raw
+    assert "GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}" in raw
+    assert "GH_PAT_ACTIONS is not configured." in raw
     assert "audit_reqsys_dev_runner_pool.py" in raw
     assert "Mode: `report_only`" in raw
     assert "Production touched: `false`" in raw
