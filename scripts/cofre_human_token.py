@@ -64,12 +64,13 @@ import binascii
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 try:
@@ -94,6 +95,7 @@ DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 DEVICE_CODE_SCOPES = "openid profile email"
 GATEWAY_RETRY_ATTEMPTS = 60
 GATEWAY_RETRY_INTERVAL_SECONDS = 5
+DEFAULT_LOCAL_COFRE_CONTAINER = "wt-pc24x7-piloto-api-1"
 _MAX_CAPTURE_BODY_BYTES = 8192
 _FRONTEND_ORIGIN_PATTERN = re.compile(
     r"https://(?P<host>[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)"
@@ -108,6 +110,85 @@ fetch('http://127.0.0.1:__PORT__/capture',{method:'POST',headers:{'Content-Type'
 .then(function(j){alert(j.ok?('Token capturado no Cofre. Expira em ~'+j.expires_in_min+' min.'):('Falha: '+(j.erro||'?')));})
 .catch(function(e){alert('Falha ao conectar no listener local (rode: python scripts/cofre_human_token.py listen): '+e);});
 })();"""
+
+_LOCAL_STATUS_PROBE = r"""
+import base64
+import json
+import os
+import time
+
+result = {
+    "schema_version": "1.0.0",
+    "status": "invalid",
+    "environment": os.environ.get("COFRE_HUMAN_JWT_ENVIRONMENT", ""),
+    "vault_initialized": False,
+    "credential_present": False,
+    "credential_decryptable": False,
+    "expires_at_utc": None,
+    "remaining_minutes": None,
+    "human_action_required": True,
+    "secret_value_exposed": False,
+    "production_touched": False,
+}
+try:
+    with open('/run/secrets/cofre_keyring_passphrase', encoding='utf-8') as handle:
+        os.environ['COFRE_KEYRING_PASSPHRASE'] = handle.read().strip()
+    from app.core.secrets import read_secret_from_vault, vault_initialized
+
+    result["vault_initialized"] = vault_initialized()
+    stored = read_secret_from_vault(
+        "human_admin_jwt:" + result["environment"]
+    )
+    result["credential_present"] = stored is not None
+    if stored:
+        token = stored
+        envelope_exp = None
+        try:
+            envelope = json.loads(stored)
+            if isinstance(envelope, dict):
+                token = str(envelope.get("token") or "")
+                envelope_exp = envelope.get("exp")
+        except json.JSONDecodeError:
+            pass
+
+        parts = token.split(".")
+        if len(parts) == 3:
+            payload_segment = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload = json.loads(
+                base64.urlsafe_b64decode(payload_segment.encode()).decode()
+            )
+            exp = payload.get("exp")
+            if isinstance(exp, int) and (
+                envelope_exp is None or envelope_exp == exp
+            ):
+                now = int(time.time())
+                remaining_seconds = exp - now
+                warning_minutes = int(
+                    os.environ.get("COFRE_HUMAN_JWT_WARNING_MINUTES", "15")
+                )
+                result["credential_decryptable"] = True
+                result["expires_at_utc"] = time.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime(exp)
+                )
+                result["remaining_minutes"] = remaining_seconds // 60
+                if remaining_seconds <= 0:
+                    result["status"] = "expired"
+                elif remaining_seconds <= warning_minutes * 60:
+                    result["status"] = "expiring"
+                else:
+                    result["status"] = "valid"
+                    result["human_action_required"] = False
+        if result["status"] == "invalid" and not result["vault_initialized"]:
+            result["status"] = "vault_unavailable"
+    elif result["vault_initialized"]:
+        result["status"] = "missing_or_unreadable"
+    else:
+        result["status"] = "vault_unavailable"
+except Exception:
+    result["status"] = "probe_failed"
+
+print(json.dumps(result, sort_keys=True))
+"""
 
 
 class CofreTokenError(Exception):
@@ -169,6 +250,94 @@ def _decode_jwt_exp(token: str) -> int:
     if not isinstance(exp, int):
         raise CofreTokenError("JWT não tem claim 'exp' numérica.")
     return exp
+
+
+def _local_status(
+    environment: str,
+    *,
+    container: str = DEFAULT_LOCAL_COFRE_CONTAINER,
+    warning_minutes: int = 15,
+) -> dict:
+    if environment != "dev":
+        raise CofreTokenError("Status local do JWT humano permitido somente em DEV")
+    if container != DEFAULT_LOCAL_COFRE_CONTAINER:
+        raise CofreTokenError("Container local do Cofre não autorizado")
+    if not 1 <= warning_minutes <= 120:
+        raise CofreTokenError("warning-minutes deve estar entre 1 e 120")
+
+    try:
+        completed = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "--env",
+                f"COFRE_HUMAN_JWT_ENVIRONMENT={environment}",
+                "--env",
+                f"COFRE_HUMAN_JWT_WARNING_MINUTES={warning_minutes}",
+                container,
+                "python",
+                "-c",
+                _LOCAL_STATUS_PROBE,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CofreTokenError(
+            f"Falha ao consultar Cofre local: {type(exc).__name__}"
+        ) from None
+    if completed.returncode != 0:
+        raise CofreTokenError(
+            f"Falha ao consultar Cofre local: exit_{completed.returncode}"
+        )
+
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    try:
+        status = json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError, TypeError) as exc:
+        raise CofreTokenError("Resposta sanitizada inválida do Cofre local") from exc
+
+    allowed_statuses = {
+        "valid",
+        "expiring",
+        "expired",
+        "missing_or_unreadable",
+        "invalid",
+        "vault_unavailable",
+        "probe_failed",
+    }
+    if (
+        not isinstance(status, dict)
+        or status.get("status") not in allowed_statuses
+        or status.get("environment") != "dev"
+        or status.get("secret_value_exposed") is not False
+        or status.get("production_touched") is not False
+    ):
+        raise CofreTokenError("Contrato sanitizado inválido do Cofre local")
+    return status
+
+
+def cmd_local_status(args: argparse.Namespace) -> None:
+    status = _local_status(
+        args.environment,
+        container=args.container,
+        warning_minutes=args.warning_minutes,
+    )
+    serialized = json.dumps(status, ensure_ascii=False, sort_keys=True)
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(serialized + "\n", encoding="utf-8")
+    print(serialized)
+    if args.require_valid and status.get("status") != "valid":
+        raise CofreTokenError(
+            f"JWT administrativo humano não está válido: {status.get('status')}"
+        )
 
 
 def _http_request(
@@ -630,6 +799,8 @@ def main() -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--environment", required=True, choices=sorted(ENVIRONMENTS))
     common.add_argument("--base-url", required=True, help="URL HTTPS explícita da API do ambiente.")
+    common_local = argparse.ArgumentParser(add_help=False)
+    common_local.add_argument("--environment", required=True, choices=sorted(ENVIRONMENTS))
 
     p_bootstrap = sub.add_parser("bootstrap-reader", parents=[common], help="Cria o token de leitura escopado (uma vez por ambiente).")
     p_bootstrap.add_argument("--token", default=None, help="JWT admin (se omitido, pede via input()).")
@@ -657,6 +828,17 @@ def main() -> None:
     )
     p_cached.add_argument("--msal-state", required=True, help="Caminho para msal-storage-state.json local.")
     p_cached.set_defaults(func=cmd_cached_login)
+
+    p_status = sub.add_parser(
+        "local-status",
+        parents=[common_local],
+        help="Lê somente o estado sanitizado do JWT humano no Cofre local PC24x7.",
+    )
+    p_status.add_argument("--container", default=DEFAULT_LOCAL_COFRE_CONTAINER)
+    p_status.add_argument("--warning-minutes", type=int, default=15)
+    p_status.add_argument("--output", default=None)
+    p_status.add_argument("--require-valid", action="store_true")
+    p_status.set_defaults(func=cmd_local_status)
 
     p_listen = sub.add_parser(
         "listen", parents=[common],

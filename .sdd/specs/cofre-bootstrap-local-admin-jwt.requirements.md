@@ -16,6 +16,11 @@ Eliminar definitivamente a dependência de identidade administrativa humana no b
 10. O fluxo pelo celular não imprime ID token, JWT interno nem device code opaco; somente a URL pública de verificação e o `user_code` temporário são exibidos.
 11. Se houver cache MSAL local compatível, o utilitário tenta renovação silenciosa sem exibir o refresh token; `invalid_grant` falha fechado e exige nova prova humana.
 12. Falhas transitórias 502/503 após a aprovação são retentadas mantendo tokens somente em memória.
+13. A automação governada DEVE oferecer operações explícitas `status` e `renew` no runner PC24x7
+    DEV. `status` publica somente validade e estado sanitizados; `renew` exige Device Code e MFA
+    humano, grava o JWT diretamente no Cofre e comprova validade sem revelar credenciais.
+14. A renovação humana não DEVE ser agendada nem executada silenciosamente em loop, pois o JWT
+    administrativo é efêmero e não participa do bootstrap S2S normal.
 
 ## Critérios de aceite
 - Teste impede reintrodução de COFRE_ADMIN_JWT no workflow.
@@ -26,3 +31,4 @@ Eliminar definitivamente a dependência de identidade administrativa humana no b
 - Somente o novo token S2S destinado ao Key Vault pode retornar pelo pipe local.
 - Testes cobrem espera, `slow_down`, recusa, expiração e ausência de tokens na saída do Device Code Flow.
 - Testes cobrem renovação silenciosa, cache incompatível e recuperação transitória do gateway.
+- Testes cobrem o probe local sanitizado, bloqueio fora de DEV e o workflow manual sem schedule.

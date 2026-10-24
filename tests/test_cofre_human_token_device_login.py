@@ -1,9 +1,118 @@
-import time
 import json
+import time
+from types import SimpleNamespace
 
 import pytest
 
 from scripts import cofre_human_token as subject
+
+
+def _sanitized_local_status(status="valid"):
+    return {
+        "schema_version": "1.0.0",
+        "status": status,
+        "environment": "dev",
+        "vault_initialized": True,
+        "credential_present": True,
+        "credential_decryptable": True,
+        "expires_at_utc": "2026-10-24T18:00:00Z",
+        "remaining_minutes": 55,
+        "human_action_required": status != "valid",
+        "secret_value_exposed": False,
+        "production_touched": False,
+    }
+
+
+def test_local_status_uses_fixed_dev_container_and_sanitized_contract(monkeypatch):
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(_sanitized_local_status()) + "\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subject.subprocess, "run", fake_run)
+
+    status = subject._local_status("dev", warning_minutes=20)
+
+    assert status["status"] == "valid"
+    assert status["secret_value_exposed"] is False
+    assert status["production_touched"] is False
+    assert captured["command"][0:2] == ["docker", "exec"]
+    assert subject.DEFAULT_LOCAL_COFRE_CONTAINER in captured["command"]
+    assert "COFRE_HUMAN_JWT_ENVIRONMENT=dev" in captured["command"]
+    assert "COFRE_HUMAN_JWT_WARNING_MINUTES=20" in captured["command"]
+    assert captured["kwargs"]["shell"] is False
+
+
+@pytest.mark.parametrize(
+    ("environment", "container", "message"),
+    [
+        ("stg", subject.DEFAULT_LOCAL_COFRE_CONTAINER, "somente em DEV"),
+        ("dev", "outro-container", "não autorizado"),
+    ],
+)
+def test_local_status_blocks_non_dev_or_noncanonical_container(
+    monkeypatch, environment, container, message
+):
+    monkeypatch.setattr(
+        subject.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("docker não deveria ser chamado"),
+    )
+
+    with pytest.raises(subject.CofreTokenError, match=message):
+        subject._local_status(environment, container=container)
+
+
+def test_local_status_command_writes_only_sanitized_evidence(monkeypatch, tmp_path, capsys):
+    output = tmp_path / "status.json"
+    monkeypatch.setattr(
+        subject,
+        "_local_status",
+        lambda *_args, **_kwargs: _sanitized_local_status(),
+    )
+    args = SimpleNamespace(
+        environment="dev",
+        container=subject.DEFAULT_LOCAL_COFRE_CONTAINER,
+        warning_minutes=15,
+        output=str(output),
+        require_valid=True,
+    )
+
+    subject.cmd_local_status(args)
+
+    evidence = json.loads(output.read_text(encoding="utf-8"))
+    assert evidence == _sanitized_local_status()
+    assert "token" not in output.read_text(encoding="utf-8").lower()
+    stdout = capsys.readouterr().out
+    assert "opaque-id-token" not in stdout
+    assert "reqsys-secret-jwt" not in stdout
+
+
+def test_local_status_require_valid_fails_closed_after_writing_evidence(monkeypatch, tmp_path):
+    output = tmp_path / "status.json"
+    monkeypatch.setattr(
+        subject,
+        "_local_status",
+        lambda *_args, **_kwargs: _sanitized_local_status("expired"),
+    )
+    args = SimpleNamespace(
+        environment="dev",
+        container=subject.DEFAULT_LOCAL_COFRE_CONTAINER,
+        warning_minutes=15,
+        output=str(output),
+        require_valid=True,
+    )
+
+    with pytest.raises(subject.CofreTokenError, match="não está válido: expired"):
+        subject.cmd_local_status(args)
+
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "expired"
 
 
 def test_device_code_pending_then_returns_id_token(monkeypatch, capsys):
