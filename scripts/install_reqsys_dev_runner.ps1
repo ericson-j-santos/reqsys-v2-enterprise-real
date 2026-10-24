@@ -8,7 +8,7 @@ param(
   [string]$RunnerServiceName = '',
   [switch]$RestartRunnerService,
   [switch]$ApplyGitHubLabels,
-  [string]$Confirm = ''
+  [string]$LabelConfirmation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +37,7 @@ if ($RestartRunnerService -and [string]::IsNullOrWhiteSpace($RunnerServiceName))
   }
   $RunnerServiceName = $runnerServices[0].Name
 }
-if ($ApplyGitHubLabels -and $Confirm -cne 'APPLY-REQSYS-DEV-RUNNER-LABELS') {
+if ($ApplyGitHubLabels -and $LabelConfirmation -cne 'APPLY-REQSYS-DEV-RUNNER-LABELS') {
   throw 'GITHUB_LABEL_CONFIRMATION_REQUIRED'
 }
 

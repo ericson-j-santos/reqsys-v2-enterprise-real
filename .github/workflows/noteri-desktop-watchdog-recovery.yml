@@ -16,15 +16,16 @@ on:
           - runner-bootstrap
           - runner-canary
           - runner-pool-canary
+          - runner-pool-onboard-noteri
           - watchdog-readback
           - alm-runner-bootstrap
           - reboot-once
       expected_sha:
-        description: 'SHA exato autorizado em main (somente runner-pool-canary)'
+        description: 'SHA exato autorizado em main (runner-pool-canary/onboard)'
         required: false
         type: string
       authorization_comment_id:
-        description: 'Comentário owner consumido pelo gateway (somente runner-pool-canary)'
+        description: 'Comentário owner consumido pelo gateway (runner-pool-canary/onboard)'
         required: false
         type: string
 
@@ -957,6 +958,118 @@ jobs:
         with:
           name: desktop-runner-bootstrap-${{ github.run_id }}
           path: ${{ steps.session.outputs.evidence_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+  runner-pool-onboard-noteri:
+    if: ${{ inputs.mode == 'runner-pool-onboard-noteri' }}
+    name: Configure eligible ReqSys DEV base profile on Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/reqsys-dev-runner-pool-onboard/evidence.json
+    steps:
+      - name: Verify owner authorization and immutable SHA
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:AUTHORIZATION_COMMENT_ID -notmatch '^[0-9]+$') { throw 'AUTHORIZATION_COMMENT_INVALID' }
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$' -or $env:EXPECTED_SHA -ne '${{ github.sha }}') {
+            throw 'EXPECTED_SHA_INVALID'
+          }
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $comment = Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/comments/$env:AUTHORIZATION_COMMENT_ID" -Headers $headers -TimeoutSec 30
+          if ($comment.user.login -ne 'ericson-j-santos' -or
+              $comment.issue_url -ne "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/1705" -or
+              $comment.body -cne '/reqsys run noteri-runner-pool-onboard') {
+            throw 'AUTHORIZATION_MISMATCH'
+          }
+          $age = [DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($comment.created_at).ToUniversalTime()
+          if ($age.TotalSeconds -lt -300 -or $age.TotalMinutes -gt 30) { throw 'AUTHORIZATION_EXPIRED' }
+
+      - name: Checkout immutable authorized SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install and validate exact base profile
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ine 'NOTERI') { throw 'NOTERI_HOST_REQUIRED' }
+          $observed = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne $env:EXPECTED_SHA) { throw 'CHECKOUT_SHA_MISMATCH' }
+          $manifestPath = $env:REQSYS_DEV_RUNNER_MANIFEST
+          if ([string]::IsNullOrWhiteSpace($manifestPath) -or -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            throw 'RUNNER_MANIFEST_MISSING'
+          }
+          $current = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$current.runner_instance_id)) { throw 'RUNNER_INSTANCE_ID_MISSING' }
+          if ([string]::IsNullOrWhiteSpace([string]$current.runtime_root)) { throw 'RUNTIME_ROOT_MISSING' }
+          $workRoot = Split-Path -Parent $env:RUNNER_WORKSPACE
+          $runnerRoot = Split-Path -Parent $workRoot
+          if (-not (Test-Path -LiteralPath (Join-Path $runnerRoot '.runner') -PathType Leaf)) {
+            throw 'RUNNER_ROOT_DERIVATION_FAILED'
+          }
+          & '.\scripts\install_reqsys_dev_runner.ps1' `
+            -RunnerInstanceId ([string]$current.runner_instance_id) `
+            -RuntimeRoot ([string]$current.runtime_root) `
+            -RunnerRoot $runnerRoot `
+            -Profile base `
+            -ManifestPath $manifestPath `
+            -ApplyGitHubLabels `
+            -LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'
+          if ($LASTEXITCODE -ne 0) { throw 'RUNNER_INSTALLER_BLOCKED' }
+          python '.\scripts\validate_reqsys_dev_runner.py' `
+            --manifest $manifestPath `
+            --profile base `
+            --repository '.'
+          if ($LASTEXITCODE -ne 0) { throw 'RUNNER_POST_INSTALL_PREFLIGHT_BLOCKED' }
+
+      - name: Write sanitized onboarding evidence
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $rendered = [ordered]@{
+            schema_version = 1
+            result = 'REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED'
+            pool = 'reqsys-dev-pc-pool-v1'
+            profile = 'base'
+            environment = 'dev'
+            source_sha = $env:EXPECTED_SHA
+            manifest_updated = $true
+            runner_env_updated = $true
+            labels_applied = $true
+            service_restarted = $false
+            canary_dispatched = $false
+            automatic_retry_enabled = $false
+            deploy_performed = $false
+            production_touched = $false
+          } | ConvertTo-Json -Depth 4
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [IO.File]::WriteAllText($env:EVIDENCE_FILE, $rendered + [Environment]::NewLine, $utf8NoBom)
+
+      - name: Upload sanitized onboarding evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-runner-pool-onboard-${{ github.run_id }}
+          path: artifacts/reqsys-dev-runner-pool-onboard/evidence.json
           if-no-files-found: error
           retention-days: 30
 
