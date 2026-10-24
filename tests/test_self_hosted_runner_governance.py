@@ -13,6 +13,31 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
         (root / ".github" / "workflows").mkdir(parents=True)
         return temp
 
+    def write_profile_policy(self, root: Path, workflow: str) -> None:
+        adr = root / "docs" / "adr" / "ADR-999-self-hosted.md"
+        adr.parent.mkdir(parents=True)
+        adr.write_text("# Test ADR\n", encoding="utf-8")
+        (root / ".github" / "self-hosted-runner-policy.json").write_text(
+            json.dumps(
+                {
+                    "self_hosted_allowed": True,
+                    "approved_workflows": [workflow],
+                    "required_adr": "docs/adr/ADR-999-self-hosted.md",
+                    "portable_dev_runner_contract": {
+                        "profile_labels": {
+                            "base": "reqsys-dev-base-v1",
+                            "runtime": "reqsys-dev-runtime-v1",
+                        },
+                        "preflight_action": "./.github/actions/reqsys-dev-runner-preflight",
+                        "workflow_profiles": {workflow: "base"},
+                        "forbidden_hostnames": ["DESKTOP-FIXED"],
+                        "forbid_fixed_runner_id": True,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
     def test_passes_without_self_hosted_usage(self):
         temp = self.make_repo()
         self.addCleanup(temp.cleanup)
@@ -99,6 +124,52 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertIn("Required ADR not found", result["violations"][0])
+
+    def test_profile_contract_scopes_fixed_identity_checks_to_portable_job(self):
+        temp = self.make_repo()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        workflow = ".github/workflows/mixed.yml"
+        (root / workflow).write_text(
+            "jobs:\n"
+            "  legacy:\n"
+            "    runs-on: [self-hosted, Windows, DESKTOP-FIXED]\n"
+            "    steps:\n"
+            "      - run: echo legacy\n"
+            "  portable:\n"
+            "    runs-on: [self-hosted, Windows, reqsys-dev-base-v1]\n"
+            "    steps:\n"
+            "      - uses: ./.github/actions/reqsys-dev-runner-preflight\n",
+            encoding="utf-8",
+        )
+        self.write_profile_policy(root, workflow)
+
+        ok, result = validate(root, Path(".github/self-hosted-runner-policy.json"))
+
+        self.assertTrue(ok, result["violations"])
+
+    def test_profile_contract_blocks_incompatible_label_on_same_job(self):
+        temp = self.make_repo()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        workflow = ".github/workflows/portable.yml"
+        (root / workflow).write_text(
+            "jobs:\n"
+            "  portable:\n"
+            "    runs-on: [self-hosted, Windows, reqsys-dev-base-v1, reqsys-dev-runtime-v1]\n"
+            "    steps:\n"
+            "      - uses: ./.github/actions/reqsys-dev-runner-preflight\n",
+            encoding="utf-8",
+        )
+        self.write_profile_policy(root, workflow)
+
+        ok, result = validate(root, Path(".github/self-hosted-runner-policy.json"))
+
+        self.assertFalse(ok)
+        self.assertIn(
+            f"Portable DEV incompatible profile label: {workflow}:reqsys-dev-runtime-v1",
+            result["violations"],
+        )
 
 
     def test_repo_policy_allowlists_noteri_desktop_admin_broker_kick(self):

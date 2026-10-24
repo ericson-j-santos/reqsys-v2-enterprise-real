@@ -4,24 +4,24 @@ O pool `reqsys-dev-pc-pool-v1` permite que qualquer PC Windows x64 preparado ass
 
 ## Onboarding
 
-1. Instale Git, Python e, para o perfil `runtime`, Docker. O perfil `ollama` também exige Ollama.
+1. Instale Git e Python para o perfil `base`. O perfil `runtime` também exige Docker; o perfil `ollama` exige Docker e Ollama.
 2. Crie um diretório absoluto e exclusivo para o runtime DEV. Não use links/reparse points nem caminhos contendo `hml`, `stg`, `prod` ou `production`.
 3. Em PowerShell elevado, execute:
 
-   `./scripts/onboard_reqsys_dev_runner.ps1 -RunnerInstanceId reqsys-pc-<id-estavel> -RuntimeRoot <diretorio> -Profile runtime`
+   `./scripts/onboard_reqsys_dev_runner.ps1 -RunnerInstanceId reqsys-pc-<id-estavel> -RuntimeRoot <diretorio> -Profile base`
 
 4. Configure `REQSYS_DEV_RUNNER_MANIFEST` no serviço do GitHub Actions com o caminho do manifesto gerado.
-5. Somente depois do preflight positivo, associe as labels impressas pelo script: `self-hosted`, `Windows`, `X64`, `reqsys-dev`, `reqsys-dev-pool-v1`.
+5. Somente depois do preflight positivo, associe as labels impressas pelo script. O perfil `base` recebe `reqsys-dev-base-v1`; `runtime` recebe também `reqsys-dev-runtime-v1`; `ollama` recebe também `reqsys-dev-ollama-v1`.
 
 O manifesto é local e não contém segredo. `runner_instance_id` deve ser um identificador opaco e estável; hostname e id numérico do GitHub são proibidos. Cada job executa novamente o preflight e falha fechado se ferramenta, checkout, runtime root, escopo DEV ou salvaguarda divergir.
 
 ## Retirada e validação
 
-Remova primeiro `reqsys-dev-pool-v1` no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, use `-ValidateOnly` e o mesmo conjunto de parâmetros.
+Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `base`) no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, use `-ValidateOnly` e o mesmo conjunto de parâmetros.
 
 ## Monitoramento
 
-O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels da política versionada, exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels do `monitor_profile` (`base`), exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. Como as labels são cumulativas, runners `runtime` e `ollama` também contam para a disponibilidade de `base`. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
 
 O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 

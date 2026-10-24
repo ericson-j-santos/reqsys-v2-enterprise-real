@@ -93,7 +93,7 @@ jobs:
     name: Materializar TODO Runtime no Desktop PC24x7
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime' && github.actor == 'ericson-j-santos'
     needs: contract
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
     timeout-minutes: 20
     permissions:

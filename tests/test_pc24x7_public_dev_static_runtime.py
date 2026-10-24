@@ -100,7 +100,7 @@ def test_reconciler_requires_same_sha_static_frontend_and_negative_vite_control(
 
 def test_workflow_has_physical_then_independent_public_evidence() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]" in raw
     assert "./.github/actions/reqsys-dev-runner-preflight" in raw
     assert "public-static" in raw
     assert "Reconcile full DEV runtime and static frontend" in raw

@@ -6,14 +6,15 @@ from pathlib import Path
 from scripts.audit_reqsys_dev_runner_pool import audit
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRED = ["self-hosted", "Windows", "X64", "reqsys-dev", "reqsys-dev-pool-v1"]
+REQUIRED = ["self-hosted", "Windows", "X64", "reqsys-dev", "reqsys-dev-base-v1"]
 
 
 def policy() -> dict:
     return {
         "pool": "reqsys-dev-pc-pool-v1",
         "minimum_online_runners": 2,
-        "runner_labels": REQUIRED,
+        "monitor_profile": "base",
+        "profiles": {"base": {"runner_labels": REQUIRED}},
     }
 
 
@@ -32,6 +33,7 @@ def test_audit_passes_with_two_eligible_online_runners():
 
     assert result["status"] == "passed"
     assert result["online_eligible_runners"] == 2
+    assert result["monitored_profile"] == "base"
     assert result["findings"] == []
     assert result["mode"] == "report_only"
     assert result["mutated"] is False
@@ -65,6 +67,7 @@ def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
     configured = json.loads((ROOT / "config/reqsys-dev-runner-pool.json").read_text(encoding="utf-8"))
 
     assert configured["minimum_online_runners"] == 2
+    assert configured["monitor_profile"] == "base"
     assert 'cron: "*/30 * * * *"' in raw
     assert "actions: read" in raw
     assert "contents: read" in raw
