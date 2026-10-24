@@ -200,6 +200,20 @@ def test_installer_configures_runner_env_and_requires_explicit_label_confirmatio
     assert "production_touched = $false" in raw
 
 
+def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    windows_job = workflow.split("  deploy-check-wrapper-powershell-51:", 1)[1].split("  pipeline-governance:", 1)[0]
+    assert "runs-on: windows-latest" in windows_job
+    assert "Verify native PowerShell 5.1 installer binding without host mutation" in windows_job
+    assert "scripts\\install_reqsys_dev_runner.ps1" in windows_job
+    assert "-AuthorizationPhrase 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in windows_job
+    assert "ParameterNameAlreadyExistsForCommand" in windows_job
+    assert "ADMINISTRATOR_REQUIRED|RUNNER_ROOT_INVALID" in windows_job
+    assert "NEGATIVE_PRECONDITION_MUTATED_HOST" in windows_job
+    assert "NEGATIVE_PRECONDITION_FALSE_POSITIVE" in windows_job
+    assert "Restart-Service" not in windows_job
+
+
 def test_installer_authorization_phrase_does_not_shadow_powershell_common_confirm():
     installer = (ROOT / "scripts/install_reqsys_dev_runner.ps1").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
