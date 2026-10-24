@@ -112,6 +112,8 @@ def validate(root: Path, policy_path: Path) -> tuple[bool, dict]:
     if isinstance(portable, dict):
         required_label = str(portable.get("label", ""))
         preflight_action = str(portable.get("preflight_action", ""))
+        capability_labels = portable.get("capability_labels", {})
+        workflow_profiles = portable.get("workflow_profiles", {})
         forbidden = [str(item) for item in portable.get("forbidden_hostnames", [])]
         for workflow in portable.get("workflows", []):
             path = root / str(workflow)
@@ -121,14 +123,25 @@ def validate(root: Path, policy_path: Path) -> tuple[bool, dict]:
             raw = path.read_text(encoding="utf-8")
             if required_label not in raw:
                 violations.append(f"Portable DEV label missing: {workflow}")
+            profile = workflow_profiles.get(workflow) if isinstance(workflow_profiles, dict) else None
+            capability_label = (
+                capability_labels.get(profile)
+                if isinstance(capability_labels, dict) and profile
+                else None
+            )
+            if not capability_label:
+                violations.append(f"Portable DEV capability profile missing: {workflow}")
             if preflight_action not in raw:
                 violations.append(f"Portable DEV preflight missing: {workflow}")
-            pool_jobs = sum(
-                1
+            pool_runs_on = [
+                RUNS_ON_PATTERN.match(line).group("value")
                 for line in raw.splitlines()
                 if RUNS_ON_PATTERN.match(line)
                 and required_label in RUNS_ON_PATTERN.match(line).group("value")
-            )
+            ]
+            pool_jobs = len(pool_runs_on)
+            if capability_label and any(capability_label not in value for value in pool_runs_on):
+                violations.append(f"Portable DEV capability label missing: {workflow}")
             if raw.count(f"uses: {preflight_action}") < pool_jobs:
                 violations.append(f"Portable DEV job without preflight: {workflow}")
             for hostname in forbidden:

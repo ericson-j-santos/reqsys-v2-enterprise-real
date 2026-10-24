@@ -100,6 +100,47 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("Required ADR not found", result["violations"][0])
 
+    def test_blocks_portable_job_without_profile_capability_label(self):
+        temp = self.make_repo()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        workflow = ".github/workflows/portable.yml"
+        (root / workflow).write_text(
+            "jobs:\n"
+            "  test:\n"
+            "    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]\n"
+            "    steps:\n"
+            "      - uses: ./.github/actions/reqsys-dev-runner-preflight\n",
+            encoding="utf-8",
+        )
+        (root / "docs" / "adr").mkdir(parents=True)
+        (root / "docs" / "adr" / "ADR.md").write_text("# ADR\n", encoding="utf-8")
+        (root / ".github" / "self-hosted-runner-policy.json").write_text(
+            json.dumps(
+                {
+                    "self_hosted_allowed": True,
+                    "approved_workflows": [workflow],
+                    "required_adr": "docs/adr/ADR.md",
+                    "portable_dev_runner_contract": {
+                        "label": "reqsys-dev-pool-v1",
+                        "capability_labels": {"base": "reqsys-cap-base-v1"},
+                        "workflow_profiles": {workflow: "base"},
+                        "preflight_action": "./.github/actions/reqsys-dev-runner-preflight",
+                        "workflows": [workflow],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ok, result = validate(root, Path(".github/self-hosted-runner-policy.json"))
+
+        self.assertFalse(ok)
+        self.assertIn(
+            f"Portable DEV capability label missing: {workflow}",
+            result["violations"],
+        )
+
 
     def test_repo_policy_allowlists_noteri_desktop_admin_broker_kick(self):
         root = Path(__file__).resolve().parents[1]

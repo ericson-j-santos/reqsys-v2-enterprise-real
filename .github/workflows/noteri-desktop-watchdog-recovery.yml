@@ -963,7 +963,7 @@ jobs:
   runner-pool-canary:
     if: ${{ inputs.mode == 'runner-pool-canary' }}
     name: Prove eligible ReqSys DEV pool pickup
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-base-v1]
     timeout-minutes: 5
     env:
       EVIDENCE_FILE: artifacts/reqsys-dev-runner-pool-canary/evidence.json

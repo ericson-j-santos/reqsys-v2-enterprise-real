@@ -19,15 +19,18 @@
   "profiles": {
     "base": {
       "capabilities": ["git", "python", "reqsys-source"],
-      "tools": ["git", "python"]
+      "tools": ["git", "python"],
+      "runner_labels": ["reqsys-cap-base-v1"]
     },
     "runtime": {
       "capabilities": ["git", "python", "docker", "reqsys-source", "dev-runtime"],
-      "tools": ["git", "python", "docker"]
+      "tools": ["git", "python", "docker"],
+      "runner_labels": ["reqsys-cap-base-v1", "reqsys-cap-runtime-v1"]
     },
     "ollama": {
       "capabilities": ["git", "python", "docker", "ollama", "reqsys-source", "dev-runtime"],
-      "tools": ["git", "python", "docker", "ollama"]
+      "tools": ["git", "python", "docker", "ollama"],
+      "runner_labels": ["reqsys-cap-base-v1", "reqsys-cap-runtime-v1", "reqsys-cap-ollama-v1"]
     }
   },
   "repositories": [

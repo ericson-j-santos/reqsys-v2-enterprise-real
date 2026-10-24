@@ -18,6 +18,15 @@ PORTABLE = (
     ".github/workflows/pc24x7-teams-token-bootstrap.yml",
     ".github/workflows/todo-global-hourly-cycle.yml",
 )
+CAPABILITY_LABELS = {
+    ".github/workflows/codex-ollama-e2e-dev.yml": "reqsys-cap-ollama-v1",
+    ".github/workflows/codex-worker-pool-handoff.yml": "reqsys-cap-base-v1",
+    ".github/workflows/figma-github-e2e-dev.yml": "reqsys-cap-base-v1",
+    ".github/workflows/noteri-study-mode-dev-reconcile.yml": "reqsys-cap-runtime-v1",
+    ".github/workflows/ollama-ci-triage.yml": "reqsys-cap-ollama-v1",
+    ".github/workflows/pc24x7-teams-token-bootstrap.yml": "reqsys-cap-runtime-v1",
+    ".github/workflows/todo-global-hourly-cycle.yml": "reqsys-cap-runtime-v1",
+}
 
 
 def policy() -> dict:
@@ -28,11 +37,21 @@ def manifest(runtime_root: Path) -> dict:
     return {
         "schema_version": 1,
         "pool": "reqsys-dev-pc-pool-v1",
+        "profile": "runtime",
         "environment": "dev",
         "runner_instance_id": "reqsys-pc-a1b2c3d4",
         "allowed_environments": ["dev"],
         "runtime_root": str(runtime_root),
         "capabilities": ["git", "python", "docker", "reqsys-source", "dev-runtime"],
+        "runner_labels": [
+            "self-hosted",
+            "Windows",
+            "X64",
+            "reqsys-dev",
+            "reqsys-dev-pool-v1",
+            "reqsys-cap-base-v1",
+            "reqsys-cap-runtime-v1",
+        ],
         "safeguards": {
             "hml_enabled": False,
             "stg_enabled": False,
@@ -87,6 +106,7 @@ def test_portable_workflows_use_shared_pool_and_have_no_fixed_machine_identity()
     for relative in PORTABLE:
         raw = (ROOT / relative).read_text(encoding="utf-8")
         assert "reqsys-dev-pool-v1" in raw
+        assert CAPABILITY_LABELS[relative] in raw
         assert "./.github/actions/reqsys-dev-runner-preflight" in raw
         assert "DESKTOP-PDQK954" not in raw
         assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" not in raw
@@ -103,6 +123,23 @@ def test_onboarding_does_not_register_or_reconfigure_github_runner():
     assert "remove.cmd" not in raw
     assert "REQSYS_DEV_RUNNER_MANIFEST" in raw
     assert "reqsys-dev-pool-v1" not in raw  # labels come from the versioned policy
+    assert "UTF8Encoding($false)" in raw
+    assert "Set-Content -LiteralPath $ManifestPath -Encoding UTF8" not in raw
+
+
+def test_fixed_installer_configures_only_explicit_runner_service():
+    raw = (ROOT / "scripts/install_reqsys_dev_runner.ps1").read_text(encoding="utf-8")
+    assert "REQSYS_DEV_RUNNER_MANIFEST=" in raw
+    assert "UTF8Encoding($false)" in raw
+    assert "^actions\\.runner\\." in raw
+    assert "Restart-Service -Name $RunnerServiceName -Force" in raw
+    assert "GITHUB_RUNNER_METADATA_MISSING" in raw
+    assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in raw
+    assert "--method PUT" in raw
+    assert "actions/runners/$runnerId/labels" in raw
+    assert "$preservedLabels + $profileLabels" in raw
+    assert "Invoke-Expression" not in raw
+    assert "iex " not in raw.casefold()
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
@@ -110,7 +147,7 @@ def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
     canary = recovery.split("  runner-pool-canary:", 1)[1].split("  runner-canary:", 1)[0]
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
     assert "REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN" in canary
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in canary
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-base-v1]" in canary
     assert "uses: ./.github/actions/reqsys-dev-runner-preflight" in canary
     assert "authorization_comment_id" in canary
     assert "expected_sha" in canary
@@ -122,3 +159,28 @@ def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
     assert "mode='runner-pool-canary'" in gateway
     assert "-f expected_sha=\"$EXPECTED_SHA\"" in gateway
     assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway
+
+
+def test_profiles_publish_cumulative_scheduling_labels():
+    profiles = policy()["profiles"]
+    assert profiles["base"]["runner_labels"] == ["reqsys-cap-base-v1"]
+    assert profiles["runtime"]["runner_labels"] == [
+        "reqsys-cap-base-v1",
+        "reqsys-cap-runtime-v1",
+    ]
+    assert profiles["ollama"]["runner_labels"] == [
+        "reqsys-cap-base-v1",
+        "reqsys-cap-runtime-v1",
+        "reqsys-cap-ollama-v1",
+    ]
+
+
+def test_runtime_manifest_cannot_claim_unversioned_labels(tmp_path):
+    runtime = tmp_path / "runtime-dev"
+    runtime.mkdir()
+    value = manifest(runtime)
+    value["runner_labels"] = ["reqsys-dev-pool-v1"]
+    with pytest.raises(preflight.PreflightError, match="runner_labels_invalid"):
+        preflight.validate(
+            policy(), value, profile="runtime", repo_paths=[], os_name="nt", which=lambda _: "tool"
+        )

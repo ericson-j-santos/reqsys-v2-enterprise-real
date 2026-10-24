@@ -62,7 +62,7 @@ jobs:
       contents: read
       id-token: write
       issues: read
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-runtime-v1]
     timeout-minutes: 45
     environment: development
     env:

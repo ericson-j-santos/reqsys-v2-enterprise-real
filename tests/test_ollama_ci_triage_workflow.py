@@ -19,7 +19,7 @@ def test_workflow_is_event_driven_and_non_recursive() -> None:
     assert "CI — ReqSys v2 Enterprise" in watched
     assert "CI Enterprise Fast" in watched
     assert "Pre-PR Readiness Gate" in watched
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-ollama-v1]" in raw
     assert "./.github/actions/reqsys-dev-runner-preflight" in raw
 
 

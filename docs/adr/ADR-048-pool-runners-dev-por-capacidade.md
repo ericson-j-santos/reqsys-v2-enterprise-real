@@ -10,7 +10,7 @@ Os fluxos portáveis DEV eram agendados pela label histórica `pc24x7` e parte d
 
 ## Decisão
 
-Os fluxos portáveis usam o pool `reqsys-dev-pc-pool-v1`, selecionado pelas labels compartilhadas `Windows`, `X64`, `reqsys-dev` e `reqsys-dev-pool-v1`. Cada job executa um preflight local, após o checkout imutável, que valida manifesto, Windows, ferramentas, checkout/origem permitida, runtime root, capacidades e salvaguardas DEV.
+Os fluxos portáveis usam o pool `reqsys-dev-pc-pool-v1`, selecionado pelas labels compartilhadas `Windows`, `X64`, `reqsys-dev` e `reqsys-dev-pool-v1`, mais uma label de capacidade obrigatória: `reqsys-cap-base-v1`, `reqsys-cap-runtime-v1` ou `reqsys-cap-ollama-v1`. Labels são cumulativas por perfil, de modo que o scheduler não entrega trabalho Ollama a um PC apenas base. Cada job repete um preflight local após o checkout imutável, validando manifesto, Windows, ferramentas, checkout/origem permitida, runtime root, capacidades e salvaguardas DEV.
 
 O manifesto atribui um `runner_instance_id` opaco. Hostname e `runner_id` do GitHub não participam do agendamento, autorização ou evidência. O runtime root vem do manifesto e é exportado como `REQSYS_DEV_RUNTIME_ROOT`.
 

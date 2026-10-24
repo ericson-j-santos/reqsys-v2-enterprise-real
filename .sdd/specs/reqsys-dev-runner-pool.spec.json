@@ -13,8 +13,18 @@
     "config/reqsys-dev-runner-pool.json",
     "scripts/validate_reqsys_dev_runner.py",
     "scripts/onboard_reqsys_dev_runner.ps1",
+    "scripts/install_reqsys_dev_runner.ps1",
+    "scripts/check_self_hosted_runner_governance.py",
+    ".github/self-hosted-runner-policy.json",
     ".github/actions/reqsys-dev-runner-preflight/action.yml",
-    ".github/workflows/reqsys-dev-runner-pool-canary.yml",
+    ".github/workflows/codex-ollama-e2e-dev.yml",
+    ".github/workflows/codex-worker-pool-handoff.yml",
+    ".github/workflows/figma-github-e2e-dev.yml",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/ollama-ci-triage.yml",
+    ".github/workflows/noteri-study-mode-dev-reconcile.yml",
+    ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    ".github/workflows/todo-global-hourly-cycle.yml",
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
     "docs/runbooks/reqsys-dev-runner-pool.md"
   ],
@@ -34,7 +44,9 @@
     "No portable critical workflow depends on DESKTOP-PDQK954 or a fixed runner_id",
     "Runtime root and evidence identity come from the validated local manifest",
     "HML, STG, PROD and automatic retry remain disabled",
-    "Onboarding validation does not register or reconfigure the GitHub runner service"
+    "Onboarding validation does not register the GitHub runner service",
+    "Scheduling labels distinguish base, runtime and Ollama before pickup",
+    "The fixed local installer writes BOM-free JSON, configures the runner environment and only restarts an explicitly named actions.runner service"
   ],
   "sdd_gate": {
     "tests": [

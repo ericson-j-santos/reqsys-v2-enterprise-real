@@ -15,11 +15,13 @@ if (-not (Test-Path -LiteralPath $RuntimeRoot -PathType Container)) { throw 'RUN
 $manifest = [ordered]@{
   schema_version = 1
   pool = $policy.pool
+  profile = $Profile
   environment = 'dev'
   runner_instance_id = $RunnerInstanceId
   allowed_environments = @('dev')
   runtime_root = (Resolve-Path -LiteralPath $RuntimeRoot).Path
   capabilities = @($selected.capabilities)
+  runner_labels = @($policy.runner_labels) + @($selected.runner_labels)
   safeguards = [ordered]@{
     hml_enabled = $false
     stg_enabled = $false
@@ -31,10 +33,12 @@ if (-not $ValidateOnly) {
   $parent = Split-Path -Parent $ManifestPath
   if ($PSCmdlet.ShouldProcess($ManifestPath, 'Write ReqSys DEV runner manifest')) {
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
-    $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
+    $rendered = ($manifest | ConvertTo-Json -Depth 6) + [Environment]::NewLine
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText($ManifestPath, $rendered, $utf8NoBom)
   }
 }
 $env:REQSYS_DEV_RUNNER_MANIFEST = $ManifestPath
 python (Join-Path $repoRoot 'scripts\validate_reqsys_dev_runner.py') --manifest $ManifestPath --profile $Profile --repository $repoRoot
 if ($LASTEXITCODE -ne 0) { throw 'RUNNER_PREFLIGHT_BLOCKED' }
-Write-Host ('Assign these shared labels only after validation: ' + ($policy.runner_labels -join ', '))
+Write-Host ('Assign these shared labels only after validation: ' + ($manifest.runner_labels -join ', '))

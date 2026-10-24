@@ -97,11 +97,23 @@ def validate(
     selected = profiles.get(profile) if isinstance(profiles, dict) else None
     if not isinstance(selected, dict):
         raise PreflightError("profile_invalid")
+    manifest_profile = str(manifest.get("profile", ""))
+    provisioned = profiles.get(manifest_profile) if isinstance(profiles, dict) else None
+    if not isinstance(provisioned, dict):
+        raise PreflightError("manifest_profile_invalid")
     capabilities = manifest.get("capabilities")
     if not isinstance(capabilities, list) or any(
         item not in capabilities for item in selected.get("capabilities", [])
     ):
         raise PreflightError("capability_missing")
+    if sorted(capabilities) != sorted(provisioned.get("capabilities", [])):
+        raise PreflightError("manifest_capabilities_invalid")
+    expected_labels = [
+        *policy.get("runner_labels", []),
+        *provisioned.get("runner_labels", []),
+    ]
+    if manifest.get("runner_labels") != expected_labels:
+        raise PreflightError("runner_labels_invalid")
     missing_tools = [tool for tool in selected.get("tools", []) if not which(tool)]
     if missing_tools:
         raise PreflightError("required_tool_missing")
@@ -133,11 +145,13 @@ def validate(
         "schema_version": 1,
         "pool": policy["pool"],
         "profile": profile,
+        "provisioned_profile": manifest_profile,
         "environment": "dev",
         "runner_instance_id": instance_id,
         "runtime_root_valid": True,
         "repository_access_valid": True,
         "repositories_checked": sorted(set(observed_repositories)),
+        "runner_labels": expected_labels,
         "safeguards_valid": True,
         "production_touched": False,
     }

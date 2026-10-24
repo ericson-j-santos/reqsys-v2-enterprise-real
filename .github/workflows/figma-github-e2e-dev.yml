@@ -14,7 +14,7 @@ concurrency:
 jobs:
   e2e:
     name: Figma ↔ GitHub E2E on PC24x7 DEV
-    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-base-v1]
     timeout-minutes: 15
     env:
       CORRELATION_ID: figma-github-e2e-${{ github.run_id }}-${{ github.run_attempt }}

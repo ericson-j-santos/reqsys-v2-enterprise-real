@@ -11,7 +11,7 @@ def test_workflow_is_fixed_to_pc24x7_dev() -> None:
     assert "workflow_dispatch:" in raw
     assert "schedule:" not in raw
     assert "pull_request:" not in raw
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1, reqsys-cap-base-v1]" in raw
     assert "./.github/actions/reqsys-dev-runner-preflight" in raw
     assert '--expected-sha "${{ github.sha }}"' in raw
     assert "production_touched" not in raw or "Produção tocada: não" in raw
