@@ -16,3 +16,4 @@
 - R12: o workflow hospedado de reconciliação deve constar tanto da rota owner quanto da allowlist fixa de dispatch, com teste de regressão que impeça divergência entre as duas listas.
 - R13: um segundo PC previamente registrado pode receber o perfil base por uma label bootstrap de capacidade aprovada, sem comparar hostname nem aceitar `runner_id` como entrada.
 - R14: o onboarding remoto do segundo PC deve produzir evidência antes de agendar uma única reinicialização do listener, e a label compartilhada só pode ser reconciliada depois que o runner voltar online.
+- R15: monitoramento e reconciliação hospedados devem usar tokens efêmeros da GitHub App governada, com permissões mínimas de administração, sem PAT pessoal ou credencial vinculada a um PC.

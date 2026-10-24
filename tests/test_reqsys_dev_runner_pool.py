@@ -254,7 +254,10 @@ def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
     assert "ONBOARDING_CONTRACT_CHANGED" in reconcile
     assert "scripts/reconcile_reqsys_dev_runner_labels.py plan" in reconcile
     assert "scripts/reconcile_reqsys_dev_runner_labels.py verify" in reconcile
-    assert "secrets.GH_PAT_ACTIONS" in reconcile
+    assert "steps.runner-administration-token.outputs.token" in reconcile
+    assert "permission-actions: read" in reconcile
+    assert "permission-administration: write" in reconcile
+    assert "secrets.GH_PAT_ACTIONS" not in reconcile
     assert "actions/runners/${runner_id}/labels" in reconcile
     assert "-RestartRunnerService" not in reconcile
     assert "runner-pool-canary" not in reconcile
