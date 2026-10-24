@@ -1006,8 +1006,10 @@ jobs:
         shell: powershell
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
         run: |
           $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw 'GH_PAT_ACTIONS_REQUIRED' }
           if ($env:COMPUTERNAME -ine 'NOTERI') { throw 'NOTERI_HOST_REQUIRED' }
           $observed = (git rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0 -or $observed -ne $env:EXPECTED_SHA) { throw 'CHECKOUT_SHA_MISMATCH' }

@@ -232,6 +232,8 @@ def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canar
     assert "-Profile base" in onboard
     assert "-ApplyGitHubLabels" in onboard
     assert "-LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in onboard
+    assert "GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}" in onboard
+    assert "GH_PAT_ACTIONS_REQUIRED" in onboard
     assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in onboard
     assert "-RestartRunnerService" not in onboard
     assert "canary_dispatched = $false" in onboard
