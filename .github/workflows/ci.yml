@@ -541,6 +541,9 @@ jobs:
             throw 'NEGATIVE_PRECONDITION_NOT_REACHED'
           }
           if (Test-Path -LiteralPath $missingRoot) { throw 'NEGATIVE_PRECONDITION_MUTATED_HOST' }
+          Write-Output 'NEGATIVE_INSTALLER_BINDING_GATE_PASSED'
+          # Native negative exit is expected. Host step succeeds only after all assertions.
+          exit 0
 
   pipeline-governance:
     name: Pipeline Governança + Evidence Snapshot
