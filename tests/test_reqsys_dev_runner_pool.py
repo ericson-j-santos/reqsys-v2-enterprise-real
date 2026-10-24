@@ -211,6 +211,9 @@ def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
     assert "ADMINISTRATOR_REQUIRED|RUNNER_ROOT_INVALID" in windows_job
     assert "NEGATIVE_PRECONDITION_MUTATED_HOST" in windows_job
     assert "NEGATIVE_PRECONDITION_FALSE_POSITIVE" in windows_job
+    assert "NEGATIVE_INSTALLER_BINDING_GATE_PASSED" in windows_job
+    assert "Native negative exit is expected" in windows_job
+    assert "exit 0" in windows_job
     assert "Restart-Service" not in windows_job
 
 
