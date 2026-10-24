@@ -198,6 +198,8 @@ def test_installer_configures_runner_env_and_requires_explicit_label_confirmatio
     assert "DESKTOP-PDQK954" not in raw
     assert "automatic_retry_enabled = $false" in raw
     assert "production_touched = $false" in raw
+    assert "[string]$Confirm" not in raw
+    assert "[string]$LabelConfirmation" in raw
 
 
 def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
@@ -206,7 +208,8 @@ def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
     assert "runs-on: windows-latest" in windows_job
     assert "Verify native PowerShell 5.1 installer binding without host mutation" in windows_job
     assert "scripts\\install_reqsys_dev_runner.ps1" in windows_job
-    assert "-AuthorizationPhrase 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in windows_job
+    assert "-LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in windows_job
+    assert "-ApplyGitHubLabels" not in windows_job
     assert "ParameterNameAlreadyExistsForCommand" in windows_job
     assert "ADMINISTRATOR_REQUIRED|RUNNER_ROOT_INVALID" in windows_job
     assert "NEGATIVE_PRECONDITION_MUTATED_HOST" in windows_job
@@ -215,19 +218,6 @@ def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
     assert "Native negative exit is expected" in windows_job
     assert "exit 0" in windows_job
     assert "Restart-Service" not in windows_job
-
-
-def test_installer_authorization_phrase_does_not_shadow_powershell_common_confirm():
-    installer = (ROOT / "scripts/install_reqsys_dev_runner.ps1").read_text(encoding="utf-8")
-    workflow = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
-    onboard = workflow.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
-    assert "[CmdletBinding(SupportsShouldProcess)]" in installer
-    assert "[string]$AuthorizationPhrase = ''" in installer
-    assert "[string]$Confirm = ''" not in installer
-    assert "$ApplyGitHubLabels -and $AuthorizationPhrase -cne 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in installer
-    assert "-AuthorizationPhrase 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in onboard
-    assert "-Confirm 'APPLY-REQSYS-DEV-RUNNER-LABELS'" not in onboard
-    assert "-RestartRunnerService" not in onboard
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Only Windows PowerShell 5.1 can bind advanced script parameters")
@@ -242,7 +232,7 @@ def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tm
             "-RuntimeRoot", str(missing),
             "-RunnerRoot", str(missing),
             "-Profile", "base",
-            "-AuthorizationPhrase", "APPLY-REQSYS-DEV-RUNNER-LABELS",
+            "-LabelConfirmation", "APPLY-REQSYS-DEV-RUNNER-LABELS",
         ],
         text=True,
         capture_output=True,
@@ -253,6 +243,7 @@ def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tm
     assert result.returncode != 0
     assert "ADMINISTRATOR_REQUIRED" in diagnostic or "RUNNER_ROOT_INVALID" in diagnostic
     assert "ParameterNameAlreadyExistsForCommand" not in diagnostic
+    assert not missing.exists()
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
@@ -274,7 +265,7 @@ def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
     assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway
 
 
-def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canary():
+def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_restart_or_canary():
     recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
     onboard = recovery.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
@@ -285,8 +276,11 @@ def test_noteri_onboarding_is_owner_bound_and_does_not_restart_or_dispatch_canar
     assert "expected_sha" in onboard
     assert "install_reqsys_dev_runner.ps1" in onboard
     assert "-Profile base" in onboard
-    assert "-ApplyGitHubLabels" in onboard
-    assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in onboard
+    assert "-ApplyGitHubLabels" not in onboard
+    assert "-LabelConfirmation" not in onboard
+    assert "secrets." not in onboard
+    assert "labels_applied = $false" in onboard
+    assert "label_reconciliation_required = $true" in onboard
     assert "-RestartRunnerService" not in onboard
     assert "canary_dispatched = $false" in onboard
     assert "automatic_retry_enabled = $false" in onboard

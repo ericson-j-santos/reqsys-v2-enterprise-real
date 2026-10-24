@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Teams workflow_run no-op notification admission",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-23",
+  "updated_at": "2026-10-23",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Conclusões skipped/cancelled/neutral não iniciam o job de envio.",
+    "Admissão de materialidade ocorre antes de locator e segredos de entrega.",
+    "Remediação sem reruns executados não gera payload nem tenta envio.",
+    "Triagem realmente executada, degradada ou bloqueada com evidência continua admitida.",
+    "Evidência ausente/inválida falha antes de locator e não vira mensagem falsa de triagem concluída.",
+    "Renderização de commit e mensagem manual, rota canônica e fallback legítimo permanecem preservados.",
+    "Contrato de teste executa o Python real da preparação com fixtures e verifica zero acesso externo para skipped e zero payload de entrega para no-op.",
+    "Nenhum teste lê credencial real, consulta runtime, envia Teams, usa Docker ou altera permissões."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_teams_notification_admission.py",
+      "tests/test_teams_commit_notification_fallback_contract.py",
+      "tests/test_pc24x7_locator_watch_contract.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_teams_notification_admission.py",
+      "tests/test_teams_commit_notification_fallback_contract.py",
+      "tests/test_pc24x7_locator_watch_contract.py"
+    ],
+    "evidence_contract": "Testes nativos de admissão, estrutura do workflow e preparação real com dados sintéticos. Não constituem envio Teams, leitura de mensagem no destino ou E2E físico."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/teams-noop-notification-admission.requirements.md",
+    "implementation": [
+      "scripts/teams_notification_admission.py",
+      ".github/workflows/teams-commit-notification.yml"
+    ],
+    "regression_tests": "tests/test_teams_notification_admission.py",
+    "observed_bad_run": "39956696535",
+    "observed_bad_job": "120424198297",
+    "agent_increment_gate_run": "39962211237",
+    "prior_teams_only_gate_run": "39960114802",
+    "agent_increment_gate_reference": "OPS-GAP-TEAMS-NATIVE-CI-BOOTSTRAP",
+    "agent_increment_gate_artifact": "12505321847",
+    "agent_increment_gate_artifact_digest": "bda7319a84af293b6ed6d3e6e93edb5c855ae4498506fba5b61a3164e4cdfb39"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "permissions": false,
+    "scope": "read-only-admission-before-existing-notification-delivery"
+  }
+}
