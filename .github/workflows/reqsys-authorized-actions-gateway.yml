@@ -67,6 +67,8 @@ jobs:
         github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run noteri-runner-pool-onboard' ||
         github.event.comment.body == '/reqsys run noteri-runner-pool-label-reconcile' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-onboard' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-label-reconcile' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
         github.event.comment.body == '/reqsys run todo-producer-keyvault-dev' ||
@@ -270,6 +272,14 @@ jobs:
               target='self-hosted-runner-governance-guard.yml'
               mode='runner-pool-label-reconcile-noteri'
               ;;
+            '/reqsys run pc24x7-runner-pool-onboard')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-pool-onboard-pc24x7'
+              ;;
+            '/reqsys run pc24x7-runner-pool-label-reconcile')
+              target='self-hosted-runner-governance-guard.yml'
+              mode='runner-pool-label-reconcile-pc24x7'
+              ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
               mode='reconcile-runtime'
@@ -453,7 +463,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml|self-hosted-runner-governance-guard.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -598,13 +608,18 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=preflight)"
-          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ]; then
+          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && { [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ] || [ "$TARGET_MODE" = "runner-pool-label-reconcile-pc24x7" ]; }; then
+            case "$TARGET_MODE" in
+              runner-pool-label-reconcile-noteri) artifact_prefix='reqsys-dev-runner-pool-onboard' ;;
+              runner-pool-label-reconcile-pc24x7) artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7' ;;
+              *) echo 'runner_pool_label_reconcile_mode_invalid' >&2; exit 3 ;;
+            esac
             onboarding_run_id=''
             for candidate_run_id in $(gh api \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/noteri-desktop-watchdog-recovery.yml/runs?event=workflow_dispatch&status=success&per_page=30" \
               --jq '.workflow_runs[].id'); do
               artifact_count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}/artifacts" \
-                --jq "[.artifacts[] | select(.name == \"reqsys-dev-runner-pool-onboard-${candidate_run_id}\" and .expired == false)] | length")"
+                --jq "[.artifacts[] | select(.name == \"${artifact_prefix}-${candidate_run_id}\" and .expired == false)] | length")"
               if [ "$artifact_count" = '1' ]; then
                 onboarding_run_id="$candidate_run_id"
                 break
@@ -621,10 +636,10 @@ jobs:
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
-              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
+              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
               *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
             esac
-            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ]; then
+            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ] || [ "$recovery_mode" = "runner-pool-onboard-pc24x7" ]; then
               run_url="$(gh workflow run "$TARGET_WORKFLOW" \
                 --repo "$GITHUB_REPOSITORY" \
                 --ref main \

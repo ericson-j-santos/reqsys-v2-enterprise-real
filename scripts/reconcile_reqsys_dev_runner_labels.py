@@ -24,7 +24,7 @@ MANAGED_LABELS = {
     "reqsys-cap-runtime-v1",
     "reqsys-cap-ollama-v1",
 }
-NOTERI_SELECTOR = {"self-hosted", "windows", "x64", "noteri", "reqsys-dev"}
+SELECTOR_LABELS = {"noteri", "pc24x7"}
 
 
 def load_object(path: Path) -> dict[str, Any]:
@@ -91,12 +91,17 @@ def build_plan(
     onboarding: dict[str, Any],
     expected_sha: str,
     onboarding_sha: str,
+    selector_label: str = "noteri",
 ) -> dict[str, Any]:
     if len(expected_sha) != 40 or any(char not in "0123456789abcdef" for char in expected_sha):
         raise ReconcileError("expected_sha_invalid")
     if len(onboarding_sha) != 40 or any(char not in "0123456789abcdef" for char in onboarding_sha):
         raise ReconcileError("onboarding_sha_invalid")
     validate_onboarding(onboarding, onboarding_sha)
+    selector_label = selector_label.casefold()
+    if selector_label not in SELECTOR_LABELS:
+        raise ReconcileError("runner_selector_invalid")
+    selector = {"self-hosted", "windows", "x64", selector_label, "reqsys-dev"}
     profile_labels = desired_profile_labels(policy)
     runners = inventory.get("runners")
     if not isinstance(runners, list):
@@ -106,10 +111,10 @@ def build_plan(
         if not isinstance(runner, dict) or str(runner.get("status") or "").casefold() != "online":
             continue
         current = labels(runner)
-        if NOTERI_SELECTOR.issubset({item.casefold() for item in current}):
+        if selector.issubset({item.casefold() for item in current}):
             candidates.append((runner, current))
     if len(candidates) != 1:
-        raise ReconcileError(f"noteri_runner_cardinality_invalid:{len(candidates)}")
+        raise ReconcileError(f"runner_selector_cardinality_invalid:{selector_label}:{len(candidates)}")
     runner, current = candidates[0]
     runner_id = runner.get("id")
     if not isinstance(runner_id, int) or runner_id < 1:
@@ -133,6 +138,7 @@ def build_plan(
         "expected_sha": expected_sha,
         "onboarding_sha": onboarding_sha,
         "profile": "base",
+        "selector_label": selector_label,
         "environment": "dev",
         "production_touched": False,
     }
@@ -188,6 +194,7 @@ def main() -> int:
     plan_parser.add_argument("--onboarding-evidence", type=Path, required=True)
     plan_parser.add_argument("--expected-sha", required=True)
     plan_parser.add_argument("--onboarding-sha", required=True)
+    plan_parser.add_argument("--selector-label", choices=sorted(SELECTOR_LABELS), default="noteri")
     plan_parser.add_argument("--output", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--plan", type=Path, required=True)
@@ -202,6 +209,7 @@ def main() -> int:
                 load_object(args.onboarding_evidence),
                 args.expected_sha,
                 args.onboarding_sha,
+                args.selector_label,
             )
         else:
             value = verify(load_object(args.plan), load_object(args.inventory))
