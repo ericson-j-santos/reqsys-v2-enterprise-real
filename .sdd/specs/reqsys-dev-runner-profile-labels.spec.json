@@ -8,7 +8,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Separa a seleção de runners DEV por capacidade para permitir o perfil base sem Docker e impedir pickup de jobs incompatíveis.",
+  "description": "Separa a seleção de runners DEV por capacidade, vincula exatamente perfil, capacidades e labels no manifesto e automatiza o onboarding seguro sem dependência do Registro.",
   "sdd_gate": {
     "tests": [
       "tests/test_reqsys_dev_runner_pool.py",
