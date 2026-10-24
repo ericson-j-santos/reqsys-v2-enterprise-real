@@ -18,7 +18,8 @@
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
     "docs/runbooks/reqsys-dev-runner-pool.md",
     "scripts/install_reqsys_dev_runner.ps1",
-    ".github/workflows/noteri-desktop-watchdog-recovery.yml"
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/ci.yml"
   ],
   "safety": {
     "dispatch_performed": false,
@@ -40,7 +41,8 @@
     "Runtime root and evidence identity come from the validated local manifest",
     "HML, STG, PROD and automatic retry remain disabled",
     "Onboarding validation does not register or reconfigure the GitHub runner service",
-    "Installer authorization phrase is distinct from PowerShell common Confirm/WhatIf; binding reaches fail-closed prerequisite without host mutation."
+    "Installer authorization phrase is distinct from PowerShell common Confirm/WhatIf; binding reaches fail-closed prerequisite without host mutation.",
+    "Windows PowerShell 5.1 existing CI job proves installer parameter binding and a no-mutation negative precondition."
   ],
   "sdd_gate": {
     "tests": [
