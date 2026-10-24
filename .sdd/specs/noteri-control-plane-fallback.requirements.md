@@ -66,6 +66,23 @@ O bootstrap `scripts/activate_noteri_free_control_plane.cmd` deve eliminar a seq
 
 A autenticação interativa do GitHub pode exigir ação humana por consentimento, mas nenhuma etapa recorrente de operação pode voltar a depender do RDC.
 
+### Recuperação de registro remoto apagado
+
+O arquivo local `.runner` não comprova que o runner continua registrado no GitHub. O bootstrap deve consultar o registro oficial de runners do repositório antes de declarar `runtime_active`.
+
+Quando o contrato local existe mas o runner `Noteri` não aparece no registro remoto:
+- obter token de remoção e token de registro pelo endpoint oficial **antes de qualquer mutação local**;
+- manter ambos somente em memória, sem log, artifact ou persistência;
+- parar somente o `Runner.Listener.exe` cujo caminho absoluto pertence ao `runner_home` governado;
+- remover a configuração local pelo `config.cmd remove` oficial e re-registrar nome/labels fixos;
+- exigir readback do registro remoto com `status=online` e labels `self-hosted, Windows, X64, noteri, reqsys-dev`;
+- falhar fechado antes de parar o runner quando autenticação/escopo não permitir obter os dois tokens;
+- oferecer modo `--non-interactive-auth` que nunca abre browser e retorna `github_auth_required`/permissão ausente;
+- registrar apenas flags sanitizadas de token consumido/persistido/logado, nunca o valor.
+
+A identidade do listener local deve ser validada pelo caminho absoluto via watchdog; a existência de outro processo `Runner.Listener.exe` não pode produzir `runtime_active`.
+
+
 ## Regressão do resolver
 
 O [run 37059423546](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37059423546) adquiriu o job no Noteri e falhou em `Resolve immutable noteri-runtime main SHA` com `noteri_runtime_main_resolution_failed`. A correção deve comprovar a consulta oficial de `main`, o checkout do SHA completo e o E2E isolado no mesmo SHA da branch, incluindo após sincronização com a base.

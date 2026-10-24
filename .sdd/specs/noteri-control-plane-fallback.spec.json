@@ -40,7 +40,10 @@
     "fail_closed_on_missing_runner": true,
     "elevated_result_contains_secrets": false,
     "self_hosted_pull_request_trigger": false,
-    "premerge_owner_push_only": true
+    "premerge_owner_push_only": true,
+    "registration_token_persisted": false,
+    "remove_token_persisted": false,
+    "local_gh_auth_required": true
   },
   "runtime_gate": {
     "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
@@ -63,7 +66,24 @@
       "tests/test_noteri_control_plane_fallback.py",
       ".sdd/specs/noteri-control-plane-fallback.requirements.md",
       ".sdd/specs/noteri-control-plane-fallback.spec.json"
-    ]
+    ],
+    "remote_registry_required": true,
+    "runtime_active_requires": "exact_listener_path + remote_runner_present_online + required_labels",
+    "stale_registration_repair": {
+      "trigger": "local_runner_contract_present_and_remote_registry_missing",
+      "token_transport": "official_remove_and_registration_tokens_in_memory_only",
+      "mutation_order": [
+        "acquire_remove_token",
+        "acquire_registration_token",
+        "stop_exact_listener",
+        "remove_local_config",
+        "register_fixed_runner",
+        "readback_remote_registry"
+      ],
+      "non_interactive_fail_closed": true,
+      "secrets_logged": false,
+      "secrets_persisted": false
+    }
   },
   "sdd_gate": {
     "tests": [
@@ -75,7 +95,7 @@
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_teams_bot_dev_provision_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O workflow do probe deve preparar Python 3.12.10 portátil com URL e SHA-256 fixos e executar tanto o probe quanto o E2E do noteri-runtime por REQSYS_PYTHON; o Python global do host não é uma dependência operacional. O monitor agendado adota circuit breaker: após probe terminal sem pickup físico, 60 minutos sem novo dispatch; uma única sonda half-open por ciclo ou pedido manual explícito do proprietário após mudança material. O estado runner_unavailable_cooldown é registrado com run_id e SHA anterior, nunca como runtime_active; indisponibilidade da API ou timestamp inválido bloqueia novas sondas."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O workflow do probe deve preparar Python 3.12.10 portátil com URL e SHA-256 fixos e executar tanto o probe quanto o E2E do noteri-runtime por REQSYS_PYTHON; o Python global do host não é uma dependência operacional. O monitor agendado adota circuit breaker: após probe terminal sem pickup físico, 60 minutos sem novo dispatch; uma única sonda half-open por ciclo ou pedido manual explícito do proprietário após mudança material. O estado runner_unavailable_cooldown é registrado com run_id e SHA anterior, nunca como runtime_active; indisponibilidade da API ou timestamp inválido bloqueia novas sondas. O bootstrap deve tratar .runner local com registro remoto ausente como estado recuperável: adquirir ambos os tokens efêmeros antes da mutação, parar somente o listener do runner_home exato, re-registrar nome/labels fixos, exigir readback remoto online e falhar antes da mutação quando auth/escopo estiver indisponível. Modo non-interactive nunca abre browser."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -265,5 +285,5 @@
       }
     }
   },
-  "updated_at": "2026-10-23"
+  "updated_at": "2026-10-24"
 }
