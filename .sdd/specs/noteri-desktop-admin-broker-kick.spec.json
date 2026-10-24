@@ -2,24 +2,49 @@
   "feature_name": "noteri-desktop-admin-broker-kick",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-10-08",
+  "updated_at": "2026-10-24",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Kick local, fixo e sem credenciais da tarefa existente Desktop Admin Broker a partir do runner PC24x7 do próprio Desktop.",
+  "description": "Kick local, fixo e sem credenciais da tarefa existente Desktop Admin Broker a partir do runner PC24x7 do próprio Desktop.; novo modo preflight faz somente leitura governada da prontidão para recuperar tarefas e autenticação local.",
   "sdd_gate": {
     "tests": [
       "tests/test_noteri_desktop_admin_broker_kick.py",
-      "tests/test_reqsys_authorized_actions_gateway.py"
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_desktop_admin_broker_recovery_preflight.py"
     ],
-    "evidence_contract": "Somente o runner PC24x7 do DESKTOP-PDQK954 pode solicitar /Run local da tarefa fixa \\\\Automation\\\\ReqSysDesktopAdminBroker; /S e credenciais são proibidos; a mutação local só pode ser disparada por workflow_dispatch via Authorized Actions Gateway; pull_request/push validam apenas contratos; nenhuma tarefa é criada/alterada e falhas são fail-closed."
+    "evidence_contract": "Somente o runner PC24x7 do DESKTOP-PDQK954 pode solicitar /Run local da tarefa fixa \\\\Automation\\\\ReqSysDesktopAdminBroker; /S e credenciais são proibidos; a mutação local só pode ser disparada por workflow_dispatch via Authorized Actions Gateway; pull_request/push validam apenas contratos; nenhuma tarefa é criada/alterada e falhas são fail-closed. O modo preflight, acionado somente com modo fixo preflight, inspeciona host, metadata/source SHA/release, Task Scheduler via /Query, privilégios e autenticação gh local sem expor credenciais e sem fazer mutações; retorna resultado sanitizado e falha fechado. A execução do reparo nativo e a proteção main permanecem separadas e dependem de autorização/esquema próprios."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md",
     "implementation": "scripts/noteri_desktop_admin_broker_kick.py",
-    "workflow": ".github/workflows/noteri-desktop-admin-broker-kick.yml"
+    "workflow": ".github/workflows/noteri-desktop-admin-broker-kick.yml",
+    "preflight_implementation": "scripts/desktop_admin_broker_recovery_preflight.py"
+  },
+  "preflight": {
+    "mode": "preflight",
+    "workflow": ".github/workflows/noteri-desktop-admin-broker-kick.yml",
+    "dispatch_command": "/reqsys run desktop-admin-broker-recovery-preflight",
+    "target_host": "DESKTOP-PDQK954",
+    "environment": "local/DEV",
+    "risk": 1,
+    "allowed_task_operation": "/Query",
+    "forbidden_operations": [
+      "/Run",
+      "/Create",
+      "/Change",
+      "/Delete",
+      "elevation",
+      "secret access"
+    ],
+    "expected_statuses": [
+      "NATIVE_REPAIR_ELIGIBLE_NOT_EXECUTED",
+      "EXISTING_TASKS_AND_AUTH_READY",
+      "BLOCKED_*"
+    ],
+    "evidence": "sanitized structured job output; physical E2E pending"
   }
 }
