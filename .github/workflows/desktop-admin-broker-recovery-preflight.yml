@@ -1,0 +1,132 @@
+name: Desktop Admin Broker Recovery Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-admin-broker-recovery-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Inspect governed Desktop broker and local auth
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      RULES_SHA: 1c0ba29b2596562e1974a8ee8f9040b50dcf0987
+      CORRELATION_ID: desktop-broker-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+      PYTHONNOUSERSITE: "1"
+
+    steps:
+      - name: Checkout immutable ReqSys SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate exact expected physical host
+        shell: powershell
+        run: |
+          if ($env:COMPUTERNAME -ine 'DESKTOP-PDQK954') {
+            throw 'DESKTOP_ADMIN_BROKER_PREFLIGHT_HOST_MISMATCH'
+          }
+
+      - name: Prepare SHA-256 verified portable Python
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP ('reqsys-broker-preflight-python-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { throw 'PORTABLE_PYTHON_DIR_ALREADY_EXISTS' }
+          if (Test-Path -LiteralPath $zip) { throw 'PORTABLE_PYTHON_ARCHIVE_ALREADY_EXISTS' }
+          New-Item -ItemType Directory -Path $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PORTABLE_PYTHON_SHA256) {
+            throw 'PORTABLE_PYTHON_SHA256_MISMATCH'
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root
+          $python = Join-Path $root 'python.exe'
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw 'PORTABLE_PYTHON_MISSING' }
+          $version = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne ('Python ' + $env:PORTABLE_PYTHON_VERSION)) {
+            throw 'PORTABLE_PYTHON_VERSION_MISMATCH'
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout pinned operational rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory isolated session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scripts = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts'
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) 'python312._pth'
+          if (-not (Test-Path -LiteralPath $pth)) { throw 'PORTABLE_PYTHON_PTH_MISSING' }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $scripts) {
+            Add-Content -LiteralPath $pth -Value $scripts
+          }
+          $launcher = Join-Path $scripts 'session_launcher.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $launcherArgs = @(
+            '--policy', $policy,
+            '--repo', $env:GITHUB_WORKSPACE,
+            '--session-prefix', 'desktop-broker-preflight',
+            '--correlation-id', $env:CORRELATION_ID,
+            '--expected-head', '${{ github.sha }}',
+            '--sync-ref', 'origin/main',
+            '--require-runner-version-preflight'
+          )
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { throw 'SESSION_LAUNCH_EXIT_NONZERO' }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne 'SESSION_LAUNCH_OK' -or $data.state_validated -ne $true) {
+            throw 'SESSION_LAUNCH_BLOCKED'
+          }
+          if ($data.head -ne '${{ github.sha }}') { throw 'SESSION_HEAD_MISMATCH' }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$($data.head)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Inspect native repair prerequisites through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'GOVERNED_SESSION_MISSING' }
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $probe = Join-Path $env:TARGET_PATH 'scripts\desktop_admin_broker_recovery_preflight.py'
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'run',
+            '--cwd', $env:TARGET_PATH,
+            '--session-id', $env:SESSION_ID,
+            "--risk", "1",
+            '--timeout', '75',
+            '--expected-head', $env:ANCHOR_SHA,
+            '--', $env:REQSYS_PYTHON, $probe,
+            '--confirm', 'PROBE-DESKTOP-ADMIN-BROKER-REPAIR'
+          )
+          & $env:REQSYS_PYTHON $gateway @gatewayArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
