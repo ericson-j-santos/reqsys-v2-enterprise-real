@@ -241,3 +241,24 @@ def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_resta
     assert "deploy_performed = $false" in onboard
     assert "production_touched = $false" in onboard
     assert "mode='runner-pool-onboard-noteri'" in gateway
+
+
+def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
+    guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
+    reconcile = guard.split("  runner-pool-label-reconcile-noteri:", 1)[1]
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "runs-on: ubuntu-latest" in reconcile
+    assert "/reqsys run noteri-runner-pool-label-reconcile" in reconcile
+    assert "onboarding_run_id" in reconcile
+    assert "reqsys-dev-runner-pool-onboard-${ONBOARDING_RUN_ID}" in reconcile
+    assert "ONBOARDING_CONTRACT_CHANGED" in reconcile
+    assert "scripts/reconcile_reqsys_dev_runner_labels.py plan" in reconcile
+    assert "scripts/reconcile_reqsys_dev_runner_labels.py verify" in reconcile
+    assert "secrets.GH_PAT_ACTIONS" in reconcile
+    assert "actions/runners/${runner_id}/labels" in reconcile
+    assert "-RestartRunnerService" not in reconcile
+    assert "runner-pool-canary" not in reconcile
+    assert "environment=prod" not in reconcile
+    assert "mode='runner-pool-label-reconcile-noteri'" in gateway
+    assert "target='self-hosted-runner-governance-guard.yml'" in gateway
+    assert '-f onboarding_run_id="$onboarding_run_id"' in gateway
