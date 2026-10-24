@@ -16,25 +16,31 @@
     ".github/actions/reqsys-dev-runner-preflight/action.yml",
     ".github/workflows/reqsys-dev-runner-pool-canary.yml",
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
-    "docs/runbooks/reqsys-dev-runner-pool.md"
+    "docs/runbooks/reqsys-dev-runner-pool.md",
+    "scripts/install_reqsys_dev_runner.ps1",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml"
   ],
   "safety": {
     "dispatch_performed": false,
     "deploy_performed": false,
     "environment_mutated": false,
-    "allowed_environments": ["dev"]
+    "allowed_environments": [
+      "dev"
+    ]
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-runner-pool.requirements.md",
     "implementation": "scripts/validate_reqsys_dev_runner.py",
-    "tests": "tests/test_reqsys_dev_runner_pool.py"
+    "tests": "tests/test_reqsys_dev_runner_pool.py",
+    "authorization_contract": "scripts/install_reqsys_dev_runner.ps1:-AuthorizationPhrase; workflow:noteri-desktop-watchdog-recovery.yml"
   },
   "acceptance_criteria": [
     "Portable DEV workflows use shared capability labels and a fail-closed preflight",
     "No portable critical workflow depends on DESKTOP-PDQK954 or a fixed runner_id",
     "Runtime root and evidence identity come from the validated local manifest",
     "HML, STG, PROD and automatic retry remain disabled",
-    "Onboarding validation does not register or reconfigure the GitHub runner service"
+    "Onboarding validation does not register or reconfigure the GitHub runner service",
+    "Installer authorization phrase is distinct from PowerShell common Confirm/WhatIf; binding reaches fail-closed prerequisite without host mutation."
   ],
   "sdd_gate": {
     "tests": [
