@@ -120,7 +120,7 @@ def test_probe_cannot_modify_tasks_or_expose_secrets() -> None:
 
 
 def test_workflow_gate_is_owner_only_and_read_only() -> None:
-    workflow = (ROOT / ".github/workflows/desktop-admin-broker-recovery-preflight.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/noteri-desktop-admin-broker-kick.yml").read_text(encoding="utf-8")
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
     policy = json.loads((ROOT / ".github/self-hosted-runner-policy.json").read_text(encoding="utf-8"))
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in workflow
@@ -129,5 +129,7 @@ def test_workflow_gate_is_owner_only_and_read_only() -> None:
     assert '"--risk", "1"' in workflow
     assert "NATIVE_REPAIR_ELIGIBLE_NOT_EXECUTED" in SCRIPT.read_text(encoding="utf-8")
     assert "/reqsys run desktop-admin-broker-recovery-preflight" in gateway
-    assert "desktop-admin-broker-recovery-preflight.yml" in gateway
-    assert ".github/workflows/desktop-admin-broker-recovery-preflight.yml" in policy["approved_workflows"]
+    assert "target='noteri-desktop-admin-broker-kick.yml'" in gateway
+    assert "-f mode=preflight" in gateway
+    assert ".github/workflows/noteri-desktop-admin-broker-kick.yml" in policy["approved_workflows"]
+    assert ".github/workflows/desktop-admin-broker-recovery-preflight.yml" not in policy["approved_workflows"]
