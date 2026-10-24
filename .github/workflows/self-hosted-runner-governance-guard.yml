@@ -25,15 +25,39 @@ on:
       - "tests/test_reqsys_dev_runner_pool_monitor.py"
       - "tests/test_self_hosted_runner_governance.py"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Report-only audit or owner-authorized label reconciliation'
+        required: false
+        type: choice
+        default: report
+        options:
+          - report
+          - runner-pool-label-reconcile-noteri
+          - runner-pool-label-reconcile-pc24x7
+      expected_sha:
+        description: 'Current main SHA authorized by the owner'
+        required: false
+        type: string
+      authorization_comment_id:
+        description: 'Exact owner authorization comment consumed by the gateway'
+        required: false
+        type: string
+      onboarding_run_id:
+        description: 'Successful physical onboarding run with sanitized evidence'
+        required: false
+        type: string
   schedule:
     - cron: "*/30 * * * *"
 
 permissions:
   actions: read
   contents: read
+  issues: read
 
 jobs:
   governance:
+    if: ${{ !startsWith(inputs.mode, 'runner-pool-label-reconcile-') }}
     name: Validate self-hosted runner governance
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -65,23 +89,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-  monitor-pool:
-    name: Audit ReqSys DEV runner availability and labels
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+  probe-pool:
+    name: ReqSys DEV runner lease probe (${{ matrix.slot }})
+    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]
     timeout-minutes: 5
-    env:
-      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+    concurrency:
+      group: reqsys-dev-runner-pool-probe-${{ matrix.slot }}
+      cancel-in-progress: true
     steps:
-      - name: Validate governed runner inventory credential
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GH_PAT_ACTIONS is not configured."
-            exit 2
-          fi
-
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -89,12 +109,51 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Read repository runner inventory
+      - name: Validate governed DEV base capability
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+
+      - name: Hold an observable pool lease
+        shell: powershell
+        run: Start-Sleep -Seconds 75
+
+  monitor-pool:
+    name: Audit ReqSys DEV runner lease evidence
+    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Observe the two portable runner leases
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/reqsys-dev-runner-pool-monitor
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runners?per_page=100" \
-            > artifacts/reqsys-dev-runner-pool-monitor/inventory.json
+          jobs_file='artifacts/reqsys-dev-runner-pool-monitor/jobs.json'
+          for attempt in $(seq 1 43); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" > "$jobs_file"
+            completed="$(JOBS_FILE="$jobs_file" python - <<'PY'
+          import json
+          import os
+
+          jobs = json.load(open(os.environ['JOBS_FILE'], encoding='utf-8')).get('jobs') or []
+          probes = [job for job in jobs if str(job.get('name') or '').startswith('ReqSys DEV runner lease probe (')]
+          print(sum(job.get('status') == 'completed' for job in probes))
+          PY
+          )"
+            if [ "$completed" -ge 2 ]; then
+              break
+            fi
+            sleep 5
+          done
 
       - name: Build sanitized report-only evidence
         id: audit
@@ -102,7 +161,7 @@ jobs:
           set -euo pipefail
           python scripts/audit_reqsys_dev_runner_pool.py \
             --policy config/reqsys-dev-runner-pool.json \
-            --inventory artifacts/reqsys-dev-runner-pool-monitor/inventory.json \
+            --jobs artifacts/reqsys-dev-runner-pool-monitor/jobs.json \
             --output artifacts/reqsys-dev-runner-pool-monitor/evidence.json
           status="$(python -c "import json; print(json.load(open('artifacts/reqsys-dev-runner-pool-monitor/evidence.json'))['status'])")"
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -134,5 +193,214 @@ jobs:
         with:
           name: reqsys-dev-runner-pool-monitor-${{ github.run_id }}
           path: artifacts/reqsys-dev-runner-pool-monitor/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  runner-pool-label-reconcile:
+    if: ${{ inputs.mode == 'runner-pool-label-reconcile-noteri' || inputs.mode == 'runner-pool-label-reconcile-pc24x7' }}
+    name: Reconcile validated ReqSys DEV base labels for an onboarded PC
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RECONCILE_ROOT: artifacts/reqsys-dev-runner-label-reconcile
+      EVIDENCE_FILE: artifacts/reqsys-dev-runner-label-reconcile/evidence.json
+    steps:
+      - name: Verify owner authorization and immutable SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ONBOARDING_RUN_ID: ${{ inputs.onboarding_run_id }}
+          RECONCILE_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          [[ "$AUTHORIZATION_COMMENT_ID" =~ ^[1-9][0-9]{0,19}$ ]] || { echo 'AUTHORIZATION_COMMENT_INVALID' >&2; exit 2; }
+          [[ "$ONBOARDING_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || { echo 'ONBOARDING_RUN_ID_INVALID' >&2; exit 2; }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "${{ github.sha }}" ] || {
+            echo 'EXPECTED_SHA_INVALID' >&2
+            exit 2
+          }
+          comment_json="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${AUTHORIZATION_COMMENT_ID}")"
+          COMMENT_JSON="$comment_json" python - <<'PY'
+          import datetime as dt
+          import json
+          import os
+
+          comment = json.loads(os.environ['COMMENT_JSON'])
+          expected_issue = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues/1705"
+          if comment.get('user', {}).get('login') != 'ericson-j-santos':
+              raise SystemExit('AUTHORIZATION_ACTOR_MISMATCH')
+          if comment.get('issue_url') != expected_issue:
+              raise SystemExit('AUTHORIZATION_ISSUE_MISMATCH')
+          commands = {
+              'runner-pool-label-reconcile-noteri': '/reqsys run noteri-runner-pool-label-reconcile',
+              'runner-pool-label-reconcile-pc24x7': '/reqsys run pc24x7-runner-pool-label-reconcile',
+          }
+          expected_command = commands.get(os.environ.get('RECONCILE_MODE'))
+          if not expected_command or comment.get('body') != expected_command:
+              raise SystemExit('AUTHORIZATION_COMMAND_MISMATCH')
+          created = dt.datetime.fromisoformat(comment['created_at'].replace('Z', '+00:00'))
+          age = dt.datetime.now(dt.UTC) - created
+          if age.total_seconds() < -300 or age.total_seconds() > 1800:
+              raise SystemExit('AUTHORIZATION_EXPIRED')
+          PY
+
+      - name: Checkout immutable authorized SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate governed runner administration app
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_ID:-}" ] || [ -z "${PRIVATE_KEY:-}" ]; then
+            echo 'ADMINISTRATIVE_APP_MISSING' >&2
+            exit 2
+          fi
+
+      - name: Generate short-lived runner administration token
+        id: runner-administration-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-actions: read
+          permission-administration: write
+
+      - name: Resolve exact successful onboarding evidence
+        id: onboarding
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.runner-administration-token.outputs.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ONBOARDING_RUN_ID: ${{ inputs.onboarding_run_id }}
+          RECONCILE_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          [ -n "${GH_TOKEN:-}" ] || { echo 'ADMINISTRATIVE_APP_TOKEN_MISSING' >&2; exit 2; }
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ONBOARDING_RUN_ID}")"
+          RUN_JSON="$run_json" python - <<'PY'
+          import json
+          import os
+
+          run = json.loads(os.environ['RUN_JSON'])
+          if run.get('event') != 'workflow_dispatch' or run.get('status') != 'completed' or run.get('conclusion') != 'success':
+              raise SystemExit('ONBOARDING_RUN_NOT_SUCCESSFUL')
+          if run.get('path') != '.github/workflows/noteri-desktop-watchdog-recovery.yml':
+              raise SystemExit('ONBOARDING_WORKFLOW_MISMATCH')
+          head = run.get('head_sha') or ''
+          if len(head) != 40:
+              raise SystemExit('ONBOARDING_SHA_INVALID')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'onboarding_sha={head}\n')
+          PY
+          onboarding_sha="$(RUN_JSON="$run_json" python -c 'import json,os; print(json.loads(os.environ["RUN_JSON"])["head_sha"])')"
+          compare_json="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${onboarding_sha}...${EXPECTED_SHA}")"
+          COMPARE_JSON="$compare_json" python - <<'PY'
+          import json
+          import os
+
+          value = json.loads(os.environ['COMPARE_JSON'])
+          if value.get('status') not in {'ahead', 'identical'} or value.get('behind_by') != 0:
+              raise SystemExit('ONBOARDING_SHA_NOT_ANCESTOR')
+          protected = {
+              '.github/actions/reqsys-dev-runner-preflight/action.yml',
+              'config/reqsys-dev-runner-pool.json',
+              'scripts/install_reqsys_dev_runner.ps1',
+              'scripts/onboard_reqsys_dev_runner.ps1',
+              'scripts/validate_reqsys_dev_runner.py',
+          }
+          changed = {item.get('filename') for item in value.get('files') or []}
+          overlap = sorted(protected & changed)
+          if overlap:
+              raise SystemExit('ONBOARDING_CONTRACT_CHANGED:' + ','.join(overlap))
+          PY
+          case "$RECONCILE_MODE" in
+            runner-pool-label-reconcile-noteri)
+              artifact_prefix='reqsys-dev-runner-pool-onboard'
+              selector_label='noteri'
+              ;;
+            runner-pool-label-reconcile-pc24x7)
+              artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7'
+              selector_label='pc24x7'
+              ;;
+            *) echo 'RECONCILE_MODE_INVALID' >&2; exit 2 ;;
+          esac
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ONBOARDING_RUN_ID}/artifacts" \
+            --jq "[.artifacts[] | select(.name == \"${artifact_prefix}-${ONBOARDING_RUN_ID}\" and .expired == false)][0].id // empty")"
+          [ -n "$artifact_id" ] || { echo 'ONBOARDING_EVIDENCE_ARTIFACT_MISSING' >&2; exit 2; }
+          echo "artifact_name=${artifact_prefix}-${ONBOARDING_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "selector_label=${selector_label}" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact onboarding evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ steps.onboarding.outputs.artifact_name }}
+          path: artifacts/reqsys-dev-runner-label-reconcile/onboarding
+          run-id: ${{ inputs.onboarding_run_id }}
+          github-token: ${{ steps.runner-administration-token.outputs.token }}
+
+      - name: Build fail-closed label plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.runner-administration-token.outputs.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ONBOARDING_SHA: ${{ steps.onboarding.outputs.onboarding_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RECONCILE_ROOT"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runners?per_page=100" > "$RECONCILE_ROOT/inventory-before.json"
+          python scripts/reconcile_reqsys_dev_runner_labels.py plan \
+            --policy config/reqsys-dev-runner-pool.json \
+            --inventory "$RECONCILE_ROOT/inventory-before.json" \
+            --onboarding-evidence "$RECONCILE_ROOT/onboarding/evidence.json" \
+            --expected-sha "$EXPECTED_SHA" \
+            --onboarding-sha "$ONBOARDING_SHA" \
+            --selector-label "${{ steps.onboarding.outputs.selector_label }}" \
+            --output "$RECONCILE_ROOT/plan.json"
+
+      - name: Apply exact labels and verify readback
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.runner-administration-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          runner_id="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["RECONCILE_ROOT"], "plan.json"), encoding="utf-8"))["runner_id"])')"
+          mutation_required="$(python -c 'import json,os; print(str(json.load(open(os.path.join(os.environ["RECONCILE_ROOT"], "plan.json"), encoding="utf-8"))["mutation_required"]).lower())')"
+          python - <<'PY'
+          import json
+          import os
+
+          root = os.environ['RECONCILE_ROOT']
+          plan = json.load(open(os.path.join(root, 'plan.json'), encoding='utf-8'))
+          with open(os.path.join(root, 'labels.json'), 'w', encoding='utf-8') as output:
+              json.dump({'labels': plan['desired_labels']}, output, sort_keys=True)
+              output.write('\n')
+          PY
+          if [ "$mutation_required" = 'true' ]; then
+            gh api --method PUT \
+              "repos/${GITHUB_REPOSITORY}/actions/runners/${runner_id}/labels" \
+              --input "$RECONCILE_ROOT/labels.json" > /dev/null
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runners?per_page=100" > "$RECONCILE_ROOT/inventory-after.json"
+          python scripts/reconcile_reqsys_dev_runner_labels.py verify \
+            --plan "$RECONCILE_ROOT/plan.json" \
+            --inventory "$RECONCILE_ROOT/inventory-after.json" \
+            --output "$EVIDENCE_FILE"
+
+      - name: Upload sanitized label reconciliation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-runner-label-reconcile-${{ github.run_id }}
+          path: artifacts/reqsys-dev-runner-label-reconcile/evidence.json
           if-no-files-found: error
           retention-days: 30

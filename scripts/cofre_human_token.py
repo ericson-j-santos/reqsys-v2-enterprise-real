@@ -8,6 +8,19 @@ vários lugares (arquivos .http, terminais, scripts) dentro da mesma janela de
 60min: você guarda uma vez (`set` ou `listen`), e qualquer coisa local pode
 buscar com `get` até ele expirar.
 
+Fluxo recomendado (celular, sem copiar token):
+  python scripts/cofre_human_token.py device-login --environment dev \
+    --base-url https://api-dev.example.net
+
+O comando mostra a URL e um código temporário Microsoft. O operador conclui
+login + MFA no celular; o PC recebe o ID token por polling, troca-o pelo JWT
+interno ReqSys e grava o JWT diretamente no Cofre. Nenhum token é impresso.
+
+Quando já existir um `msal-storage-state.json` ainda renovável, a interação
+humana pode ser dispensada:
+  python scripts/cofre_human_token.py cached-login --environment dev \
+    --base-url https://api-dev.example.net --msal-state caminho/msal-storage-state.json
+
 Fluxo (com captura manual):
   1) Login real no frontend HTTPS autorizado, copiar o JWT do DevTools
      (Application > Local Storage > reqsys_token).
@@ -26,7 +39,7 @@ Fluxo (com captura manual):
      nunca o JWT admin. Se expirado, avisa e pede para repetir o passo 1+3.
      --write-http atualiza @jwt/@jwtStg em scratch-api-calls.http.)
 
-Fluxo (com captura automática do passo 3, via bookmarklet):
+Fluxo legado (captura automática do passo 3, via bookmarklet):
   1) Login real no frontend HTTPS autorizado (continua manual, nunca
      automatizado).
   2) python scripts/cofre_human_token.py listen --environment dev \
@@ -51,11 +64,13 @@ import binascii
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 try:
@@ -76,6 +91,11 @@ HTTP_VAR_BY_ENV = {
 
 LISTEN_DEFAULT_PORT = 8765
 LISTEN_DEFAULT_TIMEOUT_SECONDS = 180
+DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+DEVICE_CODE_SCOPES = "openid profile email"
+GATEWAY_RETRY_ATTEMPTS = 60
+GATEWAY_RETRY_INTERVAL_SECONDS = 5
+DEFAULT_LOCAL_COFRE_CONTAINER = "wt-pc24x7-piloto-api-1"
 _MAX_CAPTURE_BODY_BYTES = 8192
 _FRONTEND_ORIGIN_PATTERN = re.compile(
     r"https://(?P<host>[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)"
@@ -90,6 +110,85 @@ fetch('http://127.0.0.1:__PORT__/capture',{method:'POST',headers:{'Content-Type'
 .then(function(j){alert(j.ok?('Token capturado no Cofre. Expira em ~'+j.expires_in_min+' min.'):('Falha: '+(j.erro||'?')));})
 .catch(function(e){alert('Falha ao conectar no listener local (rode: python scripts/cofre_human_token.py listen): '+e);});
 })();"""
+
+_LOCAL_STATUS_PROBE = r"""
+import base64
+import json
+import os
+import time
+
+result = {
+    "schema_version": "1.0.0",
+    "status": "invalid",
+    "environment": os.environ.get("COFRE_HUMAN_JWT_ENVIRONMENT", ""),
+    "vault_initialized": False,
+    "credential_present": False,
+    "credential_decryptable": False,
+    "expires_at_utc": None,
+    "remaining_minutes": None,
+    "human_action_required": True,
+    "secret_value_exposed": False,
+    "production_touched": False,
+}
+try:
+    with open('/run/secrets/cofre_keyring_passphrase', encoding='utf-8') as handle:
+        os.environ['COFRE_KEYRING_PASSPHRASE'] = handle.read().strip()
+    from app.core.secrets import read_secret_from_vault, vault_initialized
+
+    result["vault_initialized"] = vault_initialized()
+    stored = read_secret_from_vault(
+        "human_admin_jwt:" + result["environment"]
+    )
+    result["credential_present"] = stored is not None
+    if stored:
+        token = stored
+        envelope_exp = None
+        try:
+            envelope = json.loads(stored)
+            if isinstance(envelope, dict):
+                token = str(envelope.get("token") or "")
+                envelope_exp = envelope.get("exp")
+        except json.JSONDecodeError:
+            pass
+
+        parts = token.split(".")
+        if len(parts) == 3:
+            payload_segment = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload = json.loads(
+                base64.urlsafe_b64decode(payload_segment.encode()).decode()
+            )
+            exp = payload.get("exp")
+            if isinstance(exp, int) and (
+                envelope_exp is None or envelope_exp == exp
+            ):
+                now = int(time.time())
+                remaining_seconds = exp - now
+                warning_minutes = int(
+                    os.environ.get("COFRE_HUMAN_JWT_WARNING_MINUTES", "15")
+                )
+                result["credential_decryptable"] = True
+                result["expires_at_utc"] = time.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime(exp)
+                )
+                result["remaining_minutes"] = remaining_seconds // 60
+                if remaining_seconds <= 0:
+                    result["status"] = "expired"
+                elif remaining_seconds <= warning_minutes * 60:
+                    result["status"] = "expiring"
+                else:
+                    result["status"] = "valid"
+                    result["human_action_required"] = False
+        if result["status"] == "invalid" and not result["vault_initialized"]:
+            result["status"] = "vault_unavailable"
+    elif result["vault_initialized"]:
+        result["status"] = "missing_or_unreadable"
+    else:
+        result["status"] = "vault_unavailable"
+except Exception:
+    result["status"] = "probe_failed"
+
+print(json.dumps(result, sort_keys=True))
+"""
 
 
 class CofreTokenError(Exception):
@@ -153,6 +252,94 @@ def _decode_jwt_exp(token: str) -> int:
     return exp
 
 
+def _local_status(
+    environment: str,
+    *,
+    container: str = DEFAULT_LOCAL_COFRE_CONTAINER,
+    warning_minutes: int = 15,
+) -> dict:
+    if environment != "dev":
+        raise CofreTokenError("Status local do JWT humano permitido somente em DEV")
+    if container != DEFAULT_LOCAL_COFRE_CONTAINER:
+        raise CofreTokenError("Container local do Cofre não autorizado")
+    if not 1 <= warning_minutes <= 120:
+        raise CofreTokenError("warning-minutes deve estar entre 1 e 120")
+
+    try:
+        completed = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "--env",
+                f"COFRE_HUMAN_JWT_ENVIRONMENT={environment}",
+                "--env",
+                f"COFRE_HUMAN_JWT_WARNING_MINUTES={warning_minutes}",
+                container,
+                "python",
+                "-c",
+                _LOCAL_STATUS_PROBE,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CofreTokenError(
+            f"Falha ao consultar Cofre local: {type(exc).__name__}"
+        ) from None
+    if completed.returncode != 0:
+        raise CofreTokenError(
+            f"Falha ao consultar Cofre local: exit_{completed.returncode}"
+        )
+
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    try:
+        status = json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError, TypeError) as exc:
+        raise CofreTokenError("Resposta sanitizada inválida do Cofre local") from exc
+
+    allowed_statuses = {
+        "valid",
+        "expiring",
+        "expired",
+        "missing_or_unreadable",
+        "invalid",
+        "vault_unavailable",
+        "probe_failed",
+    }
+    if (
+        not isinstance(status, dict)
+        or status.get("status") not in allowed_statuses
+        or status.get("environment") != "dev"
+        or status.get("secret_value_exposed") is not False
+        or status.get("production_touched") is not False
+    ):
+        raise CofreTokenError("Contrato sanitizado inválido do Cofre local")
+    return status
+
+
+def cmd_local_status(args: argparse.Namespace) -> None:
+    status = _local_status(
+        args.environment,
+        container=args.container,
+        warning_minutes=args.warning_minutes,
+    )
+    serialized = json.dumps(status, ensure_ascii=False, sort_keys=True)
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(serialized + "\n", encoding="utf-8")
+    print(serialized)
+    if args.require_valid and status.get("status") != "valid":
+        raise CofreTokenError(
+            f"JWT administrativo humano não está válido: {status.get('status')}"
+        )
+
+
 def _http_request(
     method: str,
     url: str,
@@ -169,12 +356,218 @@ def _http_request(
     try:
         with urlopen(req, timeout=20) as resp:
             raw = resp.read()
-            return json.loads(raw) if raw else {}
+            try:
+                return json.loads(raw) if raw else {}
+            except json.JSONDecodeError as exc:
+                raise CofreTokenError(f"Resposta não JSON em {method} {url}") from exc
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise CofreTokenError(f"HTTP {exc.code} em {method} {url}: {detail}")
     except URLError as exc:
         raise CofreTokenError(f"Falha de rede em {method} {url}: {exc.reason}")
+
+
+def _http_form(url: str, body: dict[str, str]) -> tuple[int, dict]:
+    """POST form OAuth sem ecoar payloads ou tokens no terminal."""
+    request = Request(
+        url,
+        data=urlencode(body).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            raw = response.read()
+            return response.status, json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        raw = exc.read()
+        try:
+            payload = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            payload = {"error": "oauth_http_error", "error_description": f"HTTP {exc.code}"}
+        return exc.code, payload
+    except URLError as exc:
+        raise CofreTokenError(f"Falha de rede ao contactar Microsoft Entra ID: {exc.reason}") from exc
+
+
+def _azure_runtime_config(base_url: str) -> tuple[str, str, str]:
+    response = None
+    api_base = base_url
+    errors = []
+    for candidate in (base_url, f"{base_url}/api"):
+        try:
+            candidate_response = _http_request("GET", f"{candidate}/v1/auth/config", headers={})
+        except CofreTokenError as exc:
+            errors.append(str(exc))
+            continue
+        data = candidate_response.get("data") or {}
+        if "azure_enabled" in data:
+            response = candidate_response
+            api_base = candidate
+            break
+    if response is None:
+        detail = "; ".join(errors) or "endpoint de configuração ausente"
+        raise CofreTokenError(f"Não foi possível localizar a API de autenticação: {detail}")
+
+    data = response.get("data") or {}
+    tenant_id = str(data.get("azure_tenant_id") or "").strip()
+    client_id = str(data.get("azure_client_id") or "").strip()
+    if data.get("azure_enabled") is not True or not tenant_id or not client_id:
+        missing = ", ".join(data.get("missing_fields") or []) or "configuração Azure"
+        raise CofreTokenError(f"Login Azure indisponível no runtime: {missing}")
+    return api_base, tenant_id, client_id
+
+
+def _device_code_token(tenant_id: str, client_id: str) -> str:
+    authority = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0"
+    status, device = _http_form(
+        f"{authority}/devicecode",
+        {"client_id": client_id, "scope": DEVICE_CODE_SCOPES},
+    )
+    if status >= 400 or not device.get("device_code"):
+        detail = device.get("error_description") or device.get("error") or f"HTTP {status}"
+        raise CofreTokenError(f"Falha ao iniciar Device Code Flow: {detail}")
+
+    verification_uri = device.get("verification_uri") or "https://microsoft.com/devicelogin"
+    user_code = device.get("user_code")
+    if not user_code:
+        raise CofreTokenError("Microsoft Entra ID não retornou user_code")
+
+    print("\nNo celular, abra:")
+    print(f"  {verification_uri}")
+    print("e informe o código temporário:")
+    print(f"  {user_code}\n")
+    print("Conclua o login e o MFA; o PC continuará automaticamente.")
+
+    interval = max(int(device.get("interval") or 5), 5)
+    deadline = time.monotonic() + int(device.get("expires_in") or 900)
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        status, token = _http_form(
+            f"{authority}/token",
+            {
+                "grant_type": DEVICE_CODE_GRANT_TYPE,
+                "client_id": client_id,
+                "device_code": str(device["device_code"]),
+            },
+        )
+        if status < 400 and token.get("id_token"):
+            return str(token["id_token"])
+
+        error = token.get("error")
+        if error == "authorization_pending":
+            continue
+        if error == "slow_down":
+            interval += 5
+            continue
+        if error == "authorization_declined":
+            raise CofreTokenError("Login recusado no celular")
+        if error in {"expired_token", "code_expired"}:
+            raise CofreTokenError("Código temporário expirou; execute novamente")
+        detail = token.get("error_description") or error or f"HTTP {status}"
+        raise CofreTokenError(f"Device Code Flow falhou: {detail}")
+
+    raise CofreTokenError("Tempo esgotado aguardando o login pelo celular")
+
+
+def _retry_gateway(operation, *, attempts: int = GATEWAY_RETRY_ATTEMPTS):
+    """Retém credenciais somente em memória enquanto o gateway DEV reinicia."""
+    transient_markers = (
+        "HTTP 502",
+        "HTTP 503",
+        "Falha de rede",
+        "Resposta não JSON",
+    )
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return operation()
+        except CofreTokenError as exc:
+            if not any(marker in str(exc) for marker in transient_markers):
+                raise
+            last_error = exc
+            if attempt == attempts:
+                break
+            if attempt == 1:
+                print("Gateway DEV temporariamente indisponível; aguardando recuperação automática.")
+            time.sleep(GATEWAY_RETRY_INTERVAL_SECONDS)
+    raise CofreTokenError(f"Gateway DEV não recuperou após {attempts} tentativas: {last_error}")
+
+
+def _store_azure_id_token(environment: str, api_base: str, azure_id_token: str) -> int:
+    login = _retry_gateway(
+        lambda: _http_request(
+            "POST",
+            f"{api_base}/v1/auth/azure",
+            headers={},
+            body={"id_token": azure_id_token},
+        )
+    )
+    admin_jwt = str((login.get("data") or {}).get("access_token") or "").strip()
+    if not admin_jwt:
+        raise CofreTokenError("Runtime não retornou o JWT interno após validar o login Azure")
+    return _retry_gateway(lambda: _set_token(environment, api_base, admin_jwt))
+
+
+def _msal_cached_id_token(path: Path, tenant_id: str, client_id: str) -> str:
+    try:
+        envelope = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CofreTokenError(f"Cache MSAL inválido ou ilegível: {path}") from exc
+
+    refresh_token = ""
+    for entry in envelope.get("sessionStorage") or []:
+        try:
+            credential = json.loads(entry.get("value") or "{}")
+        except (AttributeError, TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(credential, dict):
+            continue
+        if (
+            credential.get("credentialType") == "RefreshToken"
+            and str(credential.get("clientId") or "").lower() == client_id.lower()
+        ):
+            refresh_token = str(credential.get("secret") or "").strip()
+            break
+    if not refresh_token:
+        raise CofreTokenError("Cache MSAL não contém refresh token para o client_id do runtime")
+
+    status, token = _http_form(
+        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
+        {
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "refresh_token": refresh_token,
+            "scope": DEVICE_CODE_SCOPES,
+        },
+    )
+    id_token = str(token.get("id_token") or "").strip()
+    if status >= 400 or not id_token:
+        error = token.get("error") or f"HTTP {status}"
+        raise CofreTokenError(f"Renovação silenciosa MSAL indisponível: {error}")
+    return id_token
+
+
+def cmd_device_login(args: argparse.Namespace) -> None:
+    """Login humano pelo celular; nenhum token é impresso ou copiado."""
+    base_url = _base_url(args.environment, args.base_url)
+    api_base, tenant_id, client_id = _azure_runtime_config(base_url)
+    azure_id_token = _device_code_token(tenant_id, client_id)
+    exp = _store_azure_id_token(args.environment, api_base, azure_id_token)
+    remaining_min = max(0, (exp - int(time.time())) // 60)
+    print(f"Login concluído; JWT guardado diretamente no Cofre ({args.environment}).")
+    print(f"Validade aproximada: {remaining_min}min. Nenhum token foi exibido.")
+
+
+def cmd_cached_login(args: argparse.Namespace) -> None:
+    """Tenta renovar uma sessão MSAL já existente, sem nova interação humana."""
+    base_url = _base_url(args.environment, args.base_url)
+    api_base, tenant_id, client_id = _azure_runtime_config(base_url)
+    azure_id_token = _msal_cached_id_token(Path(args.msal_state), tenant_id, client_id)
+    exp = _store_azure_id_token(args.environment, api_base, azure_id_token)
+    remaining_min = max(0, (exp - int(time.time())) // 60)
+    print(f"Sessão MSAL renovada e JWT guardado no Cofre ({args.environment}).")
+    print(f"Validade aproximada: {remaining_min}min. Nenhum token foi exibido.")
 
 
 def _set_token(environment: str, base_url_override: str | None, admin_jwt: str) -> int:
@@ -406,6 +799,8 @@ def main() -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--environment", required=True, choices=sorted(ENVIRONMENTS))
     common.add_argument("--base-url", required=True, help="URL HTTPS explícita da API do ambiente.")
+    common_local = argparse.ArgumentParser(add_help=False)
+    common_local.add_argument("--environment", required=True, choices=sorted(ENVIRONMENTS))
 
     p_bootstrap = sub.add_parser("bootstrap-reader", parents=[common], help="Cria o token de leitura escopado (uma vez por ambiente).")
     p_bootstrap.add_argument("--token", default=None, help="JWT admin (se omitido, pede via input()).")
@@ -418,6 +813,32 @@ def main() -> None:
     p_get = sub.add_parser("get", parents=[common], help="Busca o JWT guardado, se ainda válido.")
     p_get.add_argument("--write-http", action="store_true", help="Atualiza @jwt/@jwtStg em scratch-api-calls.http.")
     p_get.set_defaults(func=cmd_get)
+
+    p_device = sub.add_parser(
+        "device-login",
+        parents=[common],
+        help="Faz login Azure pelo celular e grava o JWT diretamente no Cofre, sem copiar token.",
+    )
+    p_device.set_defaults(func=cmd_device_login)
+
+    p_cached = sub.add_parser(
+        "cached-login",
+        parents=[common],
+        help="Renova silenciosamente um cache MSAL existente e grava o JWT no Cofre.",
+    )
+    p_cached.add_argument("--msal-state", required=True, help="Caminho para msal-storage-state.json local.")
+    p_cached.set_defaults(func=cmd_cached_login)
+
+    p_status = sub.add_parser(
+        "local-status",
+        parents=[common_local],
+        help="Lê somente o estado sanitizado do JWT humano no Cofre local PC24x7.",
+    )
+    p_status.add_argument("--container", default=DEFAULT_LOCAL_COFRE_CONTAINER)
+    p_status.add_argument("--warning-minutes", type=int, default=15)
+    p_status.add_argument("--output", default=None)
+    p_status.add_argument("--require-valid", action="store_true")
+    p_status.set_defaults(func=cmd_local_status)
 
     p_listen = sub.add_parser(
         "listen", parents=[common],

@@ -23,6 +23,7 @@ Executar a fila `ci:recuperado` por eventos do GitHub, sem ChatGPT Work e sem po
 15. Teams é notificação; GitHub continua fonte de verdade.
 16. Nenhum workflow novo é criado e nenhuma etapa depende de ChatGPT Work.
 17. Nenhuma etapa executa deploy, promoção, force-push, segredo ou branch protection.
+18. `PR CI Watch` com conclusão `cancelled` é neutro para `Notify Teams - ReqSys Logs`; somente `failure`, `timed_out` e `action_required` podem gerar checkpoint de bloqueio e alerta.
 
 ## Critérios de aceite
 
@@ -34,3 +35,4 @@ Executar a fila `ci:recuperado` por eventos do GitHub, sem ChatGPT Work e sem po
 - Pre-PR Readiness verde no HEAD exato e `behind_by=0`;
 - crescimento líquido zero em `.github/workflows`;
 - checkpoint pós-merge e avanço da próxima PR permanecem preservados.
+- cancelamento de `PR CI Watch` não produz comentário de bloqueio nem alerta operacional.
