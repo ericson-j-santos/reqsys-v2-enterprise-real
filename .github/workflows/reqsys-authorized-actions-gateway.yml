@@ -69,6 +69,8 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-runner-pool-label-reconcile' ||
         github.event.comment.body == '/reqsys run pc24x7-runner-pool-onboard' ||
         github.event.comment.body == '/reqsys run pc24x7-runner-pool-label-reconcile' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-runtime-onboard' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-runtime-label-reconcile' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
         github.event.comment.body == '/reqsys run todo-producer-keyvault-dev' ||
@@ -279,6 +281,14 @@ jobs:
             '/reqsys run pc24x7-runner-pool-label-reconcile')
               target='self-hosted-runner-governance-guard.yml'
               mode='runner-pool-label-reconcile-pc24x7'
+              ;;
+            '/reqsys run pc24x7-runner-pool-runtime-onboard')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-pool-onboard-pc24x7-runtime'
+              ;;
+            '/reqsys run pc24x7-runner-pool-runtime-label-reconcile')
+              target='self-hosted-runner-governance-guard.yml'
+              mode='runner-pool-label-reconcile-pc24x7-runtime'
               ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
@@ -608,10 +618,11 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=preflight)"
-          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && { [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ] || [ "$TARGET_MODE" = "runner-pool-label-reconcile-pc24x7" ]; }; then
+          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && { [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ] || [ "$TARGET_MODE" = "runner-pool-label-reconcile-pc24x7" ] || [ "$TARGET_MODE" = "runner-pool-label-reconcile-pc24x7-runtime" ]; }; then
             case "$TARGET_MODE" in
               runner-pool-label-reconcile-noteri) artifact_prefix='reqsys-dev-runner-pool-onboard' ;;
               runner-pool-label-reconcile-pc24x7) artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7' ;;
+              runner-pool-label-reconcile-pc24x7-runtime) artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7-runtime' ;;
               *) echo 'runner_pool_label_reconcile_mode_invalid' >&2; exit 3 ;;
             esac
             onboarding_run_id=''
@@ -636,10 +647,10 @@ jobs:
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
-              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
+              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|runner-pool-onboard-pc24x7-runtime|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
               *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
             esac
-            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ] || [ "$recovery_mode" = "runner-pool-onboard-pc24x7" ]; then
+            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ] || [ "$recovery_mode" = "runner-pool-onboard-pc24x7" ] || [ "$recovery_mode" = "runner-pool-onboard-pc24x7-runtime" ]; then
               run_url="$(gh workflow run "$TARGET_WORKFLOW" \
                 --repo "$GITHUB_REPOSITORY" \
                 --ref main \

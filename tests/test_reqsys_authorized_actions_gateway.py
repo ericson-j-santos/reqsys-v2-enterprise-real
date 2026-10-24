@@ -85,7 +85,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-runner-registry-repair.yml'" in content
     assert "'/reqsys run noteri-alm-runner-bootstrap')" in content
     assert "mode='alm-runner-bootstrap'" in content
-    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|reboot-once|alm-runner-bootstrap" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|runner-pool-onboard-pc24x7-runtime|reboot-once|alm-runner-bootstrap" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "'/reqsys run report-builder-email-e2e-dev')" in content
@@ -456,6 +456,12 @@ def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -
     assert "github.event.comment.body == '/reqsys run pc24x7-runner-pool-label-reconcile'" in content
     assert "'/reqsys run pc24x7-runner-pool-label-reconcile')" in content
     assert "mode='runner-pool-label-reconcile-pc24x7'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-pool-runtime-onboard'" in content
+    assert "'/reqsys run pc24x7-runner-pool-runtime-onboard')" in content
+    assert "mode='runner-pool-onboard-pc24x7-runtime'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-pool-runtime-label-reconcile'" in content
+    assert "'/reqsys run pc24x7-runner-pool-runtime-label-reconcile')" in content
+    assert "mode='runner-pool-label-reconcile-pc24x7-runtime'" in content
     assert '-f onboarding_run_id="$onboarding_run_id"' in content
     assert "successful_onboarding_evidence_not_found" in content
     dispatch = content.split("- name: Dispatch fixed workflow on main", 1)[1]
@@ -570,7 +576,7 @@ def test_gateway_desktop_one_time_reboot_dev_is_exact_inputless_and_fail_closed(
     assert "'/reqsys run desktop-one-time-reboot-dev')" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "mode='reboot-once'" in content
-    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|reboot-once" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|runner-pool-onboard-pc24x7-runtime|reboot-once" in content
     assert '-f mode="$recovery_mode"' in content
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f target_host=" not in content
