@@ -61,7 +61,14 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        (github.event.workflow_run.name == 'PR CI Watch' && github.event.workflow_run.conclusion != 'success')
+        (
+          github.event.workflow_run.name == 'PR CI Watch' &&
+          (
+            github.event.workflow_run.conclusion == 'failure' ||
+            github.event.workflow_run.conclusion == 'timed_out' ||
+            github.event.workflow_run.conclusion == 'action_required'
+          )
+        )
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
