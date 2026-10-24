@@ -34,6 +34,8 @@ Quando um PC Windows x64 já registrado responde pela capacidade bootstrap `pc24
 
 Esse bootstrap seleciona a capacidade `pc24x7`; não compara hostname, não recebe `runner_id`, não executa canário e não habilita HML, STG ou PROD. Se a máquina não voltar online ou o readback falhar, a reconciliação deve parar sem retry automático.
 
+A etapa privilegiada não executa o instalador diretamente no token do serviço do runner. Ela exige a tarefa local preexistente `\Automation\ReqSysDesktopAdminBroker` com trigger `AtStartup`, logon `S4U`, nível `highest` e estado habilitado. O job apenas prepara uma release vinculada ao SHA e reinicia essa tarefa; nenhum usuário, senha, PAT ou segredo administrativo é fornecido. O broker elevado busca novamente o comentário owner exato na issue operacional, revalida idade, SHA, origem e limpeza do checkout, raiz e marcador do serviço do runner, aplica somente o perfil `base`/DEV e agenda uma única reinicialização atrasada. Qualquer divergência bloqueia o fluxo sem retry.
+
 ## Retirada e validação
 
 Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `base`) no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, execute `onboard_reqsys_dev_runner.ps1` com `-ValidateOnly` e o mesmo conjunto de parâmetros.

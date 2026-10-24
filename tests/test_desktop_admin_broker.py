@@ -51,6 +51,7 @@ def test_allowlist_is_exact_and_has_no_shell_action() -> None:
         "/reqsys admin desktop recover-rdc",
         "/reqsys admin desktop recover-runner",
         "/reqsys admin desktop activate-watchdog",
+        "/reqsys run pc24x7-runner-pool-onboard",
     }
     source = MODULE.read_text(encoding="utf-8").casefold()
     assert "shell=true" not in source
@@ -146,8 +147,14 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
         m.WATCHDOG_UAC_SCRIPT,
         m.RDC_RECOVERY_SCRIPT,
         m.RUNNER_BOOTSTRAP_SCRIPT,
+        m.RUNNER_INSTALL_SCRIPT,
+        m.RUNNER_ONBOARD_SCRIPT,
+        m.RUNNER_PREFLIGHT_SCRIPT,
     ):
         (scripts / name).write_text("# stub\n", encoding="utf-8")
+    config = source / "config"
+    config.mkdir()
+    (config / m.RUNNER_POOL_POLICY).write_text("{}\n", encoding="utf-8")
     runtime = tmp_path / "runtime"
     python = tmp_path / "python.exe"
     python.write_text("", encoding="utf-8")
@@ -240,6 +247,98 @@ def test_recover_runner_fails_closed_on_bootstrap_error(monkeypatch, tmp_path: P
                 "release_root": str(release),
                 "source_sha": "b" * 40,
             }
+        )
+
+
+def test_runner_onboard_action_requires_elevated_broker(monkeypatch) -> None:
+    monkeypatch.setattr(m, "_is_admin", lambda: False)
+    with pytest.raises(m.BrokerError, match="elevated_broker_required"):
+        m._onboard_runner_base({})
+
+
+def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    scripts = source / "scripts"
+    config = source / "config"
+    runner = tmp_path / "runner"
+    scripts.mkdir(parents=True)
+    config.mkdir()
+    runner.mkdir()
+    for name in (m.RUNNER_INSTALL_SCRIPT, m.RUNNER_PREFLIGHT_SCRIPT):
+        (scripts / name).write_text("# stub\n", encoding="utf-8")
+    (config / m.RUNNER_POOL_POLICY).write_text("{}\n", encoding="utf-8")
+    now = datetime.now(timezone.utc)
+    comment = gh_comment(
+        comment_id=501,
+        body=m.RUNNER_ONBOARD_COMMAND,
+        created=now,
+    )
+    calls: list[list[str]] = []
+    restarts: list[str] = []
+
+    def fake_run(argv, **kwargs):
+        calls.append([str(item) for item in argv])
+        return subprocess.CompletedProcess(argv, 0, stdout='{"status":"eligible"}\n', stderr="")
+
+    monkeypatch.setattr(m, "_is_admin", lambda: True)
+    monkeypatch.setattr(m, "fetch_comment_by_id", lambda comment_id: comment)
+    monkeypatch.setattr(m, "_validate_checkout", lambda path, sha: source)
+    monkeypatch.setattr(m, "_validate_runner_root", lambda path: runner)
+    monkeypatch.setattr(m, "_runner_service_name", lambda path: "actions.runner.owner.repo.pc24x7")
+    monkeypatch.setattr(m, "_schedule_runner_restart", lambda service: restarts.append(service))
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    monkeypatch.setenv("SystemDrive", str(tmp_path / "system"))
+    monkeypatch.setenv("ProgramData", str(tmp_path / "programdata"))
+    monkeypatch.setenv("SystemRoot", str(tmp_path / "windows"))
+
+    result = m._onboard_runner_base(
+        {
+            "not_before": (now - timedelta(seconds=1)).isoformat(),
+            "runner_onboard_request": {
+                "owner_comment_id": 501,
+                "source_sha": "a" * 40,
+                "source_root": str(source),
+                "runner_root": str(runner),
+            },
+        }
+    )
+
+    assert result["profile"] == "base"
+    assert result["environment"] == "dev"
+    assert result["admin_route"] == "scheduled_task_s4u_highest"
+    assert result["admin_secret_supplied"] is False
+    assert result["labels_applied"] is False
+    assert result["production_touched"] is False
+    assert restarts == ["actions.runner.owner.repo.pc24x7"]
+    assert len(calls) == 2
+    installer = calls[0]
+    assert installer[installer.index("-Profile") + 1] == "base"
+    assert "-ApplyGitHubLabels" not in installer
+    assert "-RestartRunnerService" not in installer
+    assert "--profile" in calls[1]
+    assert calls[1][calls[1].index("--profile") + 1] == "base"
+
+
+def test_runner_onboard_stage_requires_existing_s4u_highest_task(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
+    monkeypatch.setattr(
+        m,
+        "task_status",
+        lambda: {
+            "exists": True,
+            "trigger_at_startup": True,
+            "logon_type": "InteractiveToken",
+            "run_level": "highest",
+            "enabled": True,
+        },
+    )
+    with pytest.raises(m.BrokerError, match="admin_broker_task_contract_invalid"):
+        m.stage_runner_onboard(
+            tmp_path,
+            source_sha="a" * 40,
+            runner_root=tmp_path,
+            owner_comment_id=501,
+            confirm=m.RUNNER_ONBOARD_STAGE_CONFIRM,
         )
 
 

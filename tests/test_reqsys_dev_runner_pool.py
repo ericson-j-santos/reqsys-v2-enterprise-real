@@ -278,7 +278,12 @@ def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
     assert "/reqsys run pc24x7-runner-pool-onboard" in onboard
     assert "runner_instance_id = $env:RUNNER_INSTANCE_ID" in onboard
     assert "bootstrap_selector = 'pc24x7'" in onboard
-    assert "-Profile base" in onboard
+    assert "stage-runner-onboard" in onboard
+    assert "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD" in onboard
+    assert "--owner-comment-id" in onboard
+    assert "admin_secret_supplied = $false" in onboard
+    assert "install_reqsys_dev_runner.ps1" not in onboard
+    assert "Start-Process" not in onboard
     assert "-ApplyGitHubLabels" not in onboard
     assert "labels_applied = $false" in onboard
     assert "service_restart_scheduled = $true" in onboard
