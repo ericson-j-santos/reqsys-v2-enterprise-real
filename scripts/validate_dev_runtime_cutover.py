@@ -136,8 +136,10 @@ def validate() -> list[str]:
     trigger = study.split("permissions:", 1)[0]
     if "push:" not in trigger or "- main" not in trigger:
         errors.append("study_mode_post_merge_reconcile_trigger_missing")
-    if "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" not in study:
-        errors.append("study_mode_pc24x7_runner_missing")
+    if "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" not in study:
+        errors.append("study_mode_reqsys_dev_pool_runner_missing")
+    if "uses: ./.github/actions/reqsys-dev-runner-preflight" not in study:
+        errors.append("study_mode_reqsys_dev_pool_preflight_missing")
 
     backend = read("backend/app/core/config.py")
     if STABLE_DEV_ENTRYPOINT not in backend or "same-origin:/api" not in backend:

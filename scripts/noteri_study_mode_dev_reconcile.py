@@ -2,7 +2,7 @@
 """Reconcilia e valida o Modo ESTUDO no runtime DEV público do PC24x7.
 
 O script é propositalmente restrito:
-- runtime fixo DESKTOP-PDQK954;
+- runner elegível do pool compartilhado ReqSys DEV;
 - ambiente DEV descoberto pela API local exclusiva na porta 8210;
 - gateway funcional DEV canônico na porta 8083, com autorreparo Nginx restrito;
 - projeto/containers derivados dos labels Docker Compose do gateway observado;
@@ -33,7 +33,6 @@ try:
 except (ImportError, ModuleNotFoundError):
     import self_hosted_dev_maintenance as portable_dev
 
-EXPECTED_HOST = "DESKTOP-PDQK954"
 DEV_GATEWAY_PORT = "8083"
 DEV_API_PORT = "8210"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
@@ -208,11 +207,17 @@ def git_head(repo_root: Path) -> str:
     ).stdout.strip()
 
 
+def runner_instance_id() -> str:
+    value = os.environ.get("REQSYS_DEV_RUNNER_INSTANCE_ID", "").strip()
+    if not value:
+        raise ReconcileError("runner_preflight_required")
+    return value
+
+
 def require_host() -> None:
     if os.name != "nt":
         raise ReconcileError("windows_required")
-    if socket.gethostname().casefold() != EXPECTED_HOST.casefold():
-        raise ReconcileError("host_not_allowed")
+    runner_instance_id()
 
 
 def inspect(
@@ -942,7 +947,7 @@ def emit_checkpoint(name: str, expected_sha: str) -> None:
         "correlation_id": f"study-mode-reconcile-{expected_sha[:12]}",
         "expected_sha": expected_sha,
         "environment": "dev",
-        "host": EXPECTED_HOST,
+        "runner_instance_id": runner_instance_id(),
     }
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
 
@@ -1747,7 +1752,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     evidence = {
         "ok": True,
         "environment": "dev",
-        "host": EXPECTED_HOST,
+        "runner_instance_id": runner_instance_id(),
         "project": project,
         "expected_sha": args.expected_sha,
         "api_container": api_container,

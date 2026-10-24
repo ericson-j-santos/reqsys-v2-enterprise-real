@@ -15,13 +15,14 @@ m = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(m)
 
 
-def test_ingress_is_fixed_to_desktop_loopback_mcp() -> None:
-    assert m.EXPECTED_HOST == "DESKTOP-PDQK954"
+def test_ingress_requires_pool_identity_and_keeps_loopback_mcp() -> None:
+    assert "EXPECTED_HOST" not in vars(m)
     assert m.MCP_TARGET == "http://127.0.0.1:8010"
     assert m.MCP_PATH == "/mcp"
     assert m.HTTPS_PORT == 443
-    with pytest.raises(m.IngressError, match="host_not_authorized"):
+    with pytest.raises(m.IngressError, match="runner_preflight_required"):
         m.require_host("Noteri")
+    assert m.require_host("reqsys-pc-a1b2c3d4") == "reqsys-pc-a1b2c3d4"
 
 
 def test_resolve_tailscale_cli_prefers_explicit_valid_path(tmp_path: Path) -> None:

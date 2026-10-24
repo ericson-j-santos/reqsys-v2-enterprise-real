@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "pool": "reqsys-dev-pc-pool-v1",
+  "environment": "dev",
+  "runner_labels": [
+    "self-hosted",
+    "Windows",
+    "X64",
+    "reqsys-dev",
+    "reqsys-dev-pool-v1"
+  ],
+  "forbidden_environments": ["hml", "stg", "prod", "production"],
+  "required_safeguards": {
+    "hml_enabled": false,
+    "stg_enabled": false,
+    "production_enabled": false,
+    "automatic_retry_enabled": false
+  },
+  "profiles": {
+    "base": {
+      "capabilities": ["git", "python", "reqsys-source"],
+      "tools": ["git", "python"]
+    },
+    "runtime": {
+      "capabilities": ["git", "python", "docker", "reqsys-source", "dev-runtime"],
+      "tools": ["git", "python", "docker"]
+    },
+    "ollama": {
+      "capabilities": ["git", "python", "docker", "ollama", "reqsys-source", "dev-runtime"],
+      "tools": ["git", "python", "docker", "ollama"]
+    }
+  },
+  "repositories": [
+    "ericson-j-santos/reqsys-v2-enterprise-real",
+    "ericson-j-santos/engineering-rules",
+    "ericson-j-santos/chatgpt-operational-rules"
+  ]
+}
