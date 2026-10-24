@@ -1,0 +1,15 @@
+{
+  "feature_name": "Undici 7.30.1 security override",
+  "approvals": {
+    "requirements": true
+  },
+  "description": "Update the frontend transitive undici override to the patched 7.30.1 release after npm audit reported high-severity advisories on 7.30.0.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_undici_security_override.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_undici_security_override.py"
+    ]
+  }
+}
