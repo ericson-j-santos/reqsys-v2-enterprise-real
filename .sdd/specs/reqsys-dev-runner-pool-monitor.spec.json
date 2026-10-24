@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "ReqSys DEV runner pool monitor",
+  "status": "implementation",
+  "updated_at": "2026-10-24",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": {
+    "environment": "dev",
+    "minimum_online_runners": 2,
+    "execution": "github-hosted",
+    "schedule": "every_30_minutes",
+    "mode": "report_only"
+  },
+  "architecture": {
+    "workflow": ".github/workflows/self-hosted-runner-governance-guard.yml",
+    "policy": "config/reqsys-dev-runner-pool.json",
+    "audit": "scripts/audit_reqsys_dev_runner_pool.py",
+    "test": "tests/test_reqsys_dev_runner_pool_monitor.py",
+    "inventory_credential": "GH_PAT_ACTIONS",
+    "new_workflow_surface": false
+  },
+  "safety": {
+    "mutates_runner_registry": false,
+    "dispatches_self_hosted_jobs": false,
+    "automatic_retry": false,
+    "deploy": false,
+    "hml": false,
+    "stg": false,
+    "production": false
+  },
+  "evidence": {
+    "artifact": "reqsys-dev-runner-pool-monitor-<run_id>",
+    "retention_days": 30,
+    "sanitized": true,
+    "finding_types": [
+      "runner_offline",
+      "runner_labels_mismatch",
+      "insufficient_online_runners"
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_dev_runner_pool_monitor.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "O monitor deve reutilizar o workflow canônico de governança, executar em infraestrutura GitHub-hosted, consultar o inventário com a credencial governada, reportar offline, drift de labels e capacidade insuficiente sem qualquer mutação, deploy, retry automático ou contato com HML, STG e PROD."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/reqsys-dev-runner-pool-monitor.requirements.md",
+    "runbook": "docs/runbooks/reqsys-dev-runner-pool.md"
+  }
+}

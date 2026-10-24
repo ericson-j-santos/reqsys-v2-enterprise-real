@@ -5,18 +5,31 @@ on:
     paths:
       - ".github/workflows/**"
       - ".github/self-hosted-runner-policy.json"
+      - ".sdd/specs/reqsys-dev-runner-pool-monitor.*"
+      - "config/reqsys-dev-runner-pool.json"
+      - "docs/runbooks/reqsys-dev-runner-pool.md"
+      - "scripts/audit_reqsys_dev_runner_pool.py"
       - "scripts/check_self_hosted_runner_governance.py"
+      - "tests/test_reqsys_dev_runner_pool_monitor.py"
       - "tests/test_self_hosted_runner_governance.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/**"
       - ".github/self-hosted-runner-policy.json"
+      - ".sdd/specs/reqsys-dev-runner-pool-monitor.*"
+      - "config/reqsys-dev-runner-pool.json"
+      - "docs/runbooks/reqsys-dev-runner-pool.md"
+      - "scripts/audit_reqsys_dev_runner_pool.py"
       - "scripts/check_self_hosted_runner_governance.py"
+      - "tests/test_reqsys_dev_runner_pool_monitor.py"
       - "tests/test_self_hosted_runner_governance.py"
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -51,3 +64,74 @@ jobs:
           path: artifacts/self-hosted-runner-governance.json
           if-no-files-found: warn
           retention-days: 90
+
+  monitor-pool:
+    name: Audit ReqSys DEV runner availability and labels
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+    steps:
+      - name: Validate governed runner inventory credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT_ACTIONS is not configured."
+            exit 2
+          fi
+
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Read repository runner inventory
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/reqsys-dev-runner-pool-monitor
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runners?per_page=100" \
+            > artifacts/reqsys-dev-runner-pool-monitor/inventory.json
+
+      - name: Build sanitized report-only evidence
+        id: audit
+        run: |
+          set -euo pipefail
+          python scripts/audit_reqsys_dev_runner_pool.py \
+            --policy config/reqsys-dev-runner-pool.json \
+            --inventory artifacts/reqsys-dev-runner-pool-monitor/inventory.json \
+            --output artifacts/reqsys-dev-runner-pool-monitor/evidence.json
+          status="$(python -c "import json; print(json.load(open('artifacts/reqsys-dev-runner-pool-monitor/evidence.json'))['status'])")"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" != "passed" ]; then
+            echo "::warning::ReqSys DEV runner pool is degraded; inspect the sanitized evidence artifact."
+          fi
+
+      - name: Publish pool status summary
+        if: always()
+        run: |
+          if [ -f artifacts/reqsys-dev-runner-pool-monitor/evidence.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          value = json.load(open('artifacts/reqsys-dev-runner-pool-monitor/evidence.json', encoding='utf-8'))
+          print('## ReqSys DEV Runner Pool')
+          print()
+          print(f"- Status: `{value['status']}`")
+          print(f"- Eligible online: `{value['online_eligible_runners']}/{value['minimum_online_runners']}`")
+          print(f"- Findings: `{len(value['findings'])}`")
+          print('- Mode: `report_only`')
+          print('- Production touched: `false`')
+          PY
+          fi
+
+      - name: Upload sanitized runner-pool evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-runner-pool-monitor-${{ github.run_id }}
+          path: artifacts/reqsys-dev-runner-pool-monitor/evidence.json
+          if-no-files-found: error
+          retention-days: 30
