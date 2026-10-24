@@ -25,6 +25,11 @@ preflight.
 9. O monitor report-only do pool DEVE medir disponibilidade pelas labels do perfil `base`,
    permitindo que runners `runtime` e `ollama` cumulativos também sejam contabilizados.
 10. A mudança DEVE permanecer restrita a DEV e NÃO DEVE habilitar HML, STG ou PROD.
+11. Um instalador elevado DEVE configurar o manifesto no `.env` do runner sem
+    depender do Registro, validar o perfil antes de aplicar labels, preservar
+    labels não gerenciadas e exigir confirmação literal para a mutação no GitHub.
+12. O manifesto DEVE ser UTF-8 sem BOM e vincular exatamente perfil,
+    capacidades e labels; divergências DEVEM falhar fechadas.
 
 ## Evidência esperada
 

@@ -31,15 +31,18 @@ def policy() -> dict:
     return json.loads((ROOT / "config/reqsys-dev-runner-pool.json").read_text(encoding="utf-8"))
 
 
-def manifest(runtime_root: Path) -> dict:
+def manifest(runtime_root: Path, profile: str = "runtime") -> dict:
+    selected = policy()["profiles"][profile]
     return {
         "schema_version": 1,
         "pool": "reqsys-dev-pc-pool-v1",
+        "profile": profile,
         "environment": "dev",
         "runner_instance_id": "reqsys-pc-a1b2c3d4",
         "allowed_environments": ["dev"],
         "runtime_root": str(runtime_root),
-        "capabilities": ["git", "python", "docker", "reqsys-source", "dev-runtime"],
+        "capabilities": selected["capabilities"],
+        "runner_labels": selected["runner_labels"],
         "safeguards": {
             "hml_enabled": False,
             "stg_enabled": False,
@@ -71,8 +74,7 @@ def test_base_profile_does_not_require_docker_or_ollama(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime-dev"
     repo.mkdir()
     runtime.mkdir()
-    value = manifest(runtime)
-    value["capabilities"] = ["git", "python", "reqsys-source"]
+    value = manifest(runtime, "base")
     monkeypatch.setattr(preflight, "_origin_repository", lambda _: "ericson-j-santos/reqsys-v2-enterprise-real")
 
     result = preflight.validate(
@@ -110,6 +112,23 @@ def test_preflight_requires_tools_and_runtime_root(tmp_path):
     missing = manifest(tmp_path / "missing")
     with pytest.raises(preflight.PreflightError, match="required_tool_missing"):
         preflight.validate(policy(), missing, profile="runtime", repo_paths=[], os_name="nt", which=lambda _: None)
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ({"profile": "base"}, "profile_scope_invalid"),
+        ({"capabilities": ["git", "python"]}, "capability_scope_invalid"),
+        ({"runner_labels": ["self-hosted", "Windows", "X64", "reqsys-dev"]}, "runner_labels_invalid"),
+    ],
+)
+def test_preflight_rejects_manifest_that_overclaims_or_underclaims_profile(tmp_path, change, reason):
+    runtime = tmp_path / "runtime-dev"
+    runtime.mkdir()
+    value = manifest(runtime)
+    value.update(change)
+    with pytest.raises(preflight.PreflightError, match=reason):
+        preflight.validate(policy(), value, profile="runtime", repo_paths=[], os_name="nt", which=lambda _: "tool")
 
 
 def test_portable_workflows_use_profile_pool_and_have_no_fixed_machine_identity():
@@ -158,7 +177,25 @@ def test_onboarding_does_not_register_or_reconfigure_github_runner():
     assert "remove.cmd" not in raw
     assert "REQSYS_DEV_RUNNER_MANIFEST" in raw
     assert "$selected.runner_labels" in raw
+    assert "profile = $Profile" in raw
+    assert "runner_labels = @($runnerLabels)" in raw
+    assert "System.Text.UTF8Encoding($false)" in raw
     assert "reqsys-dev-base-v1" not in raw  # labels come from the versioned policy
+
+
+def test_installer_configures_runner_env_and_requires_explicit_label_confirmation():
+    raw = (ROOT / "scripts/install_reqsys_dev_runner.ps1").read_text(encoding="utf-8")
+    assert "ADMINISTRATOR_REQUIRED" in raw
+    assert "REQSYS_DEV_RUNNER_MANIFEST=" in raw
+    assert "System.Text.UTF8Encoding($false)" in raw
+    assert "APPLY-REQSYS-DEV-RUNNER-LABELS" in raw
+    assert "GITHUB_LABEL_CONFIRMATION_REQUIRED" in raw
+    assert "RUNNER_SERVICE_NAME_REQUIRED_OR_AMBIGUOUS" in raw
+    assert "actions.runner.*" in raw
+    assert "SetEnvironmentVariable" not in raw
+    assert "DESKTOP-PDQK954" not in raw
+    assert "automatic_retry_enabled = $false" in raw
+    assert "production_touched = $false" in raw
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
