@@ -11,4 +11,4 @@
 - R7: testes devem impedir a reintrodução de `DESKTOP-PDQK954` ou `runner_id` fixo nos workflows portáteis.
 - R8: esta evolução não executa dispatch, retry, deploy ou mutação de ambiente.
 - R9: a confirmação explícita para reconciliar labels deve usar parâmetro dedicado, sem colidir com o parâmetro comum `-Confirm` de `SupportsShouldProcess`.
-- R10: a reconciliação remota de labels deve receber credencial administrativa somente na etapa de instalação e falhar fechado quando o secret governado estiver ausente.
+- R10: o onboarding físico não deve receber secrets administrativos; a reconciliação remota da label deve ocorrer somente depois da evidência sanitizada do perfil local.

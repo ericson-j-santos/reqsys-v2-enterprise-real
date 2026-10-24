@@ -38,7 +38,7 @@
     "HML, STG, PROD and automatic retry remain disabled",
     "Onboarding validation does not register or reconfigure the GitHub runner service",
     "Explicit label reconciliation uses a dedicated confirmation parameter without colliding with PowerShell common parameters",
-    "Remote label reconciliation receives the governed administrative credential only in its install step and fails closed when absent"
+    "Physical onboarding receives no administrative secret and defers remote label reconciliation until after sanitized local-profile evidence"
   ],
   "sdd_gate": {
     "tests": [
