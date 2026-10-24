@@ -42,7 +42,8 @@
     "Onboarding validation does not register or reconfigure the GitHub runner service",
     "Explicit label reconciliation uses a dedicated confirmation parameter without colliding with PowerShell common parameters",
     "Physical onboarding receives no administrative secret and defers remote label reconciliation until after sanitized local-profile evidence",
-    "Hosted label reconciliation is owner-bound, evidence-bound, resolves one runner by labels, validates readback and never uses a fixed runner_id"
+    "Hosted label reconciliation is owner-bound, evidence-bound, resolves one runner by labels, validates readback and never uses a fixed runner_id",
+    "The hosted reconciliation workflow is present in both the owner route and the fixed dispatch allowlist"
   ],
   "sdd_gate": {
     "tests": [
