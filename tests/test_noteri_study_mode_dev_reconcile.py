@@ -24,7 +24,7 @@ spec.loader.exec_module(module)
 
 
 def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
-    assert module.EXPECTED_HOST == "DESKTOP-PDQK954"
+    assert "EXPECTED_HOST" not in vars(module)
     assert module.DEV_GATEWAY_PORT == "8083"
     assert module.DEV_API_PORT == "8210"
     assert module.GATEWAY == "http://127.0.0.1:8083"
@@ -244,7 +244,8 @@ def test_workflow_keeps_study_mode_default_and_allows_only_governed_public_stati
     assert "default: 'study-mode'" in raw
     assert "- study-mode" in raw
     assert "- public-static" in raw
-    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]" in raw
+    assert "./.github/actions/reqsys-dev-runner-preflight" in raw
     assert "environment: development" in raw
     assert "'--confirm', 'RECONCILE-NOTERI-STUDY-MODE-DEV'" in raw
     assert "production_touched" in raw

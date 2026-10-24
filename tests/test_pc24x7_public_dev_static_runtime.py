@@ -65,7 +65,7 @@ def test_public_gateway_preserves_runtime_todo_subpath_and_query() -> None:
 def test_reconciler_is_dev_only_fast_forward_and_recreates_only_public_surface() -> None:
     module = _load()
     raw = SCRIPT.read_text(encoding="utf-8")
-    assert module.EXPECTED_HOST == "DESKTOP-PDQK954"
+    assert "EXPECTED_HOST" not in vars(module)
     assert module.DEV_API_PORT == "8210"
     assert module.DEV_GATEWAY_PORT == "8083"
     assert '"merge", "--ff-only", expected' in raw
@@ -100,7 +100,8 @@ def test_reconciler_requires_same_sha_static_frontend_and_negative_vite_control(
 
 def test_workflow_has_physical_then_independent_public_evidence() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]" in raw
+    assert "./.github/actions/reqsys-dev-runner-preflight" in raw
     assert "public-static" in raw
     assert "Reconcile full DEV runtime and static frontend" in raw
     assert "scripts\\pc24x7_public_dev_tunnel.py" in raw
@@ -621,10 +622,10 @@ def test_public_static_workflow_prepares_recovery_before_oidc_or_deploy() -> Non
     assert "inputs.mode == 'public-static'" in before
     assert "owner_risk3_gateway.py" in before
     assert "reqsys.pc24x7.public_dev.cutover.prepare" in before
-    assert "repo://reqsys/environment/dev/host/desktop-pdqk954" in before
+    assert "repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1" in before
     assert "'--timeout', '900'" in before
     assert "'--risk', '3'" not in before
-    assert "C:\\dev\\chatgpt-workers\\wt-pc24x7-public-dev-governed" in before
+    assert "$runtimeRoot = $env:REQSYS_DEV_RUNTIME_ROOT" in before
     assert "PREPARE-PC24X7-PUBLIC-DEV-CUTOVER" in before
     assert "isolated_restore_verified -ne $true" in before
     assert "prepare_failure_receipt_missing_or_invalid" in before
@@ -702,7 +703,7 @@ def _public_dev_governed_inventory_guard_active(raw: str) -> bool:
         "owner_risk3_gateway.py" in guard_step,
         "set_owner_risk3_action.py" in guard_step,
         "reqsys.pc24x7.public_dev.cutover.prepare" in guard_step,
-        "repo://reqsys/environment/dev/host/desktop-pdqk954" in guard_step,
+        "repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1" in guard_step,
         "'--timeout', '900'" in guard_step,
         "'--risk', '3'" not in guard_step,
         "set_owner_risk3_development_mode.py" not in guard_step,
@@ -753,8 +754,8 @@ def test_public_dev_governed_recovery_security_control_detects_bypass():
     )
     assert not _public_dev_governed_inventory_guard_active(without_specific_authorizer)
     without_dev_scope = raw.replace(
-        "repo://reqsys/environment/dev/host/desktop-pdqk954",
-        "repo://reqsys/environment/unknown/host/desktop-pdqk954",
+        "repo://reqsys/environment/dev/runner-pool/reqsys-dev-pool-v1",
+        "repo://reqsys/environment/unknown/runner-pool/reqsys-dev-pool-v1",
     )
     assert not _public_dev_governed_inventory_guard_active(without_dev_scope)
     without_gateway = raw.replace("'--risk', '1'", "'--risk', '2'", 1)

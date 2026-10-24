@@ -9,7 +9,6 @@ import pytest
 
 import scripts.dev_runtime_recovery as recovery
 from scripts.dev_runtime_recovery import (
-    HOST,
     PROJECT,
     RecoveryError,
     Result,
@@ -20,13 +19,19 @@ from scripts.dev_runtime_recovery import (
     validate,
 )
 
+TEST_RUNNER_ID = "reqsys-pc-test01"
 IMAGE = "sha256:" + "a" * 64
 OTHER = "sha256:" + "b" * 64
 OLD = "5" * 40
 
 
-def test_fixed_runtime_root_matches_governed_dev_worktree():
-    assert str(recovery.ROOT) == r"C:\dev\chatgpt-workers\wt-pc24x7-public-dev-governed"
+@pytest.fixture(autouse=True)
+def runner_identity(monkeypatch):
+    monkeypatch.setenv("REQSYS_DEV_RUNNER_INSTANCE_ID", TEST_RUNNER_ID)
+
+
+def test_runtime_root_requires_pool_preflight_environment():
+    assert str(recovery.ROOT) == "__REQSYS_DEV_RUNTIME_ROOT_REQUIRED__"
 
 
 class Fake:
@@ -109,7 +114,7 @@ def root(tmp_path):
 
 def captured(root, runner=None):
     runner = runner or Fake(root)
-    return capture(runner, root=root, identity_probe=lambda: OLD, hostname=HOST)
+    return capture(runner, root=root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID)
 
 
 def prepared(root, runner=None):
@@ -122,7 +127,7 @@ def test_capture_sanitized_scope_and_cardinality(root):
     m = captured(root)
     assert "SECRET=" not in json.dumps(m)
     assert m["runtime_sha"] == OLD
-    with pytest.raises(RecoveryError, match="host_identity_refused"):
+    with pytest.raises(RecoveryError, match="runner_identity_refused"):
         capture(Fake(root), root=root, identity_probe=lambda: OLD, hostname="prod")
     with pytest.raises(RecoveryError, match="container_cardinality"):
         captured(root, Fake(root, duplicate=True))
@@ -194,7 +199,7 @@ def test_cutover_capture_migrates_only_allowlisted_sibling_legacy_sources(root):
         runner,
         root=root,
         identity_probe=lambda: OLD,
-        hostname=HOST,
+        hostname=TEST_RUNNER_ID,
         external_snapshot_dir=snapshot_dir,
     )
 
@@ -248,7 +253,7 @@ def test_cutover_capture_rejects_unallowlisted_or_split_external_sources(root):
             bad_runner,
             root=root,
             identity_probe=lambda: OLD,
-            hostname=HOST,
+            hostname=TEST_RUNNER_ID,
             external_snapshot_dir=snapshot_dir,
         )
 
@@ -266,7 +271,7 @@ def test_cutover_capture_rejects_unallowlisted_or_split_external_sources(root):
             split_runner,
             root=root,
             identity_probe=lambda: OLD,
-            hostname=HOST,
+            hostname=TEST_RUNNER_ID,
             external_snapshot_dir=snapshot_dir,
         )
 
@@ -299,7 +304,7 @@ def test_rollback_replays_each_distinct_service_source(root):
         manifest["fingerprint"],
         root,
         identity_probe=lambda: OLD,
-        hostname=HOST,
+        hostname=TEST_RUNNER_ID,
     )
 
     assert result["rollback_ok"] is True
@@ -388,7 +393,7 @@ def test_legacy_probe_is_stdin_and_not_new_module(root):
     p = prepared(root, runner)
     runner.calls.clear()
     rollback(
-        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
+        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID
     )
     call = next(x for x in runner.calls if x[0][:3] == ("docker", "exec", "-i"))
     assert call[0][-3:] == ("python", "-B", "-")
@@ -400,7 +405,7 @@ def test_live_guard_runs_before_each_mutation(root):
     p = prepared(root, runner)
     runner.calls.clear()
     rollback(
-        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
+        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID
     )
     commands = [" ".join(x[0]) for x in runner.calls]
     ups = [i for i, x in enumerate(commands) if "force-recreate" in x]
@@ -427,7 +432,7 @@ def test_explicit_recovery_can_rollback_when_candidate_api_is_unavailable(root):
         manifest["fingerprint"],
         root,
         identity_probe=probe,
-        hostname=HOST,
+        hostname=TEST_RUNNER_ID,
         allow_unhealthy_current=True,
     )
     assert result["rollback_ok"] is True
@@ -446,7 +451,7 @@ def test_compose_argv_preserves_env_then_file_order(root):
     p = prepared(root, runner)
     runner.calls.clear()
     rollback(
-        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
+        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID
     )
     argv = next(
         x[0]
@@ -483,7 +488,7 @@ def test_rollback_uses_private_compose_snapshots_after_source_fast_forward(root)
 
     result = rollback(
         p, runner, p["fingerprint"], root,
-        identity_probe=lambda: OLD, hostname=HOST,
+        identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID,
     )
 
     assert result["rollback_ok"] is True
@@ -522,7 +527,7 @@ def test_wait_succeeds_after_transient_states(root):
         p["fingerprint"],
         root,
         identity_probe=probe,
-        hostname=HOST,
+        hostname=TEST_RUNNER_ID,
         wait_timeout=10,
         wait_interval=1,
         clock=clock,
@@ -549,7 +554,7 @@ def test_wait_timeout_is_bounded_and_sanitized(root):
             p["fingerprint"],
             root,
             identity_probe=lambda: "6" * 40,
-            hostname=HOST,
+            hostname=TEST_RUNNER_ID,
             wait_timeout=3,
             wait_interval=1,
             clock=clock,
@@ -595,7 +600,7 @@ def test_real_probe_error_is_retried_then_converges(root, monkeypatch):
         OLD,
         root,
         recovery.observe_identity,
-        HOST,
+        TEST_RUNNER_ID,
         5,
         1,
         lambda: ticks[0],
@@ -621,7 +626,7 @@ def test_real_probe_error_permanent_reaches_bounded_timeout(root, monkeypatch):
             OLD,
             root,
             recovery.observe_identity,
-            HOST,
+            TEST_RUNNER_ID,
             3,
             1,
             lambda: ticks[0],
@@ -812,7 +817,7 @@ def test_deploy_check_positive_is_read_only(root):
         if p.is_file()
     }
     runner = Fake(root)
-    result = deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=HOST)
+    result = deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID)
     after = {
         p.relative_to(root).as_posix(): p.read_bytes()
         for p in root.rglob("*")
@@ -841,7 +846,7 @@ def test_deploy_check_sql_error_and_malformed_json(root):
     ):
         runner = Fake(root, sql_output=response)
         with pytest.raises(RecoveryError, match=category) as exc:
-            deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=HOST)
+            deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID)
         assert "secret" not in str(exc.value)
         assert_read_only(runner)
 
@@ -849,7 +854,7 @@ def test_deploy_check_sql_error_and_malformed_json(root):
 def test_deploy_check_sql_timeout(root):
     runner = Fake(root, sql_timeout=True)
     with pytest.raises(RecoveryError, match="database_probe_timeout"):
-        deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=HOST)
+        deploy_check(OLD, runner, root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID)
     assert_read_only(runner)
 
 
@@ -862,7 +867,7 @@ def test_deploy_check_sha_mismatch_is_bounded(root):
             runner,
             root,
             identity_probe=lambda: OLD,
-            hostname=HOST,
+            hostname=TEST_RUNNER_ID,
             wait_timeout=2,
             wait_interval=1,
             clock=lambda: ticks[0],
@@ -893,7 +898,7 @@ def test_deploy_check_timeout_preserves_allowlisted_reason(
 
     with pytest.raises(RecoveryError, match=f"^{expected_category}$") as exc:
         deploy_check(
-            OLD, runner, root, identity_probe=unavailable, hostname=HOST,
+            OLD, runner, root, identity_probe=unavailable, hostname=TEST_RUNNER_ID,
             wait_timeout=2, wait_interval=1,
             clock=lambda: ticks[0],
             sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
@@ -907,7 +912,7 @@ def test_deploy_check_timeout_preserves_allowlisted_reason(
 @pytest.mark.parametrize(
     ("upstream_error", "expected_category"),
     [
-        ("host_identity_refused", "deploy_readiness_scope_invalid"),
+        ("runner_identity_refused", "deploy_readiness_scope_invalid"),
         ("live_probe_source_unavailable", "deploy_readiness_probe_invalid"),
     ],
 )
@@ -922,7 +927,7 @@ def test_deploy_check_static_readiness_failure_fails_fast(
 
     with pytest.raises(RecoveryError, match=f"^{expected_category}$"):
         deploy_check(
-            OLD, runner, root, identity_probe=unavailable, hostname=HOST,
+            OLD, runner, root, identity_probe=unavailable, hostname=TEST_RUNNER_ID,
             wait_timeout=90, wait_interval=1,
             clock=lambda: ticks[0],
             sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
@@ -936,7 +941,7 @@ def test_deploy_check_docker_container_unavailable_is_typed(root):
     ticks = [0]
     with pytest.raises(RecoveryError, match="^deploy_readiness_container_unavailable$"):
         deploy_check(
-            OLD, runner, root, identity_probe=lambda: OLD, hostname=HOST,
+            OLD, runner, root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID,
             wait_timeout=2, wait_interval=1,
             clock=lambda: ticks[0],
             sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
@@ -957,7 +962,7 @@ def test_deploy_check_recovers_from_transient_probe_failure(root):
         return OLD
 
     result = deploy_check(
-        OLD, runner, root, identity_probe=temporary_unavailability, hostname=HOST,
+        OLD, runner, root, identity_probe=temporary_unavailability, hostname=TEST_RUNNER_ID,
         wait_timeout=3, wait_interval=1,
         clock=lambda: ticks[0],
         sleeper=lambda value: ticks.__setitem__(0, ticks[0] + value),
@@ -972,7 +977,7 @@ def test_durable_override_supports_next_capture(root):
     runner = Fake(root)
     p = prepared(root, runner)
     rollback(
-        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
+        p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID
     )
     override = root / p["rollback_override"]["relative_path"]
     assert override.exists()
@@ -1003,7 +1008,7 @@ def test_phase_failures_sanitized(root, phase):
     runner.fail = phase
     with pytest.raises(RecoveryError, match="rollback_failed") as exc:
         rollback(
-            p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=HOST
+            p, runner, p["fingerprint"], root, identity_probe=lambda: OLD, hostname=TEST_RUNNER_ID
         )
     assert "password" not in str(exc.value)
 

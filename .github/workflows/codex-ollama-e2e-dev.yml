@@ -30,7 +30,7 @@ jobs:
   e2e:
     name: ReqSys → Ollama Gateway → cloud/fallback on PC24x7 DEV
     if: inputs.mode == 'codex-e2e'
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-ollama-v1]
     timeout-minutes: 25
     env:
       CORRELATION_ID: codex-ollama-e2e-${{ github.run_id }}-${{ github.run_attempt }}
@@ -42,12 +42,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Verify exact DEV host
-        shell: powershell
-        run: |
-          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
-            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
-          }
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: ollama
+          repository-path: .
 
       - name: Validate preinstalled Python runtime
         shell: powershell
@@ -92,7 +91,7 @@ jobs:
         shell: powershell
         run: |
           "## Codex Ollama E2E DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Runner do pool: $env:REQSYS_DEV_RUNNER_INSTANCE_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Provider: ollama_gateway" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Primário: gemma4:31b-cloud" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Fallback: gemma4:26b-q8-code" | Add-Content $env:GITHUB_STEP_SUMMARY
@@ -103,7 +102,7 @@ jobs:
   change-impact-pr2144:
     name: CHANGE impact benchmark PR #2144 via Ollama on PC24x7 DEV
     if: inputs.mode == 'change-impact-pr2144'
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-ollama-v1]
     timeout-minutes: 25
     env:
       CORRELATION_ID: change-impact-pr2144-${{ github.run_id }}-${{ github.run_attempt }}
@@ -140,11 +139,16 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Verify exact PR SHA and DEV host
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: ollama
+          repository-path: .
+
+      - name: Verify exact PR SHA
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") { throw "UNEXPECTED_HOST" }
           $observed = (git rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0 -or $observed -ne $env:TARGET_SHA) { throw "TARGET_SHA_CHECKOUT_MISMATCH" }
 
@@ -235,7 +239,7 @@ jobs:
   mcp-ingress:
     name: GitHub Copilot → Ollama MCP HTTPS ingress on PC24x7 DEV
     if: inputs.mode == 'mcp-ingress'
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-ollama-v1]
     timeout-minutes: 10
     env:
       EVIDENCE_FILE: artifacts/github-copilot-ollama-mcp-ingress/evidence.json
@@ -247,12 +251,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Verify exact DEV host
-        shell: powershell
-        run: |
-          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
-            throw "UNEXPECTED_HOST"
-          }
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: ollama
+          repository-path: .
 
       - name: Validate preinstalled Python runtime
         shell: powershell
@@ -289,7 +292,7 @@ jobs:
         shell: powershell
         run: |
           "## GitHub Copilot Ollama MCP Ingress DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Runner do pool: $env:REQSYS_DEV_RUNNER_INSTANCE_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Rota: HTTPS /mcp -> 127.0.0.1:8010" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Ollama :11434 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Gateway :8008 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY

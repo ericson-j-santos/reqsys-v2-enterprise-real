@@ -11,14 +11,16 @@ def test_workflow_is_fixed_to_pc24x7_dev() -> None:
     assert "workflow_dispatch:" in raw
     assert "schedule:" not in raw
     assert "pull_request:" not in raw
-    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in raw
+    assert "./.github/actions/reqsys-dev-runner-preflight" in raw
     assert '--expected-sha "${{ github.sha }}"' in raw
     assert "production_touched" not in raw or "Produção tocada: não" in raw
 
 
 def test_script_uses_fixed_targets_and_replay_guard() -> None:
     raw = SCRIPT.read_text(encoding="utf-8")
-    assert 'EXPECTED_HOST = "DESKTOP-PDQK954"' in raw
+    assert "EXPECTED_HOST" not in raw
+    assert "REQSYS_DEV_RUNNER_INSTANCE_ID" in raw
     assert 'CONTAINER = "wt-pc24x7-piloto-api-1"' in raw
     assert 'FIGMA_FILE_ID = "1iA8PiHX7qMnYHBDTdt0fY"' in raw
     assert 'FIGMA_NODE_ID = "1:44"' in raw

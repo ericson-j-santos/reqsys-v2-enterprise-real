@@ -93,7 +93,7 @@ jobs:
     name: Materializar TODO Runtime no Desktop PC24x7
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime' && github.actor == 'ericson-j-santos'
     needs: contract
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
     timeout-minutes: 20
     permissions:
@@ -113,6 +113,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: runtime
+          repository-path: .
 
       - name: Validar configuração governada
         shell: powershell
