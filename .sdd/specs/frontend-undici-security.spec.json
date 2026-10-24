@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Frontend undici advisory GHSA-xjj6-f33q-929c",
+  "status": "implementation_pending_final_ci",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrigir o override npm transitivo que força uma versão undici vulnerável e validar a resolução do lock sem bypass de auditoria.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_frontend_undici_security_lock.py"
+    ],
+    "evidence_contract": "No HEAD da PR: bloqueio do downgrade override e lock, integridade exigida, npm ci, npm audit --audit-level=high e build do frontend com controles OCR preservados."
+  },
+  "traceability": {
+    "manifest": "frontend/package.json",
+    "lock": "frontend/package-lock.json",
+    "ci": ".github/workflows/ci.yml",
+    "test": "tests/test_frontend_undici_security_lock.py",
+    "advisory": "GHSA-xjj6-f33q-929c",
+    "pr": 3079
+  },
+  "risk": {
+    "deploy": false,
+    "merge": false,
+    "production": false,
+    "ocr_fallback_preserved": true
+  }
+}
