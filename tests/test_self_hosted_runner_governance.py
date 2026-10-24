@@ -225,6 +225,20 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
             policy["approved_workflows"],
         )
 
+    def test_repo_policy_allowlists_portable_runner_pool_probe(self):
+        root = Path(__file__).resolve().parents[1]
+        policy = json.loads(
+            (root / ".github" / "self-hosted-runner-policy.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        workflow = ".github/workflows/self-hosted-runner-governance-guard.yml"
+        self.assertIn(workflow, policy["approved_workflows"])
+        self.assertEqual(
+            "base",
+            policy["portable_dev_runner_contract"]["workflow_profiles"][workflow],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
