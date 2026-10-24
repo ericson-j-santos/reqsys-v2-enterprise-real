@@ -108,6 +108,7 @@ A rota só fica `runtime_active` após evidência nova de:
 6. artifact mostrando `ok=true`, host Noteri e `rdc_required=false`.
 7. E2E físico do `noteri-runtime/main` no SHA resolvido, com `NORMAL -> ESTUDO -> replay -> NORMAL`, leitura independente, idempotência e controle negativo aprovados.
 8. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
+9. antes de cancelar por timeout, o Gateway deve executar grace/readback limitado de 30 segundos e uma segunda leitura imediatamente anterior ao cancelamento; se um job self-hosted tiver `started_at` + `runner_name` ou o run estiver `in_progress`, o cancelamento é proibido e o cleanup deve registrar `pickup_observed_before_cancel`. Essa proteção evita cancelar um job fisicamente adquirido quando a API agregada de run ainda reporta `queued`.
 
 Sem esses itens o estado permanece `activation_pending`.
 

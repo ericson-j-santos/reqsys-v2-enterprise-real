@@ -717,6 +717,7 @@ jobs:
           pickup_source='none'
           wait_seconds=0
           pickup_timeout_seconds=60
+          pickup_grace_seconds=30
           poll_seconds=5
           for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
@@ -746,6 +747,36 @@ jobs:
           done
           case "$status" in
             pending|queued|requested|waiting)
+              for attempt in $(seq 1 $((pickup_grace_seconds / poll_seconds))); do
+                status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status' 2>/dev/null || printf 'queued')"
+                started_self_hosted_jobs="$(
+                  gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                    --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                    2>/dev/null || printf '0'
+                )"
+                case "$started_self_hosted_jobs" in
+                  ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+                esac
+                if [ "$started_self_hosted_jobs" -gt 0 ]; then
+                  status='in_progress'
+                  pickup_source='self_hosted_runner_assigned_grace'
+                  break
+                fi
+                case "$status" in
+                  pending|queued|requested|waiting)
+                    sleep "$poll_seconds"
+                    wait_seconds=$((wait_seconds + poll_seconds))
+                    ;;
+                  *)
+                    pickup_source='run_status_grace'
+                    break
+                    ;;
+                esac
+              done
+              ;;
+          esac
+          case "$status" in
+            pending|queued|requested|waiting)
               pickup_source='timeout'
               printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
               ;;
@@ -765,24 +796,278 @@ jobs:
           set -euo pipefail
           cleanup_status='cancel_failed'
           cleanup_error=''
-          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
-            cleanup_status='cancel_requested'
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
-              if [ -n "$state" ]; then
-                IFS=$'\t' read -r status conclusion <<< "$state"
-                if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
-                  cleanup_status='cancelled'
-                  break
-                fi
-              fi
-              sleep 5
-            done
-            if [ "$cleanup_status" != 'cancelled' ]; then
-              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+          pre_cancel_grace_seconds=30
+          poll_seconds=5
+          for attempt in $(seq 1 $((pre_cancel_grace_seconds / poll_seconds))); do
+            status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status' 2>/dev/null || printf 'queued')"
+            started_self_hosted_jobs="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                2>/dev/null || printf '0'
+            )"
+            case "$started_self_hosted_jobs" in
+              ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+            esac
+            if [ "$started_self_hosted_jobs" -gt 0 ] || [ "$status" = 'in_progress' ]; then
+              cleanup_status='pickup_observed_before_cancel'
+              break
             fi
-          else
-            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+            if [ "$status" = 'completed' ]; then
+              cleanup_status='already_terminal_without_pickup'
+              break
+            fi
+            sleep "$poll_seconds"
+          done
+
+          if [ "$cleanup_status" = 'cancel_failed' ]; then
+            if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+              cleanup_status='cancel_requested'
+              for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
+                if [ -n "$state" ]; then
+                  IFS=          printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
+          printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized dispatch evidence
+        shell: bash
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          TARGET_MODE: ${{ steps.route.outputs.mode }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          CHANGE_IMPACT_TARGET_SHA: ${{ steps.change_impact_target.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_SOURCE: ${{ steps.pickup.outputs.source }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+          RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
+          TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
+          TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
+          TEAMS_ADMITTED: ${{ steps.teams_admission.outputs.admitted }}
+          CANONICAL_COMMENT_ID: ${{ steps.teams_admission.outputs.canonical_comment_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          evidence = {
+              'status': ('duplicate_suppressed' if os.environ.get('TEAMS_ADMITTED') == 'false' else 'dispatched'),
+              'canonical_comment_id': int(os.environ['CANONICAL_COMMENT_ID']) if os.environ.get('CANONICAL_COMMENT_ID') else None,
+              'authorization': 'exact_issue_actor_command_allowlist',
+              'issue_number': 1705,
+              'actor': os.environ['GITHUB_ACTOR'],
+              'command': os.environ['COMMAND'],
+              'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_mode': os.environ.get('TARGET_MODE') or 'default',
+              'target_ref': 'main',
+              'target_sha': os.environ['EXPECTED_SHA'],
+              'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None,
+              'target_run_id': int(os.environ['TARGET_RUN_ID']) if os.environ.get('TARGET_RUN_ID') else None,
+              'target_run_url': os.environ['TARGET_RUN_URL'],
+              'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_source': os.environ.get('RUNNER_PICKUP_SOURCE') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'runner_pickup_wait_seconds': int(os.environ.get('RUNNER_PICKUP_WAIT_SECONDS') or '0'),
+              'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
+              'target_cleanup_error': os.environ.get('TARGET_CLEANUP_ERROR') or None,
+              'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'secrets_read': False,
+              'production_touched': False,
+          }
+          with open('authorized-action-dispatch.json', 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: authorized-action-dispatch-${{ github.run_id }}
+          path: authorized-action-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail closed when self-hosted runner pickup times out or is busy
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' && steps.cleanup.outputs.status != 'pickup_observed_before_cancel'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
+          exit 4
+
+  publish-todo-event:
+    name: Publish governed ChatGPT TodoEvent
+    permissions:
+      contents: read
+      id-token: write
+    if: >-
+      github.event.issue.number == 1705 &&
+      github.event.comment.user.login == 'ericson-j-santos' &&
+      startsWith(github.event.comment.body, '/reqsys todo-event-v1 ')
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+    steps:
+      - name: Checkout immutable event SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Node 20
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "20"
+
+      - name: Validar contrato local antes de autenticar
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.3
+          python -m py_compile scripts/todo_global_chat_event_gateway.py scripts/todo_global_hourly_cycle.py
+          python -m pytest -q tests/test_todo_global_chat_event_gateway.py tests/test_todo_global_hourly_cycle.py
+
+      - name: Validar configuração OIDC governada
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in REQSYS_KEY_VAULT_NAME CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            test -n "${!name:-}" || {
+              echo "::error::${name} missing"
+              exit 2
+            }
+          done
+
+      - name: Login Azure OIDC governado
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver locator DEV assinado
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/todo-global-chat-event
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/todo-global-chat-event/locator.json
+
+      - name: Ler token de produtor sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Validar runtime público no mesmo SHA
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def observed(path):
+              request = Request(
+                  base + path,
+                  headers={"Accept": "application/json", "User-Agent": "TODOGlobalChatGateway/1.0"},
+              )
+              with urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read(262144).decode("utf-8"))
+              data = payload.get("data", payload)
+              return str(data.get("build_sha") or "").lower()
+
+          reqsys_sha = observed("/api/runtime/build-info")
+          todo_sha = observed("/runtime-core/api/runtime/build-info")
+          if reqsys_sha != expected:
+              raise SystemExit("reqsys_public_api_sha_mismatch")
+          if todo_sha != expected:
+              raise SystemExit("todo_runtime_public_sha_mismatch")
+          PY
+
+      - name: Publicar TodoEvent e comprovar readback + replay
+        shell: bash
+        env:
+          RUNTIME_BASE: ${{ steps.locator.outputs.base_url }}/runtime-core
+        run: |
+          set -euo pipefail
+          python scripts/todo_global_chat_event_gateway.py \
+            --github-event-path "$GITHUB_EVENT_PATH" \
+            --runtime-url "$RUNTIME_BASE" \
+            --timeout-seconds 180 \
+            --poll-seconds 5 \
+            --output artifacts/todo-global-chat-event/evidence.json
+
+      - name: Publicar resumo sanitizado
+        if: always()
+        shell: bash
+        run: |
+          {
+            printf '%s\n' "## TODO Global Chat Event Gateway"
+            printf '%s\n' "- SHA: \`$GITHUB_SHA\`"
+            printf '%s\n' "- Issue autorizadora: \`#1705\`"
+            if [[ -f artifacts/todo-global-chat-event/evidence.json ]]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/todo-global-chat-event/evidence.json").read_text(encoding="utf-8"))
+          print(f"- Event ID: \`{data['event_id']}\`")
+          print(f"- Correlation ID: \`{data['correlation_id']}\`")
+          print(f"- Estado terminal: \`{data['terminal_status']}\`")
+          print(f"- Readback independente: \`{data['readback_verified']}\`")
+          print(f"- Replay idempotente: \`{data['replay_duplicate_event']}\`")
+          PY
+            else
+              printf '%s\n' '- Estado: `BLOQUEADO/PARCIAL`'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preservar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: todo-global-chat-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/todo-global-chat-event/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+\t' read -r status conclusion <<< "$state"
+                  if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                    cleanup_status='cancelled'
+                    break
+                  fi
+                fi
+                sleep 5
+              done
+              if [ "$cleanup_status" != 'cancelled' ]; then
+                cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+              fi
+            else
+              cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+            fi
           fi
           printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
           printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
