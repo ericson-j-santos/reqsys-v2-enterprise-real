@@ -51,7 +51,9 @@
     "A second registered PC can be onboarded through an approved bootstrap capability without hostname or runner_id affinity",
     "Second-PC onboarding uploads sanitized evidence before one delayed listener restart and defers shared labels until online readback",
     "Hosted pool monitoring and label reconciliation use short-lived governed GitHub App tokens instead of a personal PAT or machine-bound credential",
-    "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart"
+    "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/runtime-only and schedules one delayed runner restart",
+    "Profile-aware reconciliation accepts base evidence for Noteri and runtime evidence for PC24x7, then validates cumulative label readback",
+    "S4U task registration passes a null password and does not store or repeatedly request credentials"
   ],
   "sdd_gate": {
     "tests": [

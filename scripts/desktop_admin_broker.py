@@ -54,7 +54,7 @@ RUNNER_ONBOARD_SCRIPT = "onboard_reqsys_dev_runner.ps1"
 RUNNER_PREFLIGHT_SCRIPT = "validate_reqsys_dev_runner.py"
 RUNNER_POOL_POLICY = "reqsys-dev-runner-pool.json"
 RUNNER_ONBOARD_COMMAND = "/reqsys run pc24x7-runner-pool-onboard"
-RUNNER_ONBOARD_ACTION = "onboard-runner-base"
+RUNNER_ONBOARD_ACTION = "onboard-runner-runtime"
 RUNNER_ONBOARD_STAGE_CONFIRM = "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD"
 RUNNER_SERVICE = re.compile(r"actions\.runner\.[A-Za-z0-9_.-]+\Z")
 
@@ -427,7 +427,7 @@ def _recover_runner(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
+def _onboard_runner_runtime(metadata: dict[str, Any]) -> dict[str, Any]:
     if not _is_admin():
         raise BrokerError("elevated_broker_required")
     request = metadata.get("runner_onboard_request")
@@ -478,7 +478,7 @@ def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
             "-RunnerRoot",
             str(runner_root),
             "-Profile",
-            "base",
+            "runtime",
             "-ManifestPath",
             str(manifest_path),
         ],
@@ -491,7 +491,7 @@ def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
         check=False,
     )
     if completed.returncode != 0:
-        raise BrokerError("runner_base_installer_blocked")
+        raise BrokerError("runner_runtime_installer_blocked")
 
     preflight_result = subprocess.run(
         [
@@ -502,7 +502,7 @@ def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
             "--manifest",
             str(manifest_path),
             "--profile",
-            "base",
+            "runtime",
             "--repository",
             str(source_root),
         ],
@@ -520,7 +520,7 @@ def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
     _schedule_runner_restart(service_name)
     return {
         "handler": RUNNER_ONBOARD_ACTION,
-        "profile": "base",
+        "profile": "runtime",
         "environment": "dev",
         "runner_instance_id": instance_id,
         "manifest_path": str(manifest_path),
@@ -611,7 +611,7 @@ def execute_action(action: str, metadata: dict[str, Any], comment_id: int) -> di
     elif action == "activate-watchdog":
         result = _activate_watchdog(metadata)
     elif action == RUNNER_ONBOARD_ACTION:
-        result = _onboard_runner_base(metadata)
+        result = _onboard_runner_runtime(metadata)
     else:
         raise BrokerError("action_id não allowlisted")
     return {
@@ -767,7 +767,7 @@ def register_task(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
             definition,
             TASK_CREATE_OR_UPDATE,
             principal.UserId,
-            "",
+            None,
             TASK_LOGON_S4U,
         )
     except Exception as exc:

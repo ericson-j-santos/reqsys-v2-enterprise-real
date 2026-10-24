@@ -198,7 +198,7 @@ jobs:
 
   runner-pool-label-reconcile:
     if: ${{ inputs.mode == 'runner-pool-label-reconcile-noteri' || inputs.mode == 'runner-pool-label-reconcile-pc24x7' }}
-    name: Reconcile validated ReqSys DEV base labels for an onboarded PC
+    name: Reconcile validated ReqSys DEV profile labels for an onboarded PC
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -314,9 +314,12 @@ jobs:
               raise SystemExit('ONBOARDING_SHA_NOT_ANCESTOR')
           protected = {
               '.github/actions/reqsys-dev-runner-preflight/action.yml',
+              '.github/workflows/noteri-desktop-watchdog-recovery.yml',
               'config/reqsys-dev-runner-pool.json',
+              'scripts/desktop_admin_broker.py',
               'scripts/install_reqsys_dev_runner.ps1',
               'scripts/onboard_reqsys_dev_runner.ps1',
+              'scripts/reconcile_reqsys_dev_runner_labels.py',
               'scripts/validate_reqsys_dev_runner.py',
           }
           changed = {item.get('filename') for item in value.get('files') or []}

@@ -267,7 +267,7 @@ def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
     assert '-f onboarding_run_id="$onboarding_run_id"' in gateway
 
 
-def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
+def test_pc24x7_runtime_onboarding_is_capability_selected_owner_bound_and_dev_only():
     recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
     onboard = recovery.split("  runner-pool-onboard-pc24x7:", 1)[1].split("  runner-pool-canary:", 1)[0]
     guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
@@ -281,6 +281,9 @@ def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
     assert "stage-runner-onboard" in onboard
     assert "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD" in onboard
     assert "--owner-comment-id" in onboard
+    assert "exact runtime profile" in onboard
+    assert "REQSYS_DEV_RUNNER_RUNTIME_PROFILE_CONFIGURED" in onboard
+    assert "profile = 'runtime'" in onboard
     assert "admin_secret_supplied = $false" in onboard
     assert "install_reqsys_dev_runner.ps1" not in onboard
     assert "Start-Process" not in onboard
@@ -293,5 +296,7 @@ def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
     assert "production_touched = $false" in onboard
     assert "runner-pool-label-reconcile-pc24x7" in guard
     assert "--selector-label" in guard
+    assert "scripts/desktop_admin_broker.py" in guard
+    assert "scripts/reconcile_reqsys_dev_runner_labels.py" in guard
     assert "mode='runner-pool-onboard-pc24x7'" in gateway
     assert "mode='runner-pool-label-reconcile-pc24x7'" in gateway

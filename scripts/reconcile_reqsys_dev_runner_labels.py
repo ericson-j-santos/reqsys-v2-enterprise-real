@@ -25,6 +25,17 @@ MANAGED_LABELS = {
     "reqsys-cap-ollama-v1",
 }
 SELECTOR_LABELS = {"noteri", "pc24x7"}
+SELECTOR_PROFILES = {"noteri": "base", "pc24x7": "runtime"}
+PROFILE_RESULTS = {
+    "base": {
+        "onboarding": "REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED",
+        "reconciled": "REQSYS_DEV_RUNNER_BASE_LABELS_RECONCILED",
+    },
+    "runtime": {
+        "onboarding": "REQSYS_DEV_RUNNER_RUNTIME_PROFILE_CONFIGURED",
+        "reconciled": "REQSYS_DEV_RUNNER_RUNTIME_LABELS_RECONCILED",
+    },
+}
 
 
 def load_object(path: Path) -> dict[str, Any]:
@@ -43,11 +54,16 @@ def labels(runner: dict[str, Any]) -> list[str]:
     return sorted(set(result), key=str.casefold)
 
 
-def validate_onboarding(evidence: dict[str, Any], expected_sha: str) -> None:
+def validate_onboarding(
+    evidence: dict[str, Any], expected_sha: str, selector_label: str
+) -> str:
+    expected_profile = SELECTOR_PROFILES.get(selector_label)
+    if expected_profile is None:
+        raise ReconcileError("runner_selector_invalid")
     required = {
-        "result": "REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED",
+        "result": PROFILE_RESULTS[expected_profile]["onboarding"],
         "pool": "reqsys-dev-pc-pool-v1",
-        "profile": "base",
+        "profile": expected_profile,
         "environment": "dev",
         "source_sha": expected_sha,
         "manifest_updated": True,
@@ -63,9 +79,22 @@ def validate_onboarding(evidence: dict[str, Any], expected_sha: str) -> None:
     for key, expected in required.items():
         if evidence.get(key) != expected:
             raise ReconcileError(f"onboarding_evidence_invalid:{key}")
+    if selector_label == "pc24x7":
+        pc24x7_required = {
+            "bootstrap_selector": "pc24x7",
+            "admin_route": "scheduled_task_s4u_highest",
+            "admin_secret_supplied": False,
+            "service_restart_scheduled": True,
+        }
+        for key, expected in pc24x7_required.items():
+            if evidence.get(key) != expected:
+                raise ReconcileError(f"onboarding_evidence_invalid:{key}")
+        if not isinstance(evidence.get("runner_instance_id"), str) or not evidence["runner_instance_id"].strip():
+            raise ReconcileError("onboarding_evidence_invalid:runner_instance_id")
+    return expected_profile
 
 
-def desired_profile_labels(policy: dict[str, Any]) -> list[str]:
+def desired_profile_labels(policy: dict[str, Any], profile_name: str) -> list[str]:
     if policy.get("environment") != "dev" or policy.get("pool") != "reqsys-dev-pc-pool-v1":
         raise ReconcileError("policy_scope_invalid")
     safeguards = policy.get("required_safeguards")
@@ -73,15 +102,23 @@ def desired_profile_labels(policy: dict[str, Any]) -> list[str]:
         "hml_enabled", "stg_enabled", "production_enabled", "automatic_retry_enabled"
     )):
         raise ReconcileError("policy_safeguards_invalid")
-    profile = (policy.get("profiles") or {}).get("base")
+    if profile_name not in PROFILE_RESULTS:
+        raise ReconcileError("profile_scope_invalid")
+    profile = (policy.get("profiles") or {}).get(profile_name)
     raw = profile.get("runner_labels") if isinstance(profile, dict) else None
     if not isinstance(raw, list) or not raw or not all(isinstance(item, str) and item for item in raw):
-        raise ReconcileError("base_profile_labels_invalid")
+        raise ReconcileError(f"{profile_name}_profile_labels_invalid")
     normalized = {item.casefold() for item in raw}
-    if not {"self-hosted", "windows", "x64", "reqsys-dev", "reqsys-dev-base-v1"}.issubset(normalized):
-        raise ReconcileError("base_profile_labels_incomplete")
-    if normalized & {"reqsys-dev-runtime-v1", "reqsys-dev-ollama-v1"}:
-        raise ReconcileError("base_profile_scope_invalid")
+    required = {"self-hosted", "windows", "x64", "reqsys-dev", "reqsys-dev-base-v1"}
+    forbidden = {"reqsys-dev-ollama-v1"}
+    if profile_name == "runtime":
+        required.add("reqsys-dev-runtime-v1")
+    else:
+        forbidden.add("reqsys-dev-runtime-v1")
+    if not required.issubset(normalized):
+        raise ReconcileError(f"{profile_name}_profile_labels_incomplete")
+    if normalized & forbidden:
+        raise ReconcileError(f"{profile_name}_profile_scope_invalid")
     return list(raw)
 
 
@@ -97,12 +134,12 @@ def build_plan(
         raise ReconcileError("expected_sha_invalid")
     if len(onboarding_sha) != 40 or any(char not in "0123456789abcdef" for char in onboarding_sha):
         raise ReconcileError("onboarding_sha_invalid")
-    validate_onboarding(onboarding, onboarding_sha)
     selector_label = selector_label.casefold()
     if selector_label not in SELECTOR_LABELS:
         raise ReconcileError("runner_selector_invalid")
+    profile_name = validate_onboarding(onboarding, onboarding_sha, selector_label)
     selector = {"self-hosted", "windows", "x64", selector_label, "reqsys-dev"}
-    profile_labels = desired_profile_labels(policy)
+    profile_labels = desired_profile_labels(policy, profile_name)
     runners = inventory.get("runners")
     if not isinstance(runners, list):
         raise ReconcileError("runner_inventory_invalid")
@@ -137,7 +174,7 @@ def build_plan(
         "mutation_required": current_custom != desired,
         "expected_sha": expected_sha,
         "onboarding_sha": onboarding_sha,
-        "profile": "base",
+        "profile": profile_name,
         "selector_label": selector_label,
         "environment": "dev",
         "production_touched": False,
@@ -147,7 +184,12 @@ def build_plan(
 def verify(plan: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
     runner_id = plan.get("runner_id")
     desired = plan.get("desired_labels")
-    if not isinstance(runner_id, int) or not isinstance(desired, list):
+    profile_name = plan.get("profile")
+    if (
+        not isinstance(runner_id, int)
+        or not isinstance(desired, list)
+        or profile_name not in PROFILE_RESULTS
+    ):
         raise ReconcileError("reconciliation_plan_invalid")
     matches = [runner for runner in inventory.get("runners") or [] if runner.get("id") == runner_id]
     if len(matches) != 1:
@@ -158,13 +200,14 @@ def verify(plan: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
     )
     if current_custom != sorted(desired, key=str.casefold):
         raise ReconcileError("runner_label_readback_mismatch")
-    if "reqsys-dev-base-v1" not in {item.casefold() for item in current_custom}:
-        raise ReconcileError("base_capability_label_missing")
+    capability_label = f"reqsys-dev-{profile_name}-v1"
+    if capability_label not in {item.casefold() for item in current_custom}:
+        raise ReconcileError(f"{profile_name}_capability_label_missing")
     return {
         "schema_version": 1,
-        "result": "REQSYS_DEV_RUNNER_BASE_LABELS_RECONCILED",
+        "result": PROFILE_RESULTS[profile_name]["reconciled"],
         "pool": "reqsys-dev-pc-pool-v1",
-        "profile": "base",
+        "profile": profile_name,
         "environment": "dev",
         "source_sha": plan.get("expected_sha"),
         "onboarding_sha": plan.get("onboarding_sha"),

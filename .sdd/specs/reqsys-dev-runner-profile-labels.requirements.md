@@ -33,6 +33,9 @@ preflight.
 13. O onboarding físico do Noteri DEVE ocorrer somente por comando owner exato,
     SHA atual de `main` e job host-bound; o job NÃO DEVE reiniciar o próprio
     serviço, disparar canário, habilitar retry, fazer deploy ou tocar produção.
+14. O onboarding físico do PC24x7 DEVE preparar o perfil `runtime`, comprovando
+    Docker antes de reconciliar cumulativamente `reqsys-dev-base-v1` e
+    `reqsys-dev-runtime-v1`; a label `ollama` não pode ser aplicada nesse fluxo.
 
 ## Evidência esperada
 

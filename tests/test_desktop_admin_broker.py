@@ -5,6 +5,7 @@ import json
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -253,10 +254,10 @@ def test_recover_runner_fails_closed_on_bootstrap_error(monkeypatch, tmp_path: P
 def test_runner_onboard_action_requires_elevated_broker(monkeypatch) -> None:
     monkeypatch.setattr(m, "_is_admin", lambda: False)
     with pytest.raises(m.BrokerError, match="elevated_broker_required"):
-        m._onboard_runner_base({})
+        m._onboard_runner_runtime({})
 
 
-def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp_path: Path) -> None:
+def test_runner_onboard_action_is_fixed_dev_runtime_without_labels(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "source"
     scripts = source / "scripts"
     config = source / "config"
@@ -291,7 +292,7 @@ def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp
     monkeypatch.setenv("ProgramData", str(tmp_path / "programdata"))
     monkeypatch.setenv("SystemRoot", str(tmp_path / "windows"))
 
-    result = m._onboard_runner_base(
+    result = m._onboard_runner_runtime(
         {
             "not_before": (now - timedelta(seconds=1)).isoformat(),
             "runner_onboard_request": {
@@ -303,7 +304,7 @@ def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp
         }
     )
 
-    assert result["profile"] == "base"
+    assert result["profile"] == "runtime"
     assert result["environment"] == "dev"
     assert result["admin_route"] == "scheduled_task_s4u_highest"
     assert result["admin_secret_supplied"] is False
@@ -312,11 +313,11 @@ def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp
     assert restarts == ["actions.runner.owner.repo.pc24x7"]
     assert len(calls) == 2
     installer = calls[0]
-    assert installer[installer.index("-Profile") + 1] == "base"
+    assert installer[installer.index("-Profile") + 1] == "runtime"
     assert "-ApplyGitHubLabels" not in installer
     assert "-RestartRunnerService" not in installer
     assert "--profile" in calls[1]
-    assert calls[1][calls[1].index("--profile") + 1] == "base"
+    assert calls[1][calls[1].index("--profile") + 1] == "runtime"
 
 
 def test_runner_onboard_stage_requires_existing_s4u_highest_task(monkeypatch, tmp_path: Path) -> None:
@@ -349,3 +350,34 @@ def test_register_task_contract_requires_s4u_highest() -> None:
     assert 'definition.Principal' in source
     assert 'principal.LogonType = TASK_LOGON_S4U' in source
     assert 'principal.RunLevel = TASK_RUNLEVEL_HIGHEST' in source
+
+
+def test_register_task_uses_null_s4u_password(monkeypatch, tmp_path: Path) -> None:
+    registered: list[tuple] = []
+    folder = SimpleNamespace(
+        RegisterTaskDefinition=lambda *args: registered.append(args),
+    )
+    definition = SimpleNamespace(
+        RegistrationInfo=SimpleNamespace(Description=""),
+        Settings=SimpleNamespace(),
+        Triggers=SimpleNamespace(Create=lambda _: SimpleNamespace()),
+        Actions=SimpleNamespace(Create=lambda _: SimpleNamespace()),
+        Principal=SimpleNamespace(),
+    )
+    service = SimpleNamespace(
+        GetFolder=lambda _: folder,
+        NewTask=lambda _: definition,
+    )
+    monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
+    monkeypatch.setattr(m, "current_user_id", lambda: r"DESKTOP-PDQK954\Windows")
+    monkeypatch.setattr(m, "_scheduler", lambda: service)
+
+    result = m.register_task(
+        python_executable=tmp_path / "python.exe",
+        launcher=tmp_path / "run.py",
+    )
+
+    assert result["password_used"] is False
+    assert len(registered) == 1
+    assert registered[0][4] is None
+    assert registered[0][5] == m.TASK_LOGON_S4U

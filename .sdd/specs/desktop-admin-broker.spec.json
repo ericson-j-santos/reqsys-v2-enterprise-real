@@ -24,7 +24,8 @@
     "/reqsys admin desktop recover-control-plane",
     "/reqsys admin desktop recover-rdc",
     "/reqsys admin desktop recover-runner",
-    "/reqsys admin desktop activate-watchdog"
+    "/reqsys admin desktop activate-watchdog",
+    "/reqsys run pc24x7-runner-pool-onboard"
   ],
   "sdd_gate": {
     "tests": [

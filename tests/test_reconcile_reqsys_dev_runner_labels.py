@@ -4,8 +4,11 @@ import copy
 
 import pytest
 
-from scripts.reconcile_reqsys_dev_runner_labels import ReconcileError, build_plan, verify
-
+from scripts.reconcile_reqsys_dev_runner_labels import (
+    ReconcileError,
+    build_plan,
+    verify,
+)
 
 SHA = "8" * 40
 
@@ -23,16 +26,26 @@ def policy():
         "profiles": {
             "base": {
                 "runner_labels": ["self-hosted", "Windows", "X64", "reqsys-dev", "reqsys-dev-base-v1"]
+            },
+            "runtime": {
+                "runner_labels": [
+                    "self-hosted",
+                    "Windows",
+                    "X64",
+                    "reqsys-dev",
+                    "reqsys-dev-base-v1",
+                    "reqsys-dev-runtime-v1",
+                ]
             }
         },
     }
 
 
-def onboarding():
-    return {
-        "result": "REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED",
+def onboarding(profile="base"):
+    value = {
+        "result": f"REQSYS_DEV_RUNNER_{profile.upper()}_PROFILE_CONFIGURED",
         "pool": "reqsys-dev-pc-pool-v1",
-        "profile": "base",
+        "profile": profile,
         "environment": "dev",
         "source_sha": SHA,
         "manifest_updated": True,
@@ -45,6 +58,17 @@ def onboarding():
         "deploy_performed": False,
         "production_touched": False,
     }
+    if profile == "runtime":
+        value.update(
+            {
+                "runner_instance_id": "reqsys-pc-123456789abc",
+                "bootstrap_selector": "pc24x7",
+                "admin_route": "scheduled_task_s4u_highest",
+                "admin_secret_supplied": False,
+                "service_restart_scheduled": True,
+            }
+        )
+    return value
 
 
 def inventory(labels=None):
@@ -76,10 +100,22 @@ def test_plan_rejects_missing_or_ambiguous_noteri_runner():
 def test_plan_supports_pc24x7_bootstrap_capability_without_runner_id_affinity():
     candidate = inventory(["self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev"])
     candidate["runners"][0]["id"] = 91
-    plan = build_plan(policy(), candidate, onboarding(), SHA, SHA, "pc24x7")
+    plan = build_plan(policy(), candidate, onboarding("runtime"), SHA, SHA, "pc24x7")
     assert plan["runner_id"] == 91
     assert plan["selector_label"] == "pc24x7"
-    assert plan["desired_labels"] == ["pc24x7", "reqsys-dev", "reqsys-dev-base-v1"]
+    assert plan["profile"] == "runtime"
+    assert plan["desired_labels"] == [
+        "pc24x7",
+        "reqsys-dev",
+        "reqsys-dev-base-v1",
+        "reqsys-dev-runtime-v1",
+    ]
+
+
+def test_plan_rejects_base_onboarding_evidence_for_pc24x7_runtime_selector():
+    candidate = inventory(["self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev"])
+    with pytest.raises(ReconcileError, match="onboarding_evidence_invalid:result"):
+        build_plan(policy(), candidate, onboarding(), SHA, SHA, "pc24x7")
 
 
 def test_plan_rejects_unapproved_bootstrap_selector():
@@ -108,6 +144,26 @@ def test_verify_requires_exact_readback_and_emits_sanitized_evidence():
     assert evidence["canary_dispatched"] is False
     assert evidence["production_touched"] is False
     assert "runner_id" not in evidence
+
+
+def test_verify_runtime_readback_emits_runtime_evidence():
+    before = inventory(["self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev"])
+    plan = build_plan(policy(), before, onboarding("runtime"), SHA, SHA, "pc24x7")
+    after = inventory(
+        [
+            "self-hosted",
+            "Windows",
+            "X64",
+            "pc24x7",
+            "reqsys-dev",
+            "reqsys-dev-base-v1",
+            "reqsys-dev-runtime-v1",
+        ]
+    )
+    evidence = verify(plan, after)
+    assert evidence["result"] == "REQSYS_DEV_RUNNER_RUNTIME_LABELS_RECONCILED"
+    assert evidence["profile"] == "runtime"
+    assert evidence["production_touched"] is False
 
 
 def test_verify_rejects_specialized_or_missing_labels():

@@ -35,7 +35,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 10. Não reexecutar automaticamente um comentário após falha; uma nova tentativa exige um novo comentário.
 11. Não abrir WinRM, SSH, SMB, WMI remoto ou listener de rede.
 12. Não armazenar token GitHub, senha ou segredo; o transporte usa leitura HTTPS pública da issue.
-13. O broker deve executar apenas: status, recuperação do runner, recuperação RDC, ativação do watchdog e recuperação do plano de controle.
+13. O broker deve executar apenas: status, recuperação do runner, recuperação RDC, ativação do watchdog, recuperação do plano de controle e onboarding governado do perfil `runtime` do runner PC24x7.
 14. A recuperação RDC deve reutilizar `pc24x7_rdc_recovery.py`.
 15. A recuperação do runner deve reutilizar `activate_desktop_free_control_plane.py` da mesma release imutável, com `source_sha` fixo e autenticação não interativa; runner ausente deve ser provisionado, e autenticação/escopo insuficiente deve falhar fechado sem abrir navegador.
 15.1. Presença local de `Runner.Listener.exe` comprova somente processo local e não saúde ou conectividade do runner no GitHub; a conclusão operacional exige registro e labels governados válidos e pickup externo no SHA corrente.
@@ -46,6 +46,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 20. A elevação inicial deve usar somente `desktop_admin_broker_uac_launcher.py` e o subcomando fixo `register-task-com --metadata`.
 21. O canal não autoriza reboot, shutdown, deploy, produção, segredo, RBAC amplo, force-push ou exclusão destrutiva.
 22. Toda evidência deve declarar `production_touched=false`, `secrets_read=false` e `reboot_performed=false`.
+23. O registro S4U deve fornecer senha nula à API do Task Scheduler; string vazia não é aceita como substituto e não pode provocar solicitação recorrente de credencial.
 
 ## Comandos allowlisted
 
@@ -54,6 +55,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 - `/reqsys admin desktop recover-rdc`
 - `/reqsys admin desktop recover-runner`
 - `/reqsys admin desktop activate-watchdog`
+- `/reqsys run pc24x7-runner-pool-onboard`
 
 ## Critérios de aceite de código
 
