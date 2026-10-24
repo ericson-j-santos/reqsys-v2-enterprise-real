@@ -40,7 +40,7 @@ Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `
 
 ## Monitoramento
 
-O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels do `monitor_profile` (`base`), exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. Como as labels são cumulativas, runners `runtime` e `ollama` também contam para a disponibilidade de `base`. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels do `monitor_profile` (`base`), exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. Como as labels são cumulativas, runners `runtime` e `ollama` também contam para a disponibilidade de `base`. A leitura do inventário usa um token de instalação de curta duração da GitHub App governada (`REQSYS_STACK_REBASE_APP_ID` e `REQSYS_STACK_REBASE_PRIVATE_KEY`), sem PAT pessoal e sem depender de credencial armazenada em qualquer PC. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
 
 O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 

@@ -72,8 +72,10 @@ def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
     assert "actions: read" in raw
     assert "contents: read" in raw
     assert "issues: write" not in raw
-    assert "GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}" in raw
-    assert "GH_PAT_ACTIONS is not configured." in raw
+    assert "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1" in raw
+    assert "permission-administration: read" in raw
+    assert "GH_TOKEN: ${{ steps.runner-inventory-token.outputs.token }}" in raw
+    assert "GH_PAT_ACTIONS" not in raw
     assert "audit_reqsys_dev_runner_pool.py" in raw
     assert "Mode: `report_only`" in raw
     assert "Production touched: `false`" in raw
