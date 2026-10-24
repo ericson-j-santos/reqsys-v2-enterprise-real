@@ -8,9 +8,9 @@
   },
   "traceability": {
     "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
-    "script": "scripts/bootstrap_pc24x7_teams_service_token.py",
+    "script": "scripts/bootstrap_pc24x7_teams_service_token.py, scripts/cofre_human_token.py",
     "backend_operation": "backend/app/core/dev_service_token_bootstrap.py",
-    "tests": "tests/test_pc24x7_teams_token_bootstrap_workflow.py, backend/tests/test_dev_service_token_bootstrap.py",
+    "tests": "tests/test_pc24x7_teams_token_bootstrap_workflow.py, backend/tests/test_dev_service_token_bootstrap.py, tests/test_cofre_human_token_device_login.py, tests/test_cofre_human_token_renewal_workflow.py",
     "requirements": ".sdd/specs/cofre-bootstrap-local-admin-jwt.requirements.md"
   },
   "acceptance_criteria": [
@@ -22,13 +22,21 @@
     "Container ou ambiente diferente do alvo DEV canônico falha fechado.",
     "Nenhum JWT administrativo é criado.",
     "A rotação revoga credenciais anteriores e registra auditoria na mesma transação.",
-    "Somente o novo token S2S atravessa o pipe capturado para persistência imediata no Key Vault via OIDC."
+    "Somente o novo token S2S atravessa o pipe capturado para persistência imediata no Key Vault via OIDC.",
+    "Device Code Flow permite login e MFA pelo celular e grava o JWT interno diretamente no Cofre.",
+    "ID token, JWT interno e device code opaco não aparecem na saída do comando.",
+    "Cache MSAL renovável elimina interação repetida; cache revogado ou expirado falha fechado.",
+    "Falhas transitórias do gateway após a aprovação não descartam tokens mantidos em memória.",
+    "Workflow manual no PC24x7 oferece status sanitizado ou renovação por Device Code, sem schedule e sem GitHub Secret administrativo.",
+    "A renovação comprova validade após o MFA e mantém senha, MFA, ID token e JWT fora de logs e artifacts."
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
       "tests/test_bootstrap_pc24x7_teams_service_token.py",
-      "backend/tests/test_dev_service_token_bootstrap.py"
+      "backend/tests/test_dev_service_token_bootstrap.py",
+      "tests/test_cofre_human_token_device_login.py",
+      "tests/test_cofre_human_token_renewal_workflow.py"
     ]
   }
 }
