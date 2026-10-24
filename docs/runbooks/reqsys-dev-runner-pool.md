@@ -28,6 +28,12 @@ O pool `reqsys-dev-pc-pool-v1` permite que qualquer PC Windows x64 preparado ass
 
 O manifesto é local e não contém segredo. `runner_instance_id` deve ser um identificador opaco e estável; hostname e id numérico do GitHub são proibidos. Cada job executa novamente o preflight e falha fechado se ferramenta, checkout, runtime root, perfil, labels, escopo DEV ou salvaguarda divergir.
 
+### Segundo PC já registrado
+
+Quando um PC Windows x64 já registrado responde pela capacidade bootstrap `pc24x7`, o owner pode usar os comandos exatos `/reqsys run pc24x7-runner-pool-onboard` e, somente depois do retorno online e da evidência positiva, `/reqsys run pc24x7-runner-pool-label-reconcile`. O primeiro comando cria ou atualiza apenas o manifesto DEV e o `.env` do runner, valida o perfil `base`, publica evidência sanitizada e agenda uma única reinicialização atrasada do listener. O segundo roda hospedado, consome a evidência exata e aplica a label compartilhada sem transportar credencial administrativa ao PC.
+
+Esse bootstrap seleciona a capacidade `pc24x7`; não compara hostname, não recebe `runner_id`, não executa canário e não habilita HML, STG ou PROD. Se a máquina não voltar online ou o readback falhar, a reconciliação deve parar sem retry automático.
+
 ## Retirada e validação
 
 Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `base`) no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, execute `onboard_reqsys_dev_runner.ps1` com `-ValidateOnly` e o mesmo conjunto de parâmetros.

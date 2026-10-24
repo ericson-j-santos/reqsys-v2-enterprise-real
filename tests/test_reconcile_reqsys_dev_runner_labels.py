@@ -73,6 +73,20 @@ def test_plan_rejects_missing_or_ambiguous_noteri_runner():
         build_plan(policy(), ambiguous, onboarding(), SHA, SHA)
 
 
+def test_plan_supports_pc24x7_bootstrap_capability_without_runner_id_affinity():
+    candidate = inventory(["self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev"])
+    candidate["runners"][0]["id"] = 91
+    plan = build_plan(policy(), candidate, onboarding(), SHA, SHA, "pc24x7")
+    assert plan["runner_id"] == 91
+    assert plan["selector_label"] == "pc24x7"
+    assert plan["desired_labels"] == ["pc24x7", "reqsys-dev", "reqsys-dev-base-v1"]
+
+
+def test_plan_rejects_unapproved_bootstrap_selector():
+    with pytest.raises(ReconcileError, match="runner_selector_invalid"):
+        build_plan(policy(), inventory(), onboarding(), SHA, SHA, "fixed-host-name")
+
+
 def test_plan_rejects_stale_or_unsafe_onboarding_evidence():
     stale = onboarding()
     stale["source_sha"] = "7" * 40

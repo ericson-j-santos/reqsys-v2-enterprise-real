@@ -245,12 +245,12 @@ def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_resta
 
 def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
     guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
-    reconcile = guard.split("  runner-pool-label-reconcile-noteri:", 1)[1]
+    reconcile = guard.split("  runner-pool-label-reconcile:", 1)[1]
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
     assert "runs-on: ubuntu-latest" in reconcile
     assert "/reqsys run noteri-runner-pool-label-reconcile" in reconcile
     assert "onboarding_run_id" in reconcile
-    assert "reqsys-dev-runner-pool-onboard-${ONBOARDING_RUN_ID}" in reconcile
+    assert "artifact_prefix}-${ONBOARDING_RUN_ID}" in reconcile
     assert "ONBOARDING_CONTRACT_CHANGED" in reconcile
     assert "scripts/reconcile_reqsys_dev_runner_labels.py plan" in reconcile
     assert "scripts/reconcile_reqsys_dev_runner_labels.py verify" in reconcile
@@ -262,3 +262,28 @@ def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
     assert "mode='runner-pool-label-reconcile-noteri'" in gateway
     assert "target='self-hosted-runner-governance-guard.yml'" in gateway
     assert '-f onboarding_run_id="$onboarding_run_id"' in gateway
+
+
+def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
+    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
+    onboard = recovery.split("  runner-pool-onboard-pc24x7:", 1)[1].split("  runner-pool-canary:", 1)[0]
+    guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in onboard
+    assert "DESKTOP-PDQK954" not in onboard
+    assert "RUNNER_NAME -ne" not in onboard
+    assert "/reqsys run pc24x7-runner-pool-onboard" in onboard
+    assert "runner_instance_id = $env:RUNNER_INSTANCE_ID" in onboard
+    assert "bootstrap_selector = 'pc24x7'" in onboard
+    assert "-Profile base" in onboard
+    assert "-ApplyGitHubLabels" not in onboard
+    assert "labels_applied = $false" in onboard
+    assert "service_restart_scheduled = $true" in onboard
+    assert "canary_dispatched = $false" in onboard
+    assert "automatic_retry_enabled = $false" in onboard
+    assert "deploy_performed = $false" in onboard
+    assert "production_touched = $false" in onboard
+    assert "runner-pool-label-reconcile-pc24x7" in guard
+    assert "--selector-label" in guard
+    assert "mode='runner-pool-onboard-pc24x7'" in gateway
+    assert "mode='runner-pool-label-reconcile-pc24x7'" in gateway
