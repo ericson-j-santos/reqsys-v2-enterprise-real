@@ -19,6 +19,10 @@ O manifesto é local e não contém segredo. `runner_instance_id` deve ser um id
 
 Remova primeiro `reqsys-dev-pool-v1` no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, use `-ValidateOnly` e o mesmo conjunto de parâmetros.
 
+## Monitoramento
+
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels da política versionada, exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+
 O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 
 ## Fases de adoção

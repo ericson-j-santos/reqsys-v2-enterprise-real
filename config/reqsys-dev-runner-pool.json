@@ -2,6 +2,7 @@
   "schema_version": 1,
   "pool": "reqsys-dev-pc-pool-v1",
   "environment": "dev",
+  "minimum_online_runners": 2,
   "runner_labels": [
     "self-hosted",
     "Windows",
