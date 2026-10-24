@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -196,6 +198,44 @@ def test_installer_configures_runner_env_and_requires_explicit_label_confirmatio
     assert "DESKTOP-PDQK954" not in raw
     assert "automatic_retry_enabled = $false" in raw
     assert "production_touched = $false" in raw
+
+
+def test_installer_authorization_phrase_does_not_shadow_powershell_common_confirm():
+    installer = (ROOT / "scripts/install_reqsys_dev_runner.ps1").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
+    onboard = workflow.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
+    assert "[CmdletBinding(SupportsShouldProcess)]" in installer
+    assert "[string]$AuthorizationPhrase = ''" in installer
+    assert "[string]$Confirm = ''" not in installer
+    assert "$ApplyGitHubLabels -and $AuthorizationPhrase -cne 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in installer
+    assert "-AuthorizationPhrase 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in onboard
+    assert "-Confirm 'APPLY-REQSYS-DEV-RUNNER-LABELS'" not in onboard
+    assert "-RestartRunnerService" not in onboard
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Only Windows PowerShell 5.1 can bind advanced script parameters")
+def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tmp_path):
+    # This invocation cannot mutate a runner: the runner root does not exist.
+    missing = tmp_path / "absent-runner-root"
+    script = ROOT / "scripts/install_reqsys_dev_runner.ps1"
+    result = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script),
+            "-RunnerInstanceId", "reqsys-pc-a1b2c3d4",
+            "-RuntimeRoot", str(missing),
+            "-RunnerRoot", str(missing),
+            "-Profile", "base",
+            "-AuthorizationPhrase", "APPLY-REQSYS-DEV-RUNNER-LABELS",
+        ],
+        text=True,
+        capture_output=True,
+        timeout=25,
+        check=False,
+    )
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "ADMINISTRATOR_REQUIRED" in diagnostic or "RUNNER_ROOT_INVALID" in diagnostic
+    assert "ParameterNameAlreadyExistsForCommand" not in diagnostic
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
