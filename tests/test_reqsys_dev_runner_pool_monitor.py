@@ -18,18 +18,26 @@ def policy() -> dict:
     }
 
 
-def runner(name: str, *, status: str = "online", labels: list[str] | None = None) -> dict:
+def probe(
+    slot: int,
+    runner_name: str | None,
+    *,
+    status: str = "completed",
+    conclusion: str | None = "success",
+    labels: list[str] | None = None,
+) -> dict:
     return {
-        "id": len(name),
-        "name": name,
+        "id": slot,
+        "name": f"ReqSys DEV runner lease probe ({slot})",
         "status": status,
-        "busy": False,
-        "labels": [{"name": value} for value in (labels or REQUIRED)],
+        "conclusion": conclusion,
+        "runner_name": runner_name,
+        "labels": labels or REQUIRED,
     }
 
 
 def test_audit_passes_with_two_eligible_online_runners():
-    result = audit(policy(), {"runners": [runner("one"), runner("two")]})
+    result = audit(policy(), {"jobs": [probe(1, "one"), probe(2, "two")]})
 
     assert result["status"] == "passed"
     assert result["online_eligible_runners"] == 2
@@ -40,13 +48,13 @@ def test_audit_passes_with_two_eligible_online_runners():
     assert result["production_touched"] is False
 
 
-def test_audit_reports_offline_and_label_drift_without_mutation():
+def test_audit_reports_unassigned_and_label_drift_without_mutation():
     result = audit(
         policy(),
         {
-            "runners": [
-                runner("noteri"),
-                runner("desktop", status="offline", labels=REQUIRED[:-1]),
+            "jobs": [
+                probe(1, "noteri"),
+                probe(2, None, status="queued", conclusion=None, labels=REQUIRED[:-1]),
             ]
         },
     )
@@ -54,12 +62,24 @@ def test_audit_reports_offline_and_label_drift_without_mutation():
     assert result["status"] == "degraded"
     assert result["online_eligible_runners"] == 1
     assert {item["type"] for item in result["findings"]} == {
-        "runner_offline",
+        "probe_unassigned",
+        "probe_incomplete",
         "runner_labels_mismatch",
         "insufficient_online_runners",
     }
     assert result["deploy_performed"] is False
     assert result["production_touched"] is False
+
+
+def test_audit_rejects_two_successful_leases_served_by_one_runner():
+    result = audit(policy(), {"jobs": [probe(1, "one"), probe(2, "one")]})
+
+    assert result["status"] == "degraded"
+    assert result["online_eligible_runners"] == 1
+    assert {item["type"] for item in result["findings"]} == {
+        "probe_runner_reused",
+        "insufficient_online_runners",
+    }
 
 
 def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
@@ -72,9 +92,12 @@ def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
     assert "actions: read" in raw
     assert "contents: read" in raw
     assert "issues: write" not in raw
-    assert "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1" in raw
-    assert "permission-administration: read" in raw
-    assert "GH_TOKEN: ${{ steps.runner-inventory-token.outputs.token }}" in raw
+    assert "ReqSys DEV runner lease probe" in raw
+    assert "matrix:" in raw
+    assert "slot: [1, 2]" in raw
+    assert "permission-administration: read" not in raw
+    assert "GH_TOKEN: ${{ github.token }}" in raw
+    assert "/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" in raw
     assert "GH_PAT_ACTIONS" not in raw
     assert "audit_reqsys_dev_runner_pool.py" in raw
     assert "Mode: `report_only`" in raw
