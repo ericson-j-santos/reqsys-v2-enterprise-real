@@ -30,6 +30,9 @@ preflight.
     labels não gerenciadas e exigir confirmação literal para a mutação no GitHub.
 12. O manifesto DEVE ser UTF-8 sem BOM e vincular exatamente perfil,
     capacidades e labels; divergências DEVEM falhar fechadas.
+13. O onboarding físico do Noteri DEVE ocorrer somente por comando owner exato,
+    SHA atual de `main` e job host-bound; o job NÃO DEVE reiniciar o próprio
+    serviço, disparar canário, habilitar retry, fazer deploy ou tocar produção.
 
 ## Evidência esperada
 
