@@ -10,7 +10,9 @@ Os fluxos portáveis DEV eram agendados pela label histórica `pc24x7` e parte d
 
 ## Decisão
 
-Os fluxos portáveis usam o pool `reqsys-dev-pc-pool-v1`, selecionado pelas labels compartilhadas `Windows`, `X64`, `reqsys-dev` e `reqsys-dev-pool-v1`. Cada job executa um preflight local, após o checkout imutável, que valida manifesto, Windows, ferramentas, checkout/origem permitida, runtime root, capacidades e salvaguardas DEV.
+Os fluxos portáveis usam o pool lógico `reqsys-dev-pc-pool-v1`, com seleção física separada por capacidade: `reqsys-dev-base-v1` para Git/Python, `reqsys-dev-runtime-v1` para Docker e `reqsys-dev-ollama-v1` para Docker/Ollama. Cada job exige apenas a label do seu perfil e executa um preflight local, após o checkout imutável, que valida manifesto, Windows, ferramentas, checkout/origem permitida, runtime root, capacidades e salvaguardas DEV.
+
+As labels são cumulativas no onboarding: um runner `runtime` também pode receber jobs `base`, e um runner `ollama` também pode receber jobs `runtime` e `base`. Um runner `base` nunca recebe jobs que exijam Docker ou Ollama.
 
 O manifesto atribui um `runner_instance_id` opaco. Hostname e `runner_id` do GitHub não participam do agendamento, autorização ou evidência. O runtime root vem do manifesto e é exportado como `REQSYS_DEV_RUNTIME_ROOT`.
 
@@ -23,7 +25,7 @@ A adoção é faseada: a primeira entrega cobre o contrato, reconcile, gateway e
 ## Consequências
 
 - um PC novo só entra no pool depois do onboarding e preflight positivo;
-- a retirada começa pela remoção da label do pool, permitindo drenagem;
+- a retirada começa pela remoção da label mais especializada e termina pela label `base`, permitindo drenagem gradual;
 - concurrency, environments e autorizações owner existentes permanecem válidos;
 - a adoção física das labels e do manifesto é um gate operacional separado e revisável;
 - nenhuma promoção ou acesso a HML/STG/PROD é concedido.

@@ -7,8 +7,8 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 SELF_HOSTED_PATTERN = re.compile(r"(^|[\s\[,:'\"])(self-hosted)([\s\],:'\"]|$)", re.IGNORECASE)
 RUNS_ON_PATTERN = re.compile(r"^(?P<indent>\s*)runs-on\s*:\s*(?P<value>.*?)(?:\s+#.*)?$")
@@ -45,7 +45,7 @@ def find_self_hosted_usages(root: Path) -> list[str]:
 
             value = match.group("value").strip()
             if value and _contains_self_hosted(value):
-                findings.append(f"{path.relative_to(root)}:{index + 1}: {line.strip()}")
+                findings.append(f"{path.relative_to(root).as_posix()}:{index + 1}: {line.strip()}")
                 index += 1
                 continue
 
@@ -65,7 +65,7 @@ def find_self_hosted_usages(root: Path) -> list[str]:
 
                     if _contains_self_hosted(stripped):
                         findings.append(
-                            f"{path.relative_to(root)}:{cursor + 1}: {stripped}"
+                            f"{path.relative_to(root).as_posix()}:{cursor + 1}: {stripped}"
                         )
                     cursor += 1
                 index = cursor
@@ -85,6 +85,28 @@ def load_policy(root: Path, policy_path: Path) -> dict:
             "required_adr": None,
         }
     return json.loads(full_path.read_text(encoding="utf-8"))
+
+
+def _profile_job_blocks(raw: str, label: str) -> list[str]:
+    """Return YAML job blocks whose literal runs-on line selects ``label``."""
+
+    lines = raw.splitlines()
+    job_header = re.compile(r"^  [A-Za-z0-9_-]+:\s*(?:#.*)?$")
+    selected: dict[int, str] = {}
+    for index, line in enumerate(lines):
+        match = RUNS_ON_PATTERN.match(line)
+        if not match or label not in match.group("value"):
+            continue
+        start = index
+        while start >= 0 and not job_header.match(lines[start]):
+            start -= 1
+        if start < 0:
+            continue
+        end = start + 1
+        while end < len(lines) and not job_header.match(lines[end]):
+            end += 1
+        selected[start] = "\n".join(lines[start:end])
+    return list(selected.values())
 
 
 def validate(root: Path, policy_path: Path) -> tuple[bool, dict]:
@@ -109,35 +131,54 @@ def validate(root: Path, policy_path: Path) -> tuple[bool, dict]:
                 violations.append(f"Workflow not allowlisted: {workflow}")
 
     portable = policy.get("portable_dev_runner_contract", {})
-    if isinstance(portable, dict):
-        required_label = str(portable.get("label", ""))
+    if isinstance(portable, dict) and portable:
         preflight_action = str(portable.get("preflight_action", ""))
         forbidden = [str(item) for item in portable.get("forbidden_hostnames", [])]
-        for workflow in portable.get("workflows", []):
+        profile_labels = portable.get("profile_labels", {})
+        workflow_profiles = portable.get("workflow_profiles", {})
+        if not isinstance(profile_labels, dict) or not profile_labels:
+            violations.append("Portable DEV profile labels are missing")
+            profile_labels = {}
+        if not isinstance(workflow_profiles, dict) or not workflow_profiles:
+            violations.append("Portable DEV workflow profiles are missing")
+            workflow_profiles = {}
+        known_labels = {str(label) for label in profile_labels.values() if label}
+        for workflow, profile in workflow_profiles.items():
             path = root / str(workflow)
             if not path.is_file():
                 violations.append(f"Portable DEV workflow not found: {workflow}")
                 continue
             raw = path.read_text(encoding="utf-8")
-            if required_label not in raw:
-                violations.append(f"Portable DEV label missing: {workflow}")
-            if preflight_action not in raw:
-                violations.append(f"Portable DEV preflight missing: {workflow}")
-            pool_jobs = sum(
-                1
-                for line in raw.splitlines()
-                if RUNS_ON_PATTERN.match(line)
-                and required_label in RUNS_ON_PATTERN.match(line).group("value")
-            )
-            if raw.count(f"uses: {preflight_action}") < pool_jobs:
-                violations.append(f"Portable DEV job without preflight: {workflow}")
-            for hostname in forbidden:
-                if hostname and hostname.casefold() in raw.casefold():
-                    violations.append(f"Fixed runner hostname forbidden: {workflow}")
-            if portable.get("forbid_fixed_runner_id") and re.search(
-                r"\brunner_id\s*[:=]\s*[0-9]+", raw, re.IGNORECASE
-            ):
-                violations.append(f"Fixed runner id forbidden: {workflow}")
+            required_label = str(profile_labels.get(str(profile), ""))
+            if not required_label:
+                violations.append(f"Portable DEV profile label unknown: {workflow}:{profile}")
+                continue
+            profile_jobs = _profile_job_blocks(raw, required_label)
+            if not profile_jobs:
+                violations.append(f"Portable DEV profile label missing: {workflow}:{profile}")
+            for job in profile_jobs:
+                for incompatible_label in known_labels - {required_label}:
+                    if incompatible_label in job:
+                        violations.append(
+                            f"Portable DEV incompatible profile label: {workflow}:{incompatible_label}"
+                        )
+                if f"uses: {preflight_action}" not in job:
+                    violations.append(f"Portable DEV job without preflight: {workflow}")
+                for hostname in forbidden:
+                    if hostname and hostname.casefold() in job.casefold():
+                        violations.append(f"Fixed runner hostname forbidden: {workflow}")
+                if portable.get("forbid_fixed_runner_id") and re.search(
+                    r"\brunner_id\s*[:=]\s*[0-9]+", job, re.IGNORECASE
+                ):
+                    violations.append(f"Fixed runner id forbidden: {workflow}")
+
+        registered_workflows = {str(item) for item in workflow_profiles}
+        for path in workflow_files(root):
+            raw = path.read_text(encoding="utf-8")
+            if any(label in raw for label in known_labels):
+                relative = str(path.relative_to(root)).replace("\\", "/")
+                if relative not in registered_workflows:
+                    violations.append(f"Portable DEV workflow profile missing: {relative}")
 
     result_status = "pass" if not violations else "fail"
 

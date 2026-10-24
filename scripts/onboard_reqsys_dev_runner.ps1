@@ -11,6 +11,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $policy = Get-Content -Raw (Join-Path $repoRoot 'config\reqsys-dev-runner-pool.json') | ConvertFrom-Json
 $selected = $policy.profiles.$Profile
 if (-not $selected) { throw 'PROFILE_INVALID' }
+$runnerLabels = @($selected.runner_labels)
+if (-not $runnerLabels -or $runnerLabels.Count -lt 5) { throw 'PROFILE_LABELS_INVALID' }
 if (-not (Test-Path -LiteralPath $RuntimeRoot -PathType Container)) { throw 'RUNTIME_ROOT_INVALID' }
 $manifest = [ordered]@{
   schema_version = 1
@@ -37,4 +39,4 @@ if (-not $ValidateOnly) {
 $env:REQSYS_DEV_RUNNER_MANIFEST = $ManifestPath
 python (Join-Path $repoRoot 'scripts\validate_reqsys_dev_runner.py') --manifest $ManifestPath --profile $Profile --repository $repoRoot
 if ($LASTEXITCODE -ne 0) { throw 'RUNNER_PREFLIGHT_BLOCKED' }
-Write-Host ('Assign these shared labels only after validation: ' + ($policy.runner_labels -join ', '))
+Write-Host ('Assign these profile labels only after validation: ' + ($runnerLabels -join ', '))

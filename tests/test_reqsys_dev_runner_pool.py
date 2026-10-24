@@ -9,15 +9,22 @@ from scripts import validate_reqsys_dev_runner as preflight
 from scripts.check_self_hosted_runner_governance import validate as validate_governance
 
 ROOT = Path(__file__).resolve().parents[1]
-PORTABLE = (
-    ".github/workflows/codex-ollama-e2e-dev.yml",
-    ".github/workflows/codex-worker-pool-handoff.yml",
-    ".github/workflows/figma-github-e2e-dev.yml",
-    ".github/workflows/noteri-study-mode-dev-reconcile.yml",
-    ".github/workflows/ollama-ci-triage.yml",
-    ".github/workflows/pc24x7-teams-token-bootstrap.yml",
-    ".github/workflows/todo-global-hourly-cycle.yml",
-)
+PORTABLE = {
+    ".github/workflows/codex-ollama-e2e-dev.yml": "ollama",
+    ".github/workflows/codex-worker-pool-handoff.yml": "base",
+    ".github/workflows/figma-github-e2e-dev.yml": "base",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml": "base",
+    ".github/workflows/noteri-study-mode-dev-reconcile.yml": "runtime",
+    ".github/workflows/ollama-ci-triage.yml": "ollama",
+    ".github/workflows/pc24x7-teams-token-bootstrap.yml": "runtime",
+    ".github/workflows/todo-global-hourly-cycle.yml": "runtime",
+}
+
+PROFILE_LABELS = {
+    "base": "reqsys-dev-base-v1",
+    "runtime": "reqsys-dev-runtime-v1",
+    "ollama": "reqsys-dev-ollama-v1",
+}
 
 
 def policy() -> dict:
@@ -59,6 +66,28 @@ def test_runtime_profile_accepts_capabilities_without_hostname_or_runner_id(tmp_
     assert "runner_id" not in result
 
 
+def test_base_profile_does_not_require_docker_or_ollama(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    runtime = tmp_path / "runtime-dev"
+    repo.mkdir()
+    runtime.mkdir()
+    value = manifest(runtime)
+    value["capabilities"] = ["git", "python", "reqsys-source"]
+    monkeypatch.setattr(preflight, "_origin_repository", lambda _: "ericson-j-santos/reqsys-v2-enterprise-real")
+
+    result = preflight.validate(
+        policy(),
+        value,
+        profile="base",
+        repo_paths=[repo],
+        os_name="nt",
+        which=lambda tool: tool if tool in {"git", "python"} else None,
+    )
+
+    assert result["status"] == "eligible"
+    assert result["profile"] == "base"
+
+
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
@@ -83,13 +112,39 @@ def test_preflight_requires_tools_and_runtime_root(tmp_path):
         preflight.validate(policy(), missing, profile="runtime", repo_paths=[], os_name="nt", which=lambda _: None)
 
 
-def test_portable_workflows_use_shared_pool_and_have_no_fixed_machine_identity():
-    for relative in PORTABLE:
+def test_portable_workflows_use_profile_pool_and_have_no_fixed_machine_identity():
+    for relative, profile in PORTABLE.items():
         raw = (ROOT / relative).read_text(encoding="utf-8")
-        assert "reqsys-dev-pool-v1" in raw
+        profile_runs_on = [
+            line
+            for line in raw.splitlines()
+            if line.strip().startswith("runs-on:") and PROFILE_LABELS[profile] in line
+        ]
+        assert profile_runs_on
+        for incompatible in set(PROFILE_LABELS.values()) - {PROFILE_LABELS[profile]}:
+            assert all(incompatible not in line for line in profile_runs_on)
         assert "./.github/actions/reqsys-dev-runner-preflight" in raw
-        assert "DESKTOP-PDQK954" not in raw
-        assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" not in raw
+        assert all("DESKTOP-PDQK954" not in line for line in profile_runs_on)
+        assert all("pc24x7" not in line and "noteri" not in line for line in profile_runs_on)
+
+
+def test_profile_labels_are_cumulative_without_cross_profile_pickup():
+    profiles = policy()["profiles"]
+    assert profiles["base"]["runner_labels"][-1:] == [PROFILE_LABELS["base"]]
+    assert profiles["runtime"]["runner_labels"][-2:] == [
+        PROFILE_LABELS["base"],
+        PROFILE_LABELS["runtime"],
+    ]
+    assert profiles["ollama"]["runner_labels"][-3:] == [
+        PROFILE_LABELS["base"],
+        PROFILE_LABELS["runtime"],
+        PROFILE_LABELS["ollama"],
+    ]
+    assert "reqsys-dev-pool-v1" not in {
+        label
+        for profile in profiles.values()
+        for label in profile["runner_labels"]
+    }
 
 
 def test_repository_governance_enforces_portable_pool_contract():
@@ -102,7 +157,8 @@ def test_onboarding_does_not_register_or_reconfigure_github_runner():
     assert "config.cmd" not in raw
     assert "remove.cmd" not in raw
     assert "REQSYS_DEV_RUNNER_MANIFEST" in raw
-    assert "reqsys-dev-pool-v1" not in raw  # labels come from the versioned policy
+    assert "$selected.runner_labels" in raw
+    assert "reqsys-dev-base-v1" not in raw  # labels come from the versioned policy
 
 
 def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
@@ -110,7 +166,7 @@ def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
     canary = recovery.split("  runner-pool-canary:", 1)[1].split("  runner-canary:", 1)[0]
     gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
     assert "REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN" in canary
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-pool-v1]" in canary
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in canary
     assert "uses: ./.github/actions/reqsys-dev-runner-preflight" in canary
     assert "authorization_comment_id" in canary
     assert "expected_sha" in canary

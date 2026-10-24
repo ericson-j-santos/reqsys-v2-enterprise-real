@@ -27,17 +27,22 @@
   ],
   "required_adr": "docs/adr/ADR-046-pc24x7-substituicao-flyio.md",
   "portable_dev_runner_contract": {
-    "label": "reqsys-dev-pool-v1",
+    "profile_labels": {
+      "base": "reqsys-dev-base-v1",
+      "runtime": "reqsys-dev-runtime-v1",
+      "ollama": "reqsys-dev-ollama-v1"
+    },
     "preflight_action": "./.github/actions/reqsys-dev-runner-preflight",
-    "workflows": [
-      ".github/workflows/codex-ollama-e2e-dev.yml",
-      ".github/workflows/codex-worker-pool-handoff.yml",
-      ".github/workflows/figma-github-e2e-dev.yml",
-      ".github/workflows/noteri-study-mode-dev-reconcile.yml",
-      ".github/workflows/ollama-ci-triage.yml",
-      ".github/workflows/pc24x7-teams-token-bootstrap.yml",
-      ".github/workflows/todo-global-hourly-cycle.yml"
-    ],
+    "workflow_profiles": {
+      ".github/workflows/codex-ollama-e2e-dev.yml": "ollama",
+      ".github/workflows/codex-worker-pool-handoff.yml": "base",
+      ".github/workflows/figma-github-e2e-dev.yml": "base",
+      ".github/workflows/noteri-desktop-watchdog-recovery.yml": "base",
+      ".github/workflows/noteri-study-mode-dev-reconcile.yml": "runtime",
+      ".github/workflows/ollama-ci-triage.yml": "ollama",
+      ".github/workflows/pc24x7-teams-token-bootstrap.yml": "runtime",
+      ".github/workflows/todo-global-hourly-cycle.yml": "runtime"
+    },
     "forbidden_hostnames": ["DESKTOP-PDQK954"],
     "forbid_fixed_runner_id": true
   },
