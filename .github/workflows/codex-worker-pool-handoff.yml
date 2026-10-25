@@ -57,7 +57,7 @@ concurrency:
 
 jobs:
   enqueue:
-    if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'legacy_pc24x7'
+    if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'legacy_pc24x7' && github.ref == 'refs/heads/main'
     name: Enfileirar fallback local no Worker Pool
     runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]
     timeout-minutes: 10
@@ -66,11 +66,14 @@ jobs:
       EVIDENCE_FILE: artifacts/pending-development-worker-pool/evidence.json
 
     steps:
-      - name: Checkout SHA imutável
+      # Load the verified, current dispatcher, not a frozen task base.
+      # The task's original base_sha remains an input to the Worker Pool API.
+      - name: Checkout trusted dispatcher SHA (task base kept separate)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ inputs.base_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Fail-closed runner capability preflight
         uses: ./.github/actions/reqsys-dev-runner-preflight
