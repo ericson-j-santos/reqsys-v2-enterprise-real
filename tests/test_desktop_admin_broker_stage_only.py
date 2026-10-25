@@ -46,8 +46,9 @@ def test_positive_release_stage_readback_and_idempotency(setup_stage):
     first = execute(source)
     receipt = root / "stage-receipts" / (SHA + ".json")
     before = receipt.read_bytes()
-    second = execute(source)
+    second = execute(source, correlation_id="stage-broker-3096-dev-replay")
     data = json.loads(receipt.read_text(encoding="utf-8"))
+    assert data["first_correlation_id"] == CORRELATION
     assert first["ok"] is True and first["new_release"] is True
     assert second["ok"] is True and second["new_release"] is False
     assert first["manifest_sha256"] == second["manifest_sha256"]
@@ -192,3 +193,14 @@ def test_persistent_stage_does_not_create_administrative_capability():
         assert forbidden not in raw
     assert "broker._validate_checkout(source_root, sha)" in raw
     assert "broker.atomic_json(receipt_path, expected)" in raw
+
+
+def test_tampered_correlation_in_receipt_blocks_replay(setup_stage):
+    source, root = setup_stage
+    execute(source)
+    receipt = root / "stage-receipts" / (SHA + ".json")
+    data = json.loads(receipt.read_text(encoding="utf-8"))
+    data["first_correlation_id"] = "../../unsafe"
+    receipt.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(stage.StageBlocked, match="stage_receipt_correlation_invalid"):
+        execute(source)

@@ -208,9 +208,16 @@ def stage(
                 stored = json.loads(receipt_path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, ValueError) as exc:
                 raise StageBlocked("stage_receipt_unreadable") from exc
+            # Keep the first correlation in the immutable receipt. A replay
+            # may have a different correlation and must not mutate the file.
+            original_id = stored.get("first_correlation_id") if isinstance(stored, dict) else None
+            if not isinstance(original_id, str) or not REQUEST_ID.fullmatch(original_id):
+                raise StageBlocked("stage_receipt_correlation_invalid")
+            expected["first_correlation_id"] = original_id
             if stored != expected:
                 raise StageBlocked("stage_receipt_conflict")
         else:
+            expected["first_correlation_id"] = correlation_id
             broker.atomic_json(receipt_path, expected)
         if json.loads(receipt_path.read_text(encoding="utf-8")) != expected:
             raise StageBlocked("stage_receipt_readback_failed")
