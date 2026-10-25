@@ -24,8 +24,10 @@ def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
     assert "wait_seconds=0" in content
     assert "pickup_timeout_seconds=60" in content
+    assert "pickup_grace_seconds=30" in content
     assert "poll_seconds=5" in content
     assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
+    assert "seq 1 $((pickup_grace_seconds / poll_seconds))" in content
     assert "runner_pickup_wait_seconds" in content
 
 
@@ -234,12 +236,14 @@ def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> No
     assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
 
 
-def test_gateway_self_hosted_pickup_usa_watchdog_canonico_60s() -> None:
+def test_gateway_self_hosted_pickup_usa_watchdog_canonico_60s_com_grace_limitada() -> None:
     content = _workflow()
 
     assert "pickup_timeout_seconds=60" in content
+    assert "pickup_grace_seconds=30" in content
     assert "poll_seconds=5" in content
     assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
+    assert "seq 1 $((pickup_grace_seconds / poll_seconds))" in content
     assert 'sleep "$poll_seconds"' in content
     assert "wait_seconds=$((wait_seconds + poll_seconds))" in content
     assert "seq 1 36" not in content
@@ -284,6 +288,10 @@ def test_gateway_cancela_run_self_hosted_sem_pickup_e_registra_cleanup() -> None
     assert "IFS=$'\\t' read -r status conclusion" in content
     assert "[ \"$status\" = 'completed' ]" in content
     assert "[ \"$conclusion\" = 'cancelled' ]" in content
+    assert "pre_cancel_grace_seconds=30" in content
+    assert "pickup_observed_before_cancel" in content
+    assert "already_terminal_without_pickup" in content
+    assert "steps.cleanup.outputs.status != 'pickup_observed_before_cancel'" in content
 
 
 
@@ -638,3 +646,19 @@ def test_gateway_powerbi_dre_sentinel_is_exact_main_dev_only() -> None:
     assert "-f workspace=" not in content
     assert "-f environment=prod" not in content
     assert "-f environment=stg" not in content
+
+
+def test_gateway_never_cancels_late_observed_self_hosted_pickup() -> None:
+    content = _workflow()
+    cleanup = content.split("- name: Cancel self-hosted run without pickup", 1)[1].split(
+        "- name: Write sanitized dispatch evidence", 1
+    )[0]
+    assert "pre_cancel_grace_seconds=30" in cleanup
+    assert ".started_at != null" in cleanup
+    assert 'index("self-hosted") != null' in cleanup
+    assert '(.runner_name // "") != ""' in cleanup
+    assert "[ \"$status\" = 'in_progress' ]" in cleanup
+    assert "cleanup_status='pickup_observed_before_cancel'" in cleanup
+    assert cleanup.index("pickup_observed_before_cancel") < cleanup.index('gh run cancel "$TARGET_RUN_ID"')
+    fail = content.split("- name: Fail closed when self-hosted runner pickup times out or is busy", 1)[1]
+    assert "steps.cleanup.outputs.status != 'pickup_observed_before_cancel'" in fail
