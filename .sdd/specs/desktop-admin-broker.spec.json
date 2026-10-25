@@ -30,16 +30,19 @@
     "tests": [
       "tests/test_desktop_admin_broker.py",
       "tests/test_desktop_admin_broker_uac_launcher.py",
-      "tests/test_activate_desktop_free_control_plane.py"
+      "tests/test_activate_desktop_free_control_plane.py",
+      "tests/test_desktop_admin_broker_stage_only.py"
     ],
-    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap, and persist a sanitized activation result so elevated UAC failures are propagated without waiting only for a timeout."
+    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap, and persist a sanitized activation result so elevated UAC failures are propagated without waiting only for a timeout. Stage-only DEV #3096: materialize an immutable content-verified release at releases/<source_sha>, with exclusive lock, sanitized manifest receipt, independent readback and replay; never overwrite divergent preexisting release or active metadata/launcher, create Task Scheduler registration or invoke UAC. A positive stage receipt is not privileged activation or operational recovery, and interpreter persistence remains unverified until separate activation."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-admin-broker.requirements.md",
     "implementation": "scripts/desktop_admin_broker.py",
     "uac_launcher": "scripts/desktop_admin_broker_uac_launcher.py",
     "tests": "tests/test_desktop_admin_broker.py",
-    "runner_bootstrap": "scripts/activate_desktop_free_control_plane.py"
+    "runner_bootstrap": "scripts/activate_desktop_free_control_plane.py",
+    "stage_only": "scripts/desktop_admin_broker_stage_only.py",
+    "stage_tests": "tests/test_desktop_admin_broker_stage_only.py"
   },
   "acceptance": {
     "code": [
@@ -48,7 +51,9 @@
       "anti_replay_green",
       "uac_activation_evidence_green",
       "pre_pr_ready_current_sha",
-      "ci_green_current_sha"
+      "ci_green_current_sha",
+      "stage_only_manifest_and_idempotency",
+      "stage_only_no_uac_or_active_metadata_writes"
     ],
     "runtime": [
       "broker_task_atstartup_s4u_highest",
@@ -58,6 +63,6 @@
       "rdc_recovery_proven",
       "fresh_self_hosted_workflow_pickup"
     ],
-    "runtime_status_until_evidence": "activation_pending"
+    "runtime_status_until_evidence": "stage_only_is_not_activation"
   }
 }

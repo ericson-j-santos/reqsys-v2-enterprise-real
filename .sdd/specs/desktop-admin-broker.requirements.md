@@ -79,3 +79,28 @@ Após integração e autorização explícita de instalação administrativa:
 5. `recover-rdc` produz leitura independente do RDC;
 6. repetição do mesmo comentário não produz segundo efeito;
 7. nenhum reboot, segredo ou produção é tocado.
+
+## Restágio DEV imutável sem UAC — issue #3096
+
+O stage-only é uma preparação reversível do pacote, não instalação elevada.
+Ele valida um checkout limpo de `ericson-j-santos/reqsys-v2-enterprise-real`
+com SHA completo, no host exato `DESKTOP-PDQK954` e somente em DEV.
+
+- Criar `releases/<SHA>` a partir de um conjunto fechado de arquivos, com
+  verificação de SHA-256 e publicação após validar a cópia temporária.
+- Recusar arquivo ausente, symlink/junction, divergência de bytes na mesma
+  release, diretório parcial, lock concorrente e recibo alterado.
+- Preservar integralmente `metadata.json`, `run.py`, o launcher de ativação
+  existente e tarefas agendadas, inclusive se o runtime anterior for inválido.
+- Registrar recibo sanitizado separado em `stage-receipts/<SHA>.json`, com
+  hashes, estado `BROKER_RELEASE_STAGED_NOT_ACTIVATED`, ativação pendente,
+  `python_persistence_verified=false` e controles de não mutação administrativa.
+- Replay da mesma release deve reler manifesto e recibo, sem sobrescrevê-los.
+  Se persistência de Python, ativação privilegiada ou readback operacional não
+  estiverem comprovados, nunca emitir prontidão de operação.
+- Testar positivo, negativo, concorrência, replay, interrupção antes do recibo,
+  integridade da release, preservação de metadata inválida e bloqueio de UAC.
+- Após integração e somente por Session Launcher/Gateway em worktree isolado,
+  executar stage físico em Desktop, obter readback no mesmo SHA e preservar
+  `stage_only` como condição não terminal. Administração/UAC é outro gate com
+  autorização explícita por host e ambiente; não é consequência do stage.
