@@ -6,11 +6,16 @@ on:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
       - 'scripts/reconcile_pc24x7_teams_dev_runtime.py'
       - 'scripts/recreate_cofre_dev_pc24x7.py'
+      - 'scripts/cofre_human_token.py'
       - 'config/pc24x7-teams-bot-runtime.override.yml'
       - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_bootstrap_pc24x7_teams_service_token.py'
       - 'tests/test_reconcile_pc24x7_teams_dev_runtime.py'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
+      - 'tests/test_cofre_human_token_device_login.py'
+      - 'tests/test_cofre_human_token_renewal_workflow.py'
+      - '.sdd/specs/cofre-bootstrap-local-admin-jwt.requirements.md'
+      - '.sdd/specs/cofre-bootstrap-local-admin-jwt.spec.json'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
   push:
     branches: [main]
@@ -26,6 +31,15 @@ on:
     - cron: '17 11 * * 1-5'
   workflow_dispatch:
     inputs:
+      operation:
+        description: Operação governada no PC24x7 DEV
+        required: true
+        default: bootstrap
+        type: choice
+        options:
+          - bootstrap
+          - credential-status
+          - credential-renew
       mode:
         description: Token S2S a validar/provisionar
         required: true
@@ -56,12 +70,78 @@ jobs:
           python-version: '3.12'
       - name: Validar sintaxe e testes
         run: |
-          python -m py_compile scripts/bootstrap_pc24x7_teams_service_token.py scripts/reconcile_pc24x7_teams_dev_runtime.py
+          python -m py_compile scripts/bootstrap_pc24x7_teams_service_token.py scripts/reconcile_pc24x7_teams_dev_runtime.py scripts/cofre_human_token.py
           python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q tests/test_bootstrap_pc24x7_teams_service_token.py tests/test_reconcile_pc24x7_teams_dev_runtime.py tests/test_pc24x7_teams_token_bootstrap_workflow.py
+          pytest -q tests/test_bootstrap_pc24x7_teams_service_token.py tests/test_reconcile_pc24x7_teams_dev_runtime.py tests/test_pc24x7_teams_token_bootstrap_workflow.py tests/test_cofre_human_token_device_login.py tests/test_cofre_human_token_renewal_workflow.py
+
+  human-admin-jwt-dev:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation != 'bootstrap'
+    needs: contract
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
+    environment: development
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node 24)
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fail-closed runner capability preflight
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: runtime
+          repository-path: .
+
+      - name: Estado inicial sanitizado
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/cofre-human-admin-jwt-renewal | Out-Null
+          python scripts/cofre_human_token.py local-status `
+            --environment dev `
+            --output artifacts/cofre-human-admin-jwt-renewal/before.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        if: inputs.operation == 'credential-renew'
+        id: locator_human_credential
+        shell: powershell
+        run: |
+          node scripts/resolve_pc24x7_dev_locator.mjs `
+            --output artifacts/cofre-human-admin-jwt-renewal/signed-locator.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Renovar pelo celular com Device Code e MFA humano
+        if: inputs.operation == 'credential-renew'
+        shell: powershell
+        run: |
+          python scripts/cofre_human_token.py device-login `
+            --environment dev `
+            --base-url "${{ steps.locator_human_credential.outputs.base_url }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Confirmar credencial renovada sem expor valor
+        if: inputs.operation == 'credential-renew'
+        shell: powershell
+        run: |
+          python scripts/cofre_human_token.py local-status `
+            --environment dev `
+            --require-valid `
+            --output artifacts/cofre-human-admin-jwt-renewal/after.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar somente evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
+        with:
+          name: cofre-human-admin-jwt-renewal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/cofre-human-admin-jwt-renewal/
+          if-no-files-found: warn
+          retention-days: 30
 
   reconcile-runtime-dev:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.operation == 'bootstrap')
     needs: contract
     runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
@@ -121,7 +201,7 @@ jobs:
           retention-days: 30
 
   bootstrap-token-dev:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.operation == 'bootstrap')
     needs: [contract, reconcile-runtime-dev]
     runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-runtime-v1]
     environment: development
@@ -233,7 +313,7 @@ jobs:
 
 
   bootstrap-dev:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.operation == 'bootstrap')
     needs: [contract, reconcile-runtime-dev, bootstrap-token-dev]
     runs-on: ubuntu-latest
     timeout-minutes: 3

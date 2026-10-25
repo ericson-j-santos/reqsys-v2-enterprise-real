@@ -28,15 +28,25 @@ O pool `reqsys-dev-pc-pool-v1` permite que qualquer PC Windows x64 preparado ass
 
 O manifesto é local e não contém segredo. `runner_instance_id` deve ser um identificador opaco e estável; hostname e id numérico do GitHub são proibidos. Cada job executa novamente o preflight e falha fechado se ferramenta, checkout, runtime root, perfil, labels, escopo DEV ou salvaguarda divergir.
 
+### Segundo PC já registrado
+
+Quando um PC Windows x64 já registrado responde pela capacidade bootstrap `pc24x7`, o owner pode usar os comandos exatos `/reqsys run pc24x7-runner-pool-onboard` e, somente depois do retorno online e da evidência positiva, `/reqsys run pc24x7-runner-pool-label-reconcile`. O primeiro comando cria ou atualiza apenas o manifesto DEV e o `.env` do runner, valida o perfil `base`, publica evidência sanitizada e agenda uma única reinicialização atrasada do listener. O segundo roda hospedado, consome a evidência exata e aplica a label compartilhada sem transportar credencial administrativa ao PC.
+
+Esse bootstrap seleciona a capacidade `pc24x7`; não compara hostname, não recebe `runner_id`, não executa canário e não habilita HML, STG ou PROD. Se a máquina não voltar online ou o readback falhar, a reconciliação deve parar sem retry automático.
+
+A etapa privilegiada não executa o instalador diretamente no token do serviço do runner. Ela exige a tarefa local preexistente `\Automation\ReqSysDesktopAdminBroker` com trigger `AtStartup`, logon `S4U`, nível `highest` e estado habilitado. O job apenas prepara uma release vinculada ao SHA e reinicia essa tarefa; nenhum usuário, senha, PAT ou segredo administrativo é fornecido. O broker elevado busca novamente o comentário owner exato na issue operacional, revalida idade, SHA, origem e limpeza do checkout, raiz e marcador do serviço do runner, aplica somente o perfil `base`/DEV e agenda uma única reinicialização atrasada. Qualquer divergência bloqueia o fluxo sem retry.
+
 ## Retirada e validação
 
 Remova primeiro a label mais especializada (`ollama`, depois `runtime`, depois `base`) no GitHub para drenar o PC. Não apague o manifesto nem altere serviços enquanto houver job ativo. Para revalidar sem reescrever o manifesto, execute `onboard_reqsys_dev_runner.ps1` com `-ValidateOnly` e o mesmo conjunto de parâmetros.
 
 ## Monitoramento
 
-O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele compara o inventário de runners com as labels do `monitor_profile` (`base`), exige pelo menos dois runners elegíveis online e publica somente evidência sanitizada. Como as labels são cumulativas, runners `runtime` e `ollama` também contam para a disponibilidade de `base`. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do pool a cada 30 minutos e também pode ser disparado manualmente. Ele envia simultaneamente dois leases efêmeros pelas labels portáteis do perfil `base`; cada PC executa o preflight e mantém o lease observável por 75 segundos. Um observador GitHub-hosted lê apenas os jobs da própria execução com `github.token` e `actions: read`, exige duas conclusões positivas em runners distintos e publica somente evidência sanitizada. Um único PC que execute os slots em sequência não satisfaz o requisito de capacidade dois.
 
-O pool não autoriza dispatch, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
+Esse desenho não consulta o endpoint administrativo de inventário, não usa PAT pessoal, não solicita `administration: read` e não depende de credencial armazenada em qualquer PC. Como as labels são cumulativas, runners `runtime` e `ollama` também podem atender o perfil `base`. Cada slot tem concurrency própria com cancelamento da medição anterior, limitando leases que permaneçam na fila quando não houver capacidade. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
+
+Fora desses dois leases internos, o pool não autoriza dispatch arbitrário, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 
 ## Fases de adoção
 

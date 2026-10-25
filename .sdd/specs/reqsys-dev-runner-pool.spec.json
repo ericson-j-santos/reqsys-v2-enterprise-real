@@ -14,23 +14,30 @@
     "scripts/validate_reqsys_dev_runner.py",
     "scripts/onboard_reqsys_dev_runner.ps1",
     "scripts/install_reqsys_dev_runner.ps1",
+    "scripts/reconcile_reqsys_dev_runner_labels.py",
     ".github/actions/reqsys-dev-runner-preflight/action.yml",
     ".github/workflows/reqsys-dev-runner-pool-canary.yml",
     ".github/workflows/noteri-desktop-watchdog-recovery.yml",
-    ".github/workflows/ci.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    ".github/workflows/self-hosted-runner-governance-guard.yml",
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
-    "docs/runbooks/reqsys-dev-runner-pool.md"
+    "docs/runbooks/reqsys-dev-runner-pool.md",
+    "scripts/desktop_admin_broker.py",
+    "tests/test_desktop_admin_broker.py",
+    ".github/workflows/ci.yml"
   ],
   "safety": {
     "dispatch_performed": false,
     "deploy_performed": false,
     "environment_mutated": false,
-    "allowed_environments": ["dev"]
+    "allowed_environments": [
+      "dev"
+    ]
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-runner-pool.requirements.md",
     "implementation": "scripts/validate_reqsys_dev_runner.py",
-    "tests": "tests/test_reqsys_dev_runner_pool.py"
+    "tests": "tests/test_reconcile_reqsys_dev_runner_labels.py"
   },
   "acceptance_criteria": [
     "Portable DEV workflows use shared capability labels and a fail-closed preflight",
@@ -40,12 +47,20 @@
     "Onboarding validation does not register or reconfigure the GitHub runner service",
     "Explicit label reconciliation uses a dedicated confirmation parameter without colliding with PowerShell common parameters",
     "Physical onboarding receives no administrative secret and defers remote label reconciliation until after sanitized local-profile evidence",
+    "Hosted label reconciliation is owner-bound, evidence-bound, resolves one runner by labels, validates readback and never uses a fixed runner_id",
+    "The hosted reconciliation workflow is present in both the owner route and the fixed dispatch allowlist",
+    "A second registered PC can be onboarded through an approved bootstrap capability without hostname or runner_id affinity",
+    "Second-PC onboarding uploads sanitized evidence before one delayed listener restart and defers shared labels until online readback",
+    "Hosted pool monitoring and label reconciliation use short-lived governed GitHub App tokens instead of a personal PAT or machine-bound credential",
+    "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart",
     "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_reqsys_dev_runner_pool.py",
-      "tests/test_self_hosted_runner_governance.py"
+      "tests/test_reconcile_reqsys_dev_runner_labels.py",
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_desktop_admin_broker.py"
     ]
   }
 }

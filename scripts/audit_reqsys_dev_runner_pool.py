@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build sanitized, report-only evidence for the ReqSys DEV runner pool."""
+"""Build sanitized evidence from portable ReqSys DEV runner lease probes."""
 
 from __future__ import annotations
 
@@ -30,7 +30,10 @@ def _labels(runner: dict[str, Any]) -> list[str]:
     return sorted(set(result), key=str.casefold)
 
 
-def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
+PROBE_NAME_PREFIX = "ReqSys DEV runner lease probe"
+
+
+def audit(policy: dict[str, Any], jobs_payload: dict[str, Any]) -> dict[str, Any]:
     profile_name = policy.get("monitor_profile")
     profiles = policy.get("profiles")
     if not isinstance(profile_name, str) or not isinstance(profiles, dict):
@@ -44,39 +47,87 @@ def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
     minimum = policy.get("minimum_online_runners")
     if not isinstance(minimum, int) or minimum < 2:
         raise PoolAuditError("minimum_online_runners_invalid")
-    runners = inventory.get("runners")
-    if not isinstance(runners, list):
-        raise PoolAuditError("runner_inventory_invalid")
+    jobs = jobs_payload.get("jobs")
+    if not isinstance(jobs, list):
+        raise PoolAuditError("workflow_jobs_invalid")
 
     required_by_key = {item.casefold(): item for item in required}
-    candidates: list[dict[str, Any]] = []
+    candidates_by_name: dict[str, dict[str, Any]] = {}
     findings: list[dict[str, Any]] = []
+    probe_jobs: list[dict[str, Any]] = []
 
-    for raw in runners:
+    for raw in jobs:
         if not isinstance(raw, dict):
             continue
+        name = str(raw.get("name") or "")
+        if not name.startswith(f"{PROBE_NAME_PREFIX} ("):
+            continue
+        probe_jobs.append(raw)
+
+    if len(probe_jobs) < minimum:
+        findings.append(
+            {
+                "type": "probe_jobs_missing",
+                "observed": len(probe_jobs),
+                "required": minimum,
+            }
+        )
+
+    assigned_probe_jobs = 0
+    successful_probe_jobs = 0
+    for raw in probe_jobs:
+        job_name = str(raw.get("name") or "unknown")
+        runner_name = str(raw.get("runner_name") or "").strip()
         labels = _labels(raw)
         label_keys = {item.casefold() for item in labels}
-        if "reqsys-dev" not in label_keys and policy["pool"].casefold() not in label_keys:
-            continue
         missing = [label for key, label in required_by_key.items() if key not in label_keys]
         status = str(raw.get("status") or "unknown").casefold()
+        conclusion = str(raw.get("conclusion") or "").casefold()
+        if runner_name:
+            assigned_probe_jobs += 1
+        else:
+            findings.append({"type": "probe_unassigned", "job": job_name, "status": status})
+        if status != "completed":
+            findings.append({"type": "probe_incomplete", "job": job_name, "status": status})
+        elif conclusion != "success":
+            findings.append({"type": "probe_failed", "job": job_name, "conclusion": conclusion or "unknown"})
         runner = {
-            "id": raw.get("id"),
-            "name": str(raw.get("name") or "unknown"),
+            "name": runner_name or "unassigned",
+            "jobs": [job_name],
             "status": status,
-            "busy": raw.get("busy") is True,
+            "conclusion": conclusion or None,
             "labels": labels,
             "missing_labels": missing,
-            "eligible": status == "online" and not missing,
+            "eligible": bool(runner_name) and status == "completed" and conclusion == "success" and not missing,
         }
-        candidates.append(runner)
-        if status != "online":
-            findings.append({"type": "runner_offline", "runner": runner["name"], "status": status})
         if missing:
-            findings.append({"type": "runner_labels_mismatch", "runner": runner["name"], "missing_labels": missing})
+            findings.append(
+                {
+                    "type": "runner_labels_mismatch",
+                    "runner": runner["name"],
+                    "job": job_name,
+                    "missing_labels": missing,
+                }
+            )
+        if runner["eligible"]:
+            successful_probe_jobs += 1
+            key = runner_name.casefold()
+            existing = candidates_by_name.get(key)
+            if existing is None:
+                candidates_by_name[key] = runner
+            else:
+                existing["jobs"].append(job_name)
 
-    online_eligible = sum(1 for runner in candidates if runner["eligible"])
+    candidates = sorted(candidates_by_name.values(), key=lambda item: item["name"].casefold())
+    online_eligible = len(candidates)
+    if successful_probe_jobs >= minimum and online_eligible < minimum:
+        findings.append(
+            {
+                "type": "probe_runner_reused",
+                "successful_probe_jobs": successful_probe_jobs,
+                "distinct_runners": online_eligible,
+            }
+        )
     if online_eligible < minimum:
         findings.append(
             {
@@ -95,6 +146,9 @@ def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
         "status": "passed" if not findings else "degraded",
         "minimum_online_runners": minimum,
         "online_eligible_runners": online_eligible,
+        "probe_jobs_observed": len(probe_jobs),
+        "probe_jobs_assigned": assigned_probe_jobs,
+        "probe_jobs_successful": successful_probe_jobs,
         "candidate_runners": candidates,
         "findings": findings,
         "mode": "report_only",
@@ -107,11 +161,11 @@ def audit(policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", type=Path, default=Path("config/reqsys-dev-runner-pool.json"))
-    parser.add_argument("--inventory", type=Path, required=True)
+    parser.add_argument("--jobs", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = audit(load_object(args.policy), load_object(args.inventory))
+        result = audit(load_object(args.policy), load_object(args.jobs))
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps({"status": result["status"], "online_eligible_runners": result["online_eligible_runners"]}))

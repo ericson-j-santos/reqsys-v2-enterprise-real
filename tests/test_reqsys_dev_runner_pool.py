@@ -202,6 +202,103 @@ def test_installer_configures_runner_env_and_requires_explicit_label_confirmatio
     assert "[string]$LabelConfirmation" in raw
 
 
+def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
+    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
+    canary = recovery.split("  runner-pool-canary:", 1)[1].split("  runner-canary:", 1)[0]
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN" in canary
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in canary
+    assert "uses: ./.github/actions/reqsys-dev-runner-preflight" in canary
+    assert "authorization_comment_id" in canary
+    assert "expected_sha" in canary
+    assert "runtime_mutated = $false" in canary
+    assert "deploy_performed = $false" in canary
+    assert "production_touched = $false" in canary
+    assert "DESKTOP-PDQK954" not in canary
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in gateway
+    assert "mode='runner-pool-canary'" in gateway
+    assert "-f expected_sha=\"$EXPECTED_SHA\"" in gateway
+    assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway
+
+
+def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_restart_or_canary():
+    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
+    onboard = recovery.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in onboard
+    assert "reqsys-dev-base-v1" not in onboard.split("Install and validate exact base profile", 1)[0]
+    assert "/reqsys run noteri-runner-pool-onboard" in onboard
+    assert "authorization_comment_id" in onboard
+    assert "expected_sha" in onboard
+    assert "install_reqsys_dev_runner.ps1" in onboard
+    assert "-Profile base" in onboard
+    assert "-ApplyGitHubLabels" not in onboard
+    assert "-LabelConfirmation" not in onboard
+    assert "secrets." not in onboard
+    assert "labels_applied = $false" in onboard
+    assert "label_reconciliation_required = $true" in onboard
+    assert "-RestartRunnerService" not in onboard
+    assert "canary_dispatched = $false" in onboard
+    assert "automatic_retry_enabled = $false" in onboard
+    assert "deploy_performed = $false" in onboard
+    assert "production_touched = $false" in onboard
+    assert "mode='runner-pool-onboard-noteri'" in gateway
+
+
+def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
+    guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
+    reconcile = guard.split("  runner-pool-label-reconcile:", 1)[1]
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "runs-on: ubuntu-latest" in reconcile
+    assert "/reqsys run noteri-runner-pool-label-reconcile" in reconcile
+    assert "onboarding_run_id" in reconcile
+    assert "artifact_prefix}-${ONBOARDING_RUN_ID}" in reconcile
+    assert "ONBOARDING_CONTRACT_CHANGED" in reconcile
+    assert "scripts/reconcile_reqsys_dev_runner_labels.py plan" in reconcile
+    assert "scripts/reconcile_reqsys_dev_runner_labels.py verify" in reconcile
+    assert "steps.runner-administration-token.outputs.token" in reconcile
+    assert "permission-actions: read" in reconcile
+    assert "permission-administration: write" in reconcile
+    assert "secrets.GH_PAT_ACTIONS" not in reconcile
+    assert "actions/runners/${runner_id}/labels" in reconcile
+    assert "-RestartRunnerService" not in reconcile
+    assert "runner-pool-canary" not in reconcile
+    assert "environment=prod" not in reconcile
+    assert "mode='runner-pool-label-reconcile-noteri'" in gateway
+    assert "target='self-hosted-runner-governance-guard.yml'" in gateway
+    assert '-f onboarding_run_id="$onboarding_run_id"' in gateway
+
+
+def test_pc24x7_onboarding_is_capability_selected_owner_bound_and_dev_only():
+    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
+    onboard = recovery.split("  runner-pool-onboard-pc24x7:", 1)[1].split("  runner-pool-canary:", 1)[0]
+    guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
+    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in onboard
+    assert "DESKTOP-PDQK954" not in onboard
+    assert "RUNNER_NAME -ne" not in onboard
+    assert "/reqsys run pc24x7-runner-pool-onboard" in onboard
+    assert "runner_instance_id = $env:RUNNER_INSTANCE_ID" in onboard
+    assert "bootstrap_selector = 'pc24x7'" in onboard
+    assert "stage-runner-onboard" in onboard
+    assert "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD" in onboard
+    assert "--owner-comment-id" in onboard
+    assert "admin_secret_supplied = $false" in onboard
+    assert "install_reqsys_dev_runner.ps1" not in onboard
+    assert "Start-Process" not in onboard
+    assert "-ApplyGitHubLabels" not in onboard
+    assert "labels_applied = $false" in onboard
+    assert "service_restart_scheduled = $true" in onboard
+    assert "canary_dispatched = $false" in onboard
+    assert "automatic_retry_enabled = $false" in onboard
+    assert "deploy_performed = $false" in onboard
+    assert "production_touched = $false" in onboard
+    assert "runner-pool-label-reconcile-pc24x7" in guard
+    assert "--selector-label" in guard
+    assert "mode='runner-pool-onboard-pc24x7'" in gateway
+    assert "mode='runner-pool-label-reconcile-pc24x7'" in gateway
+
+
 def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     windows_job = workflow.split("  deploy-check-wrapper-powershell-51:", 1)[1].split("  pipeline-governance:", 1)[0]
@@ -244,46 +341,3 @@ def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tm
     assert "ADMINISTRATOR_REQUIRED" in diagnostic or "RUNNER_ROOT_INVALID" in diagnostic
     assert "ParameterNameAlreadyExistsForCommand" not in diagnostic
     assert not missing.exists()
-
-
-def test_pool_canary_is_owner_and_sha_bound_without_runtime_mutation():
-    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
-    canary = recovery.split("  runner-pool-canary:", 1)[1].split("  runner-canary:", 1)[0]
-    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
-    assert "REQSYS_DEV_RUNNER_POOL_PICKUP_PROVEN" in canary
-    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in canary
-    assert "uses: ./.github/actions/reqsys-dev-runner-preflight" in canary
-    assert "authorization_comment_id" in canary
-    assert "expected_sha" in canary
-    assert "runtime_mutated = $false" in canary
-    assert "deploy_performed = $false" in canary
-    assert "production_touched = $false" in canary
-    assert "DESKTOP-PDQK954" not in canary
-    assert "target='noteri-desktop-watchdog-recovery.yml'" in gateway
-    assert "mode='runner-pool-canary'" in gateway
-    assert "-f expected_sha=\"$EXPECTED_SHA\"" in gateway
-    assert "-f authorization_comment_id=\"$AUTHORIZED_COMMENT_ID\"" in gateway
-
-
-def test_noteri_onboarding_is_owner_bound_and_defers_remote_labels_without_restart_or_canary():
-    recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
-    onboard = recovery.split("  runner-pool-onboard-noteri:", 1)[1].split("  runner-pool-canary:", 1)[0]
-    gateway = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in onboard
-    assert "reqsys-dev-base-v1" not in onboard.split("Install and validate exact base profile", 1)[0]
-    assert "/reqsys run noteri-runner-pool-onboard" in onboard
-    assert "authorization_comment_id" in onboard
-    assert "expected_sha" in onboard
-    assert "install_reqsys_dev_runner.ps1" in onboard
-    assert "-Profile base" in onboard
-    assert "-ApplyGitHubLabels" not in onboard
-    assert "-LabelConfirmation" not in onboard
-    assert "secrets." not in onboard
-    assert "labels_applied = $false" in onboard
-    assert "label_reconciliation_required = $true" in onboard
-    assert "-RestartRunnerService" not in onboard
-    assert "canary_dispatched = $false" in onboard
-    assert "automatic_retry_enabled = $false" in onboard
-    assert "deploy_performed = $false" in onboard
-    assert "production_touched = $false" in onboard
-    assert "mode='runner-pool-onboard-noteri'" in gateway

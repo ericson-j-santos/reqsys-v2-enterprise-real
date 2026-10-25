@@ -11,9 +11,12 @@ Canal outbound-only:
 from __future__ import annotations
 
 import argparse
+import ctypes
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -21,7 +24,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +49,14 @@ WATCHDOG_SCRIPT = "desktop_control_plane_watchdog.py"
 WATCHDOG_UAC_SCRIPT = "desktop_control_plane_watchdog_uac_launcher.py"
 RDC_RECOVERY_SCRIPT = "pc24x7_rdc_recovery.py"
 RUNNER_BOOTSTRAP_SCRIPT = "activate_desktop_free_control_plane.py"
+RUNNER_INSTALL_SCRIPT = "install_reqsys_dev_runner.ps1"
+RUNNER_ONBOARD_SCRIPT = "onboard_reqsys_dev_runner.ps1"
+RUNNER_PREFLIGHT_SCRIPT = "validate_reqsys_dev_runner.py"
+RUNNER_POOL_POLICY = "reqsys-dev-runner-pool.json"
+RUNNER_ONBOARD_COMMAND = "/reqsys run pc24x7-runner-pool-onboard"
+RUNNER_ONBOARD_ACTION = "onboard-runner-base"
+RUNNER_ONBOARD_STAGE_CONFIRM = "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD"
+RUNNER_SERVICE = re.compile(r"actions\.runner\.[A-Za-z0-9_.-]+\Z")
 
 ALLOWED_COMMANDS = {
     "/reqsys admin desktop status": "status",
@@ -53,6 +64,7 @@ ALLOWED_COMMANDS = {
     "/reqsys admin desktop recover-rdc": "recover-rdc",
     "/reqsys admin desktop recover-runner": "recover-runner",
     "/reqsys admin desktop activate-watchdog": "activate-watchdog",
+    RUNNER_ONBOARD_COMMAND: RUNNER_ONBOARD_ACTION,
 }
 
 
@@ -163,6 +175,126 @@ def fetch_comments(since: datetime, timeout_seconds: float = 20.0) -> list[dict[
     if not isinstance(payload, list):
         raise BrokerError("resposta GitHub inválida")
     return [item for item in payload if isinstance(item, dict)]
+
+
+def _is_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
+def _validate_checkout(source_root: Path, source_sha: str) -> Path:
+    root = source_root.resolve()
+    sha = validate_sha(source_sha)
+    if not root.is_dir():
+        raise BrokerError("source_root_invalid")
+
+    def git(*args: str) -> str:
+        completed = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise BrokerError("source_checkout_invalid")
+        return completed.stdout.strip()
+
+    if git("rev-parse", "HEAD").casefold() != sha:
+        raise BrokerError("source_sha_mismatch")
+    if git("status", "--porcelain"):
+        raise BrokerError("source_checkout_dirty")
+    remote = git("remote", "get-url", "origin").replace("\\", "/").removesuffix(".git")
+    accepted = {
+        f"https://github.com/{REPOSITORY}".casefold(),
+        f"ssh://git@github.com/{REPOSITORY}".casefold(),
+        f"git@github.com:{REPOSITORY}".casefold(),
+    }
+    if remote.casefold() not in accepted:
+        raise BrokerError("source_repository_mismatch")
+    return root
+
+
+def _validate_runner_root(runner_root: Path) -> Path:
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise BrokerError("LOCALAPPDATA não definido")
+    root = runner_root.resolve()
+    allowed = (Path(local_app_data) / "ReqSys").resolve()
+    try:
+        root.relative_to(allowed)
+    except ValueError:
+        raise BrokerError("runner_root_outside_reqsys_runtime") from None
+    if not (root / ".runner").is_file():
+        raise BrokerError("runner_metadata_missing")
+    return root
+
+
+def _runner_service_name(runner_root: Path) -> str:
+    marker = runner_root / ".service"
+    if not marker.is_file():
+        raise BrokerError("runner_service_marker_missing")
+    service_name = marker.read_text(encoding="utf-8").strip()
+    if RUNNER_SERVICE.fullmatch(service_name) is None:
+        raise BrokerError("runner_service_name_invalid")
+    return service_name
+
+
+def _schedule_runner_restart(service_name: str, delay_seconds: int = 20) -> None:
+    if not _is_admin():
+        raise BrokerError("elevated_broker_required")
+    if RUNNER_SERVICE.fullmatch(service_name) is None:
+        raise BrokerError("runner_service_name_invalid")
+    powershell = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    command = (
+        f"Start-Sleep -Seconds {max(5, min(int(delay_seconds), 60))}; "
+        f"Restart-Service -Name '{service_name}' -Force"
+    )
+    environment = os.environ.copy()
+    environment["RUNNER_TRACKING_ID"] = ""
+    creation_flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+    )
+    subprocess.Popen(
+        [
+            str(powershell),
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            command,
+        ],
+        env=environment,
+        cwd=Path(os.environ.get("SystemRoot") or r"C:\Windows"),
+        close_fds=True,
+        creationflags=creation_flags,
+    )
+
+
+def fetch_comment_by_id(comment_id: int, timeout_seconds: float = 20.0) -> dict[str, Any]:
+    if comment_id < 1:
+        raise BrokerError("owner_comment_id_invalid")
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{REPOSITORY}/issues/comments/{comment_id}",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ReqSys-Desktop-Admin-Broker/1.0",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise BrokerError("owner_comment_response_invalid")
+    expected_issue = f"https://api.github.com/repos/{REPOSITORY}/issues/{ISSUE_NUMBER}"
+    if str(payload.get("issue_url") or "").casefold() != expected_issue.casefold():
+        raise BrokerError("owner_comment_issue_mismatch")
+    return payload
 
 
 def _load_module(path: Path, name: str):
@@ -295,6 +427,116 @@ def _recover_runner(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _onboard_runner_base(metadata: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin():
+        raise BrokerError("elevated_broker_required")
+    request = metadata.get("runner_onboard_request")
+    if not isinstance(request, dict):
+        raise BrokerError("runner_onboard_request_missing")
+
+    owner_comment_id = int(request.get("owner_comment_id") or 0)
+    source_sha = validate_sha(str(request.get("source_sha") or ""))
+    comment = fetch_comment_by_id(owner_comment_id)
+    action = authorize_comment(
+        comment,
+        not_before=parse_github_time(str(metadata["not_before"])),
+        reference_time=now_utc(),
+    )
+    if action != RUNNER_ONBOARD_ACTION:
+        raise BrokerError("owner_comment_not_authorized")
+
+    source_root = _validate_checkout(Path(str(request.get("source_root") or "")), source_sha)
+    runner_root = _validate_runner_root(Path(str(request.get("runner_root") or "")))
+    runtime_root = Path(os.environ.get("SystemDrive") or "C:") / "ReqSysDev" / "Runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    program_data = Path(os.environ.get("ProgramData") or r"C:\ProgramData")
+    manifest_path = program_data / "ReqSys" / "runner-pool.json"
+    instance_seed = f"{REPOSITORY}|{socket.gethostname()}".encode("utf-8")
+    instance_id = "reqsys-pc-" + hashlib.sha256(instance_seed).hexdigest()[:12]
+    service_name = _runner_service_name(runner_root)
+    powershell = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    installer = source_root / "scripts" / RUNNER_INSTALL_SCRIPT
+    preflight = source_root / "scripts" / RUNNER_PREFLIGHT_SCRIPT
+    policy = source_root / "config" / RUNNER_POOL_POLICY
+    for required in (installer, preflight, policy):
+        if not required.is_file():
+            raise BrokerError(f"runner_onboard_file_missing:{required.name}")
+
+    completed = subprocess.run(
+        [
+            str(powershell),
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(installer),
+            "-RunnerInstanceId",
+            instance_id,
+            "-RuntimeRoot",
+            str(runtime_root),
+            "-RunnerRoot",
+            str(runner_root),
+            "-Profile",
+            "base",
+            "-ManifestPath",
+            str(manifest_path),
+        ],
+        cwd=source_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=240,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise BrokerError("runner_base_installer_blocked")
+
+    preflight_result = subprocess.run(
+        [
+            sys.executable,
+            str(preflight),
+            "--policy",
+            str(policy),
+            "--manifest",
+            str(manifest_path),
+            "--profile",
+            "base",
+            "--repository",
+            str(source_root),
+        ],
+        cwd=source_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=90,
+        check=False,
+    )
+    if preflight_result.returncode != 0:
+        raise BrokerError("runner_post_install_preflight_blocked")
+
+    _schedule_runner_restart(service_name)
+    return {
+        "handler": RUNNER_ONBOARD_ACTION,
+        "profile": "base",
+        "environment": "dev",
+        "runner_instance_id": instance_id,
+        "manifest_path": str(manifest_path),
+        "admin_route": "scheduled_task_s4u_highest",
+        "admin_secret_supplied": False,
+        "labels_applied": False,
+        "label_reconciliation_required": True,
+        "service_restarted": False,
+        "service_restart_scheduled": True,
+        "canary_dispatched": False,
+        "automatic_retry_enabled": False,
+        "deploy_performed": False,
+        "production_touched": False,
+    }
+
+
 def _recover_rdc(metadata: dict[str, Any], correlation_id: str) -> dict[str, Any]:
     release_root = Path(metadata["release_root"])
     script = release_root / "scripts" / RDC_RECOVERY_SCRIPT
@@ -368,6 +610,8 @@ def execute_action(action: str, metadata: dict[str, Any], comment_id: int) -> di
         result = _recover_runner(metadata)
     elif action == "activate-watchdog":
         result = _activate_watchdog(metadata)
+    elif action == RUNNER_ONBOARD_ACTION:
+        result = _onboard_runner_base(metadata)
     else:
         raise BrokerError("action_id não allowlisted")
     return {
@@ -579,6 +823,132 @@ def run_task() -> dict[str, Any]:
     return {"run_returncode": completed.returncode}
 
 
+def _restart_existing_task() -> dict[str, Any]:
+    root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
+    schtasks = root / "System32" / "schtasks.exe"
+    subprocess.run(
+        [str(schtasks), "/End", "/TN", TASK_NAME],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    completed = subprocess.run(
+        [str(schtasks), "/Run", "/TN", TASK_NAME],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise BrokerError("admin_broker_task_restart_failed")
+    return {"run_returncode": completed.returncode}
+
+
+def stage_runner_onboard(
+    source_root: Path,
+    *,
+    source_sha: str,
+    runner_root: Path,
+    owner_comment_id: int,
+    confirm: str,
+    timeout_seconds: int = 360,
+) -> dict[str, Any]:
+    if confirm != RUNNER_ONBOARD_STAGE_CONFIRM:
+        raise BrokerError("runner_onboard_stage_confirmation_invalid")
+    require_windows_desktop()
+    contract = task_status()
+    if not (
+        contract.get("exists") is True
+        and contract.get("trigger_at_startup") is True
+        and contract.get("logon_type") == "S4U"
+        and contract.get("run_level") == "highest"
+        and contract.get("enabled") is True
+    ):
+        raise BrokerError("admin_broker_task_contract_invalid")
+
+    sha = validate_sha(source_sha)
+    source = _validate_checkout(source_root, sha)
+    runner = _validate_runner_root(runner_root)
+    comment = fetch_comment_by_id(owner_comment_id)
+    created = parse_github_time(str(comment.get("created_at") or ""))
+    action = authorize_comment(
+        comment,
+        not_before=created - timedelta(seconds=1),
+        reference_time=now_utc(),
+    )
+    if action != RUNNER_ONBOARD_ACTION:
+        raise BrokerError("owner_comment_not_authorized")
+
+    runtime = default_runtime_root().resolve()
+    installed_path = runtime / "metadata.json"
+    installed = load_installed_metadata(installed_path)
+    release = runtime / "releases" / sha
+    _copy_release(source, release)
+    _write_launcher(runtime)
+    metadata = dict(installed["metadata"])
+    metadata.update(
+        {
+            "source_sha": sha,
+            "release_root": str(release),
+            "python_executable": str(installed["python_executable"]),
+            "not_before": created.isoformat(),
+            "runner_onboard_request": {
+                "source_root": str(source),
+                "source_sha": sha,
+                "runner_root": str(runner),
+                "owner_comment_id": int(owner_comment_id),
+            },
+            "activation_pending": False,
+            "requires_uac_activation": False,
+            "production_touched": False,
+            "secrets_read": False,
+            "staged_at": now_iso(),
+        }
+    )
+    atomic_json(installed_path, metadata)
+    atomic_json(
+        state_path(metadata),
+        {
+            "last_seen_comment_id": int(owner_comment_id) - 1,
+            "last_seen_at": (created - timedelta(seconds=1)).isoformat(),
+            "staged_owner_comment_id": int(owner_comment_id),
+            "staged_at": now_iso(),
+        },
+    )
+    restart = _restart_existing_task()
+
+    deadline = time.monotonic() + max(30, min(int(timeout_seconds), 420))
+    while time.monotonic() < deadline:
+        state = load_state(metadata)
+        accepted = state.get("accepted")
+        if isinstance(accepted, dict) and int(accepted.get("comment_id") or 0) == int(owner_comment_id):
+            status = str(accepted.get("status") or "")
+            if status == "completed":
+                outcome = accepted.get("outcome")
+                if not isinstance(outcome, dict) or outcome.get("ok") is not True:
+                    raise BrokerError("runner_onboard_evidence_invalid")
+                return {
+                    "ok": True,
+                    "admin_route": "scheduled_task_s4u_highest",
+                    "owner_comment_id": int(owner_comment_id),
+                    "source_sha": sha,
+                    "task_restart": restart,
+                    "outcome": outcome,
+                    "production_touched": False,
+                    "admin_secret_supplied": False,
+                }
+            if status == "failed":
+                error = str(accepted.get("error") or "unknown")[:300]
+                raise BrokerError(f"runner_onboard_broker_failed:{error}")
+        time.sleep(2)
+    raise BrokerError("runner_onboard_broker_timeout")
+
+
 def _copy_release(source_root: Path, release_root: Path) -> None:
     scripts = release_root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
@@ -589,12 +959,21 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
         WATCHDOG_UAC_SCRIPT,
         RDC_RECOVERY_SCRIPT,
         RUNNER_BOOTSTRAP_SCRIPT,
+        RUNNER_INSTALL_SCRIPT,
+        RUNNER_ONBOARD_SCRIPT,
+        RUNNER_PREFLIGHT_SCRIPT,
     ):
         source = source_root / "scripts" / name
         if not source.is_file():
             raise BrokerError(f"script obrigatório ausente: {name}")
         destination = scripts / name
         destination.write_bytes(source.read_bytes())
+    config = release_root / "config"
+    config.mkdir(parents=True, exist_ok=True)
+    policy = source_root / "config" / RUNNER_POOL_POLICY
+    if not policy.is_file():
+        raise BrokerError(f"arquivo obrigatório ausente: {RUNNER_POOL_POLICY}")
+    (config / RUNNER_POOL_POLICY).write_bytes(policy.read_bytes())
 
 
 def _write_launcher(runtime_root: Path) -> Path:
@@ -775,6 +1154,14 @@ def main() -> int:
     register_p = sub.add_parser("register-task-com")
     register_p.add_argument("--metadata", type=Path, required=True)
 
+    onboard_p = sub.add_parser("stage-runner-onboard")
+    onboard_p.add_argument("--source-root", type=Path, required=True)
+    onboard_p.add_argument("--source-sha", required=True)
+    onboard_p.add_argument("--runner-root", type=Path, required=True)
+    onboard_p.add_argument("--owner-comment-id", type=int, required=True)
+    onboard_p.add_argument("--confirm", required=True)
+    onboard_p.add_argument("--timeout-seconds", type=int, default=360)
+
     args = parser.parse_args()
     try:
         if args.command == "install":
@@ -791,6 +1178,15 @@ def main() -> int:
         elif args.command == "once":
             metadata = load_installed_metadata(args.metadata.resolve())["metadata"]
             payload = process_once(metadata)
+        elif args.command == "stage-runner-onboard":
+            payload = stage_runner_onboard(
+                args.source_root,
+                source_sha=args.source_sha,
+                runner_root=args.runner_root,
+                owner_comment_id=args.owner_comment_id,
+                confirm=args.confirm,
+                timeout_seconds=args.timeout_seconds,
+            )
         else:
             payload = register_task_from_metadata(args.metadata.resolve())
     except Exception as exc:

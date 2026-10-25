@@ -66,6 +66,9 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap' ||
         github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run noteri-runner-pool-onboard' ||
+        github.event.comment.body == '/reqsys run noteri-runner-pool-label-reconcile' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-onboard' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-pool-label-reconcile' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
         github.event.comment.body == '/reqsys run todo-producer-keyvault-dev' ||
@@ -265,6 +268,18 @@ jobs:
               target='noteri-desktop-watchdog-recovery.yml'
               mode='runner-pool-onboard-noteri'
               ;;
+            '/reqsys run noteri-runner-pool-label-reconcile')
+              target='self-hosted-runner-governance-guard.yml'
+              mode='runner-pool-label-reconcile-noteri'
+              ;;
+            '/reqsys run pc24x7-runner-pool-onboard')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-pool-onboard-pc24x7'
+              ;;
+            '/reqsys run pc24x7-runner-pool-label-reconcile')
+              target='self-hosted-runner-governance-guard.yml'
+              mode='runner-pool-label-reconcile-pc24x7'
+              ;;
             '/reqsys run pc24x7-todo-runtime-reconcile-dev')
               target='todo-global-hourly-cycle.yml'
               mode='reconcile-runtime'
@@ -448,7 +463,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml|self-hosted-runner-governance-guard.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -593,13 +608,38 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=preflight)"
+          elif [ "$TARGET_WORKFLOW" = "self-hosted-runner-governance-guard.yml" ] && { [ "$TARGET_MODE" = "runner-pool-label-reconcile-noteri" ] || [ "$TARGET_MODE" = "runner-pool-label-reconcile-pc24x7" ]; }; then
+            case "$TARGET_MODE" in
+              runner-pool-label-reconcile-noteri) artifact_prefix='reqsys-dev-runner-pool-onboard' ;;
+              runner-pool-label-reconcile-pc24x7) artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7' ;;
+              *) echo 'runner_pool_label_reconcile_mode_invalid' >&2; exit 3 ;;
+            esac
+            onboarding_run_id=''
+            for candidate_run_id in $(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/noteri-desktop-watchdog-recovery.yml/runs?event=workflow_dispatch&status=success&per_page=30" \
+              --jq '.workflow_runs[].id'); do
+              artifact_count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}/artifacts" \
+                --jq "[.artifacts[] | select(.name == \"${artifact_prefix}-${candidate_run_id}\" and .expired == false)] | length")"
+              if [ "$artifact_count" = '1' ]; then
+                onboarding_run_id="$candidate_run_id"
+                break
+              fi
+            done
+            [ -n "$onboarding_run_id" ] || { echo 'successful_onboarding_evidence_not_found' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE" \
+              -f expected_sha="$EXPECTED_SHA" \
+              -f authorization_comment_id="$AUTHORIZED_COMMENT_ID" \
+              -f onboarding_run_id="$onboarding_run_id")"
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
-              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
+              runner-recover|runner-bootstrap|runner-canary|runner-pool-canary|runner-pool-onboard-noteri|runner-pool-onboard-pc24x7|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
               *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
             esac
-            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ]; then
+            if [ "$recovery_mode" = "runner-pool-canary" ] || [ "$recovery_mode" = "runner-pool-onboard-noteri" ] || [ "$recovery_mode" = "runner-pool-onboard-pc24x7" ]; then
               run_url="$(gh workflow run "$TARGET_WORKFLOW" \
                 --repo "$GITHUB_REPOSITORY" \
                 --ref main \
@@ -741,6 +781,7 @@ jobs:
           pickup_source='none'
           wait_seconds=0
           pickup_timeout_seconds=60
+          pickup_grace_seconds=30
           poll_seconds=5
           for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
@@ -770,6 +811,36 @@ jobs:
           done
           case "$status" in
             pending|queued|requested|waiting)
+              for attempt in $(seq 1 $((pickup_grace_seconds / poll_seconds))); do
+                status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status' 2>/dev/null || printf 'queued')"
+                started_self_hosted_jobs="$(
+                  gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                    --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                    2>/dev/null || printf '0'
+                )"
+                case "$started_self_hosted_jobs" in
+                  ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+                esac
+                if [ "$started_self_hosted_jobs" -gt 0 ]; then
+                  status='in_progress'
+                  pickup_source='self_hosted_runner_assigned_grace'
+                  break
+                fi
+                case "$status" in
+                  pending|queued|requested|waiting)
+                    sleep "$poll_seconds"
+                    wait_seconds=$((wait_seconds + poll_seconds))
+                    ;;
+                  *)
+                    pickup_source='run_status_grace'
+                    break
+                    ;;
+                esac
+              done
+              ;;
+          esac
+          case "$status" in
+            pending|queued|requested|waiting)
               pickup_source='timeout'
               printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
               ;;
@@ -789,24 +860,49 @@ jobs:
           set -euo pipefail
           cleanup_status='cancel_failed'
           cleanup_error=''
-          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
-            cleanup_status='cancel_requested'
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
-              if [ -n "$state" ]; then
-                IFS=$'\t' read -r status conclusion <<< "$state"
-                if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
-                  cleanup_status='cancelled'
-                  break
-                fi
-              fi
-              sleep 5
-            done
-            if [ "$cleanup_status" != 'cancelled' ]; then
-              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+          pre_cancel_grace_seconds=30
+          poll_seconds=5
+          for attempt in $(seq 1 $((pre_cancel_grace_seconds / poll_seconds))); do
+            status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status' 2>/dev/null || printf 'queued')"
+            started_self_hosted_jobs="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                2>/dev/null || printf '0'
+            )"
+            case "$started_self_hosted_jobs" in
+              ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+            esac
+            if [ "$started_self_hosted_jobs" -gt 0 ] || [ "$status" = 'in_progress' ]; then
+              cleanup_status='pickup_observed_before_cancel'
+              break
             fi
-          else
-            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+            if [ "$status" = 'completed' ]; then
+              cleanup_status='already_terminal_without_pickup'
+              break
+            fi
+            sleep "$poll_seconds"
+          done
+
+          if [ "$cleanup_status" = 'cancel_failed' ]; then
+            if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+              cleanup_status='cancel_requested'
+              for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
+                if [ -n "$state" ]; then
+                  IFS=$'\t' read -r status conclusion <<< "$state"
+                  if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                    cleanup_status='cancelled'
+                    break
+                  fi
+                fi
+                sleep 5
+              done
+              if [ "$cleanup_status" != 'cancelled' ]; then
+                cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+              fi
+            else
+              cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+            fi
           fi
           printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
           printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
@@ -873,7 +969,7 @@ jobs:
           retention-days: 30
 
       - name: Fail closed when self-hosted runner pickup times out or is busy
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' && steps.cleanup.outputs.status != 'pickup_observed_before_cancel'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
