@@ -1,4 +1,5 @@
 import json
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import yaml
@@ -65,3 +66,22 @@ def test_external_contract_proves_installed_origin_and_consumer_tests() -> None:
     assert "python -m pytest -q backend/ocr_tests" in text
     assert "--compare-with" in action_text
     assert "OCR_REPRODUCIBILITY_NEGATIVE_CONTROL_OK" in action_text
+
+def test_ocr_benchmark_is_triggered_for_protected_consumer_surface() -> None:
+    patterns = _yaml(WORKFLOW)["on"]["pull_request"]["paths"]
+    protected_paths = (
+        "scripts/validate_ocr_local_fallback_parity.py",
+        "tests/test_ocr_local_fallback_parity.py",
+        "tests/test_ocr_external_package_workflow.py",
+        "tests/test_ocr_external_runtime_package.py",
+        "backend/pyproject.toml",
+        ".sdd/specs/ocr-external-package-consumer-contract.requirements.md",
+        ".sdd/specs/ocr-external-runtime-package.requirements.md",
+        ".sdd/specs/ocr-local-fallback-parity.requirements.md",
+    )
+    uncovered = [
+        path for path in protected_paths
+        if not any(fnmatchcase(path, pattern) for pattern in patterns)
+    ]
+    assert not uncovered, f"ocr_benchmark_path_filter_missing:{uncovered}"
+    assert not any(fnmatchcase("docs/unrelated.md", pattern) for pattern in patterns)

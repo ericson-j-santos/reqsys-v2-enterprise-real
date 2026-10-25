@@ -22,6 +22,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
 8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
    Antes de novo dispatch, consultar execuções ativas do mesmo workflow via GitHub API; com `queued`, `pending`, `waiting`, `requested` ou `in_progress`, reutilizar `run_id`, URL e SHA da execução mais antiga e marcar `existing_probe_active`, sem criar outro job. Se a consulta API falhar, bloquear o dispatch (fail-closed). Novo probe só é permitido quando não existir execução ativa; a mera fila não prova pickup nem modo ESTUDO funcional.
+8a. **Prevenção de tempestade de canários:** se a última execução terminal do probe governado na main não registrou pickup físico real (runner_id, runner_name e started_at), o observador continua agendado a cada 10 minutos, mas suspende novos dispatches por 60 minutos contados da criação desse probe. Um probe half-open por ciclo pode testar recuperação; erro de API/identidade/timestamp falha fechado. Uma mudança física comprovada pode ser declarada pelo proprietário mediante input booleano explícito `probe_after_change` em workflow_dispatch; o input nunca substitui a prova E2E. O recibo deve usar estado `runner_unavailable_cooldown` com ID/URL da tentativa anterior, sem relatar `runtime_active`. Preservar reutilização de execução já ativa, evitar novo run apenas por avanço de SHA e manter cancelamento/idempotência e evidência sanitizada. A rotina de recuperação permanente do host continua separada deste observador.
 9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
 10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main` pela API oficial GitHub `getBranch`, com proprietário/repositório/branch fixos e `actions/github-script` pinado por SHA completo; exigir SHA de 40 caracteres hexadecimais antes do checkout imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, com leitura independente e igualdade entre SHA esperado e observado. Não depender de `git ls-remote` nem de pipeline PowerShell para resolver o SHA.
 11. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável. O grupo de concorrência deve incluir `github.ref`, preservando a serialização por branch e impedindo que o auto watch da `main` substitua uma execução física pré-merge pendente.
@@ -65,6 +66,23 @@ O bootstrap `scripts/activate_noteri_free_control_plane.cmd` deve eliminar a seq
 
 A autenticação interativa do GitHub pode exigir ação humana por consentimento, mas nenhuma etapa recorrente de operação pode voltar a depender do RDC.
 
+### Recuperação de registro remoto apagado
+
+O arquivo local `.runner` não comprova que o runner continua registrado no GitHub. O bootstrap deve consultar o registro oficial de runners do repositório antes de declarar `runtime_active`.
+
+Quando o contrato local existe mas o runner `Noteri` não aparece no registro remoto:
+- obter token de remoção e token de registro pelo endpoint oficial **antes de qualquer mutação local**;
+- manter ambos somente em memória, sem log, artifact ou persistência;
+- parar somente o `Runner.Listener.exe` cujo caminho absoluto pertence ao `runner_home` governado;
+- remover a configuração local pelo `config.cmd remove` oficial e re-registrar nome/labels fixos;
+- exigir readback do registro remoto com `status=online` e labels `self-hosted, Windows, X64, noteri, reqsys-dev`;
+- falhar fechado antes de parar o runner quando autenticação/escopo não permitir obter os dois tokens;
+- oferecer modo `--non-interactive-auth` que nunca abre browser e retorna `github_auth_required`/permissão ausente;
+- registrar apenas flags sanitizadas de token consumido/persistido/logado, nunca o valor.
+
+A identidade do listener local deve ser validada pelo caminho absoluto via watchdog; a existência de outro processo `Runner.Listener.exe` não pode produzir `runtime_active`.
+
+
 ## Regressão do resolver
 
 O [run 37059423546](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37059423546) adquiriu o job no Noteri e falhou em `Resolve immutable noteri-runtime main SHA` com `noteri_runtime_main_resolution_failed`. A correção deve comprovar a consulta oficial de `main`, o checkout do SHA completo e o E2E isolado no mesmo SHA da branch, incluindo após sincronização com a base.
@@ -90,6 +108,7 @@ A rota só fica `runtime_active` após evidência nova de:
 6. artifact mostrando `ok=true`, host Noteri e `rdc_required=false`.
 7. E2E físico do `noteri-runtime/main` no SHA resolvido, com `NORMAL -> ESTUDO -> replay -> NORMAL`, leitura independente, idempotência e controle negativo aprovados.
 8. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
+9. antes de cancelar por timeout, o Gateway deve executar grace/readback limitado de 30 segundos e uma segunda leitura imediatamente anterior ao cancelamento; se um job self-hosted tiver `started_at` + `runner_name` ou o run estiver `in_progress`, o cancelamento é proibido e o cleanup deve registrar `pickup_observed_before_cancel`. Essa proteção evita cancelar um job fisicamente adquirido quando a API agregada de run ainda reporta `queued`.
 
 Sem esses itens o estado permanece `activation_pending`.
 
