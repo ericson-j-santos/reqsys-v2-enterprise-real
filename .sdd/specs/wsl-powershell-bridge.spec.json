@@ -1,0 +1,39 @@
+{
+  "feature_name": "wsl-powershell-bridge",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-24",
+  "updated_at": "2026-10-24",
+  "phase": "governed-local-bridge",
+  "issue": 1705,
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fornece transporte governado WSL para Windows PowerShell com scripts e argumentos exatos allowlisted, evidência sanitizada e ativação UAC local explícita do Desktop Admin Broker.",
+  "scope": "local-dev-wsl-to-windows-powershell",
+  "files": [
+    "scripts/wsl_powershell_bridge.py",
+    "scripts/activate_desktop_admin_broker_from_wsl.ps1",
+    "config/wsl-powershell-bridge.policy.json",
+    "tests/test_wsl_powershell_bridge.py",
+    "docs/runbooks/wsl-powershell-bridge.md",
+    ".sdd/specs/wsl-powershell-bridge.requirements.md",
+    ".sdd/specs/wsl-powershell-bridge.spec.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_wsl_powershell_bridge.py"
+    ],
+    "evidence_contract": "Provar que apenas scripts PowerShell versionados e argumentos exatos allowlisted atravessam WSL Interop; rejeitar script externo, extensão divergente, argumento livre, timeout fora da política e ambiente não DEV; remover variáveis com nomes sensíveis; registrar somente hashes e tamanhos; exigir UAC interativo e readback AtStartup + S4U + highest + enabled, Python e pywin32 para o Desktop Admin Broker."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": "interactive_uac_required_for_fixed_versioned_activator",
+    "external_dev_publish": false,
+    "hml_stg_prod": false
+  }
+}
