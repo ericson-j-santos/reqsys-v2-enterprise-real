@@ -52,6 +52,8 @@ O workflow canônico `Self-Hosted Runner Governance Guard` executa o monitor do 
 
 Esse desenho não consulta o endpoint administrativo de inventário, não usa PAT pessoal, não solicita `administration: read` e não depende de credencial armazenada em qualquer PC. Como as labels são cumulativas, runners `runtime` e `ollama` também podem atender o perfil `base`. Cada slot tem concurrency própria com cancelamento da medição anterior, limitando leases que permaneçam na fila quando não houver capacidade. O monitor é report-only: não adiciona labels, não reinicia máquinas, não faz deploy e não toca produção.
 
+Se os leases não comprovarem dois runners distintos elegíveis, a evidência é publicada com `status=degraded` e o job de auditoria falha. A falha é deliberada para impedir falso verde operacional; ela não dispara retry, reconciliação, deploy ou qualquer mutação automática.
+
 Fora desses dois leases internos, o pool não autoriza dispatch arbitrário, retry, deploy ou promoção. HML, STG e PROD permanecem bloqueados; concurrency dos workflows continua sendo o mecanismo de serialização do domínio.
 
 ## Fases de adoção

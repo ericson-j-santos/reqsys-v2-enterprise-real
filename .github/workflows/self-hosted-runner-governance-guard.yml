@@ -167,7 +167,8 @@ jobs:
           status="$(python -c "import json; print(json.load(open('artifacts/reqsys-dev-runner-pool-monitor/evidence.json'))['status'])")"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           if [ "$status" != "passed" ]; then
-            echo "::warning::ReqSys DEV runner pool is degraded; inspect the sanitized evidence artifact."
+            echo "::error::ReqSys DEV runner pool is degraded; inspect the sanitized evidence artifact."
+            exit 1
           fi
 
       - name: Publish pool status summary

@@ -36,6 +36,7 @@
     "artifact": "reqsys-dev-runner-pool-monitor-<run_id>",
     "retention_days": 30,
     "sanitized": true,
+    "degraded_job_conclusion": "failure",
     "finding_types": [
       "probe_jobs_missing",
       "probe_unassigned",
@@ -51,7 +52,7 @@
       "tests/test_reqsys_dev_runner_pool_monitor.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "O monitor deve reutilizar o workflow canônico de governança, observar em infraestrutura GitHub-hosted dois leases concorrentes enviados por labels portáteis, provar dois runners distintos pelos jobs da própria execução com github.token/actions:read e reportar falha, drift ou capacidade insuficiente sem endpoint administrativo, PAT pessoal, mutação, deploy, retry automático ou contato com HML, STG e PROD."
+    "evidence_contract": "O monitor deve reutilizar o workflow canônico de governança, observar em infraestrutura GitHub-hosted dois leases concorrentes enviados por labels portáteis, provar dois runners distintos pelos jobs da própria execução com github.token/actions:read e falhar o job de auditoria quando a evidência estiver degradada, sem endpoint administrativo, PAT pessoal, mutação, deploy, retry automático ou contato com HML, STG e PROD."
   },
   "traceability": {
     "requirements": ".sdd/specs/reqsys-dev-runner-pool-monitor.requirements.md",
