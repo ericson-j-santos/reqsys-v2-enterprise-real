@@ -25,7 +25,7 @@ MANAGED_LABELS = {
     "reqsys-cap-ollama-v1",
 }
 SELECTOR_LABELS = {"noteri", "pc24x7"}
-SELECTOR_PROFILES = {"noteri": "base", "pc24x7": "runtime"}
+SELECTOR_PROFILES = {"noteri": "base", "pc24x7": "base"}
 PROFILE_RESULTS = {
     "base": {
         "onboarding": "REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED",

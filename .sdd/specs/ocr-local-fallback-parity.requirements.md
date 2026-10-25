@@ -105,3 +105,24 @@ Este incremento:
 9. Evidence Gate v2 continua 10/10.
 10. Nenhum deploy ou produção é tocado.
 11. Custo adicional da validação é R$ 0,00.
+
+## Extensão — cobertura do gatilho OCR Benchmark Gate (24/10/2026)
+
+Correção preventiva: mudanças nos contratos e no validador da paridade do
+fallback local não podem escapar do gate por omissão do filtro de caminhos
+`pull_request.paths` em `.github/workflows/ocr-benchmark.yml`.
+
+### Critérios de aceite adicionais
+
+12. Alterações em `scripts/validate_ocr_local_fallback_parity.py`, nos três
+    testes `test_ocr_local_fallback_parity.py`,
+    `test_ocr_external_package_workflow.py` e
+    `test_ocr_external_runtime_package.py`, no `backend/pyproject.toml` e nas
+    especificações OCR relevantes acionam o OCR Benchmark Gate.
+13. `tests/test_ocr_external_package_workflow.py` verifica a cobertura dos
+    caminhos críticos e comprova o controle negativo de arquivo não relacionado.
+14. O gate executa os contratos de pacote instalado, imagem externa, paridade e
+    Evidence Gate v2 no HEAD da PR; ausência/skipped é reprovação, não aprovação.
+15. O SHA do motor e a versão 1.2.0 continuam fixados, e
+    `backend/ocr_evidencia` permanece versionado e disponível apenas para
+    DEV/teste/offline. Nenhum deploy, produção ou remoção é autorizada.

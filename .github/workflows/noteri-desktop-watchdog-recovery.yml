@@ -1075,7 +1075,7 @@ jobs:
 
   runner-pool-onboard-pc24x7:
     if: ${{ inputs.mode == 'runner-pool-onboard-pc24x7' }}
-    name: Configure eligible ReqSys DEV runtime profile on a PC24x7 runner
+    name: Configure eligible ReqSys DEV base profile on a PC24x7 runner
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 10
     env:
@@ -1114,7 +1114,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Stage and execute exact runtime profile through existing admin broker
+      - name: Stage and execute exact base profile through existing admin broker
         id: install
         shell: powershell
         env:
@@ -1147,7 +1147,7 @@ jobs:
             throw 'ADMIN_BROKER_ROUTE_INVALID'
           }
           $result = $payload.outcome.result
-          if ([string]$result.profile -cne 'runtime' -or [string]$result.environment -cne 'dev') {
+          if ([string]$result.profile -cne 'base' -or [string]$result.environment -cne 'dev') {
             throw 'ADMIN_BROKER_RESULT_INVALID'
           }
           "runner_instance_id=$($result.runner_instance_id)" | Add-Content $env:GITHUB_OUTPUT
@@ -1164,9 +1164,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path $directory | Out-Null
           $rendered = [ordered]@{
             schema_version = 1
-            result = 'REQSYS_DEV_RUNNER_RUNTIME_PROFILE_CONFIGURED'
+            result = 'REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED'
             pool = 'reqsys-dev-pc-pool-v1'
-            profile = 'runtime'
+            profile = 'base'
             environment = 'dev'
             source_sha = $env:EXPECTED_SHA
             runner_instance_id = $env:RUNNER_INSTANCE_ID

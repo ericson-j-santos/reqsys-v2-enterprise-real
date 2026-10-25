@@ -89,6 +89,19 @@ def test_base_profile_does_not_require_docker_or_ollama(tmp_path, monkeypatch):
     assert result["status"] == "eligible"
     assert result["profile"] == "base"
 
+def test_runtime_profile_requires_real_docker_even_when_base_tools_exist(tmp_path):
+    root = tmp_path / "runtime-dev"
+    root.mkdir()
+    with pytest.raises(preflight.PreflightError, match="required_tool_missing"):
+        preflight.validate(
+            policy(),
+            manifest(root, "runtime"),
+            profile="runtime",
+            repo_paths=[],
+            os_name="nt",
+            which=lambda tool: tool if tool in {"git", "python"} else None,
+        )
+
 
 @pytest.mark.parametrize(
     ("change", "reason"),
@@ -267,7 +280,7 @@ def test_noteri_label_reconciliation_is_hosted_evidence_bound_and_dev_only():
     assert '-f onboarding_run_id="$onboarding_run_id"' in gateway
 
 
-def test_pc24x7_runtime_onboarding_is_capability_selected_owner_bound_and_dev_only():
+def test_pc24x7_base_onboarding_is_capability_selected_owner_bound_and_dev_only():
     recovery = (ROOT / ".github/workflows/noteri-desktop-watchdog-recovery.yml").read_text(encoding="utf-8")
     onboard = recovery.split("  runner-pool-onboard-pc24x7:", 1)[1].split("  runner-pool-canary:", 1)[0]
     guard = (ROOT / ".github/workflows/self-hosted-runner-governance-guard.yml").read_text(encoding="utf-8")
@@ -281,9 +294,11 @@ def test_pc24x7_runtime_onboarding_is_capability_selected_owner_bound_and_dev_on
     assert "stage-runner-onboard" in onboard
     assert "STAGE-REQSYS-DEV-RUNNER-ADMIN-ONBOARD" in onboard
     assert "--owner-comment-id" in onboard
-    assert "exact runtime profile" in onboard
-    assert "REQSYS_DEV_RUNNER_RUNTIME_PROFILE_CONFIGURED" in onboard
-    assert "profile = 'runtime'" in onboard
+    assert "exact base profile" in onboard
+    assert "REQSYS_DEV_RUNNER_BASE_PROFILE_CONFIGURED" in onboard
+    assert "profile = 'base'" in onboard
+    assert "profile = 'runtime'" not in onboard
+    assert "reqsys-dev-runtime-v1" not in onboard
     assert "admin_secret_supplied = $false" in onboard
     assert "install_reqsys_dev_runner.ps1" not in onboard
     assert "Start-Process" not in onboard

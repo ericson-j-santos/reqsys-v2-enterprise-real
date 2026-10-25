@@ -254,10 +254,10 @@ def test_recover_runner_fails_closed_on_bootstrap_error(monkeypatch, tmp_path: P
 def test_runner_onboard_action_requires_elevated_broker(monkeypatch) -> None:
     monkeypatch.setattr(m, "_is_admin", lambda: False)
     with pytest.raises(m.BrokerError, match="elevated_broker_required"):
-        m._onboard_runner_runtime({})
+        m._onboard_runner_base({})
 
 
-def test_runner_onboard_action_is_fixed_dev_runtime_without_labels(monkeypatch, tmp_path: Path) -> None:
+def test_runner_onboard_action_is_fixed_dev_base_without_labels(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "source"
     scripts = source / "scripts"
     config = source / "config"
@@ -292,7 +292,7 @@ def test_runner_onboard_action_is_fixed_dev_runtime_without_labels(monkeypatch, 
     monkeypatch.setenv("ProgramData", str(tmp_path / "programdata"))
     monkeypatch.setenv("SystemRoot", str(tmp_path / "windows"))
 
-    result = m._onboard_runner_runtime(
+    result = m._onboard_runner_base(
         {
             "not_before": (now - timedelta(seconds=1)).isoformat(),
             "runner_onboard_request": {
@@ -304,7 +304,7 @@ def test_runner_onboard_action_is_fixed_dev_runtime_without_labels(monkeypatch, 
         }
     )
 
-    assert result["profile"] == "runtime"
+    assert result["profile"] == "base"
     assert result["environment"] == "dev"
     assert result["admin_route"] == "scheduled_task_s4u_highest"
     assert result["admin_secret_supplied"] is False
@@ -313,11 +313,11 @@ def test_runner_onboard_action_is_fixed_dev_runtime_without_labels(monkeypatch, 
     assert restarts == ["actions.runner.owner.repo.pc24x7"]
     assert len(calls) == 2
     installer = calls[0]
-    assert installer[installer.index("-Profile") + 1] == "runtime"
+    assert installer[installer.index("-Profile") + 1] == "base"
     assert "-ApplyGitHubLabels" not in installer
     assert "-RestartRunnerService" not in installer
     assert "--profile" in calls[1]
-    assert calls[1][calls[1].index("--profile") + 1] == "runtime"
+    assert calls[1][calls[1].index("--profile") + 1] == "base"
 
 
 def test_runner_onboard_stage_requires_existing_s4u_highest_task(monkeypatch, tmp_path: Path) -> None:
