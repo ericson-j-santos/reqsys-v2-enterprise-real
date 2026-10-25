@@ -322,6 +322,7 @@ jobs:
               '.github/actions/reqsys-dev-runner-preflight/action.yml',
               '.github/workflows/noteri-desktop-watchdog-recovery.yml',
               'config/reqsys-dev-runner-pool.json',
+              'scripts/desktop_admin_broker.py',
               'scripts/install_reqsys_dev_runner.ps1',
               'scripts/onboard_reqsys_dev_runner.ps1',
               'scripts/reconcile_reqsys_dev_runner_labels.py',

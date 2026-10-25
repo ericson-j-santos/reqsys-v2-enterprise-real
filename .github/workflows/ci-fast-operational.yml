@@ -47,6 +47,9 @@ jobs:
           python -m py_compile scripts/auto_rerun_governed.py
           python -m py_compile scripts/workflow_inventory_audit.py
           python -m py_compile scripts/workflow_inventory_decision_gate.py
+          python -m py_compile scripts/desktop_admin_broker.py
+          python -m py_compile scripts/reconcile_reqsys_dev_runner_labels.py
+          python -m py_compile scripts/validate_reqsys_dev_runner.py
 
       - name: Executar testes rápidos operacionais
         shell: bash
@@ -62,6 +65,9 @@ jobs:
             tests/test_workflow_inventory_audit.py \
             tests/test_workflow_inventory_decision_gate.py \
             tests/test_reqsys_global_search_browser_gate.py \
+            tests/test_reqsys_dev_runner_pool.py \
+            tests/test_reconcile_reqsys_dev_runner_labels.py \
+            tests/test_desktop_admin_broker.py \
             -q
 
       - name: Validar workflow PR CI Watch

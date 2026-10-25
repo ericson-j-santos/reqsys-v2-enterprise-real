@@ -47,6 +47,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 21. O canal não autoriza reboot, shutdown, deploy, produção, segredo, RBAC amplo, force-push ou exclusão destrutiva.
 22. Toda evidência deve declarar `production_touched=false`, `secrets_read=false` e `reboot_performed=false`.
 23. A ativação UAC deve remover evidência obsoleta antes da tentativa e persistir resultado sanitizado de sucesso ou falha em `activation-last.json`; o launcher deve encerrar imediatamente quando observar falha elevada, sem esperar apenas o timeout.
+24. O registro S4U deve chamar `RegisterTaskDefinition` com senha nula (`None`), não string vazia, e o CI precisa executar um teste do argumento COM.
 
 ## Comandos allowlisted
 

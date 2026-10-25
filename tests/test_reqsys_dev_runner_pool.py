@@ -601,3 +601,16 @@ def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tm
     assert "ADMINISTRATOR_REQUIRED" in diagnostic or "RUNNER_ROOT_INVALID" in diagnostic
     assert "ParameterNameAlreadyExistsForCommand" not in diagnostic
     assert not missing.exists()
+
+def test_fast_operational_ci_runs_pc24x7_regression_suite():
+    """Prevent focused S4U/base/label tests from silently disappearing from CI."""
+    workflow = (ROOT / ".github/workflows/ci-fast-operational.yml").read_text(
+        encoding="utf-8"
+    )
+    for path in (
+        "tests/test_reqsys_dev_runner_pool.py",
+        "tests/test_reconcile_reqsys_dev_runner_labels.py",
+        "tests/test_desktop_admin_broker.py",
+    ):
+        assert path in workflow
+    assert "python -m py_compile scripts/desktop_admin_broker.py" in workflow

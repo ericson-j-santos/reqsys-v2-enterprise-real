@@ -5,6 +5,7 @@ import json
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -390,3 +391,32 @@ def test_register_task_contract_requires_s4u_highest() -> None:
     assert 'definition.Principal' in source
     assert 'principal.LogonType = TASK_LOGON_S4U' in source
     assert 'principal.RunLevel = TASK_RUNLEVEL_HIGHEST' in source
+
+def test_register_task_uses_null_s4u_password(monkeypatch, tmp_path: Path) -> None:
+    """A S4U COM registration must pass a null password, not an empty string."""
+    registered: list[tuple] = []
+    folder = SimpleNamespace(
+        RegisterTaskDefinition=lambda *args: registered.append(args),
+    )
+    definition = SimpleNamespace(
+        RegistrationInfo=SimpleNamespace(Description=""),
+        Settings=SimpleNamespace(),
+        Triggers=SimpleNamespace(Create=lambda _: SimpleNamespace()),
+        Actions=SimpleNamespace(Create=lambda _: SimpleNamespace()),
+        Principal=SimpleNamespace(),
+    )
+    service = SimpleNamespace(
+        GetFolder=lambda _: folder,
+        NewTask=lambda _: definition,
+    )
+    monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
+    monkeypatch.setattr(m, "current_user_id", lambda: r"DESKTOP-PDQK954\Windows")
+    monkeypatch.setattr(m, "_scheduler", lambda: service)
+    result = m.register_task(
+        python_executable=tmp_path / "python.exe",
+        launcher=tmp_path / "run.py",
+    )
+    assert result["password_used"] is False
+    assert len(registered) == 1
+    assert registered[0][4] is None
+    assert registered[0][5] == m.TASK_LOGON_S4U

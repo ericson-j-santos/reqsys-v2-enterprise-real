@@ -23,3 +23,6 @@
 - R19: onboarding e jobs do perfil `runtime` devem exigir registro válido do runner atual, Docker CLI e Docker Engine respondendo exclusivamente por named pipe Windows local allowlisted, além de runtime root DEV válido; a reconciliação hospedada deve selecionar e confirmar exatamente um runner online e ocioso.
 - R20: a reconciliação deve falhar fechado até a instalação da GitHub App governada possuir `Administration: Read and write` e `Actions: Read-only`; não é permitido reintroduzir PAT ou degradar a ausência dessa permissão para sucesso.
 - R21: os dispatches físicos e de reconciliação do perfil `runtime` devem aceitar somente o owner ou `github-actions[bot]`, sempre combinados com comentário owner exato, SHA atual e janela temporal; colaborador não pode reutilizar um comentário visível para dispatch direto.
+
+- R22: o onboarding do perfil `base` no seletor PC24x7 só pode ser reconciliado com evidência explícita da tarefa S4U/higher, ausência de segredo, agendamento de restart e identificador de instância não vazio; prova incompleta deve bloquear a label.
+- R23: registro S4U do broker precisa passar senha nula e o teste de regressão correspondente deve executar no Fast CI no HEAD atual, junto das suites do runner pool e da reconciliação.

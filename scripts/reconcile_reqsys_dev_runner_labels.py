@@ -154,6 +154,21 @@ def build_plan(
         raise ReconcileError("runner_selector_invalid")
     if profile == "runtime" and selector_label != "pc24x7":
         raise ReconcileError("runtime_runner_selector_invalid")
+    # PC24x7 base requires proof of the scheduled S4U administrative route.
+    # The separate non-elevated runtime route keeps its own stricter manifest contract.
+    if profile == "base" and selector_label == "pc24x7":
+        required = {
+            "bootstrap_selector": "pc24x7",
+            "admin_route": "scheduled_task_s4u_highest",
+            "admin_secret_supplied": False,
+            "service_restart_scheduled": True,
+        }
+        for name, value in required.items():
+            if onboarding.get(name) != value:
+                raise ReconcileError(f"onboarding_evidence_invalid:{name}")
+        instance_id = onboarding.get("runner_instance_id")
+        if not isinstance(instance_id, str) or not instance_id.strip():
+            raise ReconcileError("onboarding_evidence_invalid:runner_instance_id")
     selector = {"self-hosted", "windows", "x64", selector_label, "reqsys-dev"}
     profile_labels = desired_profile_labels(policy, profile)
     runners = inventory.get("runners")
