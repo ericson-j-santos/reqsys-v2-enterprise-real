@@ -17,7 +17,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import desktop_admin_broker as broker
+if __package__:
+    from . import desktop_admin_broker as broker
+else:
+    import desktop_admin_broker as broker
 
 CONFIRM = "STAGE-DESKTOP-ADMIN-BROKER-DEV"
 REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,99}$")
