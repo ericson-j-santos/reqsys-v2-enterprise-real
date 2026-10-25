@@ -139,7 +139,7 @@ def stage(
     host = broker.require_windows_desktop()
     sha = broker.validate_sha(source_sha)
     source = broker._validate_checkout(source_root, sha)
-    python = Path(sys.executable)
+    python = Path(sys.executable).resolve()
     if not regular_file(python):
         raise StageBlocked("stage_python_unavailable")
     root = broker.default_runtime_root()
