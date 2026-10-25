@@ -14,8 +14,26 @@ runs:
   steps:
     - name: Validar capacidade e isolamento DEV
       shell: powershell
-      run: >-
-        python "${{ github.action_path }}\..\..\..\scripts\validate_reqsys_dev_runner.py"
-        --policy "${{ github.action_path }}\..\..\..\config\reqsys-dev-runner-pool.json"
-        --profile "${{ inputs.profile }}"
-        --repository "${{ inputs.repository-path }}"
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $configuredManifest = $env:REQSYS_DEV_RUNNER_MANIFEST
+        $userManifest = $null
+        if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+          $userManifest = Join-Path $env:LOCALAPPDATA 'ReqSys\runner-pool.json'
+        }
+        if (@('base', 'runtime') -ccontains '${{ inputs.profile }}' -and
+            -not [string]::IsNullOrWhiteSpace($userManifest) -and
+            (Test-Path -LiteralPath $userManifest -PathType Leaf)) {
+          $manifestPath = $userManifest
+        } elseif (-not [string]::IsNullOrWhiteSpace($configuredManifest)) {
+          $manifestPath = $configuredManifest
+        } elseif (-not [string]::IsNullOrWhiteSpace($userManifest)) {
+          $manifestPath = $userManifest
+        } else {
+          throw 'REQSYS_DEV_RUNNER_MANIFEST_UNAVAILABLE'
+        }
+        python "${{ github.action_path }}\..\..\..\scripts\validate_reqsys_dev_runner.py" `
+          --policy "${{ github.action_path }}\..\..\..\config\reqsys-dev-runner-pool.json" `
+          --manifest $manifestPath `
+          --profile "${{ inputs.profile }}" `
+          --repository "${{ inputs.repository-path }}"
