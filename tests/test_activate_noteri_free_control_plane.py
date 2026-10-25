@@ -76,3 +76,76 @@ def test_bootstrap_refreshes_repo_scope_and_selects_expected_account():
     assert 'env.pop("GH_TOKEN", None)' in text
     assert 'env.pop("GITHUB_TOKEN", None)' in text
     assert 'github_account_mismatch' in text
+
+def test_runtime_active_requires_remote_registry_and_exact_runner_identity():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "runner_registry_snapshot" in text
+    assert "wait_runner_registry_online" in text
+    assert 'REQUIRED_RUNNER_LABELS = ("self-hosted", "Windows", "X64", "noteri", "reqsys-dev")' in text
+    assert "watchdog.runner_running(root)" in text
+    assert "watchdog.runner_process_snapshot(root)" in text
+    assert '"runner_registry_missing"' in text
+    assert '"runner_github_offline"' in text
+    assert '"runner_labels_mismatch"' in text
+    assert 'state == "runtime_active"' in text
+
+
+def test_noninteractive_auth_fails_closed_before_web_login():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'parser.add_argument("--non-interactive-auth", action="store_true")' in text
+    assert "allow_interactive=not args.non_interactive_auth" in text
+    assert "allow_interactive_auth=not args.non_interactive_auth" in text
+    assert "login interativo desabilitado neste modo" in text
+    assert "refresh interativo desabilitado" in text
+
+
+def test_missing_registry_repair_policy_is_narrow():
+    module = load_module()
+    assert module.should_repair_missing_registry({"present": False}, True) is True
+    assert module.should_repair_missing_registry({"present": True}, True) is False
+    assert module.should_repair_missing_registry({"present": False}, False) is False
+
+
+def test_repair_missing_registration_acquires_tokens_before_mutation(monkeypatch, tmp_path):
+    module = load_module()
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    events = []
+    monkeypatch.setattr(module, "remove_token", lambda *a, **k: events.append("remove_token") or "R" * 24)
+    monkeypatch.setattr(module, "registration_token", lambda *a, **k: events.append("registration_token") or "G" * 24)
+    monkeypatch.setattr(
+        module,
+        "stop_runner",
+        lambda root: events.append("stop") or {
+            "previous_listener_pid": 123,
+            "termination_scope": "exact_runner_home",
+        },
+    )
+    monkeypatch.setattr(module, "_remove_runner_with_token", lambda root, token: events.append("remove_local"))
+    monkeypatch.setattr(module, "_register_runner_with_token", lambda root, token: events.append("register"))
+    result = module.repair_missing_registration(runner, Path("gh"), allow_interactive_auth=False)
+    assert events == ["remove_token", "registration_token", "stop", "remove_local", "register"]
+    assert result["repaired"] is True
+    assert result["termination_scope"] == "exact_runner_home"
+
+
+def test_registration_token_failure_does_not_stop_or_mutate_runner(monkeypatch, tmp_path):
+    module = load_module()
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    events = []
+    monkeypatch.setattr(module, "remove_token", lambda *a, **k: events.append("remove_token") or "R" * 24)
+
+    def registration_failure(*args, **kwargs):
+        events.append("registration_token")
+        raise module.ActivationError("github_runner_admin_permission_required", "blocked")
+
+    monkeypatch.setattr(module, "registration_token", registration_failure)
+    monkeypatch.setattr(module, "stop_runner", lambda root: events.append("stop"))
+    try:
+        module.repair_missing_registration(runner, Path("gh"), allow_interactive_auth=False)
+        assert False, "repair should fail closed"
+    except module.ActivationError as exc:
+        assert exc.state == "github_runner_admin_permission_required"
+    assert events == ["remove_token", "registration_token"]
+
