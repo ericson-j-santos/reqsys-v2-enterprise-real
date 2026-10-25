@@ -21,6 +21,8 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 WORKFLOW_NAME = "Pre-PR Readiness Gate"
 WORKFLOW_FILE = "pre-pr-readiness.yml"
 WORKFLOW_RUN_FALLBACK_MAX_PAGES = 5
+MAX_ADMISSION_WAIT_SECONDS = 900
+MAX_ADMISSION_POLL_SECONDS = 60
 MANIFEST_SCHEMA_VERSION = "1.1.0"
 REQUIRED_PREVENTIVE_INVARIANTS = {
     "sdd:contract",
@@ -357,6 +359,25 @@ def verify_evidence(
     raise AdmissionGuardError("admission_manifest_missing_for_head_sha")
 
 
+def assert_pr_revision(
+    repository: str,
+    pr_number: int,
+    head_sha: str,
+    base_ref: str,
+    token: str,
+) -> None:
+    """Independently read back the PR before accepting a completed Pre-PR receipt."""
+    pr = github_json(repository, f"pulls/{pr_number}", token)
+    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+    if (
+        pr.get("state") != "open"
+        or str(head.get("sha") or "").lower() != head_sha
+        or str(base.get("ref") or "") != base_ref
+    ):
+        raise AdmissionGuardError("pr_revision_changed_while_waiting")
+
+
 def wait_for_admission(
     repository: str,
     head_sha: str,
@@ -368,8 +389,12 @@ def wait_for_admission(
 ) -> dict[str, Any]:
     if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
         raise AdmissionGuardError("pr_number_invalid")
+    if not 0 <= max_wait_seconds <= MAX_ADMISSION_WAIT_SECONDS:
+        raise AdmissionGuardError("admission_wait_budget_invalid")
+    if not 1 <= poll_seconds <= MAX_ADMISSION_POLL_SECONDS:
+        raise AdmissionGuardError("admission_poll_interval_invalid")
     freshness = assert_base_freshness(repository, base_ref, head_sha, token)
-    deadline = time.monotonic() + max(0, max_wait_seconds)
+    deadline = time.monotonic() + max_wait_seconds
     while True:
         try:
             evidence = verify_evidence(
@@ -379,19 +404,23 @@ def wait_for_admission(
                 token,
                 pr_number,
             )
+            latest_base = assert_base_freshness(repository, base_ref, head_sha, token)
+            if latest_base["base_sha"] != freshness["base_sha"]:
+                raise AdmissionGuardError("base_changed_while_waiting")
+            assert_pr_revision(repository, pr_number, head_sha, base_ref, token)
             return {
                 "schema_version": "1.1.0",
                 "result": "ADMISSION_ACCEPTED",
                 "generated_at_utc": utc_now(),
                 "head_sha": head_sha,
-                "base": freshness,
+                "base": latest_base,
                 **evidence,
             }
         except AdmissionGuardError as exc:
             reason = str(exc)
             if reason not in RETRYABLE_REASONS or time.monotonic() >= deadline:
                 raise
-            time.sleep(max(1, poll_seconds))
+            time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
 
 
 def main() -> int:
@@ -401,8 +430,8 @@ def main() -> int:
     parser.add_argument("--event-name", default=os.getenv("GITHUB_EVENT_NAME", ""))
     parser.add_argument("--base-ref", default="main")
     parser.add_argument("--pr-number", type=int, default=0)
-    parser.add_argument("--max-wait-seconds", type=int, default=120)
-    parser.add_argument("--poll-seconds", type=int, default=10)
+    parser.add_argument("--max-wait-seconds", type=int, default=600)
+    parser.add_argument("--poll-seconds", type=int, default=15)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 

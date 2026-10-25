@@ -387,12 +387,136 @@ def test_expensive_pr_workflows_are_guarded_before_router_or_guardrails() -> Non
         assert expected in raw
 
 
-def test_ci_enterprise_fast_has_bounded_admission_wait_budget() -> None:
-    raw = (ROOT / ".github/workflows/ci-enterprise-fast.yml").read_text(encoding="utf-8")
-    admission = raw.split("  ci-admission:", 1)[1].split("\n  guardrails:", 1)[0]
-    assert "timeout-minutes: 5" in admission
-    assert "--max-wait-seconds 240" in admission
-    assert "--poll-seconds 5" in admission
+def test_both_core_ci_admissions_have_bounded_wait_and_pr_read_access() -> None:
+    workflows = (
+        (".github/workflows/ci.yml", "  # ─"),
+        (".github/workflows/ci-enterprise-fast.yml", "  guardrails:"),
+    )
+    for path, section_end in workflows:
+        raw = (ROOT / path).read_text(encoding="utf-8")
+        admission = raw.split("  ci-admission:", 1)[1].split(section_end, 1)[0]
+        assert "timeout-minutes: 12" in admission
+        assert "--max-wait-seconds 600" in admission
+        assert "--poll-seconds 15" in admission
+        assert "needs: ci-admission" in raw
+        assert "pull-requests: read" in raw
+
+
+
+
+def test_guard_waits_beyond_old_budget_for_matching_pre_pr(monkeypatch) -> None:
+    clock = [0.0]
+    attempts: list[float] = []
+    base = {"base_ref": "main", "base_sha": "b" * 40, "status": "ahead", "behind_by": 0}
+    monkeypatch.setattr(guard.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(guard.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(guard, "assert_base_freshness", lambda *args: dict(base))
+
+    def evidence(*args):
+        attempts.append(clock[0])
+        if clock[0] < 270:
+            raise guard.AdmissionGuardError("pre_pr_pending_for_head_sha")
+        return {"pre_pr_run_id": 7, "manifest": {"status": "admitted"}}
+
+    monkeypatch.setattr(guard, "verify_evidence", evidence)
+    monkeypatch.setattr(
+        guard, "github_json",
+        lambda repository, path, token: {
+            "state": "open", "head": {"sha": "a" * 40}, "base": {"ref": "main"}
+        } if path == f"pulls/{PR_NUMBER}" else {},
+    )
+    result = guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", 600, 15, PR_NUMBER)
+    assert result["result"] == "ADMISSION_ACCEPTED"
+    assert result["pre_pr_run_id"] == 7
+    assert clock[0] == 270
+    assert len(attempts) == 19
+
+
+def test_guard_pending_timeout_remains_fail_closed(monkeypatch) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(guard.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(guard.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(guard, "assert_base_freshness", lambda *args: {"base_sha": "b" * 40})
+    monkeypatch.setattr(
+        guard, "verify_evidence",
+        lambda *args: (_ for _ in ()).throw(guard.AdmissionGuardError("pre_pr_pending_for_head_sha")),
+    )
+    try:
+        guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", 30, 15, PR_NUMBER)
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "pre_pr_pending_for_head_sha"
+    else:
+        raise AssertionError("timeout não libera admissão")
+    assert clock[0] == 30
+
+
+def test_guard_rejects_base_change_after_pre_pr_success(monkeypatch) -> None:
+    bases = iter(("b" * 40, "c" * 40))
+    monkeypatch.setattr(guard, "assert_base_freshness", lambda *args: {"base_sha": next(bases)})
+    monkeypatch.setattr(guard, "verify_evidence", lambda *args: {"pre_pr_run_id": 7})
+    monkeypatch.setattr(
+        guard, "github_json",
+        lambda *args: (_ for _ in ()).throw(AssertionError("no PR readback after base drift")),
+    )
+    try:
+        guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", 600, 15, PR_NUMBER)
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "base_changed_while_waiting"
+    else:
+        raise AssertionError("base nova invalida manifesto antigo")
+
+
+def test_guard_rejects_changed_pr_revision_on_readback(monkeypatch) -> None:
+    monkeypatch.setattr(guard, "assert_base_freshness", lambda *args: {"base_sha": "b" * 40})
+    monkeypatch.setattr(guard, "verify_evidence", lambda *args: {"pre_pr_run_id": 7})
+    monkeypatch.setattr(
+        guard, "github_json",
+        lambda repo, path, token: {
+            "state": "open", "head": {"sha": "c" * 40}, "base": {"ref": "main"}
+        },
+    )
+    try:
+        guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", 600, 15, PR_NUMBER)
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "pr_revision_changed_while_waiting"
+    else:
+        raise AssertionError("HEAD de outra revisão deve bloquear")
+
+
+def test_guard_failed_pre_pr_is_not_retried_as_pending(monkeypatch) -> None:
+    calls: list[float] = []
+    monkeypatch.setattr(guard, "assert_base_freshness", lambda *args: {"base_sha": "b" * 40})
+    monkeypatch.setattr(
+        guard, "verify_evidence",
+        lambda *args: (_ for _ in ()).throw(guard.AdmissionGuardError("pre_pr_failed_for_head_sha")),
+    )
+    monkeypatch.setattr(guard.time, "sleep", lambda seconds: calls.append(seconds))
+    try:
+        guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", 600, 15, PR_NUMBER)
+    except guard.AdmissionGuardError as exc:
+        assert str(exc) == "pre_pr_failed_for_head_sha"
+    else:
+        raise AssertionError("Pre-PR falho deve bloquear imediatamente")
+    assert calls == []
+
+
+def test_guard_invalid_wait_configuration_blocks_before_api(monkeypatch) -> None:
+    monkeypatch.setattr(
+        guard, "assert_base_freshness",
+        lambda *args: (_ for _ in ()).throw(AssertionError("API must not run")),
+    )
+    for budget, poll, error in (
+        (901, 15, "admission_wait_budget_invalid"),
+        (-1, 15, "admission_wait_budget_invalid"),
+        (600, 0, "admission_poll_interval_invalid"),
+        (600, 61, "admission_poll_interval_invalid"),
+    ):
+        try:
+            guard.wait_for_admission("owner/repo", "a" * 40, "main", "token", budget, poll, PR_NUMBER)
+        except guard.AdmissionGuardError as exc:
+            assert str(exc) == error
+        else:
+            raise AssertionError("orçamento de espera inválido deve bloquear")
 
 
 def test_pr_evidence_gate_requires_manifest_from_current_sha() -> None:

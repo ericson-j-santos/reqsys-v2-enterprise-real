@@ -34,6 +34,11 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 18. O caminho canônico de PR deve ser versionado em `config/workflow-governance-registry.json`; novo workflow com `pull_request` amplo só pode substituir outro workflow sem aumentar a superfície e deve pertencer ao caminho canônico.
 19. Workflows informativos novos devem preferir gatilhos delimitados (`paths`, `workflow_run`, `schedule` ou `workflow_dispatch`) em vez de ampliar o fan-out global de PR.
 
+20. Os dois workflows principais (`CI — ReqSys v2 Enterprise` e `CI Enterprise Fast`) devem aguardar o Pre-PR por no máximo 600 segundos, em intervalos de 15 segundos, com timeout do job de 12 minutos; atraso normal não é reprovação e prazo expirado permanece bloqueio.
+23. O workflow `CI E2E Governado` permanece intocado nesta mudança porque alterá-lo dispara E2E Kubernetes/Argo CD fora do escopo sem deploy/Docker; sua correção de orçamento deve ocorrer em gate separado, sem isenção dos controles.
+21. Depois do manifesto válido, reconsultar `main` e a PR: mudança de SHA da base, do HEAD ou da referência de destino bloqueia imediatamente.
+22. O tempo de espera e o intervalo devem permanecer limitados por contrato; falha do Pre-PR não pode ser reclassificada como pendência passível de retry.
+
 ## Controles negativos
 
 - Pre-PR ausente/falho no SHA atual => Admission Controller bloqueia o CI caro.
