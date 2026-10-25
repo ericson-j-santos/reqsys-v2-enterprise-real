@@ -35,6 +35,7 @@ on:
           - report
           - runner-pool-label-reconcile-noteri
           - runner-pool-label-reconcile-pc24x7
+          - runner-pool-label-reconcile-pc24x7-runtime
       expected_sha:
         description: 'Current main SHA authorized by the owner'
         required: false
@@ -197,8 +198,8 @@ jobs:
           retention-days: 30
 
   runner-pool-label-reconcile:
-    if: ${{ inputs.mode == 'runner-pool-label-reconcile-noteri' || inputs.mode == 'runner-pool-label-reconcile-pc24x7' }}
-    name: Reconcile validated ReqSys DEV base labels for an onboarded PC
+    if: ${{ inputs.mode == 'runner-pool-label-reconcile-noteri' || inputs.mode == 'runner-pool-label-reconcile-pc24x7' || inputs.mode == 'runner-pool-label-reconcile-pc24x7-runtime' }}
+    name: Reconcile validated ReqSys DEV profile labels for an onboarded PC
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -215,6 +216,10 @@ jobs:
           RECONCILE_MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
+          case "${GITHUB_ACTOR:-}" in
+            ericson-j-santos|github-actions\[bot\]) ;;
+            *) echo 'DISPATCH_ACTOR_NOT_AUTHORIZED' >&2; exit 2 ;;
+          esac
           [[ "$AUTHORIZATION_COMMENT_ID" =~ ^[1-9][0-9]{0,19}$ ]] || { echo 'AUTHORIZATION_COMMENT_INVALID' >&2; exit 2; }
           [[ "$ONBOARDING_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || { echo 'ONBOARDING_RUN_ID_INVALID' >&2; exit 2; }
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$EXPECTED_SHA" = "${{ github.sha }}" ] || {
@@ -236,6 +241,7 @@ jobs:
           commands = {
               'runner-pool-label-reconcile-noteri': '/reqsys run noteri-runner-pool-label-reconcile',
               'runner-pool-label-reconcile-pc24x7': '/reqsys run pc24x7-runner-pool-label-reconcile',
+              'runner-pool-label-reconcile-pc24x7-runtime': '/reqsys run pc24x7-runner-pool-runtime-label-reconcile',
           }
           expected_command = commands.get(os.environ.get('RECONCILE_MODE'))
           if not expected_command or comment.get('body') != expected_command:
@@ -314,9 +320,11 @@ jobs:
               raise SystemExit('ONBOARDING_SHA_NOT_ANCESTOR')
           protected = {
               '.github/actions/reqsys-dev-runner-preflight/action.yml',
+              '.github/workflows/noteri-desktop-watchdog-recovery.yml',
               'config/reqsys-dev-runner-pool.json',
               'scripts/install_reqsys_dev_runner.ps1',
               'scripts/onboard_reqsys_dev_runner.ps1',
+              'scripts/reconcile_reqsys_dev_runner_labels.py',
               'scripts/validate_reqsys_dev_runner.py',
           }
           changed = {item.get('filename') for item in value.get('files') or []}
@@ -328,10 +336,17 @@ jobs:
             runner-pool-label-reconcile-noteri)
               artifact_prefix='reqsys-dev-runner-pool-onboard'
               selector_label='noteri'
+              profile='base'
               ;;
             runner-pool-label-reconcile-pc24x7)
               artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7'
               selector_label='pc24x7'
+              profile='base'
+              ;;
+            runner-pool-label-reconcile-pc24x7-runtime)
+              artifact_prefix='reqsys-dev-runner-pool-onboard-pc24x7-runtime'
+              selector_label='pc24x7'
+              profile='runtime'
               ;;
             *) echo 'RECONCILE_MODE_INVALID' >&2; exit 2 ;;
           esac
@@ -340,6 +355,7 @@ jobs:
           [ -n "$artifact_id" ] || { echo 'ONBOARDING_EVIDENCE_ARTIFACT_MISSING' >&2; exit 2; }
           echo "artifact_name=${artifact_prefix}-${ONBOARDING_RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "selector_label=${selector_label}" >> "$GITHUB_OUTPUT"
+          echo "profile=${profile}" >> "$GITHUB_OUTPUT"
 
       - name: Download exact onboarding evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -366,6 +382,7 @@ jobs:
             --expected-sha "$EXPECTED_SHA" \
             --onboarding-sha "$ONBOARDING_SHA" \
             --selector-label "${{ steps.onboarding.outputs.selector_label }}" \
+            --profile "${{ steps.onboarding.outputs.profile }}" \
             --output "$RECONCILE_ROOT/plan.json"
 
       - name: Apply exact labels and verify readback

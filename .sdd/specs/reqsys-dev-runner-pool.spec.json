@@ -23,8 +23,7 @@
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
     "docs/runbooks/reqsys-dev-runner-pool.md",
     "scripts/desktop_admin_broker.py",
-    "tests/test_desktop_admin_broker.py",
-    ".github/workflows/ci.yml"
+    "tests/test_desktop_admin_broker.py"
   ],
   "safety": {
     "dispatch_performed": false,
@@ -53,6 +52,10 @@
     "Second-PC onboarding uploads sanitized evidence before one delayed listener restart and defers shared labels until online readback",
     "Hosted pool monitoring and label reconciliation use short-lived governed GitHub App tokens instead of a personal PAT or machine-bound credential",
     "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart",
+    "A non-elevated PC24x7 runtime route lets base and runtime preflights prefer a fixed user-scoped manifest when present, honors cumulative capability order, refuses reparse points across the path and does not alter the runner service or environment file",
+    "Runtime eligibility proves the current runner registration plus Docker CLI and a responding local Windows named-pipe Engine, and hosted reconciliation selects and confirms exactly one online idle runner",
+    "Missing GitHub App Administration and Actions permissions remain a fail-closed external prerequisite without PAT fallback",
+    "Runtime onboarding and label reconciliation reject direct dispatch by non-owner collaborators even when a fresh owner comment identifier is visible",
     "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation"
   ],
   "sdd_gate": {
