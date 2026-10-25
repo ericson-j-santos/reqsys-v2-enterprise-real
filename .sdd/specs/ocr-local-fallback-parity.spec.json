@@ -7,7 +7,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Preserva backend/ocr_evidencia como fallback DEV/offline, mas exige paridade executável com o ocr-evidence-engine pinado e mantém produção obrigatoriamente no wheel externo.",
+  "description": "Preserva backend/ocr_evidencia como fallback DEV/offline, mas exige paridade executável com o ocr-evidence-engine pinado e mantém produção obrigatoriamente no wheel externo. O OCR Benchmark Gate também cobre no filtro de pull_request qualquer alteração no validador, testes de contrato, empacotamento e especificações do consumidor.",
   "sdd_gate": {
     "tests": [
       "tests/test_ocr_local_fallback_parity.py",
@@ -15,14 +15,15 @@
       "tests/test_ocr_external_runtime_package.py",
       "backend/ocr_tests/test_worker.py"
     ],
-    "evidence_contract": "No mesmo HEAD, um checkout real do engine no SHA do lock deve provar conjunto Python equivalente, byte-identidade dos módulos executáveis, contrato semântico do __init__, proveniência comum e detecção negativa de drift; os contratos de pacote externo e imagem externa permanecem obrigatórios."
+    "evidence_contract": "No mesmo HEAD, um checkout real do engine no SHA do lock deve provar conjunto Python equivalente, byte-identidade dos módulos executáveis, contrato semântico do __init__, proveniência comum e detecção negativa de drift; os contratos de pacote externo e imagem externa permanecem obrigatórios. O teste de regressão garante que paths críticos do contrato acionem o OCR Benchmark Gate, inclusive alterações no próprio teste, e que mudanças fora do domínio não o acionem desnecessariamente."
   },
   "traceability": {
     "implementation": "scripts/validate_ocr_local_fallback_parity.py",
     "local_snapshot": "backend/ocr_evidencia",
     "lock": "config/ocr-engine-lock.json",
     "action": ".github/actions/prepare-ocr-runtime/action.yml",
-    "workflow": ".github/workflows/ocr-benchmark.yml"
+    "workflow": ".github/workflows/ocr-benchmark.yml",
+    "ci_path_filter_regression_test": "tests/test_ocr_external_package_workflow.py::test_ocr_benchmark_is_triggered_for_protected_consumer_surface"
   },
   "risk": {
     "production": false,

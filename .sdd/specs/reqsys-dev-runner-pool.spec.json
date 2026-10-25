@@ -23,7 +23,8 @@
     "docs/adr/ADR-048-pool-runners-dev-por-capacidade.md",
     "docs/runbooks/reqsys-dev-runner-pool.md",
     "scripts/desktop_admin_broker.py",
-    "tests/test_desktop_admin_broker.py"
+    "tests/test_desktop_admin_broker.py",
+    ".github/workflows/ci.yml"
   ],
   "safety": {
     "dispatch_performed": false,
@@ -51,7 +52,8 @@
     "A second registered PC can be onboarded through an approved bootstrap capability without hostname or runner_id affinity",
     "Second-PC onboarding uploads sanitized evidence before one delayed listener restart and defers shared labels until online readback",
     "Hosted pool monitoring and label reconciliation use short-lived governed GitHub App tokens instead of a personal PAT or machine-bound credential",
-    "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart"
+    "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart",
+    "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation"
   ],
   "sdd_gate": {
     "tests": [
