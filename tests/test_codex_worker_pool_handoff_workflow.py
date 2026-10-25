@@ -78,3 +78,26 @@ def test_worker_pool_handoff_is_explicitly_allowlisted() -> None:
     assert policy["self_hosted_allowed"] is True
     assert ".github/workflows/codex-worker-pool-handoff.yml" in policy["approved_workflows"]
     assert policy["required_adr"]
+
+
+def test_native_preflight_uses_governed_session_without_enqueuing() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    section = raw.split("  native-preflight:", 1)[1].split("  hosted-dev-proof:", 1)[0]
+    assert "native_preflight" in raw.split("  workflow_dispatch:", 1)[1].split("  push:", 1)[0]
+    assert "inputs.execution_mode == 'native_preflight'" in section
+    assert "github.ref == 'refs/heads/main'" in section
+    assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in section
+    assert "profile: base" in section
+    assert "--require-runner-version-preflight" in section
+    assert "SESSION_LAUNCH_OK" in section
+    assert "command_gateway.py" in section
+    assert "'--risk', '1'" in section
+    assert "worker_pool_native_preflight.py" in section
+    assert "PROBE-WORKER-POOL-NATIVE" in section
+    assert "task_enqueued -ne $false" in section
+    assert "secrets_read -ne $false" in section
+    assert "worker-pool-native-preflight-" in section
+    assert "secrets." not in section
+    assert "POST" not in section
+    assert "docker " not in section.lower()
+
