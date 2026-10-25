@@ -406,7 +406,7 @@ def _assert_legacy_handoff_checkout_contract(source: str) -> None:
     """Reject using a task's historic base_sha to run the dispatcher itself."""
     assert "\n  enqueue:\n" in source
     enqueue = source.split("\n  enqueue:\n", 1)[1].split(
-        "\n  hosted-dev-proof:\n", 1
+        "\n  native-preflight:\n", 1
     )[0]
     assert "github.ref == 'refs/heads/main'" in enqueue
     assert "ref: ${{ github.sha }}" in enqueue

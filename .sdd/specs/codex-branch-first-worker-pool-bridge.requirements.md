@@ -57,7 +57,12 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 45. A referência de autenticação deve ser exclusivamente nativa e explícita: na ausência, falhar fechado `worker_pool_token_file_not_configured` sem executar Docker nem consultar mounts, processos ou caminhos descobertos.
 46. Caminhos de arquivo devem ser absolutos; rejeitar symlink direto e arquivo não regular; erro não pode expor caminho ou conteúdo.
 47. Os testes do bridge são apenas validação de código; enfileiramento real de #3096 requer arquivo já provisionado e serviço nativo saudável, contrato, replay, readback e pickup.
-48. O CI deve impedir que o job `enqueue` volte a carregar o bridge pelo `inputs.base_sha` histórico, que sobrescreva o `base_sha` da task pelo SHA do executor, que permita despacho fora da `main` ou que persista credenciais de checkout. Os testes devem incluir controles negativos que reproduzem cada regressão.
+
+48. O modo `native_preflight` do handoff verifica **somente** no host físico Noteri, com `main` e SHA fixados, a existência da referência explícita do arquivo protegido sem abrir ou imprimir o arquivo, e a resposta estritamente local `GET http://127.0.0.1:8097/health` (sem redirecionamentos, DNS externo ou proxy).
+49. O diagnóstico separa referência ausente, referência inválida, API indisponível e API não pronta. Mesmo positivo, prova somente prontidão de configuração para posterior autenticação; não comprova token correto, enqueue, Builder, Validator, correção, PR, serviço persistente nem continuidade entre hosts.
+50. O comando literal `/reqsys run worker-pool-native-preflight-dev` é limitado ao proprietário e à issue de gateway #1705, fixando issue #3096, request_id `026e9c5add6137dc65e673a6`, `main`, SHA vigente e modo somente leitura. Deve exigir Session Launcher, Command Gateway, risco 1, host Noteri e evidência sanitizada; falhar fechado diante de contexto ou pré-condições inválidas.
+51. O modo `native_preflight` jamais abre arquivo de credencial, enfileira trabalho ou inicia tarefas, modifica serviços e permissões, executa Docker, reinicia host ou alcança produção. O modo normal e o E2E hospedado permanecem separados.
+52. O CI deve impedir que o job `enqueue` volte a carregar o bridge pelo `inputs.base_sha` histórico, que sobrescreva o `base_sha` da task pelo SHA do executor, que permita despacho fora da `main` ou que persista credenciais de checkout. Os testes devem incluir controles negativos que reproduzem cada regressão.
 
 ## Critérios de aceite
 

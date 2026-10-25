@@ -32,10 +32,13 @@ on:
         options:
           - legacy_pc24x7
           - hosted_dev_proof
+          - native_preflight
   push:
     paths:
       - "scripts/worker_pool_portable_contract_e2e.py"
       - "scripts/pending_development_worker_pool_bridge.py"
+      - "scripts/worker_pool_native_preflight.py"
+      - "tests/test_worker_pool_native_preflight.py"
       - "scripts/hosted_worker_pool_reqsys_proof.py"
       - "scripts/hosted_worker_pool_reqsys_task.py"
       - "scripts/validate_hosted_worker_pool_reqsys_proof.py"
@@ -152,6 +155,97 @@ jobs:
             '- Merge/deploy: não'
             '- Token exposto: não'
           ) | Add-Content $env:GITHUB_STEP_SUMMARY
+
+
+  native-preflight:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.execution_mode == 'native_preflight' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'
+    name: Read-only native Worker Pool admission preflight
+    runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]
+    timeout-minutes: 8
+    env:
+      TARGET_SHA: ${{ inputs.base_sha }}
+      REQUEST_ID: ${{ inputs.request_id }}
+      CORRELATION_ID: native-worker-pool-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/worker-pool-native-preflight/evidence.json
+      PYTHONNOUSERSITE: '1'
+
+    steps:
+      - name: Checkout immutable main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact runner profile
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: base
+          repository-path: .
+
+      - name: Checkout pinned operational rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: 4e6091a133f8d7d157abe6f83c31ca597812e0a4
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TARGET_SHA -ne '${{ github.sha }}') { throw 'NATIVE_PREFLIGHT_HEAD_MISMATCH' }
+          if ($env:REQUEST_ID -ne '026e9c5add6137dc65e673a6') { throw 'NATIVE_PREFLIGHT_REQUEST_MISMATCH' }
+          if ('${{ inputs.issue_number }}' -ne '3096') { throw 'NATIVE_PREFLIGHT_ISSUE_MISMATCH' }
+          $rulesRoot = Join-Path $env:GITHUB_WORKSPACE '_rules'
+          $policy = Join-Path $rulesRoot 'config/command-gateway.policy.json'
+          $launcher = Join-Path $rulesRoot 'scripts/session_launcher.py'
+          $raw = & python $launcher --policy $policy --repo $env:GITHUB_WORKSPACE --session-prefix 'worker-pool-native-preflight' --correlation-id $env:CORRELATION_ID --expected-head $env:TARGET_SHA --sync-ref origin/main --require-runner-version-preflight
+          if ($LASTEXITCODE -ne 0) { throw 'SESSION_LAUNCH_EXIT_NONZERO' }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne 'SESSION_LAUNCH_OK' -or $data.state_validated -ne $true) { throw 'SESSION_LAUNCH_BLOCKED' }
+          if ($data.head -ne $env:TARGET_SHA) { throw 'SESSION_HEAD_MISMATCH' }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Run native read-only probe through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'GOVERNED_SESSION_MISSING' }
+          $rulesRoot = Join-Path $env:GITHUB_WORKSPACE '_rules'
+          $gateway = Join-Path $rulesRoot 'scripts/command_gateway.py'
+          $policy = Join-Path $rulesRoot 'config/command-gateway.policy.json'
+          $probe = Join-Path $env:TARGET_PATH 'scripts/worker_pool_native_preflight.py'
+          $gatewayArgs = @('--policy', $policy, '--correlation-id', $env:CORRELATION_ID, 'run', '--cwd', $env:TARGET_PATH, '--session-id', $env:SESSION_ID, '--risk', '1', '--timeout', '25', '--expected-head', $env:TARGET_SHA, '--', 'python', $probe, '--expected-sha', $env:TARGET_SHA, '--request-id', $env:REQUEST_ID, '--confirm', 'PROBE-WORKER-POOL-NATIVE')
+          $raw = & python $gateway @gatewayArgs
+          $gatewayCode = $LASTEXITCODE
+          if (-not $raw) { throw 'NATIVE_PREFLIGHT_GATEWAY_RECEIPT_MISSING' }
+          $receipt = @($raw)[-1] | ConvertFrom-Json
+          $evidence = $receipt.stdout | ConvertFrom-Json
+          if ($evidence.base_sha -ne $env:TARGET_SHA -or $evidence.request_id -ne $env:REQUEST_ID -or $evidence.secrets_read -ne $false -or $evidence.task_enqueued -ne $false -or $receipt.state_changed -ne $false) { throw 'NATIVE_PREFLIGHT_RECEIPT_INVALID' }
+          New-Item -ItemType Directory -Force (Split-Path $env:EVIDENCE_FILE) | Out-Null
+          $evidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+          if ($gatewayCode -ne 0) { throw ('NATIVE_PREFLIGHT_BLOCKED:' + $evidence.status) }
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: worker-pool-native-preflight-${{ github.run_id }}
+          path: artifacts/worker-pool-native-preflight/evidence.json
+          if-no-files-found: warn
+          retention-days: 7
 
   hosted-dev-proof:
     if: github.event_name == 'workflow_dispatch' && inputs.execution_mode == 'hosted_dev_proof'

@@ -662,3 +662,20 @@ def test_gateway_never_cancels_late_observed_self_hosted_pickup() -> None:
     assert cleanup.index("pickup_observed_before_cancel") < cleanup.index('gh run cancel "$TARGET_RUN_ID"')
     fail = content.split("- name: Fail closed when self-hosted runner pickup times out or is busy", 1)[1]
     assert "steps.cleanup.outputs.status != 'pickup_observed_before_cancel'" in fail
+
+
+def test_native_worker_pool_preflight_is_fixed_to_issue_3096() -> None:
+    text = _workflow()
+    assert "github.event.comment.body == '/reqsys run worker-pool-native-preflight-dev'" in text
+    assert "'/reqsys run worker-pool-native-preflight-dev')" in text
+    assert "mode='native-preflight'" in text
+    assert 'TARGET_MODE" = "native-preflight"' in text
+    assert "-f issue_number=3096" in text
+    assert "-f request_id=026e9c5add6137dc65e673a6" in text
+    assert "-f base_branch=main" in text
+    assert '-f base_sha="$EXPECTED_SHA"' in text
+    assert "-f execution_mode=native_preflight" in text
+    assert "--ref main" in text
+    assert "-f token=" not in text
+    assert "-f path=" not in text
+
