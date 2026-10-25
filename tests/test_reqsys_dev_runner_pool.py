@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -557,3 +558,46 @@ def test_pc24x7_runtime_onboarding_is_user_scoped_and_requires_live_engine():
     assert '--profile "${{ steps.onboarding.outputs.profile }}"' in guard
     assert "mode='runner-pool-onboard-pc24x7-runtime'" in gateway
     assert "mode='runner-pool-label-reconcile-pc24x7-runtime'" in gateway
+
+
+def test_existing_windows_ci_executes_no_mutation_power_shell_binding_gate():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    windows_job = workflow.split("  deploy-check-wrapper-powershell-51:", 1)[1].split("  pipeline-governance:", 1)[0]
+    assert "runs-on: windows-latest" in windows_job
+    assert "Verify native PowerShell 5.1 installer binding without host mutation" in windows_job
+    assert "scripts\\install_reqsys_dev_runner.ps1" in windows_job
+    assert "-LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS'" in windows_job
+    assert "-ApplyGitHubLabels" not in windows_job
+    assert "ParameterNameAlreadyExistsForCommand" in windows_job
+    assert "ADMINISTRATOR_REQUIRED|RUNNER_ROOT_INVALID" in windows_job
+    assert "NEGATIVE_PRECONDITION_MUTATED_HOST" in windows_job
+    assert "NEGATIVE_PRECONDITION_FALSE_POSITIVE" in windows_job
+    assert "NEGATIVE_INSTALLER_BINDING_GATE_PASSED" in windows_job
+    assert "Native negative exit is expected" in windows_job
+    assert "exit 0" in windows_job
+    assert "Restart-Service" not in windows_job
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Only Windows PowerShell 5.1 can bind advanced script parameters")
+def test_installer_powershell_parameter_binding_reaches_fail_closed_preflight(tmp_path):
+    missing = tmp_path / "absent-runner-root"
+    script = ROOT / "scripts/install_reqsys_dev_runner.ps1"
+    result = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script),
+            "-RunnerInstanceId", "reqsys-pc-a1b2c3d4",
+            "-RuntimeRoot", str(missing),
+            "-RunnerRoot", str(missing),
+            "-Profile", "base",
+            "-LabelConfirmation", "APPLY-REQSYS-DEV-RUNNER-LABELS",
+        ],
+        text=True,
+        capture_output=True,
+        timeout=25,
+        check=False,
+    )
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "ADMINISTRATOR_REQUIRED" in diagnostic or "RUNNER_ROOT_INVALID" in diagnostic
+    assert "ParameterNameAlreadyExistsForCommand" not in diagnostic
+    assert not missing.exists()

@@ -537,6 +537,33 @@ jobs:
           }
           powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests\test_deploy_check_wrapper_windows.ps1 -PythonPath "$env:pythonLocation\python.exe" -EmbeddedPythonPath "$env:EMBEDDED_PYTHON" -GatewayPath "$env:GITHUB_WORKSPACE\_rules\scripts\command_gateway.py" -GatewayPolicyPath "$env:GITHUB_WORKSPACE\_rules\config\command-gateway.policy.json"
 
+      - name: Verify native PowerShell 5.1 installer binding without host mutation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
+            throw 'WINDOWS_POWERSHELL_51_REQUIRED'
+          }
+          $script = Join-Path $env:GITHUB_WORKSPACE 'scripts\install_reqsys_dev_runner.ps1'
+          $missingRoot = Join-Path $env:RUNNER_TEMP 'noteri-installer-negative-missing-runner'
+          if (Test-Path -LiteralPath $missingRoot) { throw 'NEGATIVE_PRECONDITION_ROOT_EXISTS' }
+          $priorErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $diagnostic = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -RunnerInstanceId 'reqsys-pc-a1b2c3d4' -RuntimeRoot $missingRoot -RunnerRoot $missingRoot -Profile 'base' -LabelConfirmation 'APPLY-REQSYS-DEV-RUNNER-LABELS' 2>&1 | Out-String
+          $nativeExit = $LASTEXITCODE
+          $ErrorActionPreference = $priorErrorAction
+          if ($nativeExit -eq 0) { throw 'NEGATIVE_PRECONDITION_FALSE_POSITIVE' }
+          if ($diagnostic -match 'ParameterNameAlreadyExistsForCommand') {
+            throw 'RESERVED_CONFIRM_BINDING_REGRESSION'
+          }
+          if ($diagnostic -notmatch '(ADMINISTRATOR_REQUIRED|RUNNER_ROOT_INVALID)') {
+            throw 'NEGATIVE_PRECONDITION_NOT_REACHED'
+          }
+          if (Test-Path -LiteralPath $missingRoot) { throw 'NEGATIVE_PRECONDITION_MUTATED_HOST' }
+          Write-Output 'NEGATIVE_INSTALLER_BINDING_GATE_PASSED'
+          # Native negative exit is expected. Host step succeeds only after all assertions.
+          exit 0
+
   pipeline-governance:
     name: Pipeline Governança + Evidence Snapshot
     runs-on: ubuntu-latest
