@@ -47,6 +47,10 @@ DEV observarem o runtime PC24x7 vigente por meio do locator público assinado.
     (`AI_CONVERSATION_TEAMS_REPLY_COMPLETED`). O replay de uma resposta de cartão DEVE incrementar
     a métrica de duplicidade sem incrementar `responses_sent`, preservando os mesmos controles de
     privacidade e sem exigir o `activity.id` original.
+16. A prova física de replay inbound DEVE usar um gatilho exclusivamente DEV, one-shot, com TTL
+    máximo de dez minutos e escopo derivado da referência Bot vigente. O gatilho DEVE reutilizar
+    em memória a mesma Activity real, suprimir uma segunda resposta mesmo se a idempotência
+    regredir, expirar após o consumo e permanecer bloqueado em TEST, HML e PROD.
 
 ## Rollback
 
