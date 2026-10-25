@@ -48,6 +48,7 @@ jobs:
           python -m py_compile scripts/workflow_inventory_audit.py
           python -m py_compile scripts/workflow_inventory_decision_gate.py
           python -m py_compile scripts/desktop_admin_broker.py
+          python -m py_compile scripts/desktop_admin_broker_stage_only.py
           python -m py_compile scripts/reconcile_reqsys_dev_runner_labels.py
           python -m py_compile scripts/validate_reqsys_dev_runner.py
 
@@ -68,6 +69,7 @@ jobs:
             tests/test_reqsys_dev_runner_pool.py \
             tests/test_reconcile_reqsys_dev_runner_labels.py \
             tests/test_desktop_admin_broker.py \
+            tests/test_desktop_admin_broker_stage_only.py \
             -q
 
       - name: Validar workflow PR CI Watch
