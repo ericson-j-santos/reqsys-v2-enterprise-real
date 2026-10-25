@@ -24,7 +24,8 @@
     "docs/runbooks/reqsys-dev-runner-pool.md",
     "scripts/desktop_admin_broker.py",
     "tests/test_desktop_admin_broker.py",
-    ".github/workflows/ci-fast-operational.yml"
+    ".github/workflows/ci-fast-operational.yml",
+    ".github/workflows/ci.yml"
   ],
   "safety": {
     "dispatch_performed": false,
@@ -56,7 +57,8 @@
     "Profile-aware reconciliation accepts base evidence for both Noteri and PC24x7, then validates cumulative label readback",
     "S4U task registration passes a null password and does not store or repeatedly request credentials",
     "PC24x7 base onboarding requires no Docker; runtime capability remains explicitly Docker-gated and cannot be inferred from its bootstrap selector",
-    "Fast operational CI blocks merge unless the ReqSys runner pool, label reconciliation and S4U broker regression suites execute and pass on the current HEAD"
+    "Fast operational CI blocks merge unless the ReqSys runner pool, label reconciliation and S4U broker regression suites execute and pass on the current HEAD",
+    "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation"
   ],
   "sdd_gate": {
     "tests": [

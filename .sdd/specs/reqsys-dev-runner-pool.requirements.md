@@ -22,3 +22,4 @@
 - R18: o registro da tarefa S4U deve usar senha nula, sem armazenar senha e sem exigir nova interação depois da ativação administrativa inicial.
 
 - R19: o onboarding PC24x7 sem Docker deve permanecer no perfil `base`; a label `runtime` só pode ser concedida por fluxo separado, com preflight da ferramenta e prova física no mesmo SHA.
+- R20: o job Windows PowerShell 5.1 existente de CI deve executar o instalador com `runner_root` inexistente e `-LabelConfirmation`, comprovar bloqueio por pré-requisito sem conflito de binding ou saída zero e confirmar ausência de criação de diretório ou mutação do host.
