@@ -387,11 +387,10 @@ def test_expensive_pr_workflows_are_guarded_before_router_or_guardrails() -> Non
         assert expected in raw
 
 
-def test_all_ci_admissions_have_bounded_wait_and_pr_read_access() -> None:
+def test_both_core_ci_admissions_have_bounded_wait_and_pr_read_access() -> None:
     workflows = (
         (".github/workflows/ci.yml", "  # ─"),
         (".github/workflows/ci-enterprise-fast.yml", "  guardrails:"),
-        (".github/workflows/ci-e2e-governado.yml", "  e2e-router:"),
     )
     for path, section_end in workflows:
         raw = (ROOT / path).read_text(encoding="utf-8")

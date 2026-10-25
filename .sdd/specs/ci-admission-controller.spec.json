@@ -74,7 +74,7 @@
     "Admission Guard exige também workflow:surface-budget como invariante preventiva obrigatória e rejeita manifesto que a omita ou marque como falha.",
     "PR Evidence Gate baixa e valida o conteúdo interno do ci-admission-<HEAD_SHA> via guard canônico antes de concluir sucesso.",
     "Estado deferred permanece observável, mas não pode concluir o PR Evidence Gate com sucesso.",
-    "Three CI admission jobs wait up to 600s on the current Pre-PR SHA with bounded 15s polling and job timeout, preserving failed/missing/expired negative results.",
+    "The two core CI admission jobs wait up to 600 seconds for exact Pre-PR evidence with bounded polling; CI E2E Governado remains unchanged pending a separate Kubernetes/deploy risk gate.",
     "Admission rechecks current main SHA and current PR revision immediately before accepting the immutable admission manifest; drift fails closed."
   ]
 }
