@@ -9,6 +9,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.services import ai_conversation_teams_inbound as inbound
 
 
+@pytest.fixture(autouse=True)
+def clear_replay_proof_latches():
+    with inbound._replay_proof_lock:
+        inbound._replay_proof_deadlines.clear()
+    yield
+    with inbound._replay_proof_lock:
+        inbound._replay_proof_deadlines.clear()
+
+
 def _activity(*, activity_id='activity-1', text='Olá ReqSys'):
     return {
         'id': activity_id,
@@ -62,6 +71,122 @@ def test_fingerprint_da_activity_e_estavel_e_nao_expoe_identificador():
     assert fingerprint == 'c1ffeee4d0eed82b7a24ac012710ea9dcdce15c71931cdf168ac3aca88505d1a'
     assert 'activity-1' not in fingerprint
     assert inbound._activity_id_sha256('') is None
+
+
+def test_gatilho_replay_e_one_shot_escopado_e_expira(monkeypatch):
+    clock = {'now': 100.0}
+    monkeypatch.setattr(inbound.time, 'monotonic', lambda: clock['now'])
+
+    ttl = inbound.armar_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+        ttl_seconds=45,
+    )
+
+    assert ttl == 45
+    assert inbound._consumir_prova_replay_teams(
+        usuario_aad_object_id='aad-other',
+        teams_conversation_id='teams-conversation-1',
+    ) is False
+    assert inbound._consumir_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    ) is True
+    assert inbound._consumir_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    ) is False
+
+    inbound.armar_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+        ttl_seconds=30,
+    )
+    clock['now'] = 131.0
+    assert inbound._consumir_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    ) is False
+
+
+def test_gatilho_reprocessa_mesma_activity_sem_segunda_resposta_ou_provedor():
+    db = MagicMock()
+    conversa = _conversation()
+    resposta = SimpleNamespace(content='Resposta do ReqSys')
+    enviar = AsyncMock()
+    executar = MagicMock(
+        side_effect=[
+            {'mensagem_assistente': resposta, 'duplicado': False},
+            {'mensagem_assistente': resposta, 'duplicado': True},
+        ]
+    )
+    registrar = MagicMock()
+    activity = _activity(activity_id='activity-real-1')
+    inbound.armar_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    )
+
+    with (
+        patch.object(inbound, '_conversa_recente', return_value=conversa),
+        patch.object(inbound, 'executar_turno', executar),
+        patch.object(inbound, '_responder_no_chat', enviar),
+        patch.object(inbound, 'registrar_evento', registrar),
+    ):
+        result = asyncio.run(inbound.processar_activity_teams_bot(db, activity))
+
+    assert executar.call_count == 2
+    assert {
+        call.kwargs['idempotency_key'] for call in executar.call_args_list
+    } == {'teams-activity:activity-real-1'}
+    enviar.assert_awaited_once()
+    payloads = [json.loads(call.kwargs['payload_minimo']) for call in registrar.call_args_list]
+    assert len(payloads) == 2
+    assert payloads[0]['activity_id_sha256'] == payloads[1]['activity_id_sha256']
+    assert payloads[0]['duplicate'] is False
+    assert payloads[0]['provider_invoked'] is True
+    assert payloads[0]['response_sent'] is True
+    assert payloads[1]['duplicate'] is True
+    assert payloads[1]['provider_invoked'] is False
+    assert payloads[1]['response_sent'] is False
+    assert result['replay_proof'] == {
+        'requested': True,
+        'duplicate': True,
+        'response_sent': False,
+    }
+
+
+def test_gatilho_suprime_segunda_resposta_mesmo_se_idempotencia_regredir():
+    db = MagicMock()
+    conversa = _conversation()
+    resposta = SimpleNamespace(content='Resposta do ReqSys')
+    enviar = AsyncMock()
+    executar = MagicMock(
+        side_effect=[
+            {'mensagem_assistente': resposta, 'duplicado': False},
+            {'mensagem_assistente': resposta, 'duplicado': False},
+        ]
+    )
+    registrar = MagicMock()
+    inbound.armar_prova_replay_teams(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    )
+
+    with (
+        patch.object(inbound, '_conversa_recente', return_value=conversa),
+        patch.object(inbound, 'executar_turno', executar),
+        patch.object(inbound, '_responder_no_chat', enviar),
+        patch.object(inbound, 'registrar_evento', registrar),
+    ):
+        result = asyncio.run(inbound.processar_activity_teams_bot(db, _activity()))
+
+    enviar.assert_awaited_once()
+    second_payload = json.loads(registrar.call_args_list[1].kwargs['payload_minimo'])
+    assert second_payload['duplicate'] is False
+    assert second_payload['provider_invoked'] is True
+    assert second_payload['response_sent'] is False
+    assert result['replay_proof']['duplicate'] is False
 
 
 def test_processar_mensagem_comum_reutiliza_conversa_e_responde_no_chat():
