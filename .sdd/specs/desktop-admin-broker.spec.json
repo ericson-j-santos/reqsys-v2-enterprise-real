@@ -24,8 +24,7 @@
     "/reqsys admin desktop recover-control-plane",
     "/reqsys admin desktop recover-rdc",
     "/reqsys admin desktop recover-runner",
-    "/reqsys admin desktop activate-watchdog",
-    "/reqsys run pc24x7-runner-pool-onboard"
+    "/reqsys admin desktop activate-watchdog"
   ],
   "sdd_gate": {
     "tests": [
@@ -33,7 +32,7 @@
       "tests/test_desktop_admin_broker_uac_launcher.py",
       "tests/test_activate_desktop_free_control_plane.py"
     ],
-    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, and recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap."
+    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap, and persist a sanitized activation result so elevated UAC failures are propagated without waiting only for a timeout."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-admin-broker.requirements.md",
@@ -47,6 +46,7 @@
       "unit_tests_green",
       "negative_controls_green",
       "anti_replay_green",
+      "uac_activation_evidence_green",
       "pre_pr_ready_current_sha",
       "ci_green_current_sha"
     ],

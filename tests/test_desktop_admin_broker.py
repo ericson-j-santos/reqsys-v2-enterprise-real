@@ -189,6 +189,47 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
     assert "--action" not in activation_text
 
 
+def test_register_task_from_metadata_records_sanitized_evidence(monkeypatch, tmp_path: Path) -> None:
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(m, "now_iso", lambda: "2026-10-24T23:00:00+00:00")
+    monkeypatch.setattr(
+        m,
+        "register_task_from_metadata",
+        lambda path: {"ok": True, "task_name": m.TASK_NAME},
+    )
+
+    result = m.register_task_from_metadata_with_evidence(metadata)
+
+    evidence = json.loads((tmp_path / m.ACTIVATION_EVIDENCE_FILE).read_text(encoding="utf-8"))
+    assert result["ok"] is True
+    assert evidence["ok"] is True
+    assert evidence["result"] == "DESKTOP_ADMIN_BROKER_TASK_REGISTERED"
+    assert evidence["production_touched"] is False
+    assert evidence["secrets_read"] is False
+
+
+def test_register_task_from_metadata_records_failure_without_secret(monkeypatch, tmp_path: Path) -> None:
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(m, "now_iso", lambda: "2026-10-24T23:00:00+00:00")
+    monkeypatch.setattr(
+        m,
+        "register_task_from_metadata",
+        lambda path: (_ for _ in ()).throw(m.BrokerError("task_registration_failed")),
+    )
+
+    with pytest.raises(m.BrokerError, match="task_registration_failed"):
+        m.register_task_from_metadata_with_evidence(metadata)
+
+    evidence = json.loads((tmp_path / m.ACTIVATION_EVIDENCE_FILE).read_text(encoding="utf-8"))
+    assert evidence["ok"] is False
+    assert evidence["result"] == "DESKTOP_ADMIN_BROKER_ACTIVATION_BLOCKED"
+    assert evidence["error_code"] == "activation_unexpected_error"
+    assert evidence["production_touched"] is False
+    assert evidence["secrets_read"] is False
+
+
 def test_recover_runner_uses_fixed_noninteractive_bootstrap(monkeypatch, tmp_path: Path) -> None:
     release = tmp_path / "release"
     scripts = release / "scripts"
@@ -351,8 +392,8 @@ def test_register_task_contract_requires_s4u_highest() -> None:
     assert 'principal.LogonType = TASK_LOGON_S4U' in source
     assert 'principal.RunLevel = TASK_RUNLEVEL_HIGHEST' in source
 
-
 def test_register_task_uses_null_s4u_password(monkeypatch, tmp_path: Path) -> None:
+    """A S4U COM registration must pass a null password, not an empty string."""
     registered: list[tuple] = []
     folder = SimpleNamespace(
         RegisterTaskDefinition=lambda *args: registered.append(args),
@@ -371,12 +412,10 @@ def test_register_task_uses_null_s4u_password(monkeypatch, tmp_path: Path) -> No
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
     monkeypatch.setattr(m, "current_user_id", lambda: r"DESKTOP-PDQK954\Windows")
     monkeypatch.setattr(m, "_scheduler", lambda: service)
-
     result = m.register_task(
         python_executable=tmp_path / "python.exe",
         launcher=tmp_path / "run.py",
     )
-
     assert result["password_used"] is False
     assert len(registered) == 1
     assert registered[0][4] is None

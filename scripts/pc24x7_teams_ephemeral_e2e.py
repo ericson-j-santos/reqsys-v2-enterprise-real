@@ -372,6 +372,31 @@ def reply_same_conversation(
     return _delivery_summary(status, payload)
 
 
+def arm_inbound_replay_proof(
+    api_base: str,
+    token: str,
+    correlation_id: str,
+    conversation_id: str,
+) -> dict:
+    status, payload = request_json(
+        'POST',
+        runtime_api_url(
+            api_base,
+            f'/v1/teams-gateway/ai-conversations/{conversation_id}/replay-proof/arm',
+        ),
+        headers=_service_headers(token, correlation_id + '-arm-replay', scoped=True),
+    )
+    data = _data(payload)
+    expires = data.get('expires_in_seconds')
+    return {
+        'http_status': status,
+        'armed': data.get('armed') is True,
+        'one_shot': data.get('one_shot') is True,
+        'expires_in_seconds': expires if isinstance(expires, int) else None,
+        'secret_value_exposed': False,
+    }
+
+
 def execute_e2e(
     *,
     api_base: str,
@@ -385,7 +410,7 @@ def execute_e2e(
 ) -> dict:
     normalized_auth_mode = str(auth_mode or '').strip().lower()
     evidence: dict = {
-        'schema_version': '1.4.0',
+        'schema_version': '1.5.0',
         'status': 'blocked',
         'environment': 'dev',
         'correlation_id': correlation_id,
@@ -407,6 +432,7 @@ def execute_e2e(
         'conversation': None,
         'delivery_attempts': [],
         'turn_idempotency_proven': False,
+        'inbound_replay_proof': None,
         'error': None,
         'secret_value_exposed': False,
         'production_touched': False,
@@ -518,6 +544,22 @@ def execute_e2e(
         )
         if evidence['turn_idempotency_proven'] is not True:
             raise EphemeralE2EError('turn_idempotency_not_proven')
+
+        inbound_replay_proof = arm_inbound_replay_proof(
+            api_base,
+            token,
+            correlation_id,
+            conversation_id,
+        )
+        evidence['inbound_replay_proof'] = inbound_replay_proof
+        if (
+            inbound_replay_proof.get('http_status') != 200
+            or inbound_replay_proof.get('armed') is not True
+            or inbound_replay_proof.get('one_shot') is not True
+        ):
+            raise EphemeralE2EError(
+                f"inbound_replay_proof_arm_failed:http_{inbound_replay_proof.get('http_status')}"
+            )
 
         evidence['status'] = 'done'
     except EphemeralE2EError as exc:

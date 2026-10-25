@@ -24,8 +24,7 @@
     "docs/runbooks/reqsys-dev-runner-pool.md",
     "scripts/desktop_admin_broker.py",
     "tests/test_desktop_admin_broker.py",
-    ".github/workflows/ci-fast-operational.yml",
-    ".github/workflows/ci.yml"
+    ".github/workflows/ci-fast-operational.yml"
   ],
   "safety": {
     "dispatch_performed": false,
@@ -54,11 +53,13 @@
     "Second-PC onboarding uploads sanitized evidence before one delayed listener restart and defers shared labels until online readback",
     "Hosted pool monitoring and label reconciliation use short-lived governed GitHub App tokens instead of a personal PAT or machine-bound credential",
     "Privileged PC24x7 onboarding reuses only the pre-existing S4U/highest admin broker task, independently revalidates the exact owner comment and immutable clean checkout, exposes no administrative secret, remains DEV/base-only and schedules one delayed runner restart",
-    "Profile-aware reconciliation accepts base evidence for both Noteri and PC24x7, then validates cumulative label readback",
-    "S4U task registration passes a null password and does not store or repeatedly request credentials",
-    "PC24x7 base onboarding requires no Docker; runtime capability remains explicitly Docker-gated and cannot be inferred from its bootstrap selector",
-    "Fast operational CI blocks merge unless the ReqSys runner pool, label reconciliation and S4U broker regression suites execute and pass on the current HEAD",
-    "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation"
+    "A non-elevated PC24x7 runtime route lets base and runtime preflights prefer a fixed user-scoped manifest when present, honors cumulative capability order, refuses reparse points across the path and does not alter the runner service or environment file",
+    "Runtime eligibility proves the current runner registration plus Docker CLI and a responding local Windows named-pipe Engine, and hosted reconciliation selects and confirms exactly one online idle runner",
+    "Missing GitHub App Administration and Actions permissions remain a fail-closed external prerequisite without PAT fallback",
+    "Runtime onboarding and label reconciliation reject direct dispatch by non-owner collaborators even when a fresh owner comment identifier is visible",
+    "The existing Windows PowerShell 5.1 CI job proves installer parameter binding reaches a fail-closed prerequisite without host mutation",
+    "PC24x7 base reconciliation requires exact S4U admin-route receipt and rejects incomplete or forged onboarding evidence",
+    "Native S4U registration uses a null COM password and the focused CI suites execute on the current SHA"
   ],
   "sdd_gate": {
     "tests": [

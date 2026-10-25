@@ -42,6 +42,12 @@ TASK_LOGON_S4U = 2
 TASK_CREATE_OR_UPDATE = 6
 TASK_RUNLEVEL_HIGHEST = 1
 TASK_INSTANCES_IGNORE_NEW = 2
+ACTIVATION_EVIDENCE_FILE = "activation-last.json"
+ACTIVATION_ERROR_CODES = {
+    "pywin32_unavailable",
+    "task_scheduler_access_denied",
+    "task_scheduler_registration_failed",
+}
 INSTALL_CONFIRM = "INSTALL-DESKTOP-ADMIN-BROKER"
 DEFAULT_POLL_SECONDS = 90
 MAX_COMMENT_AGE_SECONDS = 300
@@ -729,7 +735,7 @@ def _scheduler():
     try:
         import win32com.client  # type: ignore
     except ImportError as exc:
-        raise BrokerError("pywin32 indisponível") from exc
+        raise BrokerError("pywin32_unavailable") from exc
     service = win32com.client.Dispatch("Schedule.Service")
     service.Connect()
     return service
@@ -774,7 +780,7 @@ def register_task(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
         detail = repr(exc).casefold()
         if "0x80070005" in detail or "-2147024891" in detail or "access is denied" in detail or "acesso negado" in detail:
             raise BrokerError("task_scheduler_access_denied") from exc
-        raise BrokerError(f"registro do broker falhou: {type(exc).__name__}") from exc
+        raise BrokerError("task_scheduler_registration_failed") from exc
     return {
         "ok": True,
         "task_name": TASK_NAME,
@@ -1058,6 +1064,48 @@ def register_task_from_metadata(metadata_path: Path) -> dict[str, Any]:
     )
 
 
+def activation_evidence_path(metadata_path: Path) -> Path:
+    return metadata_path.resolve().parent / ACTIVATION_EVIDENCE_FILE
+
+
+def register_task_from_metadata_with_evidence(metadata_path: Path) -> dict[str, Any]:
+    evidence = activation_evidence_path(metadata_path)
+    try:
+        task = register_task_from_metadata(metadata_path)
+    except Exception as exc:
+        candidate = exc.args[0] if isinstance(exc, BrokerError) and exc.args else None
+        error_code = (
+            candidate
+            if isinstance(candidate, str) and candidate in ACTIVATION_ERROR_CODES
+            else "activation_unexpected_error"
+        )
+        atomic_json(
+            evidence,
+            {
+                "ok": False,
+                "result": "DESKTOP_ADMIN_BROKER_ACTIVATION_BLOCKED",
+                "error_code": error_code,
+                "error_type": type(exc).__name__,
+                "production_touched": False,
+                "secrets_read": False,
+                "generated_at": now_iso(),
+            },
+        )
+        raise
+    atomic_json(
+        evidence,
+        {
+            "ok": True,
+            "result": "DESKTOP_ADMIN_BROKER_TASK_REGISTERED",
+            "task": task,
+            "production_touched": False,
+            "secrets_read": False,
+            "generated_at": now_iso(),
+        },
+    )
+    return task
+
+
 def install(
     source_root: Path,
     *,
@@ -1188,7 +1236,7 @@ def main() -> int:
                 timeout_seconds=args.timeout_seconds,
             )
         else:
-            payload = register_task_from_metadata(args.metadata.resolve())
+            payload = register_task_from_metadata_with_evidence(args.metadata.resolve())
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)[:1000], "error_type": type(exc).__name__}, sort_keys=True))
         return 2

@@ -27,7 +27,7 @@ jobs:
   ci-admission:
     name: CI Admission Controller
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - name: Checkout do controlador
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -47,8 +47,8 @@ jobs:
             --event-name "${{ github.event_name }}" \
             --base-ref "${{ github.event.pull_request.base.ref || 'main' }}" \
             --pr-number "${{ github.event.pull_request.number || 0 }}" \
-            --max-wait-seconds 240 \
-            --poll-seconds 5 \
+            --max-wait-seconds 600 \
+            --poll-seconds 15 \
             --output "artifacts/ci-admission-guard/${{ github.event.pull_request.head.sha || github.sha }}.json"
       - name: Publicar evidência do admission controller
         if: always()
