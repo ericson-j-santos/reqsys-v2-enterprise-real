@@ -64,6 +64,16 @@ def build_elevated_arguments(installation: dict[str, Any]) -> str:
     )
 
 
+def read_activation_evidence(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def shell_execute_runas(executable: Path, params: str, cwd: Path) -> int:
     return int(
         ctypes.windll.shell32.ShellExecuteW(
@@ -104,8 +114,11 @@ def launch(metadata_path: Path, *, confirm: str, timeout_seconds: int) -> dict[s
         return {"ok": True, "mode": "already_ready", **finalize(installation)}
 
     if is_admin():
-        broker.register_task_from_metadata(installation["metadata_path"])
+        broker.register_task_from_metadata_with_evidence(installation["metadata_path"])
         return {"ok": True, "mode": "already_elevated", **finalize(installation)}
+
+    activation_evidence = broker.activation_evidence_path(installation["metadata_path"])
+    activation_evidence.unlink(missing_ok=True)
 
     rc = shell_execute_runas(
         installation["python_executable"],
@@ -119,6 +132,12 @@ def launch(metadata_path: Path, *, confirm: str, timeout_seconds: int) -> dict[s
     while time.monotonic() < deadline:
         if task_ready(broker.task_status()):
             return {"ok": True, "mode": "uac", **finalize(installation)}
+        evidence = read_activation_evidence(activation_evidence)
+        if evidence is not None and evidence.get("ok") is False:
+            error_code = str(evidence.get("error_code") or "activation_unknown_error")
+            if error_code not in broker.ACTIVATION_ERROR_CODES | {"activation_unexpected_error"}:
+                error_code = "activation_invalid_error_code"
+            raise RuntimeError(f"uac_activation_failed:{error_code}")
         time.sleep(1.0)
     return {"ok": False, "mode": "uac", "result": "UAC_APPROVAL_OR_PROVISIONING_PENDING"}
 

@@ -46,6 +46,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 20. A elevação inicial deve usar somente `desktop_admin_broker_uac_launcher.py` e o subcomando fixo `register-task-com --metadata`.
 21. O canal não autoriza reboot, shutdown, deploy, produção, segredo, RBAC amplo, force-push ou exclusão destrutiva.
 22. Toda evidência deve declarar `production_touched=false`, `secrets_read=false` e `reboot_performed=false`.
+23. A ativação UAC deve remover evidência obsoleta antes da tentativa e persistir resultado sanitizado de sucesso ou falha em `activation-last.json`; o launcher deve encerrar imediatamente quando observar falha elevada, sem esperar apenas o timeout.
 
 ## Comandos allowlisted
 
@@ -63,6 +64,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 - anti-replay comprovado;
 - comentário de ator incorreto, associação incorreta, editado, antigo ou fora da allowlist deve ser ignorado;
 - UAC launcher deve elevar somente a release imutável e somente com metadata governada;
+- sucesso e falha do subcomando elevado devem produzir evidência sanitizada, sem segredo, e a falha deve ser propagada pelo launcher;
 - `recover-runner` deve usar apenas o bootstrap fixo da release, sem login/refresh interativo do GitHub;
 - Pre-PR Readiness no HEAD exato deve produzir `READY_FOR_PR=passed`.
 
