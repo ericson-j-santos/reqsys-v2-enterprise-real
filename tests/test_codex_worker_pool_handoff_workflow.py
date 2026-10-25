@@ -11,7 +11,7 @@ POLICY = ROOT / ".github/self-hosted-runner-policy.json"
 def sections() -> tuple[str, str, str, str]:
     raw = WORKFLOW.read_text(encoding="utf-8")
     enqueue = raw.split("  enqueue:", maxsplit=1)[1].split(
-        "  hosted-dev-proof:", maxsplit=1
+        "  native-preflight:", maxsplit=1
     )[0]
     hosted = raw.split("  hosted-dev-proof:", maxsplit=1)[1].split(
         "  portable-contract-e2e:", maxsplit=1
@@ -32,7 +32,12 @@ def test_worker_pool_handoff_preserves_legacy_default() -> None:
     assert "inputs.execution_mode == 'legacy_pc24x7'" in enqueue
     assert "runs-on: [self-hosted, Windows, X64, reqsys-dev, reqsys-dev-base-v1]" in enqueue
     assert "./.github/actions/reqsys-dev-runner-preflight" in enqueue
-    assert "ref: ${{ inputs.base_sha }}" in enqueue
+    # Executor source and task base are distinct identities.
+    assert "github.ref == 'refs/heads/main'" in enqueue
+    assert "ref: ${{ github.sha }}" in enqueue
+    assert "ref: ${{ inputs.base_sha }}" not in enqueue
+    assert '--base-sha "${{ inputs.base_sha }}"' in enqueue
+    assert "persist-credentials: false" in enqueue
     assert "pending_development_worker_pool_bridge.py" in enqueue
     assert "http://127.0.0.1:8097" in enqueue
     assert "replay_created" in enqueue

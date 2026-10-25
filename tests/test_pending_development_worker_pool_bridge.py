@@ -400,3 +400,46 @@ def test_contract_probe_never_falls_back_on_auth_runtime_or_transport_failure(re
             failed,
             allow_legacy_fallback=True,
         )
+
+
+def _assert_legacy_handoff_checkout_contract(source: str) -> None:
+    """Reject using a task's historic base_sha to run the dispatcher itself."""
+    assert "\n  enqueue:\n" in source
+    enqueue = source.split("\n  enqueue:\n", 1)[1].split(
+        "\n  native-preflight:\n", 1
+    )[0]
+    assert "github.ref == 'refs/heads/main'" in enqueue
+    assert "ref: ${{ github.sha }}" in enqueue
+    assert "ref: ${{ inputs.base_sha }}" not in enqueue
+    assert '--base-sha "${{ inputs.base_sha }}"' in enqueue
+    assert '--base-sha "${{ github.sha }}"' not in enqueue
+    assert "persist-credentials: false" in enqueue
+
+
+def test_handoff_uses_current_trusted_dispatcher_without_rebasing_task() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github/workflows/codex-worker-pool-handoff.yml"
+    ).read_text(encoding="utf-8")
+    _assert_legacy_handoff_checkout_contract(workflow)
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("ref: ${{ github.sha }}", "ref: ${{ inputs.base_sha }}"),
+        ('--base-sha "${{ inputs.base_sha }}"', '--base-sha "${{ github.sha }}"'),
+        (" && github.ref == 'refs/heads/main'", ""),
+        ("persist-credentials: false", "persist-credentials: true"),
+    ],
+)
+def test_handoff_sha_separation_regression_controls_detect_old_bug(
+    before: str, after: str
+) -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github/workflows/codex-worker-pool-handoff.yml"
+    ).read_text(encoding="utf-8")
+    assert before in workflow
+    with pytest.raises(AssertionError):
+        _assert_legacy_handoff_checkout_contract(workflow.replace(before, after, 1))

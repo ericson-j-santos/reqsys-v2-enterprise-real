@@ -176,3 +176,48 @@ jobs:
           path: artifacts/workflow-inventory-audit
           if-no-files-found: warn
           retention-days: 30
+
+  # Consolidated Windows-only stage contract; no extra workflow surface.
+  windows-stage-contract:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Stage-only Windows filesystem and safety regressions
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout untrusted PR for unit tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Setup pinned Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Install test dependency
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check --no-input pytest==8.4.2
+      - name: Compile stage-only and regression tests
+        shell: pwsh
+        run: |
+          python -m py_compile scripts/desktop_admin_broker_stage_only.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m py_compile tests/test_desktop_admin_broker_stage_only.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run positive negative replay and rollback on Windows
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_desktop_admin_broker_stage_only.py -q -ra --junitxml=stage-windows.xml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$result = Get-Content -Raw stage-windows.xml
+          $suite = $result.testsuites.testsuite
+          if ([int]$suite.tests -lt 10) { throw 'STAGE_TESTS_NOT_EXECUTED' }
+          if ([int]$suite.skipped -ne 0) { throw 'STAGE_TEST_SKIPPED' }
+          if ([int]$suite.failures -ne 0 -or [int]$suite.errors -ne 0) { throw 'STAGE_TEST_FAILURE' }
+      - name: Publish isolated Windows test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: broker-stage-windows-${{ github.run_id }}
+          path: stage-windows.xml
+          if-no-files-found: error
+          retention-days: 7
