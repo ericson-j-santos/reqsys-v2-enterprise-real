@@ -135,6 +135,17 @@ def reply_payload(*, conversation_id='conv-dev-1', duplicate=False, delivered=Tr
     }
 
 
+def replay_proof_armed_payload(conversation_id='conv-dev-1'):
+    return {
+        'data': {
+            'armed': True,
+            'conversation_id': conversation_id,
+            'expires_in_seconds': 600,
+            'one_shot': True,
+        }
+    }
+
+
 def patch_valid_admin(monkeypatch):
     monkeypatch.setattr(
         module,
@@ -236,6 +247,9 @@ def _success_request_recorder(calls, secret='service-token-must-never-appear'):
                 return 200, reply_payload(duplicate=False, delivered=True)
             assert body['enviar_teams'] is False
             return 200, reply_payload(duplicate=True, delivered=False)
+        if method == 'POST' and url.endswith('/conv-dev-1/replay-proof/arm'):
+            assert body is None
+            return 200, replay_proof_armed_payload()
         if method == 'DELETE' and url.endswith('/77'):
             return 200, {'data': {'id': 77, 'revogado': True}}
         raise AssertionError((method, url, body))
@@ -309,6 +323,8 @@ def test_scoped_service_token_proves_conversation_without_admin_mint_or_revoke(
                 duplicate=True,
                 delivered=False,
             )
+        if method == 'POST' and url.endswith('/conv-s2s/replay-proof/arm'):
+            return 200, replay_proof_armed_payload('conv-s2s')
         raise AssertionError((method, url, body))
 
     monkeypatch.setattr(module, 'request_json', fake_request)
@@ -331,6 +347,8 @@ def test_scoped_service_token_proves_conversation_without_admin_mint_or_revoke(
     assert evidence['admin_auth_source'] is None
     assert evidence['conversation']['conversation_id'] == 'conv-s2s'
     assert evidence['turn_idempotency_proven'] is True
+    assert evidence['inbound_replay_proof']['armed'] is True
+    assert evidence['inbound_replay_proof']['one_shot'] is True
     assert secret not in json.dumps(evidence)
     assert all('/v1/admin/' not in call[1] for call in calls)
 
@@ -359,6 +377,33 @@ def test_scoped_service_token_missing_fails_before_any_request(monkeypatch):
     assert evidence['token_lifecycle_applicable'] is False
     assert evidence['token_created'] is False
     assert evidence['token_revoked'] is False
+
+
+def test_arm_replay_proof_failure_blocks_e2e_without_exposing_token(monkeypatch):
+    secret = 'scoped-replay-token-must-never-appear'
+    calls = []
+    base_fake = _success_request_recorder(calls, secret)
+
+    def fake_request(method, url, *, headers, body=None):
+        if method == 'POST' and url.endswith('/replay-proof/arm'):
+            return 409, {}
+        return base_fake(method, url, headers=headers, body=body)
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='',
+        service_token=secret,
+        auth_mode=module.AUTH_MODE_SCOPED_SERVICE_TOKEN,
+        correlation_id='corr-replay-arm-failed',
+        provider='gemini',
+        model='gemini-2.5-flash',
+    )
+
+    assert evidence['status'] == 'blocked'
+    assert evidence['error'] == 'inbound_replay_proof_arm_failed:http_409'
+    assert evidence['inbound_replay_proof']['armed'] is False
+    assert secret not in json.dumps(evidence)
 
 
 def test_scoped_service_token_wrong_scope_is_rejected_without_secret_exposure(
@@ -548,6 +593,8 @@ def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
             if reply_count['value'] == 2:
                 return 200, reply_payload(duplicate=True, delivered=True)
             return 200, reply_payload(duplicate=True, delivered=False)
+        if method == 'POST' and url.endswith('/conv-dev-1/replay-proof/arm'):
+            return 200, replay_proof_armed_payload()
         if method == 'DELETE' and url.endswith('/88'):
             return 200, {'data': {'id': 88, 'revogado': True}}
         raise AssertionError((method, url))

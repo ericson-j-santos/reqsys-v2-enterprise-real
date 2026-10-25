@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -464,6 +465,70 @@ def test_reply_traduz_conflito_para_409(api_overrides, monkeypatch):
         '/v1/teams-gateway/ai-conversations/conv-1/reply',
         json={'mensagem': 'Continue', 'enviar_teams': False},
     )
+
+    assert response.status_code == 409
+
+
+def test_armar_replay_proof_dev_usa_referencia_vigente(api_overrides, monkeypatch):
+    conversa = _conversation(teams_destino_id='aad-user-1', teams_modo='bot')
+    referencia = SimpleNamespace(conversation_id='teams-conversation-1')
+    armar = MagicMock(return_value=600)
+    registrar = MagicMock()
+    monkeypatch.setattr(api.settings, 'app_environment', 'development')
+    monkeypatch.setattr(api, 'obter_conversa', lambda *args, **kwargs: conversa)
+    monkeypatch.setattr(api, 'obter_conversa_referencia_bot', lambda *args, **kwargs: referencia)
+    monkeypatch.setattr(api, 'diagnosticar_propriedade_conversa_referencia', lambda value: None)
+    monkeypatch.setattr(api, 'armar_prova_replay_teams', armar)
+    monkeypatch.setattr(api, 'registrar_evento', registrar)
+
+    response = client.post(
+        '/v1/teams-gateway/ai-conversations/conv-1/replay-proof/arm',
+        headers={'X-Correlation-ID': 'corr-arm'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['data'] == {
+        'armed': True,
+        'conversation_id': 'conv-1',
+        'expires_in_seconds': 600,
+        'one_shot': True,
+    }
+    armar.assert_called_once_with(
+        usuario_aad_object_id='aad-user-1',
+        teams_conversation_id='teams-conversation-1',
+    )
+    audit_payload = json.loads(registrar.call_args.kwargs['payload_minimo'])
+    assert audit_payload == {'expires_in_seconds': 600, 'one_shot': True, 'status': 'armed'}
+
+
+@pytest.mark.parametrize('environment', ['test', 'staging', 'production'])
+def test_armar_replay_proof_bloqueia_fora_de_dev(
+    api_overrides,
+    monkeypatch,
+    environment,
+):
+    monkeypatch.setattr(api.settings, 'app_environment', environment)
+    obter = MagicMock()
+    monkeypatch.setattr(api, 'obter_conversa', obter)
+
+    response = client.post('/v1/teams-gateway/ai-conversations/conv-1/replay-proof/arm')
+
+    assert response.status_code == 403
+    obter.assert_not_called()
+
+
+def test_armar_replay_proof_exige_conversa_bot_e_referencia_vigente(
+    api_overrides,
+    monkeypatch,
+):
+    monkeypatch.setattr(api.settings, 'app_environment', 'development')
+    monkeypatch.setattr(
+        api,
+        'obter_conversa',
+        lambda *args, **kwargs: _conversation(teams_destino_id='', teams_modo='fila'),
+    )
+
+    response = client.post('/v1/teams-gateway/ai-conversations/conv-1/replay-proof/arm')
 
     assert response.status_code == 409
 

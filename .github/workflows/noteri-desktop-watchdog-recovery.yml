@@ -18,6 +18,7 @@ on:
           - runner-pool-canary
           - runner-pool-onboard-noteri
           - runner-pool-onboard-pc24x7
+          - runner-pool-onboard-pc24x7-runtime
           - watchdog-readback
           - alm-runner-bootstrap
           - reboot-once
@@ -1195,6 +1196,195 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+
+  runner-pool-onboard-pc24x7-runtime:
+    if: ${{ inputs.mode == 'runner-pool-onboard-pc24x7-runtime' }}
+    name: Configure eligible ReqSys DEV runtime profile on a PC24x7 runner
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      EVIDENCE_FILE: artifacts/reqsys-dev-runner-pool-onboard-runtime/evidence.json
+    steps:
+      - name: Verify owner authorization and immutable SHA
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_COMMENT_ID: ${{ inputs.authorization_comment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (@('ericson-j-santos', 'github-actions[bot]') -cnotcontains $env:GITHUB_ACTOR) {
+            throw 'DISPATCH_ACTOR_NOT_AUTHORIZED'
+          }
+          if ($env:AUTHORIZATION_COMMENT_ID -notmatch '^[0-9]+$') { throw 'AUTHORIZATION_COMMENT_INVALID' }
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$' -or $env:EXPECTED_SHA -ne '${{ github.sha }}') {
+            throw 'EXPECTED_SHA_INVALID'
+          }
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $comment = Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/comments/$env:AUTHORIZATION_COMMENT_ID" -Headers $headers -TimeoutSec 30
+          if ($comment.user.login -ne 'ericson-j-santos' -or
+              $comment.issue_url -ne "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/1705" -or
+              $comment.body -cne '/reqsys run pc24x7-runner-pool-runtime-onboard') {
+            throw 'AUTHORIZATION_MISMATCH'
+          }
+          $age = [DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($comment.created_at).ToUniversalTime()
+          if ($age.TotalSeconds -lt -300 -or $age.TotalMinutes -gt 30) { throw 'AUTHORIZATION_EXPIRED' }
+
+      - name: Checkout immutable authorized SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Configure and validate user-scoped runtime profile
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Assert-NoReparseComponent {
+            param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string]$Code)
+            $candidate = [IO.Path]::GetFullPath($Path)
+            while (-not [string]::IsNullOrWhiteSpace($candidate)) {
+              if (Test-Path -LiteralPath $candidate) {
+                $item = Get-Item -LiteralPath $candidate -Force
+                if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw $Code }
+              }
+              $parent = Split-Path -Parent $candidate
+              if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) { break }
+              $candidate = $parent
+            }
+          }
+          $observed = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne $env:EXPECTED_SHA) { throw 'CHECKOUT_SHA_MISMATCH' }
+          if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCAL_APP_DATA_MISSING' }
+
+          $localRoot = Join-Path $env:LOCALAPPDATA 'ReqSys'
+          Assert-NoReparseComponent -Path $localRoot -Code 'LOCAL_RUNTIME_PARENT_REPARSE_REFUSED'
+          if (-not (Test-Path -LiteralPath $localRoot)) {
+            New-Item -ItemType Directory -Path $localRoot | Out-Null
+          }
+          Assert-NoReparseComponent -Path $localRoot -Code 'LOCAL_RUNTIME_PARENT_REPARSE_REFUSED'
+          $runtimeRoot = Join-Path $localRoot 'Runtime'
+          New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+          Assert-NoReparseComponent -Path $runtimeRoot -Code 'LOCAL_RUNTIME_ROOT_REPARSE_REFUSED'
+
+          $manifestPath = Join-Path $localRoot 'runner-pool.json'
+          $instanceId = ''
+          if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+            $manifestItem = Get-Item -LiteralPath $manifestPath -Force
+            if (($manifestItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'LOCAL_RUNNER_MANIFEST_REPARSE_REFUSED'
+            }
+            $current = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ([string]$current.environment -ne 'dev') { throw 'EXISTING_RUNNER_MANIFEST_SCOPE_INVALID' }
+            if ([string]$current.runner_instance_id -notmatch '^reqsys-pc-[0-9a-f]{8,32}$') {
+              throw 'EXISTING_RUNNER_INSTANCE_ID_INVALID'
+            }
+            $instanceId = [string]$current.runner_instance_id
+          }
+          if ([string]::IsNullOrWhiteSpace($instanceId)) {
+            $instanceId = 'reqsys-pc-' + ([Guid]::NewGuid().ToString('N').Substring(0, 12))
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) { throw 'GITHUB_WORKSPACE_MISSING' }
+          $candidate = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $runnerRoots = @()
+          while (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            if (Test-Path -LiteralPath (Join-Path $candidate '.runner') -PathType Leaf) {
+              $runnerRoots += $candidate
+            }
+            $parent = Split-Path -Parent $candidate
+            if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) { break }
+            $candidate = $parent
+          }
+          if ($runnerRoots.Count -ne 1) {
+            throw 'CURRENT_RUNNER_REGISTRATION_INVALID'
+          }
+          $runnerMetadata = Join-Path $runnerRoots[0] '.runner'
+          Assert-NoReparseComponent -Path $runnerMetadata -Code 'CURRENT_RUNNER_REGISTRATION_REPARSE_REFUSED'
+
+          foreach ($name in @('DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH')) {
+            if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw 'REMOTE_DOCKER_ENDPOINT_REFUSED'
+            }
+          }
+          $dockerEndpoint = (& docker context inspect --format '{{.Endpoints.docker.Host}}' 2>$null | Out-String).Trim().ToLowerInvariant()
+          $localDockerEndpoints = @(
+            'npipe:////./pipe/docker_engine',
+            'npipe:////./pipe/dockerdesktoplinuxengine',
+            'npipe:////./pipe/dockerdesktopwindowsengine'
+          )
+          if ($LASTEXITCODE -ne 0 -or $localDockerEndpoints -cnotcontains $dockerEndpoint) {
+            throw 'LOCAL_DOCKER_ENDPOINT_REQUIRED'
+          }
+          $dockerServerVersion = (& docker version --format '{{.Server.Version}}' 2>$null | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dockerServerVersion)) {
+            throw 'DOCKER_ENGINE_UNAVAILABLE'
+          }
+
+          & '.\scripts\onboard_reqsys_dev_runner.ps1' `
+            -RunnerInstanceId $instanceId `
+            -RuntimeRoot $runtimeRoot `
+            -Profile runtime `
+            -ManifestPath $manifestPath
+          if ($LASTEXITCODE -ne 0) { throw 'RUNNER_RUNTIME_ONBOARDING_BLOCKED' }
+
+      - name: Validate runtime through the shared manifest resolver
+        uses: ./.github/actions/reqsys-dev-runner-preflight
+        with:
+          profile: runtime
+          repository-path: .
+
+      - name: Write sanitized runtime onboarding evidence
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $rendered = [ordered]@{
+            schema_version = 1
+            result = 'REQSYS_DEV_RUNNER_RUNTIME_PROFILE_CONFIGURED'
+            pool = 'reqsys-dev-pc-pool-v1'
+            profile = 'runtime'
+            environment = 'dev'
+            source_sha = $env:EXPECTED_SHA
+            bootstrap_selector = 'pc24x7'
+            manifest_updated = $true
+            manifest_scope = 'user_local_app_data'
+            manifest_resolution = 'runtime_user_manifest_preferred'
+            runner_env_updated = $false
+            runtime_root_valid = $true
+            docker_engine_valid = $true
+            docker_endpoint_class = 'local_npipe'
+            runner_registration_valid = $true
+            labels_applied = $false
+            label_reconciliation_required = $true
+            service_restarted = $false
+            service_restart_required = $false
+            service_restart_scheduled = $false
+            canary_dispatched = $false
+            automatic_retry_enabled = $false
+            deploy_performed = $false
+            production_touched = $false
+          } | ConvertTo-Json -Depth 4
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [IO.File]::WriteAllText($env:EVIDENCE_FILE, $rendered + [Environment]::NewLine, $utf8NoBom)
+
+      - name: Upload sanitized runtime onboarding evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reqsys-dev-runner-pool-onboard-pc24x7-runtime-${{ github.run_id }}
+          path: artifacts/reqsys-dev-runner-pool-onboard-runtime/evidence.json
+          if-no-files-found: error
+          retention-days: 30
 
   runner-pool-canary:
     if: ${{ inputs.mode == 'runner-pool-canary' }}

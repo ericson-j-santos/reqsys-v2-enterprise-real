@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "max_timeout_seconds": 300,
+  "scripts": {
+    "scripts/activate_desktop_admin_broker_from_wsl.ps1": {
+      "arguments": [
+        "-Confirm",
+        "ACTIVATE-REQSYS-DESKTOP-ADMIN-BROKER"
+      ],
+      "environment": "local/DEV",
+      "interactive_uac": true,
+      "purpose": "Ativar e comprovar o Desktop Admin Broker por consentimento UAC local"
+    }
+  }
+}
