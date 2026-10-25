@@ -123,3 +123,14 @@ def test_activation_script_has_fixed_host_uac_and_task_contract() -> None:
     assert "Invoke-Expression" not in source
     assert "ScriptBlock" not in source
     assert "EncodedCommand" not in source
+
+
+def test_activation_stages_sha256_verified_windows_local_copy_before_uac() -> None:
+    source = ACTIVATOR.read_text(encoding="utf-8")
+    assert "Test-IsAdministrator" in source
+    assert "Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256" in source
+    assert "WslPowerShellBridge\\releases" in source
+    assert "Copy-Item -LiteralPath $PSCommandPath" in source
+    assert "STAGED_ACTIVATOR_HASH_MISMATCH" in source
+    assert '"-Elevated"' in source
+    assert "ELEVATED_TOKEN_REQUIRED" in source
