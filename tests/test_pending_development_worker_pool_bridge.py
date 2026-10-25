@@ -1,8 +1,5 @@
 from __future__ import annotations
-
-import json
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -49,245 +46,99 @@ def test_non_loopback_pool_is_rejected() -> None:
         bridge.validate_pool_url("https://worker.example.internal:8097")
 
 
-def test_token_resolution_prefers_explicit_then_environment(monkeypatch, tmp_path: Path) -> None:
+def test_token_resolution_prefers_explicit_then_host_then_service(monkeypatch, tmp_path: Path) -> None:
     explicit = tmp_path / "explicit-token"
-    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE", str(tmp_path / "container-token"))
-    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", str(tmp_path / "host-token"))
-    monkeypatch.setattr(
-        bridge,
-        "discover_worker_pool_token_file_from_docker",
-        lambda: (_ for _ in ()).throw(AssertionError("docker discovery must not run")),
-    )
-
+    host = tmp_path / "host-token"
+    service = tmp_path / "service-token"
+    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE", str(service))
+    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", str(host))
     assert bridge.resolve_token_file(explicit) == explicit
-    assert bridge.resolve_token_file(None) == tmp_path / "container-token"
+    assert bridge.resolve_token_file(None) == host
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST")
+    assert bridge.resolve_token_file(None) == service
 
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE")
-    assert bridge.resolve_token_file(None) == tmp_path / "host-token"
+
+def test_native_token_file_reads_existing_value(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "protected-token"
+    path.write_text("test-fixture-not-a-real-secret\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", str(path))
+    assert bridge.read_token(bridge.resolve_token_file(None)) == "test-fixture-not-a-real-secret"
+
+
+def test_no_native_token_reference_fails_closed_without_docker_probe(monkeypatch) -> None:
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+    with pytest.raises(bridge.BridgeError, match="^worker_pool_token_file_not_configured$"):
+        bridge.resolve_token_file(None)
+    source = (Path(__file__).resolve().parents[1] / "scripts/pending_development_worker_pool_bridge.py").read_text(
+        encoding="utf-8"
+    ).lower()
+    assert "subprocess" not in source
+    assert "docker" not in source
+
+
+def test_missing_reference_diagnostic_is_sanitized(monkeypatch) -> None:
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    with pytest.raises(bridge.BridgeError) as exc:
+        bridge.resolve_token_file(None)
+    assert str(exc.value) == "worker_pool_token_file_not_configured"
+
+
+def test_token_reference_rejects_relative_path(monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "secrets/token")
+    with pytest.raises(bridge.BridgeError, match="worker_pool_token_file_not_absolute"):
+        bridge.resolve_token_file(None)
+    with pytest.raises(bridge.BridgeError, match="worker_pool_token_file_not_absolute"):
+        bridge.read_token(Path("secrets/token"))
+
+
+def test_token_reference_rejects_symlink(monkeypatch, tmp_path: Path) -> None:
+    alias = tmp_path / "alias"
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self == alias or original_is_symlink(self))
+    with pytest.raises(bridge.BridgeError, match="worker_pool_token_file_symlink_forbidden"):
+        bridge.resolve_token_file(alias)
+    with pytest.raises(bridge.BridgeError, match="worker_pool_token_file_symlink_forbidden"):
+        bridge.read_token(alias)
+
+
+def test_token_reference_rejects_directory_without_leak(tmp_path: Path) -> None:
+    with pytest.raises(bridge.BridgeError) as exc:
+        bridge.read_token(tmp_path)
+    assert str(exc.value) == "worker_pool_token_file_not_regular"
+    assert str(tmp_path) not in str(exc.value)
 
 
 def test_read_token_classifies_missing_file_without_path_leak(tmp_path: Path) -> None:
-    token_path = tmp_path / "missing-token"
-
-    with pytest.raises(bridge.BridgeError) as exc_info:
-        bridge.read_token(token_path)
-
-    assert str(exc_info.value) == "worker_pool_token_file_missing"
-    assert str(token_path) not in str(exc_info.value)
+    path = tmp_path / "missing-token"
+    with pytest.raises(bridge.BridgeError) as exc:
+        bridge.read_token(path)
+    assert str(exc.value) == "worker_pool_token_file_missing"
+    assert str(path) not in str(exc.value)
 
 
-def test_read_token_classifies_permission_denied_without_path_leak(
-    monkeypatch, tmp_path: Path
-) -> None:
-    token_path = tmp_path / "protected-token"
-
-    def denied_read_text(_self: Path, *args, **kwargs) -> str:
+def test_read_token_classifies_permission_denied_without_path_leak(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "protected-token"
+    def denied(_self: Path, *args, **kwargs) -> str:
         raise PermissionError("access denied")
-
-    monkeypatch.setattr(Path, "read_text", denied_read_text)
-
-    with pytest.raises(bridge.BridgeError) as exc_info:
-        bridge.read_token(token_path)
-
-    assert str(exc_info.value) == "worker_pool_token_permission_denied"
-    assert str(token_path) not in str(exc_info.value)
+    monkeypatch.setattr(Path, "read_text", denied)
+    with pytest.raises(bridge.BridgeError) as exc:
+        bridge.read_token(path)
+    assert str(exc.value) == "worker_pool_token_permission_denied"
+    assert str(path) not in str(exc.value)
 
 
-def test_read_token_keeps_generic_os_error_sanitized(
-    monkeypatch, tmp_path: Path
-) -> None:
-    token_path = tmp_path / "io-error-token"
-
-    def failed_read_text(_self: Path, *args, **kwargs) -> str:
+def test_read_token_keeps_generic_os_error_sanitized(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "io-error-token"
+    def failed(_self: Path, *args, **kwargs) -> str:
         raise OSError("device error")
-
-    monkeypatch.setattr(Path, "read_text", failed_read_text)
-
-    with pytest.raises(bridge.BridgeError) as exc_info:
-        bridge.read_token(token_path)
-
-    assert str(exc_info.value) == "worker_pool_token_unavailable"
-    assert str(token_path) not in str(exc_info.value)
-
-
-def test_token_resolution_discovers_single_docker_bind(monkeypatch) -> None:
-    source = r"C:\secure\codex-worker-pool.token"
-    calls: list[list[str]] = []
-
-    def container(*, host_ip: str | None, source_path: str | None) -> dict[str, Any]:
-        bindings = []
-        if host_ip is not None:
-            bindings = [{"HostIp": host_ip, "HostPort": bridge.WORKER_POOL_HOST_PORT}]
-        mounts = []
-        if source_path is not None:
-            mounts = [
-                {
-                    "Type": "bind",
-                    "Source": source_path,
-                    "Destination": bridge.WORKER_POOL_TOKEN_DESTINATION,
-                }
-            ]
-        return {
-            "Config": {
-                "Labels": {
-                    "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
-                }
-            },
-            "State": {"Running": True},
-            "NetworkSettings": {
-                "Ports": {bridge.WORKER_POOL_CONTAINER_PORT: bindings}
-            },
-            "Mounts": mounts,
-        }
-
-    def fake_run(args: list[str], **_kwargs):
-        calls.append(args)
-        if args[1] == "ps":
-            return SimpleNamespace(stdout="container-old\ncontainer-active\n")
-        if args[1] == "inspect":
-            return SimpleNamespace(
-                stdout=json.dumps(
-                    [
-                        container(host_ip=None, source_path=None),
-                        container(host_ip=bridge.WORKER_POOL_HOST_IP, source_path=source),
-                    ]
-                )
-            )
-        raise AssertionError(args)
-
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
-
-    assert str(bridge.resolve_token_file(None)) == source
-    assert calls[0] == [
-        "docker",
-        "ps",
-        "--filter",
-        f"label=com.docker.compose.service={bridge.WORKER_POOL_COMPOSE_SERVICE}",
-        "--format",
-        "{{.ID}}",
-    ]
-    assert calls[1] == ["docker", "inspect", "container-old", "container-active"]
-
-def test_token_resolution_fails_closed_for_ambiguous_container(monkeypatch) -> None:
-    def canonical(source: str) -> dict[str, Any]:
-        return {
-            "Config": {
-                "Labels": {
-                    "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
-                }
-            },
-            "State": {"Running": True},
-            "NetworkSettings": {
-                "Ports": {
-                    bridge.WORKER_POOL_CONTAINER_PORT: [
-                        {
-                            "HostIp": bridge.WORKER_POOL_HOST_IP,
-                            "HostPort": bridge.WORKER_POOL_HOST_PORT,
-                        }
-                    ]
-                }
-            },
-            "Mounts": [
-                {
-                    "Type": "bind",
-                    "Source": source,
-                    "Destination": bridge.WORKER_POOL_TOKEN_DESTINATION,
-                }
-            ],
-        }
-
-    def fake_run(args: list[str], **_kwargs):
-        if args[1] == "ps":
-            return SimpleNamespace(stdout="one\ntwo\n")
-        return SimpleNamespace(
-            stdout=json.dumps([canonical(r"C:\secure\one"), canonical(r"C:\secure\two")])
-        )
-
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
-
-    with pytest.raises(bridge.BridgeError, match="worker_pool_endpoint_container_not_unique"):
-        bridge.resolve_token_file(None)
-
-def test_token_resolution_fails_closed_for_ambiguous_mount(monkeypatch) -> None:
-    def fake_run(args: list[str], **_kwargs):
-        if args[1] == "ps":
-            return SimpleNamespace(stdout="container-123\n")
-        mount = {
-            "Type": "bind",
-            "Source": r"C:\secure\token",
-            "Destination": bridge.WORKER_POOL_TOKEN_DESTINATION,
-        }
-        return SimpleNamespace(
-            stdout=json.dumps(
-                [
-                    {
-                        "Config": {
-                            "Labels": {
-                                "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
-                            }
-                        },
-                        "State": {"Running": True},
-                        "NetworkSettings": {
-                            "Ports": {
-                                bridge.WORKER_POOL_CONTAINER_PORT: [
-                                    {
-                                        "HostIp": bridge.WORKER_POOL_HOST_IP,
-                                        "HostPort": bridge.WORKER_POOL_HOST_PORT,
-                                    }
-                                ]
-                            }
-                        },
-                        "Mounts": [mount, dict(mount)],
-                    }
-                ]
-            )
-        )
-
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
-
-    with pytest.raises(bridge.BridgeError, match="worker_pool_token_mount_not_unique"):
-        bridge.resolve_token_file(None)
-
-
-def test_token_resolution_fails_closed_for_noncanonical_endpoint_binding(monkeypatch) -> None:
-    def fake_run(args: list[str], **_kwargs):
-        if args[1] == "ps":
-            return SimpleNamespace(stdout="container-123\n")
-        return SimpleNamespace(
-            stdout=json.dumps(
-                [
-                    {
-                        "Config": {
-                            "Labels": {
-                                "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
-                            }
-                        },
-                        "State": {"Running": True},
-                        "NetworkSettings": {
-                            "Ports": {
-                                bridge.WORKER_POOL_CONTAINER_PORT: [
-                                    {"HostIp": "0.0.0.0", "HostPort": bridge.WORKER_POOL_HOST_PORT}
-                                ]
-                            }
-                        },
-                        "Mounts": [],
-                    }
-                ]
-            )
-        )
-
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
-    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
-
-    with pytest.raises(bridge.BridgeError, match="worker_pool_endpoint_container_not_unique"):
-        bridge.resolve_token_file(None)
+    monkeypatch.setattr(Path, "read_text", failed)
+    with pytest.raises(bridge.BridgeError) as exc:
+        bridge.read_token(path)
+    assert str(exc.value) == "worker_pool_token_unavailable"
+    assert str(path) not in str(exc.value)
 
 
 def test_enqueue_prefers_work_v1_and_proves_replay_and_independent_readback() -> None:

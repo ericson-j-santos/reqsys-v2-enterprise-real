@@ -16,7 +16,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 6. O job físico `enqueue` do workflow de handoff deve executar somente por `workflow_dispatch`, no runner allowlisted `[self-hosted, Windows, X64, pc24x7, reqsys-dev]`; jobs GitHub-hosted de validação contratual podem reutilizar o mesmo workflow em eventos explicitamente restritos.
 7. O workflow deve fazer checkout do `base_sha` imutável informado pelo orquestrador.
 8. O bridge só pode acessar Worker Pool por HTTP em loopback (`127.0.0.1`, `localhost` ou `::1`).
-9. O bearer token deve ser lido exclusivamente de arquivo já provisionado por `CODEX_WORKER_POOL_API_TOKEN_FILE` ou `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST`; o valor não pode entrar em workflow, log ou evidência.
+9. O bearer token deve ser lido exclusivamente de arquivo já provisionado por `--token-file`, `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST` (preferencial no host) ou `CODEX_WORKER_POOL_API_TOKEN_FILE`; o valor não pode entrar em workflow, log ou evidência.
 10. Em contrato v1, o bridge deve preferir `POST /v1/work`, repetir a mesma identidade e exigir replay `created=false` no mesmo `work_id` e `task_id`.
 11. Um `GET /v1/work/{work_id}` separado deve confirmar `work_id`, `task_id`, repositório, issue, `request_id` e `base_sha`; somente HTTP 404 de `/v1/work` pode ativar o fallback temporário para `/v1/tasks`.
 12. A evidência não pode conter `lease_token`.
@@ -53,6 +53,10 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 42. A criação do Work v1 hospedado não pode enviar branch protegida como destino; deve omitir `target_branch` e delegar ao Worker Pool a derivação branch-first determinística.
 43. A evidência do Work não pode declarar readback independente antes da conclusão bem-sucedida do subprocesso PostgreSQL separado; esse subprocesso deve receber o perfil privado com CA explícita. Em replay, evidência já verificada só pode ser reutilizada depois de novo readback e da coincidência de SHA, controles e merge state.
 44. A identidade idempotente enviada ao Work v1 pela prova hospedada deve ser derivada deterministicamente do `request_id` do gateway e do `base_sha` exato. Replay no mesmo SHA deve convergir; avanço da base deve gerar nova identidade, Work e task, sem atribuir evidência antiga ao SHA corrente.
+
+45. A referência de autenticação deve ser exclusivamente nativa e explícita: na ausência, falhar fechado `worker_pool_token_file_not_configured` sem executar Docker nem consultar mounts, processos ou caminhos descobertos.
+46. Caminhos de arquivo devem ser absolutos; rejeitar symlink direto e arquivo não regular; erro não pode expor caminho ou conteúdo.
+47. Os testes do bridge são apenas validação de código; enfileiramento real de #3096 requer arquivo já provisionado e serviço nativo saudável, contrato, replay, readback e pickup.
 
 ## Critérios de aceite
 

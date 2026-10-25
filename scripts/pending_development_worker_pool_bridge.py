@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -26,11 +25,6 @@ from scripts.pending_development_local_codex import (  # noqa: E402
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ELIGIBLE_STATUSES = {"dispatched", "already_dispatched"}
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
-WORKER_POOL_COMPOSE_SERVICE = "codex-worker-pool"
-WORKER_POOL_HOST_IP = "127.0.0.1"
-WORKER_POOL_HOST_PORT = "8097"
-WORKER_POOL_CONTAINER_PORT = "8097/tcp"
-WORKER_POOL_TOKEN_DESTINATION = "/run/secrets/codex_worker_pool_api_token"
 EXPECTED_WORKER_POOL_CONTRACT_NAME = "engineering-worker-pool"
 EXPECTED_WORKER_POOL_CONTRACT_VERSION = "v1"
 
@@ -115,103 +109,34 @@ def validate_pool_url(value: str) -> str:
     return raw
 
 
-def _docker_run(args: list[str]) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            args,
-            cwd=ROOT,
-            check=True,
-            text=True,
-            capture_output=True,
-            timeout=15,
-        )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        raise BridgeError("worker_pool_token_docker_probe_failed") from exc
-
-
-def _has_canonical_worker_pool_endpoint(container: dict[str, Any]) -> bool:
-    labels = (container.get("Config") or {}).get("Labels") or {}
-    if labels.get("com.docker.compose.service") != WORKER_POOL_COMPOSE_SERVICE:
-        return False
-    state = container.get("State") or {}
-    if state.get("Running") is not True:
-        return False
-
-    ports = (container.get("NetworkSettings") or {}).get("Ports") or {}
-    bindings = ports.get(WORKER_POOL_CONTAINER_PORT) or []
-    endpoint_bindings = [
-        binding
-        for binding in bindings
-        if isinstance(binding, dict)
-        and str(binding.get("HostIp") or "") == WORKER_POOL_HOST_IP
-        and str(binding.get("HostPort") or "") == WORKER_POOL_HOST_PORT
-    ]
-    return len(endpoint_bindings) == 1
-
-
-def discover_worker_pool_token_file_from_docker() -> Path:
-    containers = _docker_run(
-        [
-            "docker",
-            "ps",
-            "--filter",
-            f"label=com.docker.compose.service={WORKER_POOL_COMPOSE_SERVICE}",
-            "--format",
-            "{{.ID}}",
-        ]
-    )
-    container_ids = list(
-        dict.fromkeys(line.strip() for line in containers.stdout.splitlines() if line.strip())
-    )
-    if not container_ids:
-        raise BridgeError("worker_pool_service_container_missing")
-
-    inspected = _docker_run(["docker", "inspect", *container_ids])
-    try:
-        payload = json.loads(inspected.stdout)
-    except json.JSONDecodeError as exc:
-        raise BridgeError("worker_pool_container_inspect_invalid") from exc
-    if (
-        not isinstance(payload, list)
-        or len(payload) != len(container_ids)
-        or any(not isinstance(item, dict) for item in payload)
-    ):
-        raise BridgeError("worker_pool_container_inspect_invalid")
-
-    endpoint_containers = [
-        container for container in payload if _has_canonical_worker_pool_endpoint(container)
-    ]
-    if len(endpoint_containers) != 1:
-        raise BridgeError("worker_pool_endpoint_container_not_unique")
-    container = endpoint_containers[0]
-
-    mounts = [
-        mount
-        for mount in container.get("Mounts") or []
-        if isinstance(mount, dict)
-        and mount.get("Type") == "bind"
-        and mount.get("Destination") == WORKER_POOL_TOKEN_DESTINATION
-        and str(mount.get("Source") or "").strip()
-    ]
-    if len(mounts) != 1:
-        raise BridgeError("worker_pool_token_mount_not_unique")
-    return Path(str(mounts[0]["Source"]))
-
 def resolve_token_file(explicit: Path | None) -> Path:
+    """Resolve somente caminho nativo de arquivo já provisionado e governado."""
     if explicit is not None:
-        return explicit
-    configured = (
-        os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
-        or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
-    )
-    if configured:
-        return Path(configured)
-    return discover_worker_pool_token_file_from_docker()
+        candidate = explicit
+    else:
+        configured = (
+            os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
+            or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+        )
+        if not configured:
+            raise BridgeError("worker_pool_token_file_not_configured")
+        candidate = Path(configured)
+    if not candidate.is_absolute():
+        raise BridgeError("worker_pool_token_file_not_absolute")
+    if candidate.is_symlink():
+        raise BridgeError("worker_pool_token_file_symlink_forbidden")
+    return candidate
 
 
 def read_token(path: Path | None) -> str:
     if path is None:
         raise BridgeError("worker_pool_token_file_not_configured")
+    if not path.is_absolute():
+        raise BridgeError("worker_pool_token_file_not_absolute")
+    if path.is_symlink():
+        raise BridgeError("worker_pool_token_file_symlink_forbidden")
+    if path.exists() and not path.is_file():
+        raise BridgeError("worker_pool_token_file_not_regular")
     try:
         token = path.read_text(encoding="utf-8").strip()
     except FileNotFoundError as exc:
