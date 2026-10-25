@@ -100,6 +100,10 @@ def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
     assert "/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" in raw
     assert "GH_PAT_ACTIONS" not in raw
     assert "audit_reqsys_dev_runner_pool.py" in raw
+    assert """if [ "$status" != "passed" ]; then
+            echo "::error::ReqSys DEV runner pool is degraded; inspect the sanitized evidence artifact."
+            exit 1
+          fi""" in raw
     assert "Mode: `report_only`" in raw
     assert "Production touched: `false`" in raw
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in raw

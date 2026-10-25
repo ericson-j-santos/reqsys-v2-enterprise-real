@@ -22,7 +22,7 @@ Detectar periodicamente indisponibilidade e desvio de labels no pool portátil d
 - HML, STG e PROD permanecem desabilitados.
 - O monitor não executa retry automático; os dois leases são jobs self-hosted controlados, somente leitura, com preflight e espera limitada.
 - Cada slot usa concurrency própria com `cancel-in-progress`, para que a próxima medição substitua lease antigo ainda enfileirado.
-- Um estado degradado gera aviso e evidência, sem mutação corretiva.
+- Um estado degradado gera evidência e falha o job de auditoria, sem mutação corretiva, para impedir falso verde operacional.
 - Falha de autenticação ou coleta deve falhar fechado e não fabricar inventário saudável.
 
 ## Critérios de aceite
@@ -30,5 +30,6 @@ Detectar periodicamente indisponibilidade e desvio de labels no pool portátil d
 - testes unitários cobrem dois runners distintos elegíveis, lease não atribuído com drift e rejeição de dois leases atendidos pelo mesmo PC;
 - o workflow usa ações externas pinadas por SHA completo;
 - o observador usa `github.token` somente para os jobs da própria execução e não usa endpoint administrativo, PAT pessoal ou permissão `administration: read`;
+- o job de auditoria termina com falha quando a evidência sanitizada indica `status=degraded`, mesmo que os probes individuais tenham concluído com sucesso;
 - a evidência declara `mode=report_only`, `mutated=false`, `deploy_performed=false` e `production_touched=false`;
 - o gate SDD e o orçamento de superfície de workflows ficam verdes.
