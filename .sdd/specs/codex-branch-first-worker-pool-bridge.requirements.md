@@ -14,7 +14,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 4. Marcador local legado sem marcador do Worker Pool deve ser recuperado automaticamente uma única vez.
 5. Marcador local + marcador do Worker Pool deve impedir novo dispatch.
 6. O job físico `enqueue` do workflow de handoff deve executar somente por `workflow_dispatch`, no runner allowlisted `[self-hosted, Windows, X64, pc24x7, reqsys-dev]`; jobs GitHub-hosted de validação contratual podem reutilizar o mesmo workflow em eventos explicitamente restritos.
-7. O workflow deve fazer checkout do `base_sha` imutável informado pelo orquestrador.
+7. O job físico `enqueue` deve executar somente a implementação do bridge do SHA imutável `github.sha` associado ao `workflow_dispatch` em `main`; o `base_sha` original informado pelo orquestrador permanece como identidade da tarefa e não seleciona o código do executor. Em outra branch, o job deve falhar fechado. O checkout não pode persistir credenciais.
 8. O bridge só pode acessar Worker Pool por HTTP em loopback (`127.0.0.1`, `localhost` ou `::1`).
 9. O bearer token deve ser lido exclusivamente de arquivo já provisionado por `--token-file`, `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST` (preferencial no host) ou `CODEX_WORKER_POOL_API_TOKEN_FILE`; o valor não pode entrar em workflow, log ou evidência.
 10. Em contrato v1, o bridge deve preferir `POST /v1/work`, repetir a mesma identidade e exigir replay `created=false` no mesmo `work_id` e `task_id`.
@@ -57,6 +57,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 45. A referência de autenticação deve ser exclusivamente nativa e explícita: na ausência, falhar fechado `worker_pool_token_file_not_configured` sem executar Docker nem consultar mounts, processos ou caminhos descobertos.
 46. Caminhos de arquivo devem ser absolutos; rejeitar symlink direto e arquivo não regular; erro não pode expor caminho ou conteúdo.
 47. Os testes do bridge são apenas validação de código; enfileiramento real de #3096 requer arquivo já provisionado e serviço nativo saudável, contrato, replay, readback e pickup.
+48. O CI deve impedir que o job `enqueue` volte a carregar o bridge pelo `inputs.base_sha` histórico, que sobrescreva o `base_sha` da task pelo SHA do executor, que permita despacho fora da `main` ou que persista credenciais de checkout. Os testes devem incluir controles negativos que reproduzem cada regressão.
 
 ## Critérios de aceite
 
