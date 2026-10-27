@@ -2,15 +2,20 @@
   "feature_name": "teams-slo-notification-reliability",
   "project": "ReqSys v2 Enterprise — GitHub Actions / Teams notifications",
   "created_at": "2026-09-17",
-  "updated_at": "2026-09-17",
+  "updated_at": "2026-10-26",
   "phase": "implementation",
-  "approvals": {"requirements": true, "design": true, "tasks": true},
-  "description": "Evita descarte de notificações GitHub → Teams em rajadas de pushes e torna falhas reais de entrega observáveis no resultado do workflow, em resposta ao incidente #1576.",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige classificação de eventos e conclusão de workflows como entrega; separa execução de notificação e readback Teams, mantendo o incidente #1576 aberto sem prova independente, além da proteção existente contra cancelamentos e falhas ocultas.",
   "sdd_gate": {
     "tests": [
       ".github/workflows/teams-commit-notification-contract.yml",
-      "tests/test_teams_graph_gateway_autocontido.py"
+      "tests/test_teams_graph_gateway_autocontido.py",
+      "tests/test_teams_notification_slo_semantics.py"
     ],
-    "evidence_contract": "A correção só pode ser considerada pronta para revisão quando o workflow não tiver concorrência que descarte pushes pendentes nem continue-on-error no envio. Recuperação do SLO exige evidência posterior em runtime e não é declarada por este spec."
+    "evidence_contract": "O monitor discrimina push/workflow_run, exclui schedule/workflow_dispatch do SLO de execução e mostra cancelled/failure/timed_out separadamente. Nenhum resultado de CI comprova recebimento pelo Teams ou autoriza fechar a issue #1576 sem readback independente (correlation_id, SHA, ambiente). Critérios históricos de sem concorrência e sem continue-on-error permanecem obrigatórios. Regressão: tests/test_teams_notification_slo_semantics.py, positivo/negativo/idempotência, validação Pre-PR e E2E real após autorização, sem deploy."
   }
 }

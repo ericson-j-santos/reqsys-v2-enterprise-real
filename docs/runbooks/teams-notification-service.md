@@ -81,6 +81,8 @@ recusada fora de DEV e o token efêmero nunca integra logs ou artifacts.
 
 ### P2 — SLO degradado
 
+O antigo monitor contava também `schedule` (watchdog do locator PC24x7) como notificação e interpretava qualquer `success` do Actions como sucesso de entrega. A correção distingue a taxa de execução de workflows candidatos (`push` e `workflow_run`) do **SLO de entrega**, que deve permanecer `unverified` até haver comprovantes independentes do Microsoft Teams vinculados a `correlation_id`, SHA e ambiente. A etapa `Enviar notificação` pode ser ignorada mesmo num `workflow_run` com conclusão `success`. Cancelamentos e resultados não-success são discriminados, sem presumir que sejam todas falhas do Teams. Aceitação HTTP isolada também não comprova recebimento.
+
 1. Abrir o artifact mais recente de `Teams Notification SLO`.
 2. Aplicar Pareto sobre conclusões e códigos HTTP.
 3. Tratar primeiro a causa responsável pela maior parcela das falhas.
