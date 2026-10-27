@@ -92,6 +92,28 @@ def validate_teams_paginated_workflow_queries() -> None:
             fail(f"Lista de páginas JSON deve ser decodificada integralmente em {relative_path}")
 
 
+def validate_teams_slo_delivery_guards() -> None:
+    text = (ROOT / ".github/workflows/teams-notification-slo.yml").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        "from scripts.teams_notification_slo_metrics import calculate_metrics",
+        "workflow_state",
+        "delivery_state",
+        "delivery_verified",
+        "locator_watch_runs",
+        "conclusion_counts",
+        "Manter incidente aberto sem recibo independente",
+    )
+    missing = [token for token in required if token not in text]
+    if missing:
+        fail(f"Times SLO não pode perder separação entre execução/entrega: {missing}")
+    if re.search(r"gh\\s+issue\\s+close", text):
+        fail("SLO Teams não pode fechar incidente apenas pelo resultado do workflow")
+    if "if: steps.slo.outputs.delivery_verified != 'true'" not in text:
+        fail("SLO Teams deve bloquear encerramento sem readback independente")
+
+
 def validate_flow_completion_previous_state_isolation() -> None:
     relative_path = ".github/workflows/flow-completion-alert-lifecycle.yml"
     text = (ROOT / relative_path).read_text(encoding="utf-8")
@@ -187,6 +209,7 @@ def main() -> int:
         validate_cofre_runtime_gate,
         validate_pr_evidence_gate,
         validate_teams_paginated_workflow_queries,
+        validate_teams_slo_delivery_guards,
         validate_flow_completion_previous_state_isolation,
         validate_stg_strict_evidence_only_authorization,
     ]

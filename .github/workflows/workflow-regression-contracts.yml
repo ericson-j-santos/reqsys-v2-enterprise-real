@@ -19,8 +19,10 @@ on:
       - "scripts/build_stg_enforcement_approval.py"
       - "scripts/validate_stg_policy_approval.py"
       - "scripts/validate_workflow_regression_contracts.py"
+      - "scripts/teams_notification_slo_metrics.py"
       - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
+      - "tests/test_teams_notification_slo_metrics.py"
   push:
     branches: [main]
     paths:
@@ -39,8 +41,10 @@ on:
       - "scripts/build_stg_enforcement_approval.py"
       - "scripts/validate_stg_policy_approval.py"
       - "scripts/validate_workflow_regression_contracts.py"
+      - "scripts/teams_notification_slo_metrics.py"
       - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
+      - "tests/test_teams_notification_slo_metrics.py"
   workflow_dispatch:
 
 permissions:
@@ -67,6 +71,9 @@ jobs:
       - name: Validate regression contracts
         run: python scripts/validate_workflow_regression_contracts.py
 
+      - name: Testar classes e recibos do SLO Teams
+        run: python -m unittest discover -s tests -p 'test_teams_notification_slo_metrics.py' -v
+
       - name: Publish summary
         if: always()
         run: |
@@ -75,7 +82,7 @@ jobs:
             echo "- Cofre: runner.temp restrito ao escopo do job"
             echo "- Evidence Gate: timeout transitório não vira falha definitiva"
             echo "- Falha real do CI estrito permanece bloqueante"
-            echo "- Teams: paginação JSON agregada com --slurp"
+            echo "- Teams: paginação, watchdog separado, classificação e SLO sem falso recibo"
             echo "- Flow Completion: estado anterior isolado do fallback"
             echo "- STG: exceção aposentada e aprovação estritamente humana"
             echo "- Resultado: **${{ job.status }}**"
