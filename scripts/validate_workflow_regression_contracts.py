@@ -108,7 +108,7 @@ def validate_teams_slo_delivery_guards() -> None:
     missing = [token for token in required if token not in text]
     if missing:
         fail(f"Times SLO não pode perder separação entre execução/entrega: {missing}")
-    if re.search(r"gh\\s+issue\\s+close", text):
+    if re.search(r"gh\s+issue\s+close", text):
         fail("SLO Teams não pode fechar incidente apenas pelo resultado do workflow")
     if "if: steps.slo.outputs.delivery_verified != 'true'" not in text:
         fail("SLO Teams deve bloquear encerramento sem readback independente")
