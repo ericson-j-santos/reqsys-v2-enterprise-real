@@ -38,9 +38,9 @@ jobs:
 
           import json
           import math
-          from collections import Counter
           import os
           import subprocess
+          from collections import Counter
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
@@ -245,6 +245,6 @@ jobs:
           fi
 
       - name: Aplicar gate de dados mínimos
-        if: steps.slo.outputs.state == 'insufficient_data'
+        if: steps.slo.outputs.execution_state == 'insufficient_data'
         run: |
           echo "::warning title=SLO sem amostra::Ainda não há execuções concluídas na janela de 30 dias."
