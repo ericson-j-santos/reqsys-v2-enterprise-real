@@ -38,6 +38,7 @@ jobs:
 
           import json
           import math
+          from collections import Counter
           import os
           import subprocess
           from datetime import datetime, timedelta, timezone
@@ -70,6 +71,12 @@ jobs:
                       runs.append(run)
 
           runs.sort(key=lambda item: item["created_at"], reverse=True)
+          all_completed_runs = list(runs)
+          event_breakdown = Counter(str(run.get("event") or "unknown") for run in all_completed_runs)
+          # Schedule monitors the PC24x7 locator; dispatch is a manual diagnostic.
+          notification_events = {"push", "workflow_run"}
+          runs = [run for run in all_completed_runs if run.get("event") in notification_events]
+          conclusion_breakdown = Counter(str(run.get("conclusion") or "unknown") for run in runs)
           total = len(runs)
           successes = sum(1 for run in runs if run.get("conclusion") == "success")
           failures = total - successes
@@ -93,7 +100,10 @@ jobs:
                   break
               consecutive_failures += 1
 
-          state = "insufficient_data" if total == 0 else ("healthy" if success_rate >= target else "breached")
+          execution_state = "insufficient_data" if total == 0 else ("healthy" if success_rate >= target else "breached")
+          # CI success does not prove that the send step ran, nor that Teams received the message.
+          # Do not certify the delivery SLO without destination-side readback.
+          state = "unverified_delivery"
           latest = runs[0] if runs else None
           report = {
               "schema_version": "1.0.0",
@@ -102,6 +112,20 @@ jobs:
               "window_days": window_days,
               "target_percent": target,
               "state": state,
+              "execution_state": execution_state,
+              "metric_semantics": "notification_workflow_execution_only_not_teams_delivery",
+              "delivery_verified": False,
+              "delivery_slo_state": "unverified",
+              "delivery_success_rate_percent": None,
+              "delivery_error_budget": None,
+              "notification_event_filter": sorted(notification_events),
+              "excluded_non_notification_runs": len(all_completed_runs) - total,
+              "event_breakdown": dict(sorted(event_breakdown.items())),
+              "conclusion_breakdown": dict(sorted(conclusion_breakdown.items())),
+              "failed_runs_semantics": "all_non_success_conclusions_including_cancelled_skipped_and_neutral",
+              "actual_failure_conclusions": conclusion_breakdown.get("failure", 0),
+              "cancelled_conclusions": conclusion_breakdown.get("cancelled", 0),
+              "timed_out_conclusions": conclusion_breakdown.get("timed_out", 0),
               "total_runs": total,
               "successful_runs": successes,
               "failed_runs": failures,
@@ -140,14 +164,19 @@ jobs:
           markdown = [
               "# Teams Notification SLO",
               "",
-              f"- Estado: **{state}**",
+              "- Entrega ao Teams: **NÃO VERIFICADA** (sem readback independente)",
+              f"- Estado da execução: **{execution_state}**",
               f"- Janela: **{window_days} dias**",
-              f"- Meta: **{target:.2f}%**",
-              f"- Taxa de sucesso: **{success_rate:.2f}%**",
-              f"- Execuções: **{total}**",
-              f"- Sucessos: **{successes}**",
-              f"- Falhas: **{failures}**",
-              f"- Orçamento de erro restante: **{remaining_budget}**",
+              f"- Meta de execução analisada: **{target:.2f}%**",
+              f"- Taxa de execução (NÃO entrega): **{success_rate:.2f}%**",
+              f"- Execuções candidatas (push/workflow_run): **{total}**",
+              f"- Execuções com success: **{successes}**",
+              f"- Não-success (inclusive canceladas): **{failures}**",
+              f"- Canceladas: **{conclusion_breakdown.get('cancelled', 0)}**",
+              f"- Com conclusão failure: **{conclusion_breakdown.get('failure', 0)}**",
+              f"- Locator/diagnóstico excluídos: **{len(all_completed_runs) - total}**",
+              f"- Conclusões discriminadas: `{json.dumps(dict(sorted(conclusion_breakdown.items())), sort_keys=True)}`",
+              f"- Orçamento da execução (não entrega): **{remaining_budget}**",
               f"- Falhas consecutivas: **{consecutive_failures}**",
               f"- Duração média: **{mean_duration:.2f}s**",
           ]
@@ -155,6 +184,10 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"state={state}\n")
+              output.write(f"execution_state={execution_state}\n")
+              output.write("delivery_verified=false\n")
+              output.write(f"cancelled={conclusion_breakdown.get('cancelled', 0)}\n")
+              output.write(f"excluded={len(all_completed_runs) - total}\n")
               output.write(f"success_rate={success_rate}\n")
               output.write(f"total={total}\n")
               output.write(f"failures={failures}\n")
@@ -173,23 +206,26 @@ jobs:
           retention-days: 90
 
       - name: Abrir ou atualizar incidente de SLO
-        if: steps.slo.outputs.state == 'breached'
+        if: steps.slo.outputs.state == 'unverified_delivery'
         shell: bash
         run: |
           existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
           body=$(cat <<EOF
-          ## SLO GitHub → Teams abaixo da meta
+          ## GitHub → Teams — entrega não verificada; execução em análise
 
-          - Meta: **${SLO_TARGET}%**
-          - Taxa atual: **${{ steps.slo.outputs.success_rate }}%**
+          - Entrega verificada no Teams: **NÃO**
+          - Meta de execução: **${SLO_TARGET}%**
+          - Taxa de EXECUÇÃO (não entrega): **${{ steps.slo.outputs.success_rate }}%**
           - Janela: **${WINDOW_DAYS} dias**
-          - Execuções: **${{ steps.slo.outputs.total }}**
-          - Falhas: **${{ steps.slo.outputs.failures }}**
-          - Orçamento restante: **${{ steps.slo.outputs.remaining_budget }}**
-          - Falhas consecutivas: **${{ steps.slo.outputs.consecutive_failures }}**
+          - Execuções candidatas (push/workflow_run): **${{ steps.slo.outputs.total }}**
+          - Não-success (inclusive canceladas): **${{ steps.slo.outputs.failures }}**
+          - Canceladas (em análise): **${{ steps.slo.outputs.cancelled }}**
+          - Locator/diagnóstico excluídos: **${{ steps.slo.outputs.excluded }}**
+          - Orçamento da execução (não entrega): **${{ steps.slo.outputs.remaining_budget }}**
+          - Falhas consecutivas de execução: **${{ steps.slo.outputs.consecutive_failures }}**
           - Evidência: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          A issue será fechada automaticamente quando o SLO voltar à meta.
+          Sem recibo independente no Teams não é permitido declarar recuperação nem fechar o incidente.
           EOF
           )
           if [[ -n "$existing" ]]; then
@@ -199,7 +235,7 @@ jobs:
           fi
 
       - name: Fechar incidente após recuperação
-        if: steps.slo.outputs.state == 'healthy'
+        if: steps.slo.outputs.state == 'healthy' && steps.slo.outputs.delivery_verified == 'true'
         shell: bash
         run: |
           existing=$(gh issue list --state open --search '"${{ env.INCIDENT_TITLE }}" in:title' --json number --jq '.[0].number // empty')
