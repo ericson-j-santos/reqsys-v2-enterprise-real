@@ -88,6 +88,48 @@ def test_logon_type_drift_blocks_readiness(tmp_path: Path) -> None:
     result = run_probe(tmp_path, elevated=False, bad_s4u=True)
     assert result["status"] == "BLOCKED_ADMIN_ELEVATION_REQUIRED"
     assert result["task_contract"]["broker"] is False
+    assert result["task_contract_checks"]["broker"]["logon_s4u"] is False
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "failed_check"),
+    [
+        ("LeastPrivilege", "HighestAvailable", "runlevel_expected"),
+        ("python.exe", "other.exe", "command_matches"),
+        ("run.py", "other.py", "arguments_match"),
+        ("</WorkingDirectory>", "-other</WorkingDirectory>", "working_dir_matches"),
+    ],
+)
+def test_watchdog_drift_is_identified_without_exposing_task_data(
+    tmp_path: Path, old: str, new: str, failed_check: str,
+) -> None:
+    stage(tmp_path)
+    task_data = {
+        name: task_xml(tmp_path, leaf, runlevel).replace(old, new)
+        if key == "watchdog" else task_xml(tmp_path, leaf, runlevel)
+        for key, (name, leaf, runlevel) in probe.TASKS.items()
+    }
+    result = probe.inspect(
+        base=tmp_path, host=probe.HOST, platform="nt", elevated=False,
+        gh_authenticated=True, query_xml=task_data.get,
+    )
+    checks = result["task_contract_checks"]["watchdog"]
+    assert result["task_contract"] == {"broker": True, "watchdog": False}
+    assert checks[failed_check] is False
+    assert sum(not value for value in checks.values()) == 1
+    assert str(tmp_path) not in json.dumps(result)
+    assert "<Task" not in json.dumps(result)
+
+
+def test_invalid_task_xml_fails_closed_with_sanitized_checks(tmp_path: Path) -> None:
+    stage(tmp_path)
+    result = probe.inspect(
+        base=tmp_path, host=probe.HOST, platform="nt", elevated=False,
+        gh_authenticated=True, query_xml=lambda _: "<Task>private-data",
+    )
+    assert result["task_contract"] == {"broker": False, "watchdog": False}
+    assert result["task_contract_checks"]["watchdog"]["xml_valid"] is False
+    assert "private-data" not in json.dumps(result)
 
 
 def test_local_gh_auth_is_separate_precondition(tmp_path: Path) -> None:
@@ -133,3 +175,4 @@ def test_workflow_gate_is_owner_only_and_read_only() -> None:
     assert "-f mode=preflight" in gateway
     assert ".github/workflows/noteri-desktop-admin-broker-kick.yml" in policy["approved_workflows"]
     assert ".github/workflows/desktop-admin-broker-recovery-preflight.yml" not in policy["approved_workflows"]
+
