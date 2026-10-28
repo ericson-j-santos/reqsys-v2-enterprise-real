@@ -36,3 +36,17 @@ Após o incidente [ReqSys Actions #40062202879](https://github.com/ericson-j-san
 5. `NATIVE_REPAIR_ELIGIBLE_NOT_EXECUTED` significa que a tarefa precisa de reparo e existe elevação efetiva — **não** significa que foi reparada. `EXISTING_TASKS_AND_AUTH_READY` exige ambas as tarefas íntegras e `gh` local autenticado. Qualquer divergência é `BLOCKED_*`, falha fechada.
 6. Proibido criar, alterar, executar ou remover tarefa no preflight; proibido UAC, segredos, reboot, RDC, produção ou alteração de branch protection. O reparador nativo continua ação Risk 3 separada, sujeita à autorização específica e readback independente.
 7. Testes positivos e negativos obrigatórios: host divergente; metadata/release alterados; tarefa ausente; S4U alterado; ausência de auth; e um E2E físico do preflight vinculado ao SHA integrado antes de usá-lo como evidência para liberar reparo.
+
+## Extensão — diagnóstico sanitizado do contrato da tarefa (2026-10-27)
+
+O preflight deve informar, para broker e watchdog, booleanos separados para XML válido, runtime válido, trigger de boot, logon S4U, nível de privilégio esperado, comando, argumentos e diretório de trabalho. O `task_contract` agregado mantém o significado anterior: verdadeiro somente quando todos os critérios são verdadeiros.
+
+Nenhum valor bruto do XML, caminho, argumento, identidade ou segredo pode entrar na evidência. A consulta continua limitada a `schtasks /Query /XML`; o diagnóstico não executa, registra nem modifica tarefas.
+
+### Critérios de aceite
+
+- uma divergência isolada em nível de privilégio ou em cada campo da ação identifica exatamente um booleano falso;
+- XML inválido falha fechado e não aparece na saída;
+- a saída permanece somente leitura e a decisão agregada não muda;
+- a sonda física ocorre somente após o SHA integrado na `main`, sem UAC ou reparo.
+

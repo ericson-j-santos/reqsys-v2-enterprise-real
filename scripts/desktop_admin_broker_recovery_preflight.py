@@ -69,32 +69,41 @@ def installed_runtime(base: Path, leaf: str) -> dict:
         return outcome
 
 
-def task_contract(xml: str | None, runtime: dict, runlevel: str) -> bool:
-    """Valida tarefa existente: boot, S4U, nível e ação exata fixada."""
-    if xml is None or not runtime.get("valid"):
-        return False
+def task_contract_checks(xml: str | None, runtime: dict, runlevel: str) -> dict[str, bool]:
+    """Diagnostica o contrato sem serializar XML, caminhos ou identidade."""
+    checks = {
+        "xml_valid": False,
+        "runtime_valid": bool(runtime.get("valid")),
+        "boot_trigger": False,
+        "logon_s4u": False,
+        "runlevel_expected": False,
+        "command_matches": False,
+        "arguments_match": False,
+        "working_dir_matches": False,
+    }
+    if xml is None:
+        return checks
     try:
         tree = ET.fromstring(xml)
-        if tree.find(".//{*}BootTrigger") is None:
-            return False
-        if tree.findtext(".//{*}Principal/{*}LogonType") != "S4U":
-            return False
-        if tree.findtext(".//{*}Principal/{*}RunLevel") != runlevel:
-            return False
+        checks["xml_valid"] = True
+        checks["boot_trigger"] = tree.find(".//{*}BootTrigger") is not None
+        checks["logon_s4u"] = tree.findtext(".//{*}Principal/{*}LogonType") == "S4U"
+        checks["runlevel_expected"] = tree.findtext(".//{*}Principal/{*}RunLevel") == runlevel
         command = tree.findtext(".//{*}Actions/{*}Exec/{*}Command")
         arguments = tree.findtext(".//{*}Actions/{*}Exec/{*}Arguments")
         working = tree.findtext(".//{*}Actions/{*}Exec/{*}WorkingDirectory")
-        if not command or not arguments or not working:
-            return False
-        if not path_equal(command.strip('"'), runtime["python"]):
-            return False
-        if not path_equal(arguments.strip().strip('"'), runtime["launcher"]):
-            return False
-        if not path_equal(working.strip('"'), runtime["root"]):
-            return False
-        return True
+        if checks["runtime_valid"]:
+            checks["command_matches"] = bool(command) and path_equal(command.strip('"'), runtime.get("python"))
+            checks["arguments_match"] = bool(arguments) and path_equal(arguments.strip().strip('"'), runtime.get("launcher"))
+            checks["working_dir_matches"] = bool(working) and path_equal(working.strip('"'), runtime.get("root"))
     except (ET.ParseError, OSError, ValueError, TypeError):
-        return False
+        pass
+    return checks
+
+
+def task_contract(xml: str | None, runtime: dict, runlevel: str) -> bool:
+    """Valida tarefa existente: boot, S4U, nível e ação exata fixada."""
+    return all(task_contract_checks(xml, runtime, runlevel).values())
 
 
 def query_task_xml(task_name: str) -> str | None:
@@ -142,10 +151,11 @@ def inspect(
         return {"schema_version": "1", "preflight_completed": False,
                 "status": "BLOCKED_WRONG_HOST_OR_PLATFORM", "host_expected": HOST}
     runtimes = {key: installed_runtime(base, spec[1]) for key, spec in TASKS.items()}
-    tasks = {
-        key: task_contract(query_xml(spec[0]), runtimes[key], spec[2])
+    task_checks = {
+        key: task_contract_checks(query_xml(spec[0]), runtimes[key], spec[2])
         for key, spec in TASKS.items()
     }
+    tasks = {key: all(checks.values()) for key, checks in task_checks.items()}
     runtime_ok = all(v["valid"] for v in runtimes.values())
     task_ok = all(tasks.values())
     if not runtime_ok:
@@ -164,6 +174,7 @@ def inspect(
         "status": status, "runner_is_elevated": bool(elevated),
         "gh_local_auth_available": bool(gh_authenticated),
         "task_contract": tasks,
+        "task_contract_checks": task_checks,
         "runtime_contract": {k: v["valid"] for k, v in runtimes.items()},
         "runtime_source_sha": {k: v["source_sha"] for k, v in runtimes.items()},
         "repaired": False, "task_created_or_modified": False,
@@ -196,3 +207,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
