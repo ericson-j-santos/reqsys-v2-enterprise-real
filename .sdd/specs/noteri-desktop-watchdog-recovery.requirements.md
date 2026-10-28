@@ -120,4 +120,11 @@ para o artifact privado por lista fechada, rejeitando campos ausentes ou de tipo
 inesperado. Se o diagnóstico for anterior à inclusão de `precheck_checks`, o
 campo pode permanecer nulo. O staging não executa reparo ou UAC.
 
+O recibo da tentativa local de 2026-10-28 às 17:40 UTC mostrou
+`runlevel_limited=true` e `command_matches=false`, com os outros seis campos
+verdadeiros. O reparador deve aceitar também esse perfil de divergência de um
+único campo, preservando os mesmos bloqueios para argumentos, diretório,
+gatilho, identidade S4U, ação e estado da tarefa. O pós-check completo e o
+rollback permanecem obrigatórios.
+
 
