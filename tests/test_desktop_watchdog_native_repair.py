@@ -55,7 +55,7 @@ def test_existing_task_repair_is_exact_and_reversible() -> None:
     assert "$TaskUpdate = 4" in raw
     assert "$folder.GetTask($WatchdogTask)" in raw
     assert "Test-ApprovedDrift -Checks $previousChecks" in raw
-    assert "-not $Checks.runlevel_limited -and -not $Checks.command_matches" in raw
+    assert "-not $Checks.command_matches" in raw
     assert "$previousDefinition.XmlText" in raw
     assert "$definition.XmlText = $previousXml" in raw
     assert "$action.Path = $Runtime.python" in raw
@@ -86,7 +86,7 @@ def test_stage_uses_the_installed_python_with_a_bounded_path() -> None:
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell COM helper contract")
-def test_drift_profile_accepts_only_observed_two_field_difference() -> None:
+def test_drift_profile_accepts_only_command_or_two_field_difference() -> None:
     functions = SCRIPT.read_text(encoding="utf-8").split("\ntry {\n", 1)[0]
     checks = """
 $observed = @{
@@ -95,6 +95,8 @@ $observed = @{
   runlevel_limited=$false; command_matches=$false
 }
 if (-not (Test-ApprovedDrift -Checks $observed)) { exit 1 }
+$observed.runlevel_limited = $true
+if (-not (Test-ApprovedDrift -Checks $observed)) { exit 6 }
 $observed.arguments_match = $false
 if (Test-ApprovedDrift -Checks $observed) { exit 2 }
 $observed.arguments_match = $true
