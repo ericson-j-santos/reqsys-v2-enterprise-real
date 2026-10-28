@@ -2,7 +2,7 @@
   "feature_name": "noteri-desktop-watchdog-recovery",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-10-22",
+  "updated_at": "2026-10-28",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -19,14 +19,17 @@
     "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
     "tests/test_reqsys_authorized_actions_gateway.py",
     "scripts/desktop_watchdog_readback.py",
-    "tests/test_desktop_watchdog_readback.py"
+    "tests/test_desktop_watchdog_readback.py",
+    "scripts/repair_desktop_watchdog_native.ps1",
+    "tests/test_desktop_watchdog_native_repair.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
-      "tests/test_desktop_watchdog_readback.py"
+      "tests/test_desktop_watchdog_readback.py",
+      "tests/test_desktop_watchdog_native_repair.py"
     ],
     "evidence_contract": "Fixed local Desktop host/task; dedicated clean C:\\\\dev\\\\chatgpt-workers\\\\reqsys-watchdog-session-source clone created from immutable checkout, bound to canonical origin and validated at the exact origin/main SHA before Session Launcher; runner checkout under LOCALAPPDATA and divergent operational clone are never target_repo; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; watchdog repair materializes that verified runtime under LOCALAPPDATA only when absent; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; local Query+Run, plus exact passwordless local Create only after an unequivocal missing-task result; no /S or credentials; independent XML proves enabled+AtStartup+S4U; negative authorization/config tests; exact gateway dispatch and Desktop runner pickup."
   },
@@ -35,7 +38,7 @@
     "deploy": false,
     "reboot": false,
     "secrets": false,
-    "task_creation_or_mutation": "exact_missing_watchdog_repair_only"
+    "task_creation_or_mutation": "normal_mode_missing_only; native_uac_existing_task_exact_drift_only_after_separate_authorization"
   },
   "runtime_shell": "powershell",
   "increment_type": "gap_fix",
@@ -63,6 +66,7 @@
     "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas.",
     "O modo watchdog-readback é separado e manual, usa host/runner/repositório/SHA/correlation_id exatos, sessão e Gateway; coleta somente metadados da tarefa fixa, consulta SCM de nome candidato fixo e state.json do watchdog, sem configuração privada, segredo, reparação, /Run ou mutação de serviço.",
+    "O reparador nativo UAC da tarefa existente aceita somente o drift observado de runlevel e comando, preserva a identidade S4U, usa TASK_UPDATE, valida o contrato completo após registro e tenta restaurar a definição anterior se qualquer etapa falhar; o staging não executa UAC.",
     "Metadados indisponíveis permanecem unknown/unavailable; ausência do nome candidato não prova ausência de outros serviços, last_cycle_source_sha não prova release instalada, e nenhum resultado atesta produtor ReqSys, boot real ou ciclos contínuos."
   ],
   "operational_rules": {
@@ -120,5 +124,16 @@
     "runner_service_identity_verified": false,
     "partial_metadata_is_not_readiness": true,
     "gate_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/39843440443"
+  },
+  "native_existing_task_repair": {
+    "scope": "DESKTOP-PDQK954\\Automation\\ReqSysDesktopControlPlaneWatchdog",
+    "observed_drift": ["runlevel_limited=false", "command_matches=false"],
+    "other_contract_fields": "must_match_before_update",
+    "registration_flag": "TASK_UPDATE (4)",
+    "identity": "preserve existing Principal.UserId with S4U and null password",
+    "postcheck": "enabled, boot, S4U, limited, one exec action, command, arguments, working directory",
+    "failure": "attempt rollback from previous definition and record sanitized boolean outcome",
+    "staging": "watchdog-uac-stage only; execution requires separate administrative authorization"
   }
 }
+

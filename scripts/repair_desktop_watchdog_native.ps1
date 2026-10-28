@@ -7,10 +7,9 @@ $AutomationFolder = '\Automation'
 $WatchdogTask = 'ReqSysDesktopControlPlaneWatchdog'
 $S4U = 2
 $RunLevelLimited = 0
-$TaskCreateOrUpdate = 6
+$TaskUpdate = 4
 $TaskTriggerBoot = 8
 $TaskActionExec = 0
-$TaskInstancesIgnoreNew = 2
 
 function Write-RepairEvidence {
     param([hashtable]$Payload)
@@ -50,6 +49,8 @@ function Resolve-WatchdogRuntime {
         throw 'watchdog release_root divergente'
     }
     $python = [IO.Path]::GetFullPath([string]$metadata.python_executable)
+    $expectedPython = [IO.Path]::GetFullPath((Join-Path $runtimeRoot 'python\3.12.10\python.exe'))
+    if ($python -ine $expectedPython) { throw 'WATCHDOG_PYTHON_PATH_MISMATCH' }
     $launcher = Join-Path $runtimeRoot 'run.py'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw 'watchdog Python instalado ausente' }
     if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'watchdog run.py ausente' }
@@ -65,13 +66,48 @@ function Resolve-WatchdogRuntime {
 
 function Get-SchedulerFolder {
     param([object]$Service)
+    # Esta rota repara apenas a tarefa existente; ausência muda o escopo.
+    return $Service.GetFolder($AutomationFolder)
+}
+
+function Test-SamePath {
+    param([string]$Observed, [string]$Expected)
+    if ([string]::IsNullOrWhiteSpace($Observed) -or [string]::IsNullOrWhiteSpace($Expected)) { return $false }
     try {
-        return $Service.GetFolder($AutomationFolder)
+        $left = [IO.Path]::GetFullPath($Observed.Trim().Trim('"'))
+        $right = [IO.Path]::GetFullPath($Expected)
+        return [string]::Equals($left, $right, [StringComparison]::OrdinalIgnoreCase)
+    } catch { return $false }
+}
+
+function Get-TaskContract {
+    param([object]$Definition, [hashtable]$Runtime)
+    $boot = $false
+    for ($i = 1; $i -le $Definition.Triggers.Count; $i++) {
+        $candidate = $Definition.Triggers.Item($i)
+        if ($candidate.Type -eq $TaskTriggerBoot -and $candidate.Enabled) { $boot = $true }
     }
-    catch {
-        $root = $Service.GetFolder('\')
-        return $root.CreateFolder($AutomationFolder.TrimStart('\'))
+    $oneAction = $Definition.Actions.Count -eq 1
+    $action = if ($oneAction) { $Definition.Actions.Item(1) } else { $null }
+    return @{
+        enabled = [bool]$Definition.Settings.Enabled
+        trigger_at_startup = $boot
+        logon_s4u = $Definition.Principal.LogonType -eq $S4U
+        runlevel_limited = $Definition.Principal.RunLevel -eq $RunLevelLimited
+        one_exec_action = $oneAction -and $action.Type -eq $TaskActionExec
+        command_matches = $oneAction -and (Test-SamePath -Observed $action.Path -Expected $Runtime.python)
+        arguments_match = $oneAction -and (Test-SamePath -Observed $action.Arguments -Expected $Runtime.launcher)
+        working_dir_matches = $oneAction -and (Test-SamePath -Observed $action.WorkingDirectory -Expected $Runtime.runtime_root)
     }
+}
+
+function Test-ApprovedDrift {
+    param([hashtable]$Checks)
+    return (
+        $Checks.enabled -and $Checks.trigger_at_startup -and $Checks.logon_s4u -and
+        $Checks.one_exec_action -and $Checks.arguments_match -and $Checks.working_dir_matches -and
+        -not $Checks.runlevel_limited -and -not $Checks.command_matches
+    )
 }
 
 function Register-WatchdogTask {
@@ -80,66 +116,63 @@ function Register-WatchdogTask {
         [Parameter(Mandatory = $true)][hashtable]$Runtime
     )
     $folder = Get-SchedulerFolder -Service $Scheduler
+    $previousTask = $folder.GetTask($WatchdogTask)
+    $previousDefinition = $previousTask.Definition
+    $previousXml = [string]$previousDefinition.XmlText
+    if ([string]::IsNullOrWhiteSpace($previousXml)) { throw 'WATCHDOG_ROLLBACK_SNAPSHOT_UNAVAILABLE' }
+    $previousChecks = Get-TaskContract -Definition $previousDefinition -Runtime $Runtime
+    if (-not (Test-ApprovedDrift -Checks $previousChecks)) { throw 'WATCHDOG_DRIFT_PROFILE_CHANGED' }
+    $identity = [string]$previousDefinition.Principal.UserId
+    if ([string]::IsNullOrWhiteSpace($identity)) { throw 'WATCHDOG_PRINCIPAL_MISSING' }
+
+    # Clona o XML anterior para limitar a mutação aos dois campos observados.
     $definition = $Scheduler.NewTask(0)
-    $definition.RegistrationInfo.Description = 'ReqSys Desktop control-plane watchdog: RDC + GitHub Actions runner'
-    $definition.Settings.Enabled = $true
-    $definition.Settings.StartWhenAvailable = $true
-    $definition.Settings.MultipleInstances = $TaskInstancesIgnoreNew
-    $definition.Settings.ExecutionTimeLimit = 'PT0S'
-    try {
-        $definition.Settings.RestartCount = 999
-        $definition.Settings.RestartInterval = 'PT1M'
-    } catch {}
-
-    $trigger = $definition.Triggers.Create($TaskTriggerBoot)
-    $trigger.Enabled = $true
-    $trigger.Delay = 'PT20S'
-
-    $action = $definition.Actions.Create($TaskActionExec)
+    $definition.XmlText = $previousXml
+    $action = $definition.Actions.Item(1)
     $action.Path = $Runtime.python
-    $action.Arguments = '"' + $Runtime.launcher + '"'
-    $action.WorkingDirectory = $Runtime.runtime_root
-
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $definition.Principal.UserId = $identity
-    $definition.Principal.LogonType = $S4U
     $definition.Principal.RunLevel = $RunLevelLimited
-    $null = $folder.RegisterTaskDefinition(
-        $WatchdogTask,
-        $definition,
-        $TaskCreateOrUpdate,
-        $identity,
-        $null,
-        $S4U,
-        $null
-    )
-
-    $task = $folder.GetTask($WatchdogTask)
-    $registered = $task.Definition
-    $startupFound = $false
-    for ($i = 1; $i -le $registered.Triggers.Count; $i++) {
-        if ($registered.Triggers.Item($i).Type -eq $TaskTriggerBoot) {
-            $startupFound = $true
-            break
+    $script:RegistrationAttempted = $true
+    try {
+        $null = $folder.RegisterTaskDefinition(
+            $WatchdogTask, $definition, $TaskUpdate, $identity, $null, $S4U, $null
+        )
+        $task = $folder.GetTask($WatchdogTask)
+        $checks = Get-TaskContract -Definition $task.Definition -Runtime $Runtime
+        if (@($checks.Values | Where-Object { $_ -ne $true }).Count -ne 0) {
+            throw 'WATCHDOG_POSTCHECK_FAILED'
         }
+        $null = $task.Run($null)
+    } catch {
+        $script:RollbackAttempted = $true
+        try {
+            $null = $folder.RegisterTaskDefinition(
+                $WatchdogTask, $previousDefinition, $TaskUpdate, $identity, $null, $S4U, $null
+            )
+            $restored = $folder.GetTask($WatchdogTask)
+            $script:RollbackVerified = [string]::Equals(
+                [string]$restored.Definition.XmlText, $previousXml, [StringComparison]::Ordinal
+            )
+        } catch { $script:RollbackVerified = $false }
+        throw 'WATCHDOG_REPAIR_FAILED_ROLLBACK_ATTEMPTED'
     }
-    if (-not $registered.Settings.Enabled) { throw "$WatchdogTask desabilitada" }
-    if (-not $startupFound) { throw "$WatchdogTask sem trigger AtStartup" }
-    if ($registered.Principal.LogonType -ne $S4U) { throw "$WatchdogTask sem S4U" }
-    if ($registered.Principal.RunLevel -ne $RunLevelLimited) { throw "$WatchdogTask com RunLevel divergente" }
-
-    $null = $task.Run($null)
     return @{
         task = ($AutomationFolder + '\' + $WatchdogTask)
         enabled = $true
         trigger_at_startup = $true
         logon_type = 'S4U'
         run_level = 'limited'
+        command_matches = $true
+        arguments_match = $true
+        working_dir_matches = $true
+        rollback_required = $false
         started = $true
     }
 }
 
 try {
+    $script:RegistrationAttempted = $false
+    $script:RollbackAttempted = $false
+    $script:RollbackVerified = $false
     if ($env:COMPUTERNAME -ine $ExpectedHost) { throw "launcher permitido somente em $ExpectedHost" }
     if (-not (Test-IsAdministrator)) {
         $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'))
@@ -157,6 +190,8 @@ try {
         host = $env:COMPUTERNAME
         source_sha = $runtime.source_sha
         watchdog_task = $taskResult
+        registration_attempted = $script:RegistrationAttempted
+        rollback_attempted = $script:RollbackAttempted
     }
     exit 0
 }
@@ -165,8 +200,15 @@ catch {
         ok = $false
         result = 'DESKTOP_WATCHDOG_NATIVE_REPAIR_BLOCKED'
         host = $env:COMPUTERNAME
-        error = $_.Exception.Message
+        error = if ($_.Exception.Message -in @(
+            'WATCHDOG_DRIFT_PROFILE_CHANGED', 'WATCHDOG_PRINCIPAL_MISSING',
+            'WATCHDOG_REPAIR_FAILED_ROLLBACK_ATTEMPTED'
+        )) { $_.Exception.Message } else { 'WATCHDOG_REPAIR_PRECONDITION_OR_COM_FAILED' }
         error_type = $_.Exception.GetType().Name
+        registration_attempted = $script:RegistrationAttempted
+        rollback_attempted = $script:RollbackAttempted
+        rollback_verified = $script:RollbackVerified
     }
     exit 2
 }
+
