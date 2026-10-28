@@ -69,9 +69,18 @@ jobs:
           $expectedRelease = [IO.Path]::GetFullPath((Join-Path $runtimeRoot ("releases\" + $sourceSha.ToLowerInvariant())))
           $actualRelease = [IO.Path]::GetFullPath([string]$metadata.release_root)
           if ($actualRelease -ine $expectedRelease) { throw "WATCHDOG_RELEASE_ROOT_MISMATCH" }
-          $python = [IO.Path]::GetFullPath((Join-Path $runtimeRoot "python\3.12.10\python.exe"))
-          if ([IO.Path]::GetFullPath([string]$metadata.python_executable) -ine $python) {
-            throw "WATCHDOG_PYTHON_PATH_MISMATCH"
+          $python = [IO.Path]::GetFullPath([string]$metadata.python_executable)
+          $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\') + '\'
+          if (-not $python.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            New-Item -ItemType Directory -Force (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
+            @{
+              ok = $false
+              result = "WATCHDOG_PYTHON_OUTSIDE_LOCALAPPDATA"
+              staging_attempted = $false
+              task_created_or_modified = $false
+              remote_uac_attempted = $false
+            } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+            throw "WATCHDOG_PYTHON_OUTSIDE_LOCALAPPDATA"
           }
           $launcher = Join-Path $expectedRelease "scripts\desktop_control_plane_watchdog_uac_launcher.py"
           $nativeRepairSource = Join-Path $env:GITHUB_WORKSPACE "scripts\repair_desktop_watchdog_native.ps1"
@@ -1942,3 +1951,4 @@ jobs:
           path: ${{ steps.session.outputs.target_path }}\artifacts\desktop-watchdog-readback\evidence.json
           if-no-files-found: error
           retention-days: 14
+
