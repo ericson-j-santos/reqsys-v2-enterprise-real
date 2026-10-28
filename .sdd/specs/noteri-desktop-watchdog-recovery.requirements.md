@@ -70,3 +70,26 @@ A classificação Risk 2 cobre exclusivamente o recibo escrito no worktree isola
 
 Autorização de incremento: Agent Increment Gate 39843440443, hotfix com referência 3051,
 allowed=true. Esta evidência não autoriza merge nem substitui READY_FOR_PR no novo HEAD.
+
+## Reparo nativo da tarefa existente — 2026-10-28
+
+A sonda física após a PR #3114 confirmou que a tarefa watchdog existe. O contrato de runtime
+passou; no contrato da tarefa, somente `runlevel_limited` e `command_matches` falharam.
+O modo normal continua restrito à reparação de tarefa ausente. Para esse drift específico,
+o reparador nativo distribuído por `watchdog-uac-stage` é a rota de execução administrativa.
+
+- O staging copia o reparador e os launchers; ele não registra tarefa nem apresenta UAC.
+- O reparador exige host e nome da tarefa fixos, metadata local coerente e Python no caminho
+  canônico. A tarefa deve existir, com S4U, trigger de boot, uma ação executável, argumentos,
+  diretório de trabalho e habilitação já conformes. Exatamente runlevel e comando devem divergir.
+- A atualização usa `TASK_UPDATE`, conserva `Principal.UserId`, senha nula, S4U e privilégio
+  limitado. Se a tarefa desaparecer ou mudar entre sonda e execução, falha fechado.
+- Antes da mutação, conserva a definição e o XML anteriores. Depois, relê todos os campos do
+  contrato. Se registro, releitura ou início falhar, tenta restaurar a definição anterior e
+  registra somente resultado sanitizado e se o rollback foi verificado.
+- Merge, staging físico e execução UAC requerem suas autorizações específicas conforme as
+  regras operacionais. Não há reinício, produção, credencial ou enfileiramento da ReqSys #3096.
+
+Autorização de incremento: Agent Increment Gate 40618872254, gap_fix, permitido na main
+`f92a60d944b2986121311b9a05071e6b587590d1`. A evidência não autoriza merge ou UAC.
+
