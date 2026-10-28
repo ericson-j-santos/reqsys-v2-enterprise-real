@@ -102,4 +102,17 @@ O staging ainda exige arquivo existente, release coerente e versão exata Python
 Se o caminho estiver fora de `LOCALAPPDATA`, falha fechado e publica recibo sanitizado;
 nenhuma tarefa é modificada ou UAC iniciado. A execução elevada continua separada.
 
+### Diagnóstico da pré-condição nativa
+
+Após a tentativa local de 2026-10-28, o reparador retornou
+`WATCHDOG_DRIFT_PROFILE_CHANGED` sem modificar a tarefa. O recibo privado deve
+incluir os booleanos de `Get-TaskContract` observados antes da mutação, para
+identificar a condição divergente. XML, caminhos, identidade e valores de
+credenciais não podem ser serializados. O reparador deve continuar bloqueando
+qualquer drift fora do perfil aprovado.
+
+**Critérios de aceite:** a tentativa bloqueada registra `precheck_checks` apenas
+com booleanos; `registration_attempted=false`; a tarefa permanece inalterada;
+os testes de escopo e reversão continuam passando.
+
 
