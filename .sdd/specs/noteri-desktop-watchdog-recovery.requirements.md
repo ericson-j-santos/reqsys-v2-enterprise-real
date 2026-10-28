@@ -79,8 +79,8 @@ O modo normal continua restrito à reparação de tarefa ausente. Para esse drif
 o reparador nativo distribuído por `watchdog-uac-stage` é a rota de execução administrativa.
 
 - O staging copia o reparador e os launchers; ele não registra tarefa nem apresenta UAC.
-- O reparador exige host e nome da tarefa fixos, metadata local coerente e Python no caminho
-  canônico. A tarefa deve existir, com S4U, trigger de boot, uma ação executável, argumentos,
+- O reparador exige host e nome da tarefa fixos, metadata local coerente e Python instalado
+  dentro de `LOCALAPPDATA`. A tarefa deve existir, com S4U, trigger de boot, uma ação executável, argumentos,
   diretório de trabalho e habilitação já conformes. Exatamente runlevel e comando devem divergir.
 - A atualização usa `TASK_UPDATE`, conserva `Principal.UserId`, senha nula, S4U e privilégio
   limitado. Se a tarefa desaparecer ou mudar entre sonda e execução, falha fechado.
@@ -92,4 +92,14 @@ o reparador nativo distribuído por `watchdog-uac-stage` é a rota de execução
 
 Autorização de incremento: Agent Increment Gate 40618872254, gap_fix, permitido na main
 `f92a60d944b2986121311b9a05071e6b587590d1`. A evidência não autoriza merge ou UAC.
+
+### Ajuste do Python instalado após a primeira tentativa de staging
+
+O run 40620510939 falhou em `WATCHDOG_PYTHON_PATH_MISMATCH` antes de copiar qualquer
+launcher. O instalador aceita `python_executable` resolvido nos metadados locais; portanto,
+o staging e o reparador devem usar esse mesmo caminho, limitado ao `LOCALAPPDATA` do host.
+O staging ainda exige arquivo existente, release coerente e versão exata Python 3.12.10.
+Se o caminho estiver fora de `LOCALAPPDATA`, falha fechado e publica recibo sanitizado;
+nenhuma tarefa é modificada ou UAC iniciado. A execução elevada continua separada.
+
 

@@ -7,6 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "repair_desktop_watchdog_native.ps1"
+WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-watchdog-recovery.yml"
 
 
 def test_native_watchdog_repair_is_scoped_and_fail_closed() -> None:
@@ -63,11 +64,22 @@ def test_existing_task_repair_is_exact_and_reversible() -> None:
     assert "$script:RollbackAttempted = $true" in raw
     assert "$script:RollbackVerified" in raw
     assert "WATCHDOG_REPAIR_FAILED_ROLLBACK_ATTEMPTED" in raw
-    assert "WATCHDOG_PYTHON_PATH_MISMATCH" in raw
+    assert "WATCHDOG_PYTHON_OUTSIDE_LOCALAPPDATA" in raw
+    assert "$python = [IO.Path]::GetFullPath([string]$metadata.python_executable)" in raw
     assert "command_matches = $oneAction -and" in raw
     assert "arguments_match = $oneAction -and" in raw
     assert "working_dir_matches = $oneAction -and" in raw
     assert "error = $_.Exception.Message" not in raw
+
+
+def test_stage_uses_the_installed_python_with_a_bounded_path() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    stage = raw.split("  stage-watchdog-uac:", 1)[1].split("\n  recover:", 1)[0]
+    assert '$python = [IO.Path]::GetFullPath([string]$metadata.python_executable)' in stage
+    assert '$python.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase)' in stage
+    assert '"WATCHDOG_PYTHON_OUTSIDE_LOCALAPPDATA"' in stage
+    assert 'task_created_or_modified = $false' in stage
+    assert '$version -ne "Python 3.12.10"' in stage
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell COM helper contract")
@@ -94,4 +106,5 @@ if (Test-SamePath -Observed '"C:\\ReqSys\\run.py" --extra' -Expected 'C:\\ReqSys
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
 
