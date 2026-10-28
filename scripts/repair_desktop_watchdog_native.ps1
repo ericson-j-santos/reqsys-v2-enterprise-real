@@ -123,6 +123,8 @@ function Register-WatchdogTask {
     $previousXml = [string]$previousDefinition.XmlText
     if ([string]::IsNullOrWhiteSpace($previousXml)) { throw 'WATCHDOG_ROLLBACK_SNAPSHOT_UNAVAILABLE' }
     $previousChecks = Get-TaskContract -Definition $previousDefinition -Runtime $Runtime
+    # Apenas booleanos do contrato; não incluir XML, caminhos ou identidade no recibo.
+    $script:PrecheckChecks = $previousChecks
     if (-not (Test-ApprovedDrift -Checks $previousChecks)) { throw 'WATCHDOG_DRIFT_PROFILE_CHANGED' }
     $identity = [string]$previousDefinition.Principal.UserId
     if ([string]::IsNullOrWhiteSpace($identity)) { throw 'WATCHDOG_PRINCIPAL_MISSING' }
@@ -175,6 +177,7 @@ try {
     $script:RegistrationAttempted = $false
     $script:RollbackAttempted = $false
     $script:RollbackVerified = $false
+    $script:PrecheckChecks = $null
     if ($env:COMPUTERNAME -ine $ExpectedHost) { throw "launcher permitido somente em $ExpectedHost" }
     if (-not (Test-IsAdministrator)) {
         $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'))
@@ -210,6 +213,7 @@ catch {
         registration_attempted = $script:RegistrationAttempted
         rollback_attempted = $script:RollbackAttempted
         rollback_verified = $script:RollbackVerified
+        precheck_checks = $script:PrecheckChecks
     }
     exit 2
 }

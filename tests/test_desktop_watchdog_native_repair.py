@@ -70,6 +70,9 @@ def test_existing_task_repair_is_exact_and_reversible() -> None:
     assert "arguments_match = $oneAction -and" in raw
     assert "working_dir_matches = $oneAction -and" in raw
     assert "error = $_.Exception.Message" not in raw
+    assert "$script:PrecheckChecks = $previousChecks" in raw
+    assert "precheck_checks = $script:PrecheckChecks" in raw
+    assert "# Apenas booleanos do contrato" in raw
 
 
 def test_stage_uses_the_installed_python_with_a_bounded_path() -> None:
