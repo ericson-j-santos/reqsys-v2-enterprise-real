@@ -115,4 +115,9 @@ qualquer drift fora do perfil aprovado.
 com booleanos; `registration_attempted=false`; a tarefa permanece inalterada;
 os testes de escopo e reversão continuam passando.
 
+O staging de leitura deve transportar esses oito booleanos do diagnóstico local
+para o artifact privado por lista fechada, rejeitando campos ausentes ou de tipo
+inesperado. Se o diagnóstico for anterior à inclusão de `precheck_checks`, o
+campo pode permanecer nulo. O staging não executa reparo ou UAC.
+
 
