@@ -3,7 +3,7 @@
   "feature_name": "Teams Notification SLO Evidence Classification",
   "status": "implementation",
   "created_at": "2026-10-26",
-  "updated_at": "2026-10-26",
+  "updated_at": "2026-10-27",
   "approvals": {
     "requirements": true,
     "design": true,
@@ -12,7 +12,8 @@
   "description": "Separa o proxy de conclusao de workflows da entrega verificada, preservando watchdog e impedindo falso fechamento de incidente.",
   "sdd_gate": {
     "tests": [
-      "tests/test_teams_notification_slo_metrics.py"
+      "tests/test_teams_notification_slo_metrics.py",
+      "tests/test_teams_notification_slo_semantics.py"
     ],
     "evidence_contract": "READY_FOR_PR exige classificacao por evento/conclusao, teste de nao-fechamento por proxy e ausencia de selo de entrega sem readback independente."
   },

@@ -23,6 +23,7 @@ on:
       - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
       - "tests/test_teams_notification_slo_metrics.py"
+      - "tests/test_teams_notification_slo_semantics.py"
   push:
     branches: [main]
     paths:
@@ -45,6 +46,7 @@ on:
       - "tests/test_build_stg_enforcement_approval.py"
       - "tests/test_validate_stg_policy_approval.py"
       - "tests/test_teams_notification_slo_metrics.py"
+      - "tests/test_teams_notification_slo_semantics.py"
   workflow_dispatch:
 
 permissions:
@@ -73,6 +75,9 @@ jobs:
 
       - name: Testar classes e recibos do SLO Teams
         run: python -m unittest discover -s tests -p 'test_teams_notification_slo_metrics.py' -v
+
+      - name: Validate Teams SLO semantics
+        run: python -m unittest discover -s tests -p test_teams_notification_slo_semantics.py -v
 
       - name: Publish summary
         if: always()
