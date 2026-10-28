@@ -29,9 +29,9 @@ A inspeção do HEAD `0f212b8ca096ed01e2f1a03405dee0de38fa0a38` identificou que 
 
 ### Critérios adicionais do monitor
 
-7. Excluir `schedule` e `workflow_dispatch` do denominador de execuções candidatas; preservar seu volume separado em `event_breakdown` e `excluded_non_notification_runs`. Não usar exclusão como prova de recuperação.
+7. Excluir `schedule` e `workflow_dispatch` do denominador de execuções candidatas; preservar seu volume separado em `all_events` e `excluded_non_candidate_runs` no schema `2.0.0`. Não usar exclusão como prova de recuperação.
 8. Distinguir explicitamente `failure`, `cancelled`, `timed_out`, `skipped`, `neutral` e demais conclusões; manter todos os não-success identificados no indicador de execução, sem dizer que cada um é tentativa de entrega falha.
-9. Expor taxa de conclusão dos workflows como métrica auxiliar; manter `delivery_slo_state=unverified`, `delivery_verified=false` e sem taxa/orçamento efetivo de entrega até existir leitor independente do Teams com correlação por mensagem, SHA e ambiente.
-10. Não fechar automaticamente o incidente #1576 com sucesso de Actions ou HTTP 2xx. Na falta de amostra candidata, informar `execution_state=insufficient_data`; preservar o gate de alerta de dados mínimos.
-11. Executar `tests/test_teams_notification_slo_semantics.py` na suíte `Workflow Regression Contracts`, com cenário positivo, controle negativo do filtro antigo e repetição idempotente, além de `READY_FOR_PR=passed` no HEAD da branch atual antes da PR.
+9. Expor taxa de conclusão dos workflows como métrica auxiliar; manter `delivery_state=unverified`, `delivery_verified=false` e sem taxa/orçamento efetivo de entrega até existir leitor independente do Teams com correlação por mensagem, SHA e ambiente.
+10. Não fechar automaticamente o incidente #1576 com sucesso de Actions ou HTTP 2xx. Na falta de amostra candidata, informar `workflow_execution_state=insufficient_data` e `state=insufficient_data`, mantendo `delivery_state=unverified`; preservar o gate de alerta de dados mínimos.
+11. Executar `tests/test_teams_notification_slo_semantics.py` e `tests/test_teams_notification_slo_metrics.py` na suíte `Workflow Regression Contracts`, com cenário positivo, controle negativo do filtro antigo, IDs únicos para eventos distintos e repetição idempotente, além de `READY_FOR_PR=passed` no HEAD da branch atual antes da PR.
 12. Após integração governada, obter recibos independentes de mensagens efetivamente recebidas, validar supressões legítimas, observação de 30 dias, SLO >=99% e orçamento >=0 para avaliar recuperação; até então, estado parcial e issue aberta. Não alterar destinatários, credenciais, produção ou recursos pagos neste incremento.

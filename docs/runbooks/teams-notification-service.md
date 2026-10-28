@@ -132,3 +132,13 @@ O serviço é considerado consolidado quando, durante 30 dias:
 - toda falha produz issue, artifact e classificação de causa;
 - recuperação fecha automaticamente o incidente;
 - nenhuma credencial é exposta em logs, artifacts ou dashboard.
+
+## 10. Retificação da métrica de SLO (26/10/2026)
+
+O histórico anterior (por exemplo, 74,9% em 10.464 execuções) foi calculado a partir da conclusão de workflows, incluindo `schedule` (watchdog) e execuções de notificação com envio `skipped`. **Não representa taxa de entrega fim a fim.**
+
+A nova evidência separa: eventos candidatos `push`/`workflow_run`, watchdog `schedule`, conclusões `success`/`failure`/`timed_out`/`cancelled`/`skipped` e taxa proxy de execução. `workflow_dispatch` permanece excluído da amostra candidata, pois a operação pode ser reconciliar o Flow Bot ou verificar locator. Nenhuma dessas classes constitui recibo de mensagem.
+
+**Entrega verificada exige leitura independente no Teams** vinculada ao mesmo commit ou `correlation_id`, além de resultado de envio, controles de supressão e idempotência. Enquanto esse vínculo não for obtido sistematicamente, `delivery_state=unverified` e a métrica real de entrega continua sem valor; o incidente #1576 não é encerrado pelo SLO proxy. O dashboard público mantém dívida específica de certificação por readback, que não deve ser confundida com êxito do workflow.
+
+A validação preventiva usa `tests/test_teams_notification_slo_metrics.py`, `tests/test_teams_notification_slo_semantics.py` e `scripts/validate_workflow_regression_contracts.py`, executados no workflow `Workflow Regression Contracts`. Falhas 401, 405 e ausência de owner continuam registradas como incidentes de transporte/configuração, sem desativar gates. Não há alteração de webhook, secrets, produção ou custos adicionais.
