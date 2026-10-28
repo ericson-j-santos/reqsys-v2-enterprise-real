@@ -49,8 +49,10 @@ function Resolve-WatchdogRuntime {
         throw 'watchdog release_root divergente'
     }
     $python = [IO.Path]::GetFullPath([string]$metadata.python_executable)
-    $expectedPython = [IO.Path]::GetFullPath((Join-Path $runtimeRoot 'python\3.12.10\python.exe'))
-    if ($python -ine $expectedPython) { throw 'WATCHDOG_PYTHON_PATH_MISMATCH' }
+    $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\') + '\'
+    if (-not $python.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'WATCHDOG_PYTHON_OUTSIDE_LOCALAPPDATA'
+    }
     $launcher = Join-Path $runtimeRoot 'run.py'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw 'watchdog Python instalado ausente' }
     if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'watchdog run.py ausente' }
@@ -211,4 +213,5 @@ catch {
     }
     exit 2
 }
+
 
