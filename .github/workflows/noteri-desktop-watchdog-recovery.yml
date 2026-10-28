@@ -183,12 +183,25 @@ jobs:
               $diagnostic = Get-Content -LiteralPath $diagnosticFile -Raw -Encoding UTF8 | ConvertFrom-Json
               $diagnosticError = ([string]$diagnostic.error -replace '[\r\n]', ' ').Trim()
               if ($diagnosticError.Length -gt 500) { $diagnosticError = $diagnosticError.Substring(0, 500) }
+              $precheckChecks = $null
+              if ($null -ne $diagnostic.PSObject.Properties['precheck_checks'] -and $null -ne $diagnostic.precheck_checks) {
+                $precheckChecks = @{}
+                foreach ($name in @(
+                  'enabled', 'trigger_at_startup', 'logon_s4u', 'runlevel_limited',
+                  'one_exec_action', 'command_matches', 'arguments_match', 'working_dir_matches'
+                )) {
+                  $property = $diagnostic.precheck_checks.PSObject.Properties[$name]
+                  if ($null -eq $property -or $property.Value -isnot [bool]) { throw 'NATIVE_PRECHECK_INVALID' }
+                  $precheckChecks[$name] = $property.Value
+                }
+              }
               $nativeDiagnostic = @{
                 ok = [bool]$diagnostic.ok
                 result = [string]$diagnostic.result
                 error = $diagnosticError
                 error_type = [string]$diagnostic.error_type
                 generated_at_utc = [string]$diagnostic.generated_at_utc
+                precheck_checks = $precheckChecks
               }
             } catch {
               $nativeDiagnostic = @{
