@@ -67,6 +67,7 @@
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas.",
     "O modo watchdog-readback é separado e manual, usa host/runner/repositório/SHA/correlation_id exatos, sessão e Gateway; coleta somente metadados da tarefa fixa, consulta SCM de nome candidato fixo e state.json do watchdog, sem configuração privada, segredo, reparação, /Run ou mutação de serviço.",
     "O reparador nativo UAC da tarefa existente aceita somente o drift observado de runlevel e comando, preserva a identidade S4U, usa TASK_UPDATE, valida o contrato completo após registro e tenta restaurar a definição anterior se qualquer etapa falhar; o staging não executa UAC.",
+    "O staging e o reparador usam o Python declarado na instalação existente somente quando o caminho está dentro de LOCALAPPDATA; o staging comprova Python 3.12.10, e caminho externo bloqueia com recibo sanitizado sem alterar a tarefa.",
     "Metadados indisponíveis permanecem unknown/unavailable; ausência do nome candidato não prova ausência de outros serviços, last_cycle_source_sha não prova release instalada, e nenhum resultado atesta produtor ReqSys, boot real ou ciclos contínuos."
   ],
   "operational_rules": {
@@ -133,7 +134,8 @@
     "identity": "preserve existing Principal.UserId with S4U and null password",
     "postcheck": "enabled, boot, S4U, limited, one exec action, command, arguments, working directory",
     "failure": "attempt rollback from previous definition and record sanitized boolean outcome",
-    "staging": "watchdog-uac-stage only; execution requires separate administrative authorization"
+    "staging": "watchdog-uac-stage only; installed metadata Python within LOCALAPPDATA and version 3.12.10 required; execution requires separate administrative authorization"
   }
 }
+
 
