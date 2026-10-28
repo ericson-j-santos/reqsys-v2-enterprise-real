@@ -223,6 +223,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not $env:TARGET_PATH -or -not $env:SESSION_ID) { throw 'GOVERNED_SESSION_MISSING' }
+          if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'NATIVE_PREFLIGHT_LOCALAPPDATA_MISSING' }
+          $env:CODEX_WORKER_POOL_API_TOKEN_FILE_HOST = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriWorkerPool\credentials\api-token.txt'
           $rulesRoot = Join-Path $env:GITHUB_WORKSPACE '_rules'
           $gateway = Join-Path $rulesRoot 'scripts/command_gateway.py'
           $policy = Join-Path $rulesRoot 'config/command-gateway.policy.json'

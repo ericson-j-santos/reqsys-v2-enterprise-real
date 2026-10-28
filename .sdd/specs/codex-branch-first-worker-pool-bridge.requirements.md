@@ -63,6 +63,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 50. O comando literal `/reqsys run worker-pool-native-preflight-dev` é limitado ao proprietário e à issue de gateway #1705, fixando issue #3096, request_id `026e9c5add6137dc65e673a6`, `main`, SHA vigente e modo somente leitura. Deve exigir Session Launcher, Command Gateway, risco 1, host Noteri e evidência sanitizada; falhar fechado diante de contexto ou pré-condições inválidas.
 51. O modo `native_preflight` jamais abre arquivo de credencial, enfileira trabalho ou inicia tarefas, modifica serviços e permissões, executa Docker, reinicia host ou alcança produção. O modo normal e o E2E hospedado permanecem separados.
 52. O CI deve impedir que o job `enqueue` volte a carregar o bridge pelo `inputs.base_sha` histórico, que sobrescreva o `base_sha` da task pelo SHA do executor, que permita despacho fora da `main` ou que persista credenciais de checkout. Os testes devem incluir controles negativos que reproduzem cada regressão.
+53. No job `native_preflight` do Noteri, a referência `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST` deve ser derivada de `LOCALAPPDATA` da conta do runner para `ReqSys\NoteriWorkerPool\credentials\api-token.txt` somente no passo da sonda. Se `LOCALAPPDATA` ou o arquivo não estiver disponível, a sonda deve falhar fechada. O workflow e a sonda não podem ler ou publicar o valor da credencial.
 
 ## Critérios de aceite
 
