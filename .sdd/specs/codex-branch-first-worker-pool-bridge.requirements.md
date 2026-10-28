@@ -64,6 +64,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 51. O modo `native_preflight` jamais abre arquivo de credencial, enfileira trabalho ou inicia tarefas, modifica serviços e permissões, executa Docker, reinicia host ou alcança produção. O modo normal e o E2E hospedado permanecem separados.
 52. O CI deve impedir que o job `enqueue` volte a carregar o bridge pelo `inputs.base_sha` histórico, que sobrescreva o `base_sha` da task pelo SHA do executor, que permita despacho fora da `main` ou que persista credenciais de checkout. Os testes devem incluir controles negativos que reproduzem cada regressão.
 53. No job `native_preflight` do Noteri, a referência `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST` deve ser derivada de `LOCALAPPDATA` da conta do runner para `ReqSys\NoteriWorkerPool\credentials\api-token.txt` somente no passo da sonda. Se `LOCALAPPDATA` ou o arquivo não estiver disponível, a sonda deve falhar fechada. O workflow e a sonda não podem ler ou publicar o valor da credencial.
+54. No job `enqueue` do mesmo runner, a referência ao arquivo já provisionado deve ser derivada de `LOCALAPPDATA` apenas no passo de handoff. A ausência de `LOCALAPPDATA`, arquivo inválido ou falha de autenticação bloqueia o bridge sem declarar enfileiramento; o valor do token jamais deve aparecer em argumentos, logs, resumo ou evidência.
 
 ## Critérios de aceite
 
