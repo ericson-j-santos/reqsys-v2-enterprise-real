@@ -108,7 +108,7 @@ function Test-ApprovedDrift {
     return (
         $Checks.enabled -and $Checks.trigger_at_startup -and $Checks.logon_s4u -and
         $Checks.one_exec_action -and $Checks.arguments_match -and $Checks.working_dir_matches -and
-        -not $Checks.runlevel_limited -and -not $Checks.command_matches
+        -not $Checks.command_matches
     )
 }
 
