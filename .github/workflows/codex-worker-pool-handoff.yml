@@ -85,6 +85,8 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'WORKER_POOL_LOCALAPPDATA_MISSING' }
+          $env:CODEX_WORKER_POOL_API_TOKEN_FILE_HOST = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriWorkerPool\credentials\api-token.txt'
           python scripts/pending_development_worker_pool_bridge.py `
             --issue-number "${{ inputs.issue_number }}" `
             --repository "$env:GITHUB_REPOSITORY" `
