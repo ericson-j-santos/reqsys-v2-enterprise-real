@@ -1,4 +1,8 @@
+import os
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,3 +47,51 @@ def test_native_watchdog_repair_has_no_user_supplied_parameters() -> None:
     assert "$args" not in raw
     assert "read-host" not in raw
     assert "credential" not in raw
+
+
+def test_existing_task_repair_is_exact_and_reversible() -> None:
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert "$TaskUpdate = 4" in raw
+    assert "$folder.GetTask($WatchdogTask)" in raw
+    assert "Test-ApprovedDrift -Checks $previousChecks" in raw
+    assert "-not $Checks.runlevel_limited -and -not $Checks.command_matches" in raw
+    assert "$previousDefinition.XmlText" in raw
+    assert "$definition.XmlText = $previousXml" in raw
+    assert "$action.Path = $Runtime.python" in raw
+    assert "$definition.Principal.RunLevel = $RunLevelLimited" in raw
+    assert "$folder.RegisterTaskDefinition(" in raw
+    assert "$script:RollbackAttempted = $true" in raw
+    assert "$script:RollbackVerified" in raw
+    assert "WATCHDOG_REPAIR_FAILED_ROLLBACK_ATTEMPTED" in raw
+    assert "WATCHDOG_PYTHON_PATH_MISMATCH" in raw
+    assert "command_matches = $oneAction -and" in raw
+    assert "arguments_match = $oneAction -and" in raw
+    assert "working_dir_matches = $oneAction -and" in raw
+    assert "error = $_.Exception.Message" not in raw
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell COM helper contract")
+def test_drift_profile_accepts_only_observed_two_field_difference() -> None:
+    functions = SCRIPT.read_text(encoding="utf-8").split("\ntry {\n", 1)[0]
+    checks = """
+$observed = @{
+  enabled=$true; trigger_at_startup=$true; logon_s4u=$true;
+  one_exec_action=$true; arguments_match=$true; working_dir_matches=$true;
+  runlevel_limited=$false; command_matches=$false
+}
+if (-not (Test-ApprovedDrift -Checks $observed)) { exit 1 }
+$observed.arguments_match = $false
+if (Test-ApprovedDrift -Checks $observed) { exit 2 }
+$observed.arguments_match = $true
+$observed.command_matches = $true
+if (Test-ApprovedDrift -Checks $observed) { exit 3 }
+if (-not (Test-SamePath -Observed '"C:\\ReqSys\\run.py"' -Expected 'C:\\ReqSys\\run.py')) { exit 4 }
+if (Test-SamePath -Observed '"C:\\ReqSys\\run.py" --extra' -Expected 'C:\\ReqSys\\run.py') { exit 5 }
+"""
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        input=functions + checks, text=True, capture_output=True, timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
