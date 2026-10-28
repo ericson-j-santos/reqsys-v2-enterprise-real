@@ -2,7 +2,7 @@
   "feature_name": "noteri-desktop-admin-broker-kick",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-10-24",
+  "updated_at": "2026-10-27",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -46,5 +46,22 @@
       "BLOCKED_*"
     ],
     "evidence": "sanitized structured job output; physical E2E pending"
+  },
+  "task_contract_diagnostics": {
+    "schema": "boolean-only",
+    "fields": [
+      "xml_valid",
+      "runtime_valid",
+      "boot_trigger",
+      "logon_s4u",
+      "runlevel_expected",
+      "command_matches",
+      "arguments_match",
+      "working_dir_matches"
+    ],
+    "scope": "broker and watchdog; aggregate task_contract remains unchanged",
+    "privacy": "never serialize task XML, command paths, arguments, working directory, identity or secrets",
+    "mutation": "none; query only"
   }
 }
+
