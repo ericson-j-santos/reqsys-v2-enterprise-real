@@ -64,7 +64,12 @@ class TeamsNotificationRecoveryProofTest(unittest.TestCase):
         self.assert_unverified(payload)
         step = next(s for s in self.workflow["jobs"]["observe"]["steps"]
                     if s["name"] == "Abrir ou atualizar incidente")
-        self.assertEqual(step["if"], "steps.evidence.outputs.conclusion == 'failure'")
+        self.assertEqual(
+            step["if"],
+            "steps.evidence.outputs.conclusion == 'failure' && "
+            "(steps.evidence.outputs.event == 'push' || "
+            "steps.evidence.outputs.event == 'workflow_run')",
+        )
 
     def test_skipped_cancelled_and_unknown_never_prove_recovery(self):
         for conclusion in ("skipped", "cancelled", "unknown", ""):
@@ -74,12 +79,14 @@ class TeamsNotificationRecoveryProofTest(unittest.TestCase):
                 self.assertFalse(payload["workflow_succeeded"])
 
     def test_manual_and_locator_watch_are_not_delivery_tests(self):
-        payload, _ = self.observe(event="workflow_dispatch")
+        payload, output = self.observe(event="workflow_dispatch")
         self.assertEqual(payload["delivery_state"], "not_evaluated")
+        self.assertIn("event=workflow_dispatch", output)
         self.assert_unverified(payload)
         for conclusion in ("success", "failure"):
-            payload, _ = self.observe(run_event="schedule", conclusion=conclusion)
+            payload, output = self.observe(run_event="schedule", conclusion=conclusion)
             self.assertEqual(payload["delivery_state"], "locator_watch")
+            self.assertIn("event=schedule", output)
             self.assert_unverified(payload)
 
     def test_replay_has_same_decision_and_no_external_mutation(self):
