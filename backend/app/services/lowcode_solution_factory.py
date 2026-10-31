@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import uuid
@@ -160,6 +161,26 @@ def _security_roles(prefix: str) -> list[dict[str, Any]]:
     ]
 
 
+def _delivery_state() -> dict[str, Any]:
+    """Somente a geracao do blueprint e executada nesta rota."""
+    return {
+        'blueprint': 'generated',
+        'dispatch': 'not_requested',
+        'execution': 'not_started',
+        'installation': 'not_verified',
+        'dispatch_receipt': None,
+        'execution_receipt': None,
+        'installation_evidence': None,
+        'external_write_performed': False,
+        'blocker': 'alm_executor_not_integrated',
+    }
+
+
+def _idempotency_key(request: LowCodeSolutionGenerateRequest) -> str:
+    canonical = json.dumps(request.model_dump(mode='json'), sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+
 def _alm_package(request: LowCodeSolutionGenerateRequest, prefix: str) -> dict[str, Any]:
     return {
         'package_name': PACKAGE_NAME,
@@ -167,7 +188,10 @@ def _alm_package(request: LowCodeSolutionGenerateRequest, prefix: str) -> dict[s
         'publisher_prefix': prefix,
         'target_repository': settings.github_alm_repo or 'ericson-j-santos/reqsys-powerplatform-alm',
         'target_environment': request.target_environment,
-        'mode': 'dry_run_manifest' if request.dry_run else 'pipeline_dispatch_requested',
+        'mode': 'dry_run_manifest' if request.dry_run else 'pending_dispatch',
+        'package_type': 'blueprint_only',
+        'importable': False,
+        'dispatch_receipt': None,
         'expected_pipeline': 'lowcode-solution-factory-p0.yml',
         'pac_cli_steps': ['pac auth create', f'pac solution init --publisher-prefix {prefix} --publisher-name ReqSys', 'pac solution add-reference', 'pac solution pack', 'pac solution import'],
         'connection_references': ['shared_commondataserviceforapps', 'shared_teams', 'shared_approvals', 'shared_sharepointonline'],
@@ -256,6 +280,8 @@ def gerar_lowcode_solution(request: LowCodeSolutionGenerateRequest) -> dict[str,
         )
         solution['profile'] = request.profile
         solution['factory_version'] = FACTORY_VERSION
+        solution['delivery'] = _delivery_state()
+        solution['idempotency_key'] = _idempotency_key(request)
         return solution
 
     prefix = _logical(request.owner_prefix)[:20]
@@ -264,8 +290,11 @@ def gerar_lowcode_solution(request: LowCodeSolutionGenerateRequest) -> dict[str,
         'schema_version': FACTORY_VERSION,
         'capability': 'LowCode Solution Factory P0',
         'profile': request.profile,
-        'status': 'planned' if request.dry_run else 'ready_for_pipeline',
+        'status': ('planned' if request.dry_run else
+                   'pending_dispatch' if request.include_alm_package else 'blueprint_generated'),
         'correlation_id': str(uuid.uuid4()),
+        'idempotency_key': _idempotency_key(request),
+        'delivery': _delivery_state(),
         'generated_at': _utc_now(),
         'solution_name': request.solution_name,
         'display_name': request.display_name,
@@ -274,7 +303,7 @@ def gerar_lowcode_solution(request: LowCodeSolutionGenerateRequest) -> dict[str,
         'modules': request.modules,
         'publisher': {'name': 'ReqSys', 'prefix': prefix},
         'governance': {
-            'mode': 'dry_run_blueprint' if request.dry_run else 'alm_pipeline_requested',
+            'mode': 'dry_run_blueprint' if request.dry_run else 'blueprint_only_pending_dispatch',
             'sandbox_first': True,
             'requires_human_or_pipeline_approval': True,
             'no_custom_reqsys_api_required': True,
@@ -291,6 +320,8 @@ def gerar_lowcode_solution(request: LowCodeSolutionGenerateRequest) -> dict[str,
     files = montar_arquivos_solution(solution)
     solution['package'] = {
         'package_name': PACKAGE_NAME,
+        'package_type': 'blueprint_zip_not_importable',
+        'importable': False,
         'zip_filename': f'{PACKAGE_NAME}.zip',
         'files': [{'path': file['path'], 'size': len(file['content'])} for file in files],
         'zip_base64': _zip_base64(files),
