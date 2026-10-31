@@ -117,7 +117,7 @@ def test_entrada_invalida_rejeitada():
     with pytest.raises(ValidationError):
         LowCodeSolutionGenerateRequest(modules=[])
     with pytest.raises(ValidationError):
-        LowCodeSolutionGenerateRequest(target_environment='\\n')
+        LowCodeSolutionGenerateRequest(target_environment='   ')
 
 
 def test_perfil_teams_nao_declara_instalacao():
