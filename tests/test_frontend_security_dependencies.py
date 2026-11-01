@@ -20,10 +20,11 @@ class TestFrontendSecurityDependencies(unittest.TestCase):
             packages["node_modules/vite"]["integrity"],
             "sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==",
         )
-        self.assertEqual(packages["node_modules/follow-redirects"]["version"], "1.16.1")
+        # GHSA-mrwp-f3q8-3g9p: 1.16.0-1.16.1 expõem cabeçalhos sensíveis entre realms.
+        self.assertEqual(packages["node_modules/follow-redirects"]["version"], "1.16.2")
         self.assertEqual(
             packages["node_modules/follow-redirects"]["integrity"],
-            "sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==",
+            "sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==",
         )
 
     def test_vite_patch_dependency_chain_is_coherent(self) -> None:
