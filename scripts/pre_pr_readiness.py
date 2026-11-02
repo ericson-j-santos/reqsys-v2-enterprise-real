@@ -482,8 +482,9 @@ def is_not_applicable_noop(
     behind_by: int,
     files: list[str],
 ) -> bool:
-    # PR recuperado pode ter commit de sincronização acima da base sem diff real.
-    return behind_by == 0 and not files
+    # Apenas HEAD identico a base pode ter admissao nao aplicavel.
+    # Commits distintos sem diff continuam bloqueados (sem entrega a integrar).
+    return head_sha == base_sha and behind_by == 0 and not files
 
 
 def parse_args() -> argparse.Namespace:
