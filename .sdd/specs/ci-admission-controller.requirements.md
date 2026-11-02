@@ -77,3 +77,23 @@ Quando a consolidação Padrão Ouro não atingir a meta, o processo deve emitir
 ## Escopo de ambientes
 
 O detector de drift deve consumir `infra/public-access-urls.json` como contrato machine-readable do runtime atual. Ambientes com `runtime_target=not_promoted` não participam do comparativo obrigatório do incremento corrente. A ausência dessa fonte mantém o comportamento legado estrito. Se PROD mudar para um runtime ativo, configuração PROD vazia/ausente, healthcheck ausente, porta direta ou gates `APP_ENV/ALLOW_DEMO_LOGIN` inválidos voltam a bloquear automaticamente.
+
+## Retificação do contrato no CI — 02/11/2026 (PR #3120)
+
+O commit original de Teams está na `main@0d13b0a2299c879489b8d3f97991ad0faba60881`. A branch `09e86dc4e089a2fcd8bbffbfc106108b37246935` tinha histórico diferente, mas nenhum arquivo modificado. O Pre-PR classificava esse cenário como `not_applicable`, enquanto o manifesto exigia `head_sha == base_sha` para esse estado. O conflito produziu `not_applicable_state_invalid`, cascata de falhas e nenhuma mudança integrável.
+
+### Requisitos e casos
+
+- HEAD igual à base, diff vazio, `behind_by=0`: `not_applicable` é permitido somente para execução sobre o mesmo commit.
+- HEAD diferente da base, diff vazio: o Pre-PR deve bloquear explicitamente por ausência de mudança, o manifesto deve representar `blocked/EMPTY_CHANGE` e o CI não deve admitir ou publicar um falso sucesso.
+- HEAD diferente da base, diff real: executar todos os testes e invariantes e admitir somente com contrato SDD, segurança e demais gates aprovados.
+- HEAD atrasado ou evidência em outro SHA: manter bloqueio; nenhum reaproveitamento de artefato ou commit de outro PR.
+- Escopo: apenas fluxo de admissão CI do ReqSys; sem redução de gates, merge, deploy, permissões, armazenamento extra ou execução operacional Teams.
+- A verificação negativa/positiva do Teams pertence à evidência operacional independente e não pode ser substituída por CI verde.
+
+### Critérios de aceite
+
+- `tests/test_pre_pr_readiness.py` comprova que `not_applicable` exige HEAD/base idênticos.
+- `tests/test_ci_admission_control.py` comprova que manifesto `not_applicable` com SHAs diferentes falha fechado, e `blocked/EMPTY_CHANGE` permanece bloqueado.
+- [Pre-PR #41085787283](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/41085787283) é a reprodução do defeito anterior; [Pre-PR #41379671444](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/41379671444) detectou a necessidade de contrato SDD atualizado após a correção funcional.
+- O novo SHA deverá aprovar Pre-PR, CI, PR Evidence Gate e E2E aplicável antes de elegibilidade de merge. Nenhum teste histórico serve como prova do novo SHA.

@@ -626,24 +626,27 @@ def test_manifest_rejects_not_applicable_when_a_real_diff_exists() -> None:
     else:
         raise AssertionError("not_applicable com diff real deveria ser rejeitado")
 
-def test_manifest_rejects_not_applicable_with_distinct_sha_even_without_diff() -> None:
+
+def test_manifest_rejects_not_applicable_with_distinct_head_and_empty_diff() -> None:
     payload = readiness(status="not_applicable", profiles=[])
     payload["changed_files"] = []
     payload["preventive_invariants"] = []
-    payload["behind_by"] = 0
-    assert payload["head_sha"] != payload["base_sha"]
     try:
-        manifest.build_manifest(payload, payload["head_sha"])
+        manifest.build_manifest(payload, "a" * 40)
     except manifest.AdmissionError as exc:
-        assert "not_applicable_state_invalid" in str(exc)
+        assert str(exc) == "not_applicable_state_invalid"
     else:
-        raise AssertionError("HEAD divergente sem diff nao pode ser not_applicable")
+        raise AssertionError("SHA distinto sem diff não pode ser não aplicável")
 
 
-def test_manifest_distinct_sha_without_diff_remains_blocked() -> None:
-    payload = readiness(status="blocked", blockers=["nenhuma alteração detectada em relação à base"])
+def test_manifest_classifies_empty_change_as_blocked_not_admitted() -> None:
+    payload = readiness(
+        status="blocked",
+        blockers=["nenhuma alteração detectada em relação à base"],
+    )
     payload["changed_files"] = []
-    result = manifest.build_manifest(payload, payload["head_sha"])
+    result = manifest.build_manifest(payload, "a" * 40)
     assert result["status"] == "blocked"
-    assert result["blocker_reason"]
-
+    assert result["head_sha"] == "a" * 40
+    assert result["base_sha"] == "b" * 40
+    assert any(item["code"] == "EMPTY_CHANGE" for item in result["blocker_reason"])

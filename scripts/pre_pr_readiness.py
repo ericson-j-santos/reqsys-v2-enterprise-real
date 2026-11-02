@@ -482,8 +482,8 @@ def is_not_applicable_noop(
     behind_by: int,
     files: list[str],
 ) -> bool:
-    # Apenas HEAD identico a base pode ter admissao nao aplicavel.
-    # Commits distintos sem diff continuam bloqueados (sem entrega a integrar).
+    # "Não aplicável" exige o mesmo commit. Uma PR com SHA distinto e diff vazio
+    # não contém mudança para integrar e deve ser bloqueada, sem manifesto fictício.
     return head_sha == base_sha and behind_by == 0 and not files
 
 

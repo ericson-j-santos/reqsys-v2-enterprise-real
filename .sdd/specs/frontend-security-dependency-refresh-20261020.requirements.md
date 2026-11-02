@@ -36,3 +36,20 @@ sem mudança funcional intencional da aplicação.
 - `npm run build` verde;
 - teste de regressão de versões verde;
 - nenhuma alteração fora de `frontend/package*.json`, especificação e teste de prevenção.
+
+## Correção adicional de segurança — 02/11/2026 (PR #3120)
+
+O CI principal [#41379864410](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/41379864410) falhou em `npm audit --audit-level=high` por `GHSA-mrwp-f3q8-3g9p`: `follow-redirects 1.16.1`, afetado. A versão corrigida publicada é `1.16.2` (CVE-2026-116689).
+
+### Requisitos
+- Atualizar exclusivamente o nó `node_modules/follow-redirects` em `frontend/package-lock.json` (versão, URL e integridade SHA-512), mantendo as demais dependências inalteradas.
+- `axios 1.20.0` exige `follow-redirects ^1.16.0`, portanto o patch não requer alterar dependência direta ou adotar major version.
+- Atualizar `tests/test_frontend_security_dependencies.py` para exigir a nova versão e integridade, detectando regressão para a vulnerabilidade.
+- Manter todos os gates de segurança; não reduzir `npm audit --audit-level=high`, não usar `--force`, não liberar merge sem CI e E2E aplicáveis.
+- As demais ocorrências `moderate` são independentes e permanecem sob triagem, sem redução da segurança.
+
+### Critérios de aceite
+- `npm ci` instala a versão 1.16.2, preservando coerência do lockfile.
+- `npm audit --audit-level=high` não reporta falhas `high`.
+- Testes de dependência, build Vite e SDD são aprovados no HEAD final.
+- Nenhum deploy, alteração de segredo ou merge automático.

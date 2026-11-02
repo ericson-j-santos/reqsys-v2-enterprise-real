@@ -89,6 +89,23 @@ class TeamsNotificationRecoveryProofTest(unittest.TestCase):
             self.assertIn("event=schedule", output)
             self.assert_unverified(payload)
 
+    def test_incident_event_matrix_emits_correct_failure_origin(self):
+        # Exercita o bloco Python real do workflow sem criar issues no GitHub.
+        # A guarda do passo é verificada em test_failure_stays_visible.
+        for origin, expected_state in (
+            ("schedule", "locator_watch"),
+            ("push", "failed"),
+            ("workflow_run", "failed"),
+        ):
+            with self.subTest(origin=origin):
+                payload, output = self.observe(conclusion="failure", run_event=origin)
+                self.assertEqual(payload["event"], origin)
+                self.assertEqual(payload["conclusion"], "failure")
+                self.assertEqual(payload["delivery_state"], expected_state)
+                self.assertIn(f"event={origin}", output)
+                self.assertIn("conclusion=failure", output)
+                self.assert_unverified(payload)
+
     def test_replay_has_same_decision_and_no_external_mutation(self):
         first, _ = self.observe()
         second, _ = self.observe()
