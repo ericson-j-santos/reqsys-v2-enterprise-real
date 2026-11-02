@@ -625,3 +625,28 @@ def test_manifest_rejects_not_applicable_when_a_real_diff_exists() -> None:
         assert "not_applicable_state_invalid" in str(exc)
     else:
         raise AssertionError("not_applicable com diff real deveria ser rejeitado")
+
+
+def test_manifest_rejects_not_applicable_with_distinct_head_and_empty_diff() -> None:
+    payload = readiness(status="not_applicable", profiles=[])
+    payload["changed_files"] = []
+    payload["preventive_invariants"] = []
+    try:
+        manifest.build_manifest(payload, "a" * 40)
+    except manifest.AdmissionError as exc:
+        assert str(exc) == "not_applicable_state_invalid"
+    else:
+        raise AssertionError("SHA distinto sem diff não pode ser não aplicável")
+
+
+def test_manifest_classifies_empty_change_as_blocked_not_admitted() -> None:
+    payload = readiness(
+        status="blocked",
+        blockers=["nenhuma alteração detectada em relação à base"],
+    )
+    payload["changed_files"] = []
+    result = manifest.build_manifest(payload, "a" * 40)
+    assert result["status"] == "blocked"
+    assert result["head_sha"] == "a" * 40
+    assert result["base_sha"] == "b" * 40
+    assert any(item["code"] == "EMPTY_CHANGE" for item in result["blocker_reason"])

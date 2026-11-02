@@ -329,7 +329,8 @@ def test_noop_is_not_applicable_only_for_exact_base_without_diff() -> None:
         behind_by=0,
         files=[],
     )
-    assert MODULE.is_not_applicable_noop(
+    # Regressão #3120: HEAD distinto com árvore idêntica não é execução na base.
+    assert not MODULE.is_not_applicable_noop(
         head_sha="a" * 40,
         base_sha="b" * 40,
         behind_by=0,
