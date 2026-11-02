@@ -13,7 +13,17 @@ A main do ReqSys executa dois critérios incompatíveis para PR sem diff. O Pre-
 7. Não editar a PR #3120 para fabricar diff, não fazer merge/deploy por inferência, manter custo adicional R$ 0,00.
 
 ## Escopo
-Alteração isolada do Pre-PR e testes, vinculada à issue #2117. Este incremento não altera entrega Teams, frontend, runtime ou políticas de proteção de branch.
+Alteração isolada do Pre-PR e testes, vinculada à issue #2117. Inclui adicionalmente uma correção pontual de segurança no lockfile do frontend, necessária para o gate existente de npm audit. Não altera código de interface, fluxo Teams, runtime nem políticas de proteção de branch.
 
 ## Evidência inicial
 GitHub Actions #41376525482 registrou 92 testes direcionados aprovados e bloqueou `sdd:contract` por ausência de especificação. Este documento satisfaz a rastreabilidade exigida; a execução CI no SHA posterior e o E2E/controle negativo continuam necessários.
+
+## Desbloqueio de segurança detectado no CI da PR #3125
+
+O CI #41377203586 identificou em `frontend/package-lock.json` a dependência transitiva `follow-redirects@1.16.1` (via `axios`), afetada por GHSA-mrwp-f3q8-3g9p e reprovada por `npm audit --audit-level=high`. O contrato `axios -> follow-redirects ^1.16.0` aceita o patch 1.16.2. Foi proposta atualização somente de version/resolved/integrity no lockfile, com SRI de 1.16.2 verificável por `npm ci` no runner. Não reduzir a severidade exigida no gate nem fazer `npm audit fix` irrestrito.
+
+### Aceite adicional
+- `npm ci` verifica integridade do pacote atualizado, `npm audit --audit-level=high` passa, e o build do frontend conclui sem fallback.
+- Permanecem as 4 vulnerabilidades moderadas, a serem tratadas separadamente conforme risco; não ocultar relatórios.
+- Se o frontend precisar de Node atualizado, corrigir somente o runtime do job após prova no CI, preservando a versão mínima aceita pela ferramenta e os testes existentes.
+- Como o lockfile faz parte do frontend, verificar os testes/E2E aplicáveis no SHA final antes de integrar. Nenhum deploy/merge nesta correção.
