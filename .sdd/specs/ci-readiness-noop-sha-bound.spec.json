@@ -1,0 +1,24 @@
+{
+  "feature_name": "ci-readiness-noop-sha-bound",
+  "project": "ReqSys / Engineering Control Plane",
+  "created_at": "2026-11-01",
+  "updated_at": "2026-11-01",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Alinha o contrato de nao aplicabilidade do Pre-PR Readiness ao manifesto de CI por SHA, preservando a rejeicao de PR vazia com SHA divergente (issue #2117, incidencia #3120).",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_ci_admission_control.py"
+    ],
+    "evidence_contract": "Somente HEAD idêntico a base, diff vazio e behind_by=0 podem ser not_applicable. Diff vazio com HEAD distinto deve ser blocked por falta de alteracao. CI Admission permanece fail-closed e recusa manifesto falso."
+  },
+  "evidence": [
+    "Baseline ReqSys main@0d13b0a2299c879489b8d3f97991ad0faba60881; PR #3120 head 09e86dc4e089a2fcd8bbffbfc106108b37246935 sem diff.",
+    "Pre-PR push run 41376525482 no commit 333226ad9d9268a290aec1721be6622cde210176: 92 testes direcionados aprovados, SDD_SPEC_REQUIRED ainda bloqueava gate."
+  ]
+}
