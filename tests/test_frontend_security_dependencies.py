@@ -20,7 +20,6 @@ class TestFrontendSecurityDependencies(unittest.TestCase):
             packages["node_modules/vite"]["integrity"],
             "sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==",
         )
-        # GHSA-mrwp-f3q8-3g9p: 1.16.0-1.16.1 expõem cabeçalhos sensíveis entre realms.
         self.assertEqual(packages["node_modules/follow-redirects"]["version"], "1.16.2")
         self.assertEqual(
             packages["node_modules/follow-redirects"]["integrity"],
