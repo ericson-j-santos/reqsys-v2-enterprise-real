@@ -3,7 +3,7 @@
 ## Contexto
 Issue #2117, incidente PRs #3123 e #3125 em 03/11/2026. As duas foram integradas sem uma revisão `APPROVED` de identidade independente identificada pela API. O merge é atribuído à conta proprietária via GitHub web-flow: **não há prova de que os workflows de auto-merge tenham causado a integração**. O reparo aqui fortalece apenas os dois caminhos automatizados.
 
-## Aceite
+## Critérios de aceite
 1. `Governed PR Automation` (CI-driven, recuperação de draft e dispatch manual) e `Autonomous Delivery Cycle` exigem pelo menos uma revisão `APPROVED` submetida por pessoa distinta do autor, com `commit_id` idêntico ao SHA alvo.
 2. `CHANGES_REQUESTED` vigente, comentários, bot, autoaprovação ou aprovação antiga bloqueiam.
 3. Atualizações concorrentes de HEAD bloqueiam antes da chamada de merge; a revisão é relida imediatamente antes de mutar.
