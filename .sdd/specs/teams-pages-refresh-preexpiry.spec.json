@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Teams Pages Refresh Pre-expiry Admission",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Acrescenta uma solicitação idempotente e preventiva de atualização do Dashboard Pages aos 24h, preservando erro de disponibilidade no limite de 48h, autorização humana exclusiva pelo gateway e único publicador Pages existente.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_teams_pages_refresh_policy.py",
+      "tests/test_live_dashboard_post_merge_trigger.py",
+      "tests/test_pages_single_writer_guard.py"
+    ],
+    "evidence_contract": "Com evidência independente do monitor, idade <24h não solicita publicação; idade >=24h e <=48h cria uma única solicitação preventiva; dados inválidos, expirados ou monitor unhealthy bloqueiam. Nenhuma execução de workflow_dispatch, publicação ou elevação de permissão deve ocorrer na política. Recuperação pública deve encerrar somente sua issue operacional e preserva incidente de disponibilidade."
+  },
+  "traceability": {
+    "availability_workflow": ".github/workflows/teams-dashboard-availability-monitor.yml",
+    "policy": "scripts/teams_pages_refresh_policy.py",
+    "issue_gateway": 1705,
+    "recovery_incident": 3124
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "cost_additional_brl": 0
+  }
+}
