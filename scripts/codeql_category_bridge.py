@@ -145,9 +145,9 @@ def main() -> None:
         result = stage_codeql_categories(
             args.input_root, args.output_dir, languages, args.receipt
         )
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
-    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
 
 if __name__ == "__main__":
