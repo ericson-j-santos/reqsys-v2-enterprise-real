@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import re
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -207,27 +209,34 @@ def evidence(
     completed_at: str,
     rto: float,
 ) -> dict[str, Any]:
+    source_hash = source.get("sha256")
     match = (
         source.get("quick_check") == restored.get("quick_check") == "ok"
-        and source.get("sha256") == restored.get("sha256")
-        and source.get("table_counts") == restored.get("table_counts")
+        and isinstance(source_hash, str)
+        and bool(re.fullmatch(r"[0-9a-f]{64}", source_hash))
+        and source_hash == restored.get("sha256")
+        and isinstance(source.get("table_counts"), dict)
+        and source["table_counts"] == restored.get("table_counts")
     )
+    # An unknown, malformed, timezone-naive or future recovery point is not RPO=0.
     try:
-        rpo = max(
-            0.0,
-            (
-                iso(completed_at) - iso(str(source.get("generated_at")))
-            ).total_seconds()
-            / 60,
-        )
-    except (TypeError, ValueError):
-        rpo = 0.0
+        recovery_point = iso(str(source["generated_at"]))
+        restore_time = iso(completed_at)
+        if recovery_point.utcoffset() is None or restore_time.utcoffset() is None:
+            raise ValueError("timestamps must include a timezone")
+        age_minutes = (restore_time - recovery_point).total_seconds() / 60
+        rpo = age_minutes if math.isfinite(age_minutes) and age_minutes >= 0 else None
+    except (KeyError, TypeError, ValueError, OverflowError):
+        rpo = None
 
+    rto_valid = type(rto) in (int, float) and math.isfinite(rto) and rto >= 0
     passed = (
         match
+        and rpo is not None
         and rpo <= asset["rpo_target_minutes"]
+        and rto_valid
         and rto <= asset["rto_target_seconds"]
-        and quota_payload["status"] != "critical"
+        and quota_payload.get("status") == "healthy"
     )
     return {
         "schema_version": "1.0.0",
@@ -241,9 +250,9 @@ def evidence(
         "snapshot_id": snapshot_id,
         "backup_started_at": started_at,
         "restore_completed_at": completed_at,
-        "rpo_minutes": round(rpo, 6),
+        "rpo_minutes": round(rpo, 6) if rpo is not None else None,
         "rpo_target_minutes": asset["rpo_target_minutes"],
-        "rto_seconds": round(rto, 6),
+        "rto_seconds": round(rto, 6) if rto_valid else None,
         "rto_target_seconds": asset["rto_target_seconds"],
         "integrity_match": match,
         "source_manifest": public(source),

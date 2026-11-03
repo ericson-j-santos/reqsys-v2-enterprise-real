@@ -85,6 +85,7 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         asset = select(inventory, "dev", include_disabled=True)[0]
         manifest = {
             "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
             "sha256": "a" * 64,
             "table_counts": {"item": 2},
             "row_count_total": 2,
@@ -112,6 +113,68 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         self.assertNotIn("fly_app", result)
         self.assertNotIn("table_counts", result["source_manifest"])
         self.assertIn("table_counts_sha256", result["source_manifest"])
+
+    def test_unknown_or_future_recovery_point_blocks_evidence(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        for timestamp in (None, "invalid", "2026-08-01T00:00:00", "2026-08-01T00:00:05+00:00"):
+            with self.subTest(timestamp=timestamp):
+                source = {
+                    "quick_check": "ok",
+                    "sha256": "a" * 64,
+                    "table_counts": {"item": 2},
+                }
+                if timestamp is not None:
+                    source["generated_at"] = timestamp
+                result = build_evidence(
+                    asset, source, dict(source), {"status": "healthy"},
+                    "snapshot-1", "https://example.test/run", "corr-1",
+                    "2026-08-01T00:00:00+00:00",
+                    "2026-08-01T00:00:01+00:00", 1.0,
+                )
+                self.assertEqual(result["result"], "failed")
+                self.assertIsNone(result["rpo_minutes"])
+
+    def test_invalid_rto_and_warning_quota_block_evidence(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        source = {
+            "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
+            "sha256": "a" * 64,
+            "table_counts": {"item": 2},
+        }
+        for rto in (-1.0, float("inf"), float("nan")):
+            with self.subTest(rto=rto):
+                result = build_evidence(
+                    asset, source, dict(source), {"status": "healthy"},
+                    "snapshot-1", "https://example.test/run", "corr-1",
+                    "2026-08-01T00:00:00+00:00",
+                    "2026-08-01T00:00:01+00:00", rto,
+                )
+                self.assertEqual(result["result"], "failed")
+                self.assertIsNone(result["rto_seconds"])
+        result = build_evidence(
+            asset, source, dict(source), {"status": "warning"},
+            "snapshot-1", "https://example.test/run", "corr-1",
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:00:01+00:00", 1.0,
+        )
+        self.assertEqual(result["result"], "failed")
+
+    def test_missing_source_hash_cannot_pass_integrity(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        source = {
+            "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
+            "table_counts": {"item": 2},
+        }
+        result = build_evidence(
+            asset, source, dict(source), {"status": "healthy"},
+            "snapshot-1", "https://example.test/run", "corr-1",
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:00:01+00:00", 1.0,
+        )
+        self.assertEqual(result["result"], "failed")
+        self.assertFalse(result["integrity_match"])
 
     def test_dashboard_reports_configuration_block(self) -> None:
         inventory = self.inventory()
