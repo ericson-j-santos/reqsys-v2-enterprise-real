@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import zipfile
@@ -127,3 +128,28 @@ def test_perfil_teams_nao_declara_instalacao():
     assert result['delivery']['dispatch'] == 'not_requested'
     assert result['delivery']['installation'] == 'not_verified'
     assert result['delivery']['external_write_performed'] is False
+
+
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_perfil_teams_manifesto_zip_coerente_com_a_api(dry_run):
+    request = LowCodeSolutionGenerateRequest(
+        profile='teams_notification_v2', dry_run=dry_run
+    )
+    result = gerar_lowcode_solution(request)
+    raw = base64.b64decode(result['package']['zip_base64'], validate=True)
+    assert hashlib.sha256(raw).hexdigest() == result['package']['sha256']
+
+    with zipfile.ZipFile(BytesIO(raw)) as archive:
+        names = archive.namelist()
+        assert len(names) == len(set(names))
+        manifest_name = next(name for name in names if name.endswith('/manifest.json'))
+        manifest = json.loads(archive.read(manifest_name))
+        assert 'package' not in manifest
+        assert manifest['delivery'] == result['delivery']
+        assert manifest['idempotency_key'] == result['idempotency_key']
+        assert manifest['profile'] == result['profile']
+        assert manifest['factory_version'] == result['factory_version']
+        assert manifest['status'] == result['status']
+        assert manifest['delivery']['dispatch'] == 'not_requested'
+        assert manifest['delivery']['installation'] == 'not_verified'
+        assert manifest['delivery']['external_write_performed'] is False

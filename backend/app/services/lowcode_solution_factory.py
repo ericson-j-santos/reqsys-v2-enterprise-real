@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
 from app.services.teams_notification_solution_factory import (
     gerar_teams_notification_solution,
+    montar_pacote_teams_notification_solution,
 )
 
 FACTORY_VERSION = '0.2.0'
@@ -282,6 +283,8 @@ def gerar_lowcode_solution(request: LowCodeSolutionGenerateRequest) -> dict[str,
         solution['factory_version'] = FACTORY_VERSION
         solution['delivery'] = _delivery_state()
         solution['idempotency_key'] = _idempotency_key(request)
+        # O ZIP anterior não continha os campos de entrega da API.
+        solution['package'] = montar_pacote_teams_notification_solution(solution)
         return solution
 
     prefix = _logical(request.owner_prefix)[:20]
