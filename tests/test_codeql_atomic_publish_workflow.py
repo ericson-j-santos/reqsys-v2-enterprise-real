@@ -64,14 +64,11 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
 
     def test_atomic_publisher_requires_exact_selected_categories(self):
         section = self.section("  codeql-generate:\n", "  security-executive-summary:\n")
-        self.assertIn('\"javascript-typescript\": \"javascript-typescript.sarif\"', section)
-        self.assertIn('\"python\": \"python.sarif\"', section)
-        self.assertIn('expected = {f"/language:{language}/": names[language] for language in languages}', section)
-        self.assertIn("Configurações CodeQL ausentes", section)
-        self.assertIn("Categoria CodeQL duplicada", section)
-        self.assertIn("Linguagens CodeQL desconhecidas", section)
-        self.assertIn('root.rglob("processed/upload.sarif")', section)
-        self.assertNotIn('root.glob("codeql-sarif-*/processed/upload.sarif")', section)
+        self.assertIn("python scripts/codeql_category_bridge.py", section)
+        self.assertIn('--languages-json "$CODEQL_LANGUAGES_JSON"', section)
+        self.assertIn("artifacts/security-scanners/codeql-category-compat/receipt.json", section)
+        self.assertIn("wait-for-processing: true", section)
+        self.assertNotIn("shutil.copy2(sarif", section)
 
     def test_push_main_and_manual_keep_full_scan(self):
         scope = self.section("  scope:\n", "  gitleaks:\n")

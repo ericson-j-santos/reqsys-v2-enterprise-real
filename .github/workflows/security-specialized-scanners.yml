@@ -475,51 +475,12 @@ jobs:
           CODEQL_LANGUAGES_JSON: ${{ needs.scope.outputs.codeql_languages }}
         run: |
           set -euo pipefail
-          publish_dir="artifacts/security-scanners/codeql-publish"
-          mkdir -p "$publish_dir"
-          python - <<'PY'
-          import json
-          import os
-          import shutil
-          from pathlib import Path
-
-          root = Path("artifacts/security-scanners/codeql-upload")
-          publish = Path("artifacts/security-scanners/codeql-publish")
-          names = {
-              "javascript-typescript": "javascript-typescript.sarif",
-              "python": "python.sarif",
-          }
-          languages = json.loads(os.environ["CODEQL_LANGUAGES_JSON"])
-          if not languages:
-              raise SystemExit("Nenhuma linguagem CodeQL selecionada")
-          unknown = sorted(set(languages) - set(names))
-          if unknown:
-              raise SystemExit(f"Linguagens CodeQL desconhecidas: {unknown}")
-          expected = {f"/language:{language}/": names[language] for language in languages}
-          found = set()
-          # download-artifact v8 extracts a single pattern match directly into
-          # `path`, while multiple matches retain one directory per artifact.
-          # Accept both layouts and keep category validation fail-closed.
-          for sarif in root.rglob("processed/upload.sarif"):
-              payload = json.loads(sarif.read_text(encoding="utf-8"))
-              categories = {
-                  run.get("automationDetails", {}).get("id")
-                  for run in payload.get("runs", [])
-              }
-              if len(categories) != 1:
-                  raise SystemExit(f"Categoria CodeQL inválida em {sarif}: {categories}")
-              category = categories.pop()
-              if category not in expected:
-                  raise SystemExit(f"Categoria CodeQL inesperada: {category}")
-              if category in found:
-                  raise SystemExit(f"Categoria CodeQL duplicada: {category}")
-              shutil.copy2(sarif, publish / expected[category])
-              found.add(category)
-          missing = set(expected) - found
-          if missing:
-              raise SystemExit(f"Configurações CodeQL ausentes: {sorted(missing)}")
-          print("CodeQL configurations staged:", sorted(found))
-          PY
+          python scripts/codeql_category_bridge.py \
+            --input-root artifacts/security-scanners/codeql-upload \
+            --output-dir artifacts/security-scanners/codeql-publish \
+            --languages-json "$CODEQL_LANGUAGES_JSON" \
+            --receipt artifacts/security-scanners/codeql-category-compat/receipt.json
+          python -m json.tool artifacts/security-scanners/codeql-category-compat/receipt.json
 
       - name: Publish selected CodeQL analyses in one upload
         id: upload
