@@ -6,10 +6,10 @@ No run 41668437189, a API DEV publicou `97a8348e856292bece8b161217a92ffab2fb17da
 ## Critérios de aceite
 1. Diferenciar **main_sha**, **approved_release_sha** e **observed_sha**; nenhum avanço de main gera, sozinho, uma publicação aprovada.
 2. Falhar fechado quando SHA, ambiente DEV, prova de aprovação, leitura independente, locator assinado ou frescor da evidência forem inválidos.
-3. Uma release previamente aprovada e instalada pode permanecer convergente mesmo com main mais recente, exibindo `main_ahead_of_approved_release=true`.
+3. Uma release previamente aprovada e instalada pode permanecer convergente mesmo com main diferente, exibindo `main_differs_from_approved_release=true` sem inferir ancestralidade.
 4. Com release aprovada ainda não instalada, apresentar `DEPLOY_BLOCKED` com pré-condições ausentes ou `READY_FOR_GOVERNED_DEPLOY`; ambos **não** são sucesso operacional e não iniciam publicação.
 5. A admissão de nova publicação exige rota **nativa**, runner compatível, backup, rollback e autorização específica; Docker é sempre recusado nesta camada.
-6. A função é determinística e gera fingerprint SHA-256 estável para evitar retrigger sem mudança de evidência/estado.
+6. A função é determinística e gera fingerprint SHA-256 estável por release aprovada, instalada, bloqueios e estado; novo commit em main sem nova release aprovada não deve provocar retrigger.
 7. Testes de caso positivo, negativo (produção, Docker, autorização ausente, SHA inválido, evidência antiga, sem readback), idempotência e regressão deverão passar.
 8. O controlador é somente leitura; não possui token, rede, shell, instalação, merge ou execução de deploy.
 

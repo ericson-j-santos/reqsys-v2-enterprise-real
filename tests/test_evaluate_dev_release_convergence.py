@@ -35,7 +35,7 @@ class ReleaseConvergenceTests(unittest.TestCase):
     def test_main_pode_avancar_sem_falsear_release_aprovada(self):
         actual = evaluate(payload(main_sha=THREE), now=NOW)
         self.assertEqual(actual["state"], "RELEASE_CONVERGED")
-        self.assertTrue(actual["main_ahead_of_approved_release"])
+        self.assertTrue(actual["main_differs_from_approved_release"])
         self.assertEqual(actual["approved_release_sha"], ONE)
 
     def test_drift_exige_autorizacao_antes_de_publicar(self):
@@ -54,6 +54,22 @@ class ReleaseConvergenceTests(unittest.TestCase):
         actual = evaluate(payload(observed_sha=TWO, runtime_kind="docker", deploy_authorized=True), now=NOW)
         self.assertEqual(actual["state"], "DEPLOY_BLOCKED")
         self.assertIn("native_deploy_route_required", actual["blockers"])
+
+    def test_runtime_docker_alinhado_nao_e_considerado_convergente(self):
+        actual = evaluate(payload(runtime_kind="docker"), now=NOW)
+        self.assertEqual(actual["state"], "DEPLOY_BLOCKED")
+        self.assertFalse(actual["release_effect_verified"])
+        self.assertIn("native_deploy_route_required", actual["blockers"])
+
+    def test_replay_ignora_avanco_da_main_sem_novo_release(self):
+        first = evaluate(payload(observed_sha=TWO), now=NOW)
+        second = evaluate(payload(observed_sha=TWO, main_sha=THREE), now=NOW)
+        self.assertEqual(first["fingerprint_sha256"], second["fingerprint_sha256"])
+        self.assertTrue(second["main_differs_from_approved_release"])
+
+    def test_rejeita_schema_booleano(self):
+        with self.assertRaises(ContractError):
+            evaluate(payload(schema_version=True), now=NOW)
 
     def test_rejeita_runner_sem_capacidade(self):
         actual = evaluate(payload(observed_sha=TWO, native_runner_ready=False, deploy_authorized=True), now=NOW)

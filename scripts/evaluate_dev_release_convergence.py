@@ -43,7 +43,7 @@ def _time(value: str) -> datetime:
 def evaluate(data: dict, now: datetime | None = None) -> dict:
     if not isinstance(data, dict) or set(data) != FIELDS:
         raise ContractError("schema_fields_invalid")
-    if data["schema_version"] != 1 or data["environment"] != "dev":
+    if type(data["schema_version"]) is not int or data["schema_version"] != 1 or data["environment"] != "dev":
         raise ContractError("environment_or_schema_invalid")
     for name in ("main_sha", "approved_release_sha", "observed_sha"):
         if not isinstance(data[name], str) or not SHA.fullmatch(data[name]):
@@ -77,11 +77,12 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
     installed = data["observed_sha"]
     if blocked:
         state = "BLOCKED_NO_EVIDENCE"
+    elif data["runtime_kind"] != "native":
+        blocked.append("native_deploy_route_required")
+        state = "DEPLOY_BLOCKED"
     elif installed == desired:
         state = "RELEASE_CONVERGED"
     else:
-        if data["runtime_kind"] != "native":
-            blocked.append("native_deploy_route_required")
         for name, reason in (
             ("native_runner_ready", "native_runner_unavailable"),
             ("backup_verified", "backup_unverified"),
@@ -97,7 +98,7 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
         "main_sha": data["main_sha"],
         "approved_release_sha": desired,
         "installed_sha": installed,
-        "main_ahead_of_approved_release": data["main_sha"] != desired,
+        "main_differs_from_approved_release": data["main_sha"] != desired,
         "state": state,
         "blockers": blocked,
         "automatic_deploy": False,
@@ -106,7 +107,7 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
     }
     fingerprint_fields = {
         key: comparison[key]
-        for key in ("environment", "main_sha", "approved_release_sha", "installed_sha", "state", "blockers")
+        for key in ("environment", "approved_release_sha", "installed_sha", "state", "blockers")
     }
     comparison["fingerprint_sha256"] = sha256(
         json.dumps(fingerprint_fields, sort_keys=True, separators=(",", ":")).encode()
