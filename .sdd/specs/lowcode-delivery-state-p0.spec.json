@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "LowCode Solution Factory — estados reais de entrega (#3122)",
+  "status": "implemented_pending_ci",
+  "classification": "fix",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_lowcode_solution_factory.py",
+      "backend/tests/test_lowcode_teams_notification_profile.py"
+    ],
+    "evidence_contract": "Teste negativo detecta falso despacho; branch/SHA e CI Pre-PR atuais; E2E DEV externo permanece pendente."
+  },
+  "traceability": {
+    "issue": "#3122",
+    "service": "backend/app/services/lowcode_solution_factory.py",
+    "api": "POST /v1/hub-lowcode/solutions/generate",
+    "alm_repo": "ericson-j-santos/reqsys-powerplatform-alm"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "external_write": false
+  },
+  "runtime_validation": {
+    "dispatch_dev": "blocked_missing_executor",
+    "installation_dev": "not_verified",
+    "live_e2e": "pending"
+  }
+}
