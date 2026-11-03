@@ -26,8 +26,9 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
             "python", "node", "python_deps", "node_deps", "sbom", "codeql", "codeql_languages",
         ):
             self.assertIn(f"core.setOutput('{output}'", scope)
-        self.assertIn("codeqlLanguages.push('javascript-typescript')", scope)
-        self.assertIn("codeqlLanguages.push('python')", scope)
+        self.assertIn("const codeqlLanguages = (python || node)", scope)
+        self.assertIn("? ['javascript-typescript', 'python']", scope)
+        self.assertIn(": [];", scope)
 
         gitleaks = self.section("  gitleaks:\n", "  python-dependency-audit:\n")
         self.assertNotIn("needs: scope", gitleaks)
@@ -41,7 +42,7 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         codeql_generate = self.section("  codeql-generate:\n", "  codeql:\n")
         self.assertIn("if: needs.scope.outputs.codeql == 'true'", codeql_generate)
 
-    def test_language_jobs_use_diff_selected_dynamic_matrix(self):
+    def test_language_jobs_use_baseline_parity_matrix_for_code_changes(self):
         section = self.section("  codeql-generate:\n", "  codeql:\n")
         self.assertIn("language: ${{ fromJSON(needs.scope.outputs.codeql_languages) }}", section)
         self.assertIn('category: "/language:${{ matrix.language }}"', section)
@@ -80,6 +81,23 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         self.assertIn("core.setOutput('sbom', 'true')", scope)
         self.assertIn("JSON.stringify(['javascript-typescript', 'python'])", scope)
 
+    def test_codeql_baseline_parity_and_negative_non_source_control(self):
+        scope = self.section("  scope:\n", "  gitleaks:\n")
+        # A regressão original analisava só Python em PRs Python-only.
+        # A matriz deve ser completa para qualquer mudança de código.
+        selection = scope.split("const codeqlLanguages = ", 1)[1].split(
+            "const codeql =", 1
+        )[0]
+        self.assertIn("(python || node)", selection)
+        self.assertIn("? ['javascript-typescript', 'python']", selection)
+        # Documentação sem alteração de código não ativa CodeQL sem necessidade.
+        self.assertIn(": [];", selection)
+        self.assertIn("const codeql = codeqlLanguages.length > 0", scope)
+        # Não alterar nem contornar os controles especializados.
+        self.assertIn("const sbom = pythonDeps || nodeDeps", scope)
+        self.assertIn("core.setOutput('python_deps', String(pythonDeps))", scope)
+        self.assertIn("core.setOutput('node_deps', String(nodeDeps))", scope)
+
     def test_executive_summary_waits_for_atomic_publish(self):
         section = self.text.split("  security-executive-summary:\n", 1)[1]
         needs = section.split("    if: always()", 1)[0]
@@ -90,8 +108,8 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
 
     def test_summary_reports_selected_languages(self):
         section = self.section("  codeql-generate:\n", "  security-executive-summary:\n")
-        self.assertIn("Configurações selecionadas pelo diff", section)
-        self.assertIn("Somente as linguagens afetadas", section)
+        self.assertIn("Configurações CodeQL analisadas:", section)
+        self.assertIn("conjunto completo de linguagens do baseline main", section)
 
 
 if __name__ == "__main__":

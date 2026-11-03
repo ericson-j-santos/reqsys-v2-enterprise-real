@@ -118,9 +118,13 @@ jobs:
               ])
             );
 
-            const codeqlLanguages = [];
-            if (node) codeqlLanguages.push('javascript-typescript');
-            if (python) codeqlLanguages.push('python');
+            // Code scanning compares PR analyses with the full main baseline.
+            // Keep both CodeQL languages for any source-code change, otherwise
+            // GitHub marks the PR comparison neutral for missing configurations.
+            // Dependency audits and SBOM still remain path-scoped.
+            const codeqlLanguages = (python || node)
+              ? ['javascript-typescript', 'python']
+              : [];
             const codeql = codeqlLanguages.length > 0;
             const deep = python || node || pythonDeps || nodeDeps || sbom;
 
@@ -538,8 +542,8 @@ jobs:
           selected = ", ".join(f"`{language}`" for language in languages)
           print("## CodeQL — publicação atômica")
           print()
-          print(f"Configurações selecionadas pelo diff: {selected}.")
-          print("Somente as linguagens afetadas são analisadas e publicadas em um lote consistente.")
+          print(f"Configurações CodeQL analisadas: {selected}.")
+          print("PRs com alteração de código preservam o conjunto completo de linguagens do baseline main.")
           PY
 
   security-executive-summary:
