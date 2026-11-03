@@ -65,6 +65,8 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
     def test_atomic_publisher_requires_exact_selected_categories(self):
         section = self.section("  codeql-generate:\n", "  security-executive-summary:\n")
         self.assertIn("python scripts/codeql_category_bridge.py", section)
+        self.assertIn("python scripts/codeql_config_inventory.py", section)
+        self.assertIn("github.event_name == 'pull_request'", section)
         self.assertIn('--languages-json "$CODEQL_LANGUAGES_JSON"', section)
         self.assertIn("artifacts/security-scanners/codeql-category-compat/receipt.json", section)
         self.assertIn("wait-for-processing: true", section)

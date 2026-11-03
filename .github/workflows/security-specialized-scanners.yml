@@ -489,6 +489,20 @@ jobs:
           sarif_file: artifacts/security-scanners/codeql-publish
           wait-for-processing: true
 
+      - name: Auditar identidades CodeQL no serviço GitHub (somente leitura)
+        if: github.event_name == 'pull_request' && steps.upload.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEQL_REPOSITORY: ${{ github.repository }}
+          CODEQL_PR_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python scripts/codeql_config_inventory.py \
+            --repository "$CODEQL_REPOSITORY" \
+            --pull-ref "$CODEQL_PR_REF" \
+            --output artifacts/security-scanners/codeql-config-inventory.json
+
       - name: Publish atomic CodeQL summary
         if: always()
         shell: bash
