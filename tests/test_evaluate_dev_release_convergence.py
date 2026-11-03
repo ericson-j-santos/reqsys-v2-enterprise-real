@@ -28,13 +28,15 @@ def payload(**changes):
 class ReleaseConvergenceTests(unittest.TestCase):
     def test_release_aprovada_e_instalada_convergem(self):
         actual = evaluate(payload(), now=NOW)
-        self.assertEqual(actual["state"], "RELEASE_CONVERGED")
-        self.assertTrue(actual["release_effect_verified"])
+        self.assertEqual(actual["state"], "UNVERIFIED_CONVERGENCE_CLAIM")
+        self.assertFalse(actual["release_effect_verified"])
+        self.assertTrue(actual["sha_claim_matches_approved_release"])
+        self.assertIn("external_attestation_missing", actual["blockers"])
         self.assertFalse(actual["automatic_deploy"])
 
     def test_main_pode_avancar_sem_falsear_release_aprovada(self):
         actual = evaluate(payload(main_sha=THREE), now=NOW)
-        self.assertEqual(actual["state"], "RELEASE_CONVERGED")
+        self.assertEqual(actual["state"], "UNVERIFIED_CONVERGENCE_CLAIM")
         self.assertTrue(actual["main_differs_from_approved_release"])
         self.assertEqual(actual["approved_release_sha"], ONE)
 
@@ -46,9 +48,17 @@ class ReleaseConvergenceTests(unittest.TestCase):
 
     def test_pronto_para_deploy_nao_prova_deploy(self):
         actual = evaluate(payload(observed_sha=TWO, deploy_authorized=True), now=NOW)
-        self.assertEqual(actual["state"], "READY_FOR_GOVERNED_DEPLOY")
+        self.assertEqual(actual["state"], "UNVERIFIED_DEPLOY_READINESS_CLAIM")
+        self.assertIn("external_attestation_missing", actual["blockers"])
         self.assertFalse(actual["release_effect_verified"])
         self.assertFalse(actual["automatic_deploy"])
+
+    def test_flags_autodeclaradas_nao_comprovam_versao_ou_autorizacao(self):
+        actual = evaluate(payload(approval_readback_verified=True, independent_runtime_readback=True, deploy_authorized=True), now=NOW)
+        self.assertEqual(actual["state"], "UNVERIFIED_CONVERGENCE_CLAIM")
+        self.assertTrue(actual["external_evidence_verification_required"])
+        self.assertFalse(actual["release_effect_verified"])
+        self.assertFalse(actual["deployment_admission_verified"])
 
     def test_rejeita_docker_sem_executar(self):
         actual = evaluate(payload(observed_sha=TWO, runtime_kind="docker", deploy_authorized=True), now=NOW)

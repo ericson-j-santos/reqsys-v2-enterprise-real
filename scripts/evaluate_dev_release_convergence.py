@@ -81,7 +81,9 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
         blocked.append("native_deploy_route_required")
         state = "DEPLOY_BLOCKED"
     elif installed == desired:
-        state = "RELEASE_CONVERGED"
+        # O JSON de entrada pode alegar readback, mas não autentica a fonte.
+        blocked.append("external_attestation_missing")
+        state = "UNVERIFIED_CONVERGENCE_CLAIM"
     else:
         for name, reason in (
             ("native_runner_ready", "native_runner_unavailable"),
@@ -91,7 +93,11 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
         ):
             if not data[name]:
                 blocked.append(reason)
-        state = "READY_FOR_GOVERNED_DEPLOY" if not blocked else "DEPLOY_BLOCKED"
+        if not blocked:
+            blocked.append("external_attestation_missing")
+            state = "UNVERIFIED_DEPLOY_READINESS_CLAIM"
+        else:
+            state = "DEPLOY_BLOCKED"
     comparison = {
         "schema_version": 1,
         "environment": "dev",
@@ -103,7 +109,10 @@ def evaluate(data: dict, now: datetime | None = None) -> dict:
         "blockers": blocked,
         "automatic_deploy": False,
         "production_touched": False,
-        "release_effect_verified": state == "RELEASE_CONVERGED",
+        "sha_claim_matches_approved_release": installed == desired,
+        "external_evidence_verification_required": True,
+        "release_effect_verified": False,
+        "deployment_admission_verified": False,
     }
     fingerprint_fields = {
         key: comparison[key]
@@ -128,7 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"DEV_RELEASE_STATE={result['state']}")
-    return 0 if result["state"] == "RELEASE_CONVERGED" else 3
+    # Resultado do classificador nunca substitui recibo independente.
+    return 3
 
 
 if __name__ == "__main__":
