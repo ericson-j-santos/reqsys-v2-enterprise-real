@@ -341,6 +341,20 @@ def _zip_base64(files: list[dict[str, str]]) -> tuple[str, str]:
     return base64.b64encode(raw).decode('ascii'), hashlib.sha256(raw).hexdigest()
 
 
+
+def montar_pacote_teams_notification_solution(blueprint: dict[str, Any]) -> dict[str, Any]:
+    """Empacota a versão final do blueprint, sem incluir o ZIP nele próprio."""
+    payload = {key: value for key, value in blueprint.items() if key != 'package'}
+    files = _files(payload)
+    zip_base64, sha256 = _zip_base64(files)
+    return {
+        'filename': PACKAGE_FILENAME,
+        'sha256': sha256,
+        'files': [{'path': file['path'], 'size': len(file['content'].encode('utf-8'))} for file in files],
+        'zip_base64': zip_base64,
+    }
+
+
 def gerar_teams_notification_solution(*, target_environment: str = 'dev', dry_run: bool = True) -> dict[str, Any]:
     correlation_id = str(uuid.uuid4())
     blueprint: dict[str, Any] = {
@@ -383,12 +397,5 @@ def gerar_teams_notification_solution(*, target_environment: str = 'dev', dry_ru
             'delivery_invariant': 'exactly_one_post_per_request',
         },
     }
-    files = _files(blueprint)
-    zip_base64, sha256 = _zip_base64(files)
-    blueprint['package'] = {
-        'filename': PACKAGE_FILENAME,
-        'sha256': sha256,
-        'files': [{'path': file['path'], 'size': len(file['content'].encode('utf-8'))} for file in files],
-        'zip_base64': zip_base64,
-    }
+    blueprint['package'] = montar_pacote_teams_notification_solution(blueprint)
     return blueprint
