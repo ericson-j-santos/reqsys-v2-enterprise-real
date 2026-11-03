@@ -1,0 +1,11 @@
+{
+  "feature_name": "reqsys-dev-release-convergence",
+  "project": "ReqSys Produto / Runtime Platform",
+  "created_at": "2026-11-03",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Separar main, release aprovada e build instalado; bloquear falso sucesso e publicar decisão reproduzível sem Docker, deploy ou gasto adicional.",
+  "environment": "dev",
+  "sdd_gate": {"tests": ["tests/test_evaluate_dev_release_convergence.py"]},
+  "controls": {"production_touched": false, "automatic_deploy": false, "docker_allowed": false, "requires_independent_runtime_e2e": true, "requires_native_deploy_preflight": true}
+}

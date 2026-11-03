@@ -1,0 +1,28 @@
+name: DEV Release Convergence Contract
+on:
+  push:
+    paths:
+      - 'scripts/evaluate_dev_release_convergence.py'
+      - 'tests/test_evaluate_dev_release_convergence.py'
+      - '.sdd/specs/reqsys-dev-release-convergence.*'
+      - '.github/workflows/dev-release-convergence-contract.yml'
+  pull_request:
+    paths:
+      - 'scripts/evaluate_dev_release_convergence.py'
+      - 'tests/test_evaluate_dev_release_convergence.py'
+      - '.sdd/specs/reqsys-dev-release-convergence.*'
+      - '.github/workflows/dev-release-convergence-contract.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Validate syntax and deterministic controls
+        run: |
+          python -m py_compile scripts/evaluate_dev_release_convergence.py tests/test_evaluate_dev_release_convergence.py
+          python -m unittest tests.test_evaluate_dev_release_convergence -v
