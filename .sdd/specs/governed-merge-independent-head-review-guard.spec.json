@@ -1,0 +1,23 @@
+{
+  "feature_name": "governed-merge-independent-head-review-guard",
+  "project": "ReqSys / Engineering Control Plane",
+  "created_at": "2026-11-03",
+  "updated_at": "2026-11-03",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Gate adicional de revisão independente no HEAD exato em auto-merge CI-driven/manual e Autonomous Delivery Cycle; incidente #3123/#3125, issue #2117.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_governed_pr_automation_dispatch_contract.py"
+    ],
+    "evidence_contract": "Review APPROVED vigente por terceiro humano no SHA do HEAD é obrigatório; review do autor, bot, COMMENTED, CHANGES_REQUESTED, aprovação stale e head concorrente impedem merge. E2E externo e branch protection são controles adicionais ainda separados."
+  },
+  "evidence": [
+    "ReqSys PR #3123 merge bf652e9464608b5773cdd2ed6451854ba4abae67; PR #3125 merge f28f200ce7a6f6c049710a7f8ee7ed45d161f3c7; nenhuma review APPROVED na leitura do conector.",
+    "GitHub main@f28f200ce7a6f6c049710a7f8ee7ed45d161f3c7 baseline; não atribuir causa de merge automatizado sem trilha de auditoria."
+  ]
+}

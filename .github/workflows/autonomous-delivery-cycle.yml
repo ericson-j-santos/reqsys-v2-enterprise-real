@@ -63,6 +63,29 @@ jobs:
             const crypto = require('crypto');
             const fs = require('fs');
             const { owner, repo } = context.repo;
+            // Review por identidade humana diferente do autor, na revisao vigente do HEAD.
+            async function hasIndependentHeadApproval(pull, sha) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: pull.number, per_page: 100,
+              });
+              const latest = new Map();
+              for (const review of reviews) {
+                const actor = review.user?.login?.toLowerCase();
+                if (!actor || !review.submitted_at || review.state === 'PENDING') continue;
+                const previous = latest.get(actor);
+                if (!previous || Date.parse(review.submitted_at) >= Date.parse(previous.submitted_at)) {
+                  latest.set(actor, review);
+                }
+              }
+              const current = [...latest.values()];
+              if (current.some((item) => item.state === 'CHANGES_REQUESTED')) return false;
+              return current.some((item) =>
+                item.state === 'APPROVED' &&
+                item.commit_id === sha &&
+                item.user?.type === 'User' &&
+                item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()
+              );
+            }
             const dryRun = String(process.env.DRY_RUN || 'true') === 'true';
             const requiredLabel = process.env.REQUIRED_LABEL || 'cycle:auto-merge-approved';
             const maxPrs = Math.max(1, Number(process.env.MAX_PRS || '1'));
@@ -184,6 +207,9 @@ jobs:
               if (pr.state !== 'open') decision.blockers.push(`PR não está aberto: ${pr.state}`);
               if (pr.draft) decision.blockers.push('PR em draft.');
               if (pr.mergeable === false) decision.blockers.push('PR não está mergeable.');
+              if (!await hasIndependentHeadApproval(pr, pr.head.sha)) {
+                decision.blockers.push('REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED');
+              }
 
               const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
                 owner,
@@ -208,6 +234,14 @@ jobs:
 
               decision.eligible = decision.blockers.length === 0;
               if (decision.eligible && !dryRun) {
+                const { data: current } = await github.rest.pulls.get({owner, repo, pull_number: prNumber});
+                if (current.state !== 'open' || current.draft || current.mergeable !== true ||
+                    current.head.sha !== pr.head.sha ||
+                    !await hasIndependentHeadApproval(current, pr.head.sha)) {
+                  decision.eligible = false;
+                  decision.blockers.push('REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED_OR_HEAD_CHANGED');
+                  continue;
+                }
                 const merge = await github.rest.pulls.merge({
                   owner,
                   repo,

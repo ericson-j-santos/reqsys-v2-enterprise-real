@@ -129,3 +129,38 @@ def test_recovered_draft_is_promoted_to_ready_before_any_merge() -> None:
     assert "pullRequestId: currentDraft.node_id" in block
     assert "Merge: não executado neste ciclo" in block
     assert block.index("markPullRequestReadyForReview") < block.index("github.rest.pulls.merge({")
+
+
+
+def test_review_independente_obrigatorio_para_merge_ci_driven_e_draft() -> None:
+    block = _text().split('  auto-merge-after-governed-queue:', 1)[1].split('  governed-pr-check:', 1)[0]
+    assert "github.rest.pulls.listReviews" in block
+    assert "item.commit_id === sha" in block
+    assert "item.state === 'APPROVED'" in block
+    assert "item.state === 'CHANGES_REQUESTED'" in block
+    assert "item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()" in block
+    assert "!await hasIndependentHeadApproval(pr, triggerHeadSha)" in block
+    assert "!await hasIndependentHeadApproval(currentDraft, triggerHeadSha)" in block
+    assert "!await hasIndependentHeadApproval(current, triggerHeadSha)" in block
+    assert block.index("!await hasIndependentHeadApproval(current, triggerHeadSha)") < block.index("github.rest.pulls.merge({")
+
+
+def test_review_independente_obrigatorio_em_dispatch_manual_antes_do_merge() -> None:
+    block = _text().split('  governed-pr-check:', 1)[1]
+    assert "if (!await hasIndependentHeadApproval(pr, headSha))" in block
+    assert "REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED_OR_HEAD_CHANGED" in block
+    assert "current.head.sha !== headSha" in block
+    assert block.index("hasIndependentHeadApproval(current, headSha)") < block.index("github.rest.pulls.merge({")
+
+
+def test_autonomous_delivery_cycle_recusa_autor_bot_e_aprovacao_antiga() -> None:
+    block = Path('.github/workflows/autonomous-delivery-cycle.yml').read_text(encoding='utf-8')
+    for token in (
+        "github.rest.pulls.listReviews", "item.state === 'APPROVED'",
+        "item.state === 'CHANGES_REQUESTED'", "item.commit_id === sha",
+        "item.user?.type === 'User'", "item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()",
+        "REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED",
+        "current.head.sha !== pr.head.sha",
+    ):
+        assert token in block
+    assert block.index("!await hasIndependentHeadApproval(current, pr.head.sha)") < block.index("github.rest.pulls.merge({")

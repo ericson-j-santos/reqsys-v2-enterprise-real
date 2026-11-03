@@ -316,6 +316,29 @@ jobs:
             const triggerHeadSha = context.payload.workflow_run.head_sha;
 
             const { owner, repo } = context.repo;
+            // Review por identidade humana diferente do autor, na revisao vigente do HEAD.
+            async function hasIndependentHeadApproval(pull, sha) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: pull.number, per_page: 100,
+              });
+              const latest = new Map();
+              for (const review of reviews) {
+                const actor = review.user?.login?.toLowerCase();
+                if (!actor || !review.submitted_at || review.state === 'PENDING') continue;
+                const previous = latest.get(actor);
+                if (!previous || Date.parse(review.submitted_at) >= Date.parse(previous.submitted_at)) {
+                  latest.set(actor, review);
+                }
+              }
+              const current = [...latest.values()];
+              if (current.some((item) => item.state === 'CHANGES_REQUESTED')) return false;
+              return current.some((item) =>
+                item.state === 'APPROVED' &&
+                item.commit_id === sha &&
+                item.user?.type === 'User' &&
+                item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()
+              );
+            }
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
               .split('\n')
               .map((item) => item.trim())
@@ -378,6 +401,10 @@ jobs:
               failures.push(`Autorização humana explícita ausente: label ${approvalLabel}.`);
             }
 
+            if (!await hasIndependentHeadApproval(pr, triggerHeadSha)) {
+              failures.push('REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED');
+            }
+
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               owner,
               repo,
@@ -438,7 +465,8 @@ jobs:
                 currentDraftComparison.behind_by > 0 ||
                 !currentDraftLabelNames.includes('ci:recuperado') ||
                 !currentDraftLabelNames.includes('merge-queue:eligible') ||
-                !currentDraftLabelNames.includes(approvalLabel)
+                !currentDraftLabelNames.includes(approvalLabel) ||
+                !await hasIndependentHeadApproval(currentDraft, triggerHeadSha)
               ) {
                 core.setFailed(`Estado mudou antes de promover draft recuperado; esperado head ${triggerHeadSha}, atual ${currentDraft.head.sha}`);
                 return;
@@ -506,7 +534,8 @@ jobs:
               currentComparison.status === 'behind' ||
               currentComparison.behind_by > 0 ||
               !currentLabelNames.includes('merge-queue:eligible') ||
-              !currentLabelNames.includes(approvalLabel)
+              !currentLabelNames.includes(approvalLabel) ||
+              !await hasIndependentHeadApproval(current, triggerHeadSha)
             ) {
               core.setFailed(
                 `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
@@ -640,6 +669,29 @@ jobs:
               .filter(Boolean);
 
             const { owner, repo } = context.repo;
+            // Review por identidade humana diferente do autor, na revisao vigente do HEAD.
+            async function hasIndependentHeadApproval(pull, sha) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: pull.number, per_page: 100,
+              });
+              const latest = new Map();
+              for (const review of reviews) {
+                const actor = review.user?.login?.toLowerCase();
+                if (!actor || !review.submitted_at || review.state === 'PENDING') continue;
+                const previous = latest.get(actor);
+                if (!previous || Date.parse(review.submitted_at) >= Date.parse(previous.submitted_at)) {
+                  latest.set(actor, review);
+                }
+              }
+              const current = [...latest.values()];
+              if (current.some((item) => item.state === 'CHANGES_REQUESTED')) return false;
+              return current.some((item) =>
+                item.state === 'APPROVED' &&
+                item.commit_id === sha &&
+                item.user?.type === 'User' &&
+                item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()
+              );
+            }
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
 
             const failures = [];
@@ -659,6 +711,9 @@ jobs:
             }
 
             const headSha = pr.head.sha;
+            if (!await hasIndependentHeadApproval(pr, headSha)) {
+              failures.push('REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED');
+            }
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               owner,
               repo,
@@ -726,6 +781,35 @@ jobs:
             }
             const headSha = '${{ steps.validate.outputs.head_sha }}';
             const { owner, repo } = context.repo;
+            // Review por identidade humana diferente do autor, na revisao vigente do HEAD.
+            async function hasIndependentHeadApproval(pull, sha) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: pull.number, per_page: 100,
+              });
+              const latest = new Map();
+              for (const review of reviews) {
+                const actor = review.user?.login?.toLowerCase();
+                if (!actor || !review.submitted_at || review.state === 'PENDING') continue;
+                const previous = latest.get(actor);
+                if (!previous || Date.parse(review.submitted_at) >= Date.parse(previous.submitted_at)) {
+                  latest.set(actor, review);
+                }
+              }
+              const current = [...latest.values()];
+              if (current.some((item) => item.state === 'CHANGES_REQUESTED')) return false;
+              return current.some((item) =>
+                item.state === 'APPROVED' &&
+                item.commit_id === sha &&
+                item.user?.type === 'User' &&
+                item.user.login.toLowerCase() !== pull.user?.login?.toLowerCase()
+              );
+            }
+            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (current.state !== 'open' || current.draft || current.head.sha !== headSha ||
+                current.mergeable !== true || !await hasIndependentHeadApproval(current, headSha)) {
+              core.setFailed('REVIEW_INDEPENDENT_HEAD_APPROVAL_REQUIRED_OR_HEAD_CHANGED');
+              return;
+            }
             const result = await github.rest.pulls.merge({
               owner,
               repo,
