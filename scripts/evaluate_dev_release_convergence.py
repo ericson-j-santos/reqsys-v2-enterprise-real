@@ -10,9 +10,9 @@ from pathlib import Path
 import re
 import sys
 
-SHA = re.compile(r"[0-9a-f]{40}\\Z")
+SHA = re.compile(r"[0-9a-f]{40}\Z")
 RUN_URL = re.compile(
-    r"https://github\\.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/[1-9][0-9]*\\Z"
+    r"https://github\.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/[1-9][0-9]*\Z"
 )
 FIELDS = frozenset({
     "schema_version", "environment", "main_sha", "approved_release_sha",
@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DEV_RELEASE_EVIDENCE_BLOCKED:{type(exc).__name__}", file=sys.stderr)
         return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"DEV_RELEASE_STATE={result['state']}")
     return 0 if result["state"] == "RELEASE_CONVERGED" else 3
 
