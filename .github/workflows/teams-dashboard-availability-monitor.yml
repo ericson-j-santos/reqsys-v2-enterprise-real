@@ -31,6 +31,9 @@ jobs:
       INCIDENT_TITLE: "[INCIDENT][TEAMS] Dashboard de SLO indisponível"
       MAX_DATA_AGE_HOURS: "48"
     steps:
+      - name: Checkout da politica no SHA atual
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
       - name: Verificar HTTP, contrato e frescor
         id: health
         shell: bash
@@ -142,6 +145,16 @@ jobs:
                   summary.write("- Falhas: " + "; ".join(errors) + "\n")
           PY
 
+      - name: Avaliar renovacao preventiva sem publicar
+        id: refresh_policy
+        if: always()
+        shell: bash
+        run: |
+          python scripts/teams_pages_refresh_policy.py \
+            --health dashboard-health-evidence/health.json \
+            --output dashboard-health-evidence/refresh-policy.json \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Publicar evidência
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -149,6 +162,77 @@ jobs:
           name: teams-dashboard-health-${{ github.run_id }}
           path: dashboard-health-evidence/
           retention-days: 90
+
+      - name: Conciliar issue preventiva com idempotencia
+        if: steps.refresh_policy.outputs.status == 'renewal_required' || steps.refresh_policy.outputs.status == 'fresh'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RENEWAL_STATUS: ${{ steps.refresh_policy.outputs.status }}
+          DATA_AGE_HOURS: ${{ steps.refresh_policy.outputs.age_hours }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MAIN_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='[OPS][PAGES] Renovacao preventiva do Dashboard Teams'
+          existing="$(gh issue list --repo "$REPO" --state open \
+            --search '"[OPS][PAGES] Renovacao preventiva do Dashboard Teams" in:title' \
+            --limit 100 --json number,title,body \
+            --jq '.[] | select(.title == "[OPS][PAGES] Renovacao preventiva do Dashboard Teams") | select(.body | contains("<!-- reqsys-operational-panel -->")) | .number' | head -n 1)"
+          if [ "$RENEWAL_STATUS" = 'renewal_required' ]; then
+            if [ -z "$existing" ]; then
+              cat > "$RUNNER_TEMP/pages-refresh-request.md" <<EOF
+          <!-- reqsys-operational-panel -->
+          ### Descricao do problema
+          Dashboard publico esta dentro da janela preventiva de renovacao (24-48 horas).
+
+          ### Estado atual evidenciado
+          - Idade medida pelo monitor: ${DATA_AGE_HOURS}h
+          - Run independente: ${RUN_URL}
+          - SHA de codigo avaliado: ${MAIN_SHA}
+
+          ### Estado esperado
+          Publicar o artefato Teams mais recente via publicador unico autorizado e validar HTTP, esquema, SHA, cache e frescor.
+
+          ### Causa raiz
+          O produtor Teams e periodico, mas o publicador Pages exige despacho humano governado.
+
+          ### Criterios de aceite
+          - [ ] Owner autoriza a publicacao via issue #1705: /reqsys run deploy-pages-current-main
+          - [ ] Publicador exige main/expected_sha, artefato novo e authorization=DEPLOY_PAGES
+          - [ ] Monitor publico confirma HTTP 200, esquema valido e dados recentes
+          - [ ] Esta issue e fechada somente apos o monitor voltar a ver idade inferior a 24h
+
+          ### Riscos
+          Publicacao indiscriminada, dados vencidos, workflow sem autorizacao e falso positivo por CI verde.
+
+          ### Dependencias
+          Produtor Teams bem-sucedido, artefato valido e autorizacao explicita do proprietario.
+
+          ### Evidencias
+          ${RUN_URL}
+
+          ### PR(s) relacionadas
+          #3127
+
+          ### Responsavel
+          ericson-j-santos (autorizacao Pages); Engenharia ReqSys (monitor e E2E).
+
+          ### Prioridade
+          P1 - renovacao preventiva do Dashboard, sem alterar SLO de mensagens.
+
+          ### Declaracao de rastreabilidade
+          - [x] Painel operacional; nenhum deploy e autorizado por esta issue.
+          EOF
+              gh issue create --repo "$REPO" --title "$title" --body-file "$RUNNER_TEMP/pages-refresh-request.md"
+            else
+              echo "Issue preventiva existente #$existing; replay sem duplicacao."
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "Frescor publico recuperado. Idade ${DATA_AGE_HOURS}h. Evidencia ${RUN_URL}. Nenhum deploy executado pelo monitor."
+            gh issue close "$existing" --repo "$REPO" --reason completed
+          fi
 
       - name: Abrir ou atualizar incidente
         if: steps.health.outputs.state == 'unhealthy'

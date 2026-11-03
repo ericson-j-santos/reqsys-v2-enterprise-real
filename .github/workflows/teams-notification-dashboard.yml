@@ -89,6 +89,7 @@ jobs:
           import math
           import os
           import subprocess
+          import time
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
@@ -100,30 +101,26 @@ jobs:
           now = datetime.now(timezone.utc)
           cutoff = now - timedelta(days=window_days)
 
+          from scripts.teams_dashboard_runs import collect_recent_workflow_runs
+
+          collection_deadline = time.monotonic() + 480.0
+          cached_runs: dict[str, list[dict]] = {}
+
           def workflow_runs(
               filename: str,
               newest_first: bool = True,
               allowed_events: set[str] | None = None,
           ) -> list[dict]:
-              completed = subprocess.run(
-                  [
-                      "gh", "api", "--paginate", "-q", ".workflow_runs[]",
-                      f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
-                  ],
-                  text=True,
-                  capture_output=True,
-                  check=False,
-              )
-              if completed.returncode != 0:
-                  raise SystemExit(completed.stderr or f"Falha ao consultar {filename}")
+              if filename not in cached_runs:
+                  remaining_seconds = collection_deadline - time.monotonic()
+                  if remaining_seconds <= 0:
+                      raise SystemExit("Prazo global da coleta Teams excedido")
+                  cached_runs[filename] = collect_recent_workflow_runs(
+                      repository, filename, cutoff,
+                      max_elapsed_seconds=remaining_seconds,
+                  )
               runs: list[dict] = []
-              for document in completed.stdout.splitlines():
-                  if not document.strip():
-                      continue
-                  run = json.loads(document)
-                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                  if created < cutoff or run.get("status") != "completed":
-                      continue
+              for run in cached_runs[filename]:
                   if allowed_events is not None and run.get("event") not in allowed_events:
                       continue
                   runs.append(run)
