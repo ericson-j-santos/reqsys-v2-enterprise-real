@@ -129,3 +129,16 @@ def test_expired_wall_clock_budget_blocks_partial_slo():
             "user/repo", "delivery.yml", CUTOFF,
             runner=no_api_call, clock=lambda: next(ticks), max_elapsed_seconds=2.0,
         )
+
+
+def test_producer_shares_one_deadline_across_delivery_and_monitor():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "teams-notification-dashboard.yml"
+    ).read_text(encoding="utf-8")
+    assert "collection_deadline = time.monotonic() + 480.0" in workflow
+    assert "remaining_seconds = collection_deadline - time.monotonic()" in workflow
+    assert "if remaining_seconds <= 0:" in workflow
+    assert "max_elapsed_seconds=remaining_seconds" in workflow
+    assert 'monitor_runs = workflow_runs(os.environ["MONITOR_WORKFLOW"])' in workflow
+    assert 'allowed_events=delivery_events' in workflow

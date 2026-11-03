@@ -89,6 +89,7 @@ jobs:
           import math
           import os
           import subprocess
+          import time
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
@@ -102,6 +103,7 @@ jobs:
 
           from scripts.teams_dashboard_runs import collect_recent_workflow_runs
 
+          collection_deadline = time.monotonic() + 480.0
           cached_runs: dict[str, list[dict]] = {}
 
           def workflow_runs(
@@ -110,8 +112,12 @@ jobs:
               allowed_events: set[str] | None = None,
           ) -> list[dict]:
               if filename not in cached_runs:
+                  remaining_seconds = collection_deadline - time.monotonic()
+                  if remaining_seconds <= 0:
+                      raise SystemExit("Prazo global da coleta Teams excedido")
                   cached_runs[filename] = collect_recent_workflow_runs(
-                      repository, filename, cutoff
+                      repository, filename, cutoff,
+                      max_elapsed_seconds=remaining_seconds,
                   )
               runs: list[dict] = []
               for run in cached_runs[filename]:
