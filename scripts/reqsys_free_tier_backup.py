@@ -162,6 +162,13 @@ def select(
 
 
 def quota(total: int, warn: int, hard: int) -> dict[str, Any]:
+    # A malformed or negative storage size cannot prove that free-tier limits hold.
+    if (
+        any(type(value) is not int for value in (total, warn, hard))
+        or total < 0
+        or not 0 < warn < hard
+    ):
+        raise ValueError("invalid storage quota values")
     status = "critical" if total >= hard else "warning" if total >= warn else "healthy"
     return {
         "status": status,
@@ -175,8 +182,11 @@ def quota(total: int, warn: int, hard: int) -> dict[str, Any]:
 def restic_size(payload: Any) -> int:
     if isinstance(payload, dict):
         for key in ("total_size", "total_blob_size", "total_uncompressed_size"):
-            if isinstance(payload.get(key), int):
-                return payload[key]
+            if key in payload:
+                size = payload[key]
+                if type(size) is int and size >= 0:
+                    return size
+                raise ValueError(f"restic stats JSON invalid {key}")
     raise ValueError("restic stats JSON missing total size")
 
 
@@ -230,13 +240,21 @@ def evidence(
         rpo = None
 
     rto_valid = type(rto) in (int, float) and math.isfinite(rto) and rto >= 0
+    q_total = quota_payload.get("total_size_bytes")
+    q_warn = quota_payload.get("warn_bytes")
+    q_hard = quota_payload.get("hard_bytes")
+    quota_consistent = (
+        all(type(value) is int for value in (q_total, q_warn, q_hard))
+        and 0 <= q_total < q_warn < q_hard
+        and quota_payload.get("status") == "healthy"
+    )
     passed = (
         match
         and rpo is not None
         and rpo <= asset["rpo_target_minutes"]
         and rto_valid
         and rto <= asset["rto_target_seconds"]
-        and quota_payload.get("status") == "healthy"
+        and quota_consistent
     )
     return {
         "schema_version": "1.0.0",
@@ -258,6 +276,7 @@ def evidence(
         "source_manifest": public(source),
         "restored_manifest": public(restored),
         "quota": quota_payload,
+        "quota_consistent": quota_consistent,
         "production_read_only": asset["environment"] == "prod",
         "production_restore_claimed": False,
         "correlation_id": correlation_id,
