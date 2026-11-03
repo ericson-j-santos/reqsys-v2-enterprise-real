@@ -7,7 +7,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Separa SLO de entrega Teams dos runs de watchdog do locator, revalida dashboard após Pages, marca incidentes automáticos como painéis operacionais e coleta históricos com paginação limitada à janela de observação, retentativa transitória e falha fechada.",
+  "description": "Separa SLO de entrega Teams dos runs de watchdog do locator, revalida dashboard após Pages, marca incidentes automáticos como painéis operacionais e coleta históricos com paginação limitada à janela de observação e capacidade superior a 12.521 runs em 30 dias, retentativa transitória e falha fechada.",
   "sdd_gate": {
     "tests": [
       "tests/test_teams_dashboard_slo_separation.py",
@@ -16,7 +16,7 @@
       "tests/test_validate_issue_governance.py",
       "tests/test_teams_dashboard_runs.py"
     ],
-    "evidence_contract": "No mesmo HEAD, o dashboard deve excluir schedule do SLO de entrega, preservar o watchdog fail-closed como métrica separada, o monitor deve reagir a Deploy ReqSys Pages Composite concluído com sucesso e o incidente automático deve usar reqsys-operational-panel. A coleta de workflows deve interromper paginação ao ultrapassar a janela temporal, reutilizar o mesmo conjunto de runs para filtros de evento, tolerar 502/503/504/429 com retentativas limitadas, rejeitar 403, timeout, JSON inválido, desordem ou limite de páginas e nunca declarar SLO a partir de amostra incompleta."
+    "evidence_contract": "No mesmo HEAD, o dashboard deve excluir schedule do SLO de entrega, preservar o watchdog fail-closed como métrica separada, o monitor deve reagir a Deploy ReqSys Pages Composite concluído com sucesso e o incidente automático deve usar reqsys-operational-panel. A coleta de workflows deve interromper paginação ao ultrapassar a janela temporal, reutilizar o mesmo conjunto de runs para filtros de evento, tolerar 502/503/504/429 com retentativas limitadas, rejeitar 403, timeout, JSON inválido, desordem ou limite de páginas e nunca declarar SLO a partir de amostra incompleta. O limite de páginas deve cobrir pelo menos 12.521 runs recentes (referência issue #1358) com margem, preservar recusa para truncamento e bloquear coleta que exceda o prazo interno de 480 segundos antes do timeout do job de 10 minutos."
   },
   "traceability": {
     "delivery_workflow": ".github/workflows/teams-commit-notification.yml",

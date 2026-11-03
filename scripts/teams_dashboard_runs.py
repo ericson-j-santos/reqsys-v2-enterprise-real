@@ -20,24 +20,31 @@ def collect_recent_workflow_runs(
     *,
     runner: Callable = subprocess.run,
     sleeper: Callable = time.sleep,
-    max_pages: int = 100,
+    max_pages: int = 200,
+    max_elapsed_seconds: float = 480.0,
+    clock: Callable[[], float] = time.monotonic,
 ) -> list[dict]:
     """Consulta páginas recentes até a primeira data anterior ao corte.
 
     Falha explicitamente diante de respostas inválidas, erros permanentes,
     ordenação inesperada e limite de páginas: nunca calcula SLO parcial.
     """
-    if cutoff.tzinfo is None or max_pages < 1:
-        raise ValueError("cutoff deve ter fuso e max_pages deve ser positivo")
+    if cutoff.tzinfo is None or max_pages < 1 or max_elapsed_seconds <= 0:
+        raise ValueError("cutoff deve ter fuso e limites devem ser positivos")
 
     runs: list[dict] = []
+    started_at = clock()
     previous_created: datetime | None = None
     for page in range(1, max_pages + 1):
+        if clock() - started_at >= max_elapsed_seconds:
+            raise WorkflowRunQueryError(f"Prazo de coleta excedido: {filename}, page={page}")
         command = [
             "gh", "api", "--jq", ".workflow_runs",
             f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100&page={page}",
         ]
         for attempt in range(3):
+            if clock() - started_at >= max_elapsed_seconds:
+                raise WorkflowRunQueryError(f"Prazo de coleta excedido: {filename}, page={page}")
             try:
                 result = runner(command, text=True, capture_output=True, check=False, timeout=30)
             except subprocess.TimeoutExpired as exc:

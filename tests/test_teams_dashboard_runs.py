@@ -82,3 +82,50 @@ def test_invalid_json_rejected():
         return subprocess.CompletedProcess(command, 0, stdout="invalid", stderr="")
     with pytest.raises(WorkflowRunQueryError, match="JSON inválido"):
         collect_recent_workflow_runs("user/repo", "delivery.yml", CUTOFF, runner=runner)
+
+
+# Janela medida em 03/11/2026: 12.521 entregas em 30 dias (issue #1358).
+# O coletor antigo terminava em 10.000 e impedia atualizar o dashboard.
+def test_more_than_ten_thousand_runs_is_complete_and_bounded():
+    recent_count = 12521
+    pages = []
+
+    def runner(command, **kwargs):
+        page = int(command[-1].rsplit("page=", 1)[1])
+        pages.append(page)
+        first = (page - 1) * 100
+        until = min(first + 100, recent_count)
+        data = [
+            {**item("2026-11-03T00:00:00Z"), "id": i}
+            for i in range(first, until)
+        ]
+        if first <= recent_count < first + 100:
+            data.append(item("2026-10-03T00:00:00Z"))
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(data), stderr="")
+
+    result = collect_recent_workflow_runs(
+        "user/repo", "delivery.yml", CUTOFF, runner=runner
+    )
+    assert len(result) == recent_count
+    assert result[0]["id"] == 0
+    assert result[-1]["id"] == recent_count - 1
+    assert pages == list(range(1, 127))
+
+    pages.clear()
+    with pytest.raises(WorkflowRunQueryError, match="Limite de páginas"):
+        collect_recent_workflow_runs(
+            "user/repo", "delivery.yml", CUTOFF, runner=runner, max_pages=100
+        )
+    assert pages == list(range(1, 101))
+
+
+def test_expired_wall_clock_budget_blocks_partial_slo():
+    ticks = iter((0.0, 3.0))
+    def no_api_call(*args, **kwargs):
+        pytest.fail("Não deve consultar API após o prazo")
+
+    with pytest.raises(WorkflowRunQueryError, match="Prazo de coleta excedido"):
+        collect_recent_workflow_runs(
+            "user/repo", "delivery.yml", CUTOFF,
+            runner=no_api_call, clock=lambda: next(ticks), max_elapsed_seconds=2.0,
+        )
