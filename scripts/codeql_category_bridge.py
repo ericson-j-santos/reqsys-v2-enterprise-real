@@ -79,7 +79,8 @@ def stage_codeql_categories(
     for language in sorted(LANGUAGES):
         source, original, source_hash = found[language]
         current_id = f"/language:{language}/"
-        legacy_id = f"language:{language}"
+        # SARIF requires "/" to distinguish category from run_id.
+        legacy_id = f"language:{language}/"
         primary = output_dir / f"{language}.sarif"
         shutil.copyfile(source, primary)
         if hashlib.sha256(primary.read_bytes()).hexdigest() != source_hash:
