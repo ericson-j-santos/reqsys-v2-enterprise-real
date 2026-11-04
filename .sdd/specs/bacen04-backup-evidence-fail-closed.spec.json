@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "bacen04-backup-evidence-fail-closed",
+  "project": "ReqSys v2 Enterprise — BACEN-04",
+  "created_at": "2026-11-03",
+  "updated_at": "2026-11-03",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Não aprovar evidência BACEN-04 quando a data do ponto de recuperação, o hash da cópia, o RTO ou o estado da quota não são válidos. Este incremento altera apenas o contrato de evidência, não liga backup nem migra ativos legados.",
+  "scope": "bacen04-evidence-contract",
+  "files": [
+    "scripts/reqsys_free_tier_backup.py",
+    "tests/test_reqsys_free_tier_backup.py",
+    ".sdd/specs/bacen04-backup-evidence-fail-closed.spec.json",
+    ".sdd/specs/bacen04-backup-evidence-fail-closed.requirements.md"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_free_tier_backup.py"
+    ],
+    "evidence_contract": "Em DEV/STG, RPO desconhecido, fuso ausente, timestamp futuro, hash SHA-256 inválido, RTO inválido ou quota sem métricas numéricas válidas/consistentes, status != healthy ou estatísticas Restic inválidas tornam result=failed; valores inválidos são serializados como null, nunca 0. Teste positivo preserva result=passed com dados válidos. PROD continua desabilitado. CI e testes não substituem restauração isolada real."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false,
+    "storage_cost": false
+  },
+  "acceptance_criteria": [
+    "SHA atual em branch isolada, sem alterar main, sem acessar PROD, Fly.io, banco ou armazenamento real.",
+    "RPO não é 0 quando generated_at está ausente, inválido, sem timezone ou posterior ao fim da restauração.",
+    "Hash SHA-256 ausente ou inválido rejeita integridade mesmo que origem e restauração tenham campos idênticos.",
+    "RTO negativo, infinito ou NaN não comprova recuperação; saída da evidência não publica valor numérico inválido.",
+    "Quota em warning/critical/unknown, sem total/warn/hard numéricos íntegros, com limite inconsistente ou estatísticas Restic inválidas não produz result=passed.",
+    "Caso positivo válido continua aprovado, teste negativo falha fechado, teste repetido mantém resultado e não grava dados reais.",
+    "READY_FOR_PR, CI e revisão independente pertencem ao HEAD exato; E2E físico DEV e STG de backup externo continuam bloqueados até origem/destino e custo zero comprovados.",
+    "PROD mantém enabled=false, não é habilitado, não recebe segredo nem execução ou autorização implícita."
+  ]
+}

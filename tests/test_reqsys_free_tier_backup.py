@@ -14,6 +14,7 @@ from scripts.reqsys_free_tier_backup import manifest as sqlite_manifest
 from scripts.reqsys_free_tier_backup import markdown as dashboard_markdown
 from scripts.reqsys_free_tier_backup import merged, select, validate_inventory
 from scripts.reqsys_free_tier_backup import quota as evaluate_quota
+from scripts.reqsys_free_tier_backup import restic_size
 
 
 class ReqSysFreeTierBackupTests(unittest.TestCase):
@@ -80,11 +81,60 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         self.assertEqual(evaluate_quota(8, 8, 9)["status"], "warning")
         self.assertEqual(evaluate_quota(9, 8, 9)["status"], "critical")
 
+    def test_invalid_quota_cannot_appear_healthy(self) -> None:
+        for total, warn, hard in (
+            (-1, 8, 9),
+            (True, 8, 9),
+            (1, 0, 9),
+            (1, 9, 9),
+            (1, 10, 9),
+            (1, 8, False),
+        ):
+            with self.subTest(total=total, warn=warn, hard=hard):
+                with self.assertRaises(ValueError):
+                    evaluate_quota(total, warn, hard)
+
+    def test_restic_stats_reject_invalid_primary_size(self) -> None:
+        self.assertEqual(restic_size({"total_size": 0}), 0)
+        for total in (-1, True, 1.25, "1", None):
+            with self.subTest(total=total):
+                with self.assertRaises(ValueError):
+                    restic_size({"total_size": total, "total_blob_size": 50})
+
+    def test_evidence_rejects_unverified_or_inconsistent_quota(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        source = {
+            "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
+            "sha256": "a" * 64,
+            "table_counts": {"item": 2},
+        }
+        for quota_data in (
+            {"status": "healthy"},
+            {"status": "healthy", "total_size_bytes": -1, "warn_bytes": 800, "hard_bytes": 900},
+            {"status": "healthy", "total_size_bytes": 800, "warn_bytes": 800, "hard_bytes": 900},
+            {"status": "healthy", "total_size_bytes": 900, "warn_bytes": 800, "hard_bytes": 900},
+            {"status": "healthy", "total_size_bytes": 100, "warn_bytes": 0, "hard_bytes": 900},
+            {"status": "healthy", "total_size_bytes": 100, "warn_bytes": 900, "hard_bytes": 900},
+            {"status": "healthy", "total_size_bytes": True, "warn_bytes": 800, "hard_bytes": 900},
+            {"status": "warning", "total_size_bytes": 100, "warn_bytes": 800, "hard_bytes": 900},
+        ):
+            with self.subTest(quota=quota_data):
+                result = build_evidence(
+                    asset, source, dict(source), quota_data,
+                    "snapshot-1", "https://example.test/run", "corr-1",
+                    "2026-08-01T00:00:00+00:00",
+                    "2026-08-01T00:00:01+00:00", 1.0,
+                )
+                self.assertEqual(result["result"], "failed")
+                self.assertFalse(result["quota_consistent"])
+
     def test_evidence_requires_identical_restore(self) -> None:
         inventory = self.inventory()
         asset = select(inventory, "dev", include_disabled=True)[0]
         manifest = {
             "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
             "sha256": "a" * 64,
             "table_counts": {"item": 2},
             "row_count_total": 2,
@@ -109,9 +159,72 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         )
         self.assertEqual(result["result"], "passed")
         self.assertTrue(result["integrity_match"])
+        self.assertTrue(result["quota_consistent"])
         self.assertNotIn("fly_app", result)
         self.assertNotIn("table_counts", result["source_manifest"])
         self.assertIn("table_counts_sha256", result["source_manifest"])
+
+    def test_unknown_or_future_recovery_point_blocks_evidence(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        for timestamp in (None, "invalid", "2026-08-01T00:00:00", "2026-08-01T00:00:05+00:00"):
+            with self.subTest(timestamp=timestamp):
+                source = {
+                    "quick_check": "ok",
+                    "sha256": "a" * 64,
+                    "table_counts": {"item": 2},
+                }
+                if timestamp is not None:
+                    source["generated_at"] = timestamp
+                result = build_evidence(
+                    asset, source, dict(source), {"status": "healthy"},
+                    "snapshot-1", "https://example.test/run", "corr-1",
+                    "2026-08-01T00:00:00+00:00",
+                    "2026-08-01T00:00:01+00:00", 1.0,
+                )
+                self.assertEqual(result["result"], "failed")
+                self.assertIsNone(result["rpo_minutes"])
+
+    def test_invalid_rto_and_warning_quota_block_evidence(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        source = {
+            "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
+            "sha256": "a" * 64,
+            "table_counts": {"item": 2},
+        }
+        for rto in (-1.0, float("inf"), float("nan")):
+            with self.subTest(rto=rto):
+                result = build_evidence(
+                    asset, source, dict(source), {"status": "healthy"},
+                    "snapshot-1", "https://example.test/run", "corr-1",
+                    "2026-08-01T00:00:00+00:00",
+                    "2026-08-01T00:00:01+00:00", rto,
+                )
+                self.assertEqual(result["result"], "failed")
+                self.assertIsNone(result["rto_seconds"])
+        result = build_evidence(
+            asset, source, dict(source), {"status": "warning"},
+            "snapshot-1", "https://example.test/run", "corr-1",
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:00:01+00:00", 1.0,
+        )
+        self.assertEqual(result["result"], "failed")
+
+    def test_missing_source_hash_cannot_pass_integrity(self) -> None:
+        asset = select(self.inventory(), "dev", include_disabled=True)[0]
+        source = {
+            "quick_check": "ok",
+            "generated_at": "2026-08-01T00:00:00+00:00",
+            "table_counts": {"item": 2},
+        }
+        result = build_evidence(
+            asset, source, dict(source), {"status": "healthy"},
+            "snapshot-1", "https://example.test/run", "corr-1",
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:00:01+00:00", 1.0,
+        )
+        self.assertEqual(result["result"], "failed")
+        self.assertFalse(result["integrity_match"])
 
     def test_dashboard_reports_configuration_block(self) -> None:
         inventory = self.inventory()
