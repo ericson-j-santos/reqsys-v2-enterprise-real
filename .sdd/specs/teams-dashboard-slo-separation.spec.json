@@ -7,23 +7,26 @@
     "design": true,
     "tasks": true
   },
-  "description": "Separa SLO de entrega Teams dos runs de watchdog do locator, revalida dashboard após Pages, marca incidentes automáticos como painéis operacionais e coleta históricos com paginação limitada à janela de observação e capacidade superior a 12.521 runs em 30 dias, retentativa transitória e falha fechada.",
+  "description": "Separa SLO de entrega Teams dos runs de watchdog do locator, revalida dashboard após Pages, marca incidentes automáticos como painéis operacionais e coleta históricos com paginação limitada à janela de observação e capacidade superior a 12.521 runs em 30 dias, retentativa transitória e falha fechada. O painel persistente #1358 diferencia proxy de conclusão e entrega comprovada; nenhum estado ouro sem readback independente do Teams.",
   "sdd_gate": {
     "tests": [
       "tests/test_teams_dashboard_slo_separation.py",
       "tests/test_pc24x7_locator_watch_contract.py",
       "tests/test_live_dashboard_post_merge_trigger.py",
       "tests/test_validate_issue_governance.py",
-      "tests/test_teams_dashboard_runs.py"
+      "tests/test_teams_dashboard_runs.py",
+      "tests/test_teams_certification_progress_semantics.py"
     ],
-    "evidence_contract": "No mesmo HEAD, o dashboard deve excluir schedule do SLO de entrega, preservar o watchdog fail-closed como métrica separada, o monitor deve reagir a Deploy ReqSys Pages Composite concluído com sucesso e o incidente automático deve usar reqsys-operational-panel. A coleta de workflows deve interromper paginação ao ultrapassar a janela temporal, reutilizar o mesmo conjunto de runs para filtros de evento, tolerar 502/503/504/429 com retentativas limitadas, rejeitar 403, timeout, JSON inválido, desordem ou limite de páginas e nunca declarar SLO a partir de amostra incompleta. O limite de páginas deve cobrir pelo menos 12.521 runs recentes (referência issue #1358) com margem, preservar recusa para truncamento e bloquear coleta que exceda o prazo interno de 480 segundos antes do timeout do job de 10 minutos. O produtor deve aplicar prazo global único de 480 segundos a todos os históricos consultados, sem reiniciar o orçamento por workflow."
+    "evidence_contract": "No mesmo HEAD, o dashboard deve excluir schedule do SLO de entrega, preservar o watchdog fail-closed como métrica separada, o monitor deve reagir a Deploy ReqSys Pages Composite concluído com sucesso e o incidente automático deve usar reqsys-operational-panel. A coleta de workflows deve interromper paginação ao ultrapassar a janela temporal, reutilizar o mesmo conjunto de runs para filtros de evento, tolerar 502/503/504/429 com retentativas limitadas, rejeitar 403, timeout, JSON inválido, desordem ou limite de páginas e nunca declarar SLO a partir de amostra incompleta. O limite de páginas deve cobrir pelo menos 12.521 runs recentes (referência issue #1358) com margem, preservar recusa para truncamento e bloquear coleta que exceda o prazo interno de 480 segundos antes do timeout do job de 10 minutos. O produtor deve aplicar prazo global único de 480 segundos a todos os históricos consultados, sem reiniciar o orçamento por workflow. O workflow teams-certification-progress-status.yml exclui schedule/workflow_dispatch do proxy, mantém a taxa do monitor separado, expõe delivery_verified=false e bloqueia provisional_gold/gold_certified sem recibo independente Teams; validar com testes positivos, negativos e replay no HEAD exato, sem reduzir 99%."
   },
   "traceability": {
     "delivery_workflow": ".github/workflows/teams-commit-notification.yml",
     "dashboard_workflow": ".github/workflows/teams-notification-dashboard.yml",
     "availability_workflow": ".github/workflows/teams-dashboard-availability-monitor.yml",
     "issue_validator": "scripts/validate_issue_governance.py",
-    "recent_runs_collector": "scripts/teams_dashboard_runs.py"
+    "recent_runs_collector": "scripts/teams_dashboard_runs.py",
+    "certification_status_workflow": ".github/workflows/teams-certification-progress-status.yml",
+    "status_issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1358"
   },
   "risk": {
     "production": false,
