@@ -24,6 +24,7 @@ on:
       - "tests/test_validate_stg_policy_approval.py"
       - "tests/test_teams_notification_slo_metrics.py"
       - "tests/test_teams_notification_slo_semantics.py"
+      - "tests/test_teams_certification_progress_semantics.py"
   push:
     branches: [main]
     paths:
@@ -47,6 +48,7 @@ on:
       - "tests/test_validate_stg_policy_approval.py"
       - "tests/test_teams_notification_slo_metrics.py"
       - "tests/test_teams_notification_slo_semantics.py"
+      - "tests/test_teams_certification_progress_semantics.py"
   workflow_dispatch:
 
 permissions:
@@ -78,6 +80,9 @@ jobs:
 
       - name: Validate Teams SLO semantics
         run: python -m unittest discover -s tests -p test_teams_notification_slo_semantics.py -v
+
+      - name: Validate Teams certification readback gate
+        run: python -m unittest discover -s tests -p test_teams_certification_progress_semantics.py -v
 
       - name: Publish summary
         if: always()

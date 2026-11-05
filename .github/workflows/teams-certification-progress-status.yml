@@ -52,7 +52,7 @@ jobs:
           definitive_days = int(os.environ["DEFINITIVE_DAYS"])
           target = float(os.environ["TARGET_PERCENT"])
 
-          def runs(filename: str) -> list[dict]:
+          def runs(filename: str, allowed_events: frozenset[str] | None = None) -> list[dict]:
               result = subprocess.run(
                   [
                       "gh", "api", "--paginate", "--slurp",
@@ -69,6 +69,7 @@ jobs:
                   items.extend(
                       run for run in payload.get("workflow_runs", [])
                       if run.get("status") == "completed"
+                  and (allowed_events is None or run.get("event") in allowed_events)
                   )
               items.sort(key=lambda item: item["created_at"])
               return items
@@ -96,7 +97,7 @@ jobs:
                   "last_run_at": items[-1]["created_at"] if items else None,
               }
 
-          delivery_all = runs(os.environ["DELIVERY_WORKFLOW"])
+          delivery_all = runs(os.environ["DELIVERY_WORKFLOW"], frozenset({"push", "workflow_run"}))
           monitor_all = runs(os.environ["MONITOR_WORKFLOW"])
 
           delivery_7d = metrics(window(delivery_all, provisional_days), min_delivery)
@@ -116,12 +117,15 @@ jobs:
           definitive_time_ready = observed_days >= definitive_days
           provisional_sample_ready = delivery_7d["remaining"] == 0 and monitor_7d["remaining"] == 0
           definitive_sample_ready = delivery_30d["remaining"] == 0 and monitor_30d["remaining"] == 0
+          delivery_verified = False  # Somente readback independente do Teams pode mudar este estado.
           provisional_quality_ready = (
-              delivery_7d["success_rate_percent"] >= target
+              delivery_verified
+              and delivery_7d["success_rate_percent"] >= target
               and monitor_7d["success_rate_percent"] >= target
           )
           definitive_quality_ready = (
-              delivery_30d["success_rate_percent"] >= target
+              delivery_verified
+              and delivery_30d["success_rate_percent"] >= target
               and monitor_30d["success_rate_percent"] >= target
           )
 
@@ -141,7 +145,7 @@ jobs:
               active_window_days = provisional_days
           elif provisional_time_ready and provisional_sample_ready and not provisional_quality_ready:
               state = "quality_blocked"
-              next_state = "recuperar SLO móvel para 99%"
+              next_state = "comprovar entrega Teams e recuperar SLO móvel para 99%"
               eta = None
               active_delivery = delivery_7d
               active_monitor = monitor_7d
@@ -164,6 +168,8 @@ jobs:
           ), 2)
 
           blockers: list[str] = []
+          if not delivery_verified:
+              blockers.append("Entrega Teams não verificada: falta recibo independente por mensagem, SHA e ambiente")
           if not provisional_time_ready:
               blockers.append(f"faltam {max(0.0, provisional_days - observed_days):.2f} dias de histórico operacional")
           if delivery_7d["remaining"]:
@@ -192,6 +198,12 @@ jobs:
               "next_state": next_state,
               "overall_progress_percent": overall_percent,
               "target_percent": target,
+              "metric_kind": "workflow_execution_proxy_not_delivery",
+              "delivery_candidate_events": ["push", "workflow_run"],
+              "delivery_state": "unverified",
+              "delivery_verified": delivery_verified,
+              "delivery_success_rate_percent": None,
+              "monitor_metric_kind": "dashboard_availability_workflow_execution",
               "active_window_days": active_window_days,
               "history_observed_days": round(observed_days, 2),
               "provisional_window_days": provisional_days,
@@ -232,15 +244,16 @@ jobs:
 
               **Estado atual:** `{state}`  
               **Próximo estado:** `{next_state}`  
-              **Progresso consolidado:** **{overall_percent:.2f}%**  
+              **Progresso do proxy (não é certificação):** **{overall_percent:.2f}%**  
+              **Entrega Teams:** `unverified` — não há recibo independente de recebimento  
               **Janela usada no estado:** **{active_window_days} dias**  
               **Atualizado em:** {now.strftime('%d/%m/%Y %H:%M UTC')}  
               **Previsão do próximo estado:** {eta_text}
 
               | Dimensão | 7 dias | 30 dias | Histórico |
               |---|---:|---:|---:|
-              | Entregas — execuções | {delivery_7d['total']} | {delivery_30d['total']} | {delivery_history['total']} |
-              | Entregas — SLO | {delivery_7d['success_rate_percent']:.2f}% | {delivery_30d['success_rate_percent']:.2f}% | {delivery_history['success_rate_percent']:.2f}% |
+              | Workflows candidatos (push/workflow_run) | {delivery_7d['total']} | {delivery_30d['total']} | {delivery_history['total']} |
+              | Conclusão de workflow (proxy, não entrega) | {delivery_7d['success_rate_percent']:.2f}% | {delivery_30d['success_rate_percent']:.2f}% | {delivery_history['success_rate_percent']:.2f}% |
               | Monitor — execuções | {monitor_7d['total']} | {monitor_30d['total']} | {monitor_history['total']} |
               | Monitor — SLO | {monitor_7d['success_rate_percent']:.2f}% | {monitor_30d['success_rate_percent']:.2f}% | {monitor_history['success_rate_percent']:.2f}% |
               | Tempo operacional | — | — | {observed_days:.2f} dias |
@@ -252,8 +265,8 @@ jobs:
               ### Evidência
 
               - Execução: {report['run_url']}
-              - Critério provisório: histórico ≥ 7 dias, 20 entregas e 20 monitores nos últimos 7 dias, SLO ≥ 99%
-              - Critério definitivo: histórico ≥ 30 dias, 20 entregas e 20 monitores nos últimos 30 dias, SLO ≥ 99%
+              - Critério provisório: histórico ≥ 7 dias, 20 execuções candidatas e 20 monitores nos últimos 7 dias, SLO ≥ 99% e entrega comprovada
+              - Critério definitivo: histórico ≥ 30 dias, 20 execuções candidatas e 20 monitores nos últimos 30 dias, SLO ≥ 99% e entrega comprovada
               - Histórico total: apenas informativo; falhas antigas fora da janela não bloqueiam a certificação atual
 
               > Esta issue é atualizada automaticamente e funciona como painel operacional persistente.
