@@ -126,3 +126,37 @@ Este incremento:
 6. Issue operacional produzida satisfaz a governança sem comentário de correção.
 7. CI principal e gates de segurança ficam verdes.
 8. Custo adicional = R$ 0,00.
+
+## Evolução #1358 — painel persistente e recibo independente (05/11/2026)
+
+A execução 41984951174 (main 863a316cb63ec11908bb86a28d5212937a145689)
+publicou 54,24% para 1.357 execuções do workflow misturando eventos de
+notificação e monitor de locator. A conclusão de GitHub Actions é um proxy:
+não comprova o recebimento da mensagem no Teams. A disponibilidade do painel
+também possui monitor próprio, com 22 runs e taxa de 54,55% em 7 dias.
+
+### Requisitos adicionais
+
+7. O painel de certificação da issue #1358 seleciona para o proxy de execução
+   somente eventos de candidatos push e workflow_run, e nunca schedule ou
+   workflow_dispatch. O monitor de disponibilidade do dashboard é independente,
+   mantém suas falhas e não perde a regra de frescor.
+8. O relatório mantém schema_version 2.0.0, janelas 7/30 dias, histórico,
+   meta de 99%, denominadores e estados originais, adicionando os campos
+   delivery_state=unverified, delivery_verified=false, delivery_success_rate_percent=null
+   e metric_kind=workflow_execution_proxy_not_delivery.
+9. Nem workflow success, HTTP 2xx, contingência, cache saudável ou valores
+   positivos do proxy concedem provisional_gold/gold_certified sem readback
+   independente no Teams por mensagem, SHA e ambiente. Na falta de comprovação,
+   a certificação permanece quality_blocked com causa explícita. Não alterar
+   o limiar 99%, a integridade do monitor nem o gate fail-closed do locator.
+10. Regressão real executa o Python do workflow com dados sintéticos: cenário
+    positivo de proxy 100% sem certificação, falha de schedule excluída do
+    denominador do proxy, falha workflow_run incluída, falha do monitor incluída,
+    replay sem divergência e HTML/Markdown com aviso de entrega não verificada.
+11. Após integração governada, reexecutar o publicador da issue na main vigente,
+    comparar artefato SHA e a publicação, e exigir leitor independente Teams
+    antes de declarar recuperação. A publicação Pages continua dependente de
+    autorização própria e nunca é consequência deste ajuste.
+12. Custo incremental zero; não alterar segredos, destinatários ou ambientes
+    produtivos. Evidenciar READY_FOR_PR no SHA, CI/contratos e TODO Global.
