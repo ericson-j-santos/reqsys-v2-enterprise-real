@@ -361,6 +361,9 @@ def _gib(value: Any) -> str:
 
 
 def markdown(payload: dict[str, Any]) -> str:
+    statuses = ", ".join(
+        f"{item['environment'].upper()}={item['status']}" for item in payload["assets"]
+    ) or "nenhum ativo reportado"
     icon = {"healthy": "🟢", "warning": "🟡", "critical": "🔴"}[payload["health"]]
     lines = [
         f"# {icon} Dashboard BACEN-04 — Cobertura real de backup",
@@ -406,6 +409,43 @@ def markdown(payload: dict[str, Any]) -> str:
             f"- quota alerta em {warn} e bloqueia em {hard};",
             "- PROD permanece desabilitado até evidência válida em DEV e STG;",
             "- restaurações ocorrem fora do ambiente de origem.",
+            "",
+            "### Descrição do problema",
+            "Monitorar a cobertura real de backup e restauração BACEN-04 sem interpretar ausência de evidência como sucesso.",
+            "",
+            "### Estado atual evidenciado",
+            f"Estado do painel: `{payload['health']}`; armazenamento externo configurado: `{str(payload['external_storage_configured']).lower()}`; ativos: {statuses}.",
+            "",
+            "### Estado esperado",
+            "Cobertura e recuperação verificadas nos ambientes habilitados, com integridade, RPO e RTO medidos; PROD segue sujeito às aprovações existentes.",
+            "",
+            "### Causa raiz",
+            "Não determinada automaticamente pelo painel; investigar configuração, estados dos ativos e logs da execução vinculada.",
+            "",
+            "### Critérios de aceite",
+            "- [ ] Cada ambiente habilitado possui evidência verificável de backup, integridade e restauração independente, com RPO/RTO reais.",
+            "- [ ] Nenhuma lacuna de evidência é tratada como aprovação e a promoção de PROD permanece bloqueada sem DEV/STG.",
+            "",
+            "### Riscos",
+            "A ausência de evidência de restauração pode ocultar perda de dados; métricas ausentes não comprovam proteção.",
+            "",
+            "### Dependências",
+            "Inventário versionado, armazenamento externo e execução governada de testes de restauração, quando autorizados.",
+            "",
+            "### Evidências",
+            f"[Execução da medição]({payload['run_url']}); estados e limites reproduzidos na tabela acima.",
+            "",
+            "### PR(s) relacionadas",
+            "Não informadas no relatório automático; conferir o histórico do repositório antes de vincular uma PR.",
+            "",
+            "### Responsável",
+            "@ericson-j-santos — titular da Issue #1162; execução técnica pela rota governada aplicável.",
+            "",
+            "### Prioridade",
+            "P1 — rastrear lacunas de cobertura, sem autorizar rollout ou ação em PROD.",
+            "",
+            "### Declaração de rastreabilidade",
+            "- [x] Este relatório referencia a execução e mantém indicadores sem medição como desconhecidos; não certifica backups nem restaurações não comprovados.",
             "",
             f"[Abrir execução]({payload['run_url']})",
             "",
