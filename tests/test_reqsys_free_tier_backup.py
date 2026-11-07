@@ -15,6 +15,7 @@ from scripts.reqsys_free_tier_backup import markdown as dashboard_markdown
 from scripts.reqsys_free_tier_backup import merged, select, validate_inventory
 from scripts.reqsys_free_tier_backup import quota as evaluate_quota
 from scripts.reqsys_free_tier_backup import restic_size
+from scripts.validate_issue_governance import validate_issue
 
 
 class ReqSysFreeTierBackupTests(unittest.TestCase):
@@ -244,6 +245,27 @@ class ReqSysFreeTierBackupTests(unittest.TestCase):
         self.assertIn("R2_ACCESS_KEY_ID", markdown)
         self.assertIn("quota alerta em 4 GiB e bloqueia em 4.5 GiB", markdown)
         self.assertNotIn("quota alerta em 8 GiB e bloqueia em 9 GiB", markdown)
+
+    def test_dashboard_issue_1162_obedece_governanca_sem_mascarar_pendencias(self) -> None:
+        payload = build_dashboard(
+            self.inventory(), [], False, [],
+            "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/123",
+            "unknown",
+        )
+        body = dashboard_markdown(payload)
+        result = validate_issue(
+            title="[DASHBOARD] BACEN-04 — Cobertura real de backup",
+            body=body,
+            issue_number=1162,
+            author_type="User",
+        )
+        self.assertTrue(result.valid, result.to_dict())
+        self.assertEqual(result.scope, "governed_issue")
+        self.assertEqual(result.checked_fields, 13)
+        self.assertNotIn("<!-- reqsys-operational-panel -->", body)
+        self.assertIn("Armazenamento externo configurado: **false**", body)
+        self.assertIn("rollout_pending", body)
+        self.assertIn("não certifica backups nem restaurações não comprovados", body)
 
     def test_dashboard_marks_failed_execution_critical(self) -> None:
         inventory = self.inventory()
