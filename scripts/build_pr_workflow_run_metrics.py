@@ -103,7 +103,12 @@ def build_metrics(runs: list[dict[str, Any]]) -> dict[str, Any]:
         )
 
     average = round(total_workflows / len(pr_metrics), 2) if pr_metrics else 0
-    status = "green" if average <= 10 else "yellow" if average <= 18 else "red"
+    # Ausência de PR real é falta de evidência, não eficiência perfeita.
+    status = (
+        "insufficient_data"
+        if not pr_metrics
+        else "green" if average <= 10 else "yellow" if average <= 18 else "red"
+    )
 
     return {
         "schema_version": "1.0.0",
