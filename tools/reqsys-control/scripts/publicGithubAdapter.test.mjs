@@ -31,7 +31,8 @@ test('lê uma issue pública exata sem mutação', async () => {
 test('replay é leitura sem efeito e sem duplicação', async () => {
   let count = 0;
   const fetcher = async (url, init) => { count++; return responder(body())(url, init); };
-  assert.deepEqual(await readPublicIssue(target, fetcher, signal), await readPublicIssue(target, fetcher, signal));
+  const fixedClock = () => '2026-11-08T10:40:00Z';
+  assert.deepEqual(await readPublicIssue(target, fetcher, signal, fixedClock), await readPublicIssue(target, fetcher, signal, fixedClock));
   assert.equal(count, 2);
 });
 test('rejeita URL/repositorio/issue fora da allowlist antes de fetch', async () => {
