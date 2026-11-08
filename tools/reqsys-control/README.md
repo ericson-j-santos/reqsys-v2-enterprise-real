@@ -24,8 +24,11 @@ Esta pasta preserva a origem de código do site AppDeploy `reqsys-control-1y8yvp
 ### Desenvolvimento local em ambiente de desenvolvimento isolado
 
 ```bash
-npm ci
+npm install --no-audit
 npm run build
 ```
 
 Esta branch não executa automaticamente publicação do site existente. Atualização do AppDeploy é uma etapa de deploy separada.
+
+
+**Reprodutibilidade:** o snapshot original do AppDeploy não inclui `package-lock.json`. O lockfile deve ser gerado, revisado e versionado em ambiente isolado antes de exigir `npm ci` em CI. Build e E2E do checkout GitHub ainda não foram executados.
