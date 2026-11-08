@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -225,7 +226,11 @@ class NotionTodoGlobalClient:
         if not isinstance(has_more, bool):
             raise NotionTodoGlobalError('todo_read_invalid_pagination')
         if has_more:
-            if not isinstance(next_cursor, str) or not next_cursor:
+            if (
+                not isinstance(next_cursor, str)
+                or not 1 <= len(next_cursor) <= 256
+                or not all(character.isalnum() or character in '-_' for character in next_cursor)
+            ):
                 raise NotionTodoGlobalError('todo_read_invalid_pagination')
         elif next_cursor is not None:
             raise NotionTodoGlobalError('todo_read_invalid_pagination')
@@ -236,11 +241,22 @@ class NotionTodoGlobalClient:
                 raise NotionTodoGlobalError('todo_read_invalid_page')
             page_id = page.get('id')
             updated = page.get('last_edited_time')
-            fields = self._projection_from_page(page)
+            if not isinstance(page.get('properties'), dict):
+                raise NotionTodoGlobalError('todo_read_invalid_properties')
+            try:
+                fields = self._projection_from_page(page)
+            except (AttributeError, KeyError, TypeError, ValueError, IndexError):
+                raise NotionTodoGlobalError('todo_read_invalid_properties') from None
             if not isinstance(page_id, str) or not page_id:
                 raise NotionTodoGlobalError('todo_read_invalid_page_id')
             if not isinstance(updated, str) or not updated:
                 raise NotionTodoGlobalError('todo_read_invalid_updated_at')
+            try:
+                timestamp = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                    raise ValueError('timezone_missing')
+            except ValueError:
+                raise NotionTodoGlobalError('todo_read_invalid_updated_at') from None
             if fields['Status'] not in {'PENDENTE', 'EM ANDAMENTO', 'BLOQUEADO'}:
                 raise NotionTodoGlobalError('todo_read_unexpected_status')
             if not isinstance(fields['Título'], str) or not fields['Título']:
