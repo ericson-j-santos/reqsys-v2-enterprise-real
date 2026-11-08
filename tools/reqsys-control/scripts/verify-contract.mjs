@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const main = read('../src/ReqSysDashboard.tsx');
+const feed = read('../src/PublicGithubReadOnly.tsx');
+const tests = JSON.parse(read('../tests/tests.json'));
+const targets = [...feed.matchAll(/repository: '([^']+)', issue: (\d+)/g)];
+assert.equal(targets.length, 5);
+assert.equal(new Set(targets.map(v => v[1] + '/' + v[2])).size, 5);
+assert.match(feed, /https:\/\/api\.github\.com\/repos\/ericson-j-santos\//);
+assert.match(feed, /cache: 'no-store'/);
+assert.match(feed, /if \(!response\.ok\) throw Error/);
+assert.match(feed, /value\.number !== target\.issue/);
+assert.match(feed, /controller\.abort\(\), 10000/);
+assert.doesNotMatch(feed, /method:\s*['"](?:POST|PUT|PATCH|DELETE)/);
+assert.doesNotMatch(main + feed, /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b/);
+assert.match(main, /ready_for_work é sempre false/);
+assert.match(main, /Badge tone="danger">ready_for_work = false/);
+assert.match(main, /PublicGithubReadOnly/);
+assert.equal(tests.length, 5);
+assert.equal(tests.filter(t => t.sanity).length, 1);
+assert.ok(tests.every(t => t.covers?.length && t.steps?.length && t.description));
+console.log('Contratos estáticos: OK (sem autorização de host/sem escrita externa)');
