@@ -32,3 +32,17 @@ Esta branch não executa automaticamente publicação do site existente. Atualiz
 
 
 **Reprodutibilidade:** o snapshot original do AppDeploy não inclui `package-lock.json`. O lockfile deve ser gerado, revisado e versionado em ambiente isolado antes de exigir `npm ci` em CI. Build e E2E do checkout GitHub ainda não foram executados.
+
+
+## Contrato de leitura privada preparado (não publicado)
+
+O backend ReqSys existente em `backend/app/api/todo_global_adapter.py` foi estendido com:
+- `GET /api/internal/todo-global/queue`, que exige JWT de administrador do ReqSys **ou** token de serviço com escopo exclusivo `todo_global:read`.
+- Busca paginada no **Notion real via servidor**, com credenciais no cofre existente, resposta mínima de TODOs não terminais, validação de cursores e erros fail-closed.
+- O campo `host_admitted=false` não pode ser substituído pelo frontend.
+- Testes em `backend/tests/test_todo_global_queue_readonly.py` cobrem positivos, negativos, replay e acesso não autenticado. Não houve prova física nem leitura real via esse endpoint nesta branch.
+
+**Não conectar o site público diretamente à API privada com credencial no JavaScript.**
+A futura interface autenticada precisa ser publicada em origem autorizada (ou por BFF confiável), reutilizar a política de identidade do ReqSys e exigir E2E real + readback, custos verificados e autorização de deploy. Não modificar CORS para `*` nem usar token em localStorage.
+
+**Risco conhecido de integração:** `.github/workflows/reqsys-control-static-qa.yml` foi adicionado antes da releitura da política `docs/ci/WORKFLOW_SURFACE_BUDGET.md`. A política proíbe aumento líquido de workflows; sua exclusão na branch e substituição pela QA canônica de Pre-PR exigem tratamento de mudança revisável, sem enfraquecer o gate. Até isso ocorrer, `READY_FOR_PR` é bloqueado.
