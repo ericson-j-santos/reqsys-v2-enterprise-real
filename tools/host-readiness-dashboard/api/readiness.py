@@ -182,6 +182,10 @@ def handler_factory(db_path, viewer_token, html_path, attest_key, rules_sha):
             if not self.authorized():
                 return self.respond(401, {"error": "authentication_required"})
             url = urlsplit(self.path)
+            if url.path == "/api/v1/github-observations":
+                # Observações nunca são atestados: não altera SQLite nem habilita workers.
+                from api.github_observer import observations
+                return self.respond(200, observations())
             if url.path == "/api/v1/readiness":
                 try:
                     hosts, history = snapshots(db_path, attest_key, rules_sha)

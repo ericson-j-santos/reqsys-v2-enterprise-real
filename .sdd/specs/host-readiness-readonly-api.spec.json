@@ -7,9 +7,10 @@
   },
   "sdd_gate": {
     "tests": [
-      "tools/host-readiness-dashboard/tests/test_readiness.py"
+      "tools/host-readiness-dashboard/tests/test_readiness.py",
+      "tools/host-readiness-dashboard/tests/test_github_observer.py"
     ],
-    "evidence_contract": "Assinatura HMAC externa, vinculação SHA/host/tempo, readback e idempotência; prova física pendente."
+    "evidence_contract": "Assinatura HMAC externa, vinculação SHA/host/tempo, readback e idempotência; prova física pendente. Observações de jobs do GitHub isoladas da atestação: nenhuma observação concede ready_for_work ou continuidade."
   },
   "traceability": {
     "issue": "https://github.com/ericson-j-santos/e2e-platform/issues/10",

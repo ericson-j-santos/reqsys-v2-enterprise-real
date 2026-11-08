@@ -32,3 +32,8 @@ API: `GET /api/v1/readiness` com autenticação Basic, `Cache-Control: no-store`
 ## Segurança e responsabilidades
 
 Owner do produto: ReqSys. Validador e contrato E2E: E2E Platform. Coletor de evidências: Runtime Platform. Fonte de verdade para TODO: TODO Global (sem sincronização automática neste pacote). Regras: `chatgpt-operational-rules` 1.6.20, `main@86abe65b22781c2f608a7d7286ce3a28cd48aaaf`.
+## Observação auxiliar de pickups GitHub (sem atestado operacional)
+
+Uma consulta opcional `GET /api/v1/github-observations`, protegida pelo mesmo HTTP Basic local, obtém somente dados de jobs dos repositórios permitidos via API oficial do GitHub. A versão de observação preserva `ready_for_work=false` e `continuity_certified=false` **mesmo com job concluído**: não autentica recibo do Gateway, perfil, lease, dependências e custo. Não altera banco SQLite, não despacha trabalho nem executa comandos nos hosts.
+
+A variável de ambiente opcional `REQSYS_GITHUB_READ_TOKEN` permite acessar a API oficial respeitando limites de taxa; o valor nunca é devolvido na resposta. Não configurar URL livre, usar serviço externo, expor HTTP além do loopback ou utilizar este endpoint como certificado. A ausência de observações é bloqueio, não indicação de computador desligado. Validação DEV: `python -m unittest discover -s tests -v`, incluindo testes de rede simulada e autenticação HTTP. Ativação em host ainda exige sessão governada, Gateway, configuração protegida e evidência física contemporânea.
