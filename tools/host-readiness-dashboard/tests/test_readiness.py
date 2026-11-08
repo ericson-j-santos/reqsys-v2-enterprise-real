@@ -1,6 +1,5 @@
 """Testes de API HTTP real e contrato de recibos; nenhum host é acionado."""
 import base64
-import copy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac

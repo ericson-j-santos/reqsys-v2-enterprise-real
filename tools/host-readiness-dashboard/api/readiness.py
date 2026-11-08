@@ -11,13 +11,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sqlite3
 import sys
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 
 HOSTS = {"desktop": "DESKTOP-PDQK954", "lenovo": "DESKTOP-RP23OGS", "noteri": "Noteri"}
 GATES = ("identity", "normal", "sha", "session", "validated", "gateway", "worktree", "lease", "native", "cost", "readback")
 CATEGORIES = ("runner", "admissao", "dependencia", "configuracao", "continuidade")
-SHA40 = lambda x: isinstance(x, str) and len(x) == 40 and all(c in "0123456789abcdefABCDEF" for c in x)
-SHA64 = lambda x: isinstance(x, str) and len(x) == 64 and all(c in "0123456789abcdefABCDEF" for c in x)
+def SHA40(x):
+    return isinstance(x, str) and len(x) == 40 and all(c in "0123456789abcdefABCDEF" for c in x)
+
+
+def SHA64(x):
+    return isinstance(x, str) and len(x) == 64 and all(c in "0123456789abcdefABCDEF" for c in x)
 MAX_AGE_SECONDS = 300
 
 

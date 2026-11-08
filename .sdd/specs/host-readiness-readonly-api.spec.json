@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "ReqSys Host Readiness — API de evidências read-only",
+  "status": "implemented_pending_ci_and_physical_e2e",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tools/host-readiness-dashboard/tests/test_readiness.py"
+    ],
+    "evidence_contract": "Assinatura HMAC externa, vinculação SHA/host/tempo, readback e idempotência; prova física pendente."
+  },
+  "traceability": {
+    "issue": "https://github.com/ericson-j-santos/e2e-platform/issues/10",
+    "path": "tools/host-readiness-dashboard",
+    "canonical_rules_sha": "86abe65b22781c2f608a7d7286ce3a28cd48aaaf"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "host_mutation": false
+  }
+}
