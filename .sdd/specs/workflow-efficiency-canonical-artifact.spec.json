@@ -2,14 +2,14 @@
   "feature_name": "workflow-efficiency-canonical-artifact",
   "project": "ReqSys v2 Enterprise — Ops Dashboard",
   "created_at": "2026-10-21",
-  "updated_at": "2026-10-21",
+  "updated_at": "2026-11-08",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": false,
     "tasks": false
   },
-  "description": "Integra ao artifact Ops Dashboard o indicador Workflow Efficiency medido em PRs reais, impedindo publicação de um contrato sem fonte ou com score inconsistente.",
+  "description": "Integra ao artifact Ops Dashboard o indicador Workflow Efficiency medido em PRs reais, impedindo publicação de um contrato sem fonte ou com score inconsistente. Em falta de vínculos PR na captura global, recupera amostra de PRs e runs de commits reais da API GitHub em janela fixa de sete dias; amostra insuficiente permanece bloqueante.",
   "scope": "ops-dashboard-workflow-efficiency-canonical",
   "files": [
     ".github/workflows/ops-dashboard.yml",
@@ -17,14 +17,16 @@
     "tests/test_homologate_workflow_efficiency_artifact.py",
     "tests/test_ops_dashboard_workflow_efficiency_integration.py",
     ".sdd/specs/workflow-efficiency-canonical-artifact.requirements.md",
-    ".sdd/specs/workflow-efficiency-canonical-artifact.spec.json"
+    ".sdd/specs/workflow-efficiency-canonical-artifact.spec.json",
+    "tests/scripts/test_enrich_ci_pr_efficiency.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_homologate_workflow_efficiency_artifact.py",
-      "tests/test_ops_dashboard_workflow_efficiency_integration.py"
+      "tests/test_ops_dashboard_workflow_efficiency_integration.py",
+      "tests/scripts/test_enrich_ci_pr_efficiency.py"
     ],
-    "evidence_contract": "O Produtor lê dados reais de PRs, integra o card e homologa pré-publicação; um consumidor independente baixa o artifact do mesmo SHA e confirma HOMOLOGATED, com fontes, hashes e controle negativo."
+    "evidence_contract": "O Produtor lê dados reais de PRs, integra o card e homologa pré-publicação; um consumidor independente baixa o artifact do mesmo SHA e confirma HOMOLOGATED, com fontes, hashes e controle negativo. Com zero PRs associadas na coleta global, usar fallback bounded da API por PR/commit, exigir pelo menos três PRs com runs reais, persistir metadados da amostra e preservar captura global original. Sem três PRs, conservar bloqueio, não publicar score inventado."
   },
   "risk": {
     "production": false,
@@ -38,6 +40,9 @@
     "Homologação positiva somente com HTML, JSON do índice, fonte medição e link relativo canônico coerentes.",
     "Controle negativo rejeita contrato ausente, fonte inválida, amostra vazia e score divergente.",
     "Pre-PR e demais gates aprovados no HEAD real antes da PR e merge.",
-    "Download independente e homologação no SHA final, sem confundir artifact de falha com êxito."
+    "Download independente e homologação no SHA final, sem confundir artifact de falha com êxito.",
+    "Fallback executado apenas quando a coleta global tiver pr_count=0 e usar somente PRs/commits/runs reais da API oficial, sem inferir PR por branch.",
+    "Exigir três PRs distintas criadas nos últimos sete dias e com runs válidos para substituir snapshot; preservar bytes da coleta global e declarar modo e intervalo de amostragem.",
+    "Fallback vazio ou incompleto mantém bloqueio de ausência de amostra; testes positivos, negativos e idempotentes validam a fonte real no mesmo workflow antes da homologação."
   ]
 }
