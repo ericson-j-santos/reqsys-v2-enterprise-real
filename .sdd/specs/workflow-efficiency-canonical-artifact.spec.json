@@ -18,15 +18,18 @@
     "tests/test_ops_dashboard_workflow_efficiency_integration.py",
     ".sdd/specs/workflow-efficiency-canonical-artifact.requirements.md",
     ".sdd/specs/workflow-efficiency-canonical-artifact.spec.json",
-    "tests/scripts/test_enrich_ci_pr_efficiency.py"
+    "tests/scripts/test_enrich_ci_pr_efficiency.py",
+    "scripts/build_pr_workflow_run_metrics.py",
+    "tests/test_build_pr_workflow_run_metrics.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_homologate_workflow_efficiency_artifact.py",
       "tests/test_ops_dashboard_workflow_efficiency_integration.py",
-      "tests/scripts/test_enrich_ci_pr_efficiency.py"
+      "tests/scripts/test_enrich_ci_pr_efficiency.py",
+      "tests/test_build_pr_workflow_run_metrics.py"
     ],
-    "evidence_contract": "O Produtor lê dados reais de PRs, integra o card e homologa pré-publicação; um consumidor independente baixa o artifact do mesmo SHA e confirma HOMOLOGATED, com fontes, hashes e controle negativo. Com zero PRs associadas na coleta global, usar fallback bounded da API por PR/commit, exigir pelo menos três PRs com runs reais, persistir metadados da amostra e preservar captura global original. Sem três PRs, conservar bloqueio, não publicar score inventado."
+    "evidence_contract": "O Produtor lê dados reais de PRs, integra o card e homologa pré-publicação; um consumidor independente baixa o artifact do mesmo SHA e confirma HOMOLOGATED, com fontes, hashes e controle negativo. Com zero PRs associadas na coleta global, usar fallback bounded da API por PR/commit, exigir pelo menos três PRs com runs reais, persistir metadados da amostra e preservar captura global original. Sem três PRs, conservar bloqueio, não publicar score inventado. A fonte sem nenhuma PR deve relatar pareto_status=insufficient_data, nunca green por divisão sem amostra, e o workflow produtor deve executar o teste negativo antes da coleta."
   },
   "risk": {
     "production": false,
@@ -43,6 +46,7 @@
     "Download independente e homologação no SHA final, sem confundir artifact de falha com êxito.",
     "Fallback executado apenas quando a coleta global tiver pr_count=0 e usar somente PRs/commits/runs reais da API oficial, sem inferir PR por branch.",
     "Exigir três PRs distintas criadas nos últimos sete dias e com runs válidos para substituir snapshot; preservar bytes da coleta global e declarar modo e intervalo de amostragem.",
-    "Fallback vazio ou incompleto mantém bloqueio de ausência de amostra; testes positivos, negativos e idempotentes validam a fonte real no mesmo workflow antes da homologação."
+    "Fallback vazio ou incompleto mantém bloqueio de ausência de amostra; testes positivos, negativos e idempotentes validam a fonte real no mesmo workflow antes da homologação.",
+    "A ausência de qualquer PR no snapshot produz pareto_status=insufficient_data, não green; a regra fail-closed de pr_count>0 e source_available permanece intacta."
   ]
 }
