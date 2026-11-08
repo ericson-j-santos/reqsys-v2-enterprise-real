@@ -42,3 +42,6 @@ A run 42388747355 falhou no passo de métricas por ausência de associação vá
 - A ordem do produtor permanece coleta → fallback condicionado → métrica → enriquecimento → injeção → pacote → homologação → publicação.
 - Os testes `tests/scripts/test_enrich_ci_pr_efficiency.py` executam também no workflow produtor, e os testes de integração verificam que o fallback não remove o bloqueio.
 - `Pre-PR Readiness Gate`, checks da PR, homologação real de artefato e leitura independente continuam exigidos no SHA final.
+
+- Caso de controle obrigatório: com lista vazia ou runs sem vínculos de PR, `build_metrics` retorna `pr_count=0`, `pareto_status=insufficient_data` e `average_workflows_per_pr=0` sem declarar eficiência verde.
+- O teste `tests/test_build_pr_workflow_run_metrics.py` integra a etapa `Validate dashboard generator` do workflow de produção; o bloqueio de ausência de amostra no passo de coleta continua inalterado.
