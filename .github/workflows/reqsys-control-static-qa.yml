@@ -40,3 +40,5 @@ jobs:
         run: npm run build
       - name: Read-only fail-closed contract
         run: node scripts/verify-contract.mjs
+      - name: Issue adapter unit and negative tests
+        run: node --test scripts/publicGithubAdapter.test.mjs
