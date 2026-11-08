@@ -1,36 +1,19 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, Clock3, GitBranch, RefreshCcw, ShieldAlert } from 'lucide-react';
+import { APPROVED_SOURCES, readPublicIssue, sourceLink } from './publicGithubAdapter.mjs';
 
-type Target = { repository: string; issue: number; label: string };
+type Target = typeof APPROVED_SOURCES[number];
 type Snapshot = {
   target: Target; state: 'open' | 'closed' | 'unknown';
   title: string; updated: string; checked: string; error: string;
 };
-const TARGETS: Target[] = [
-  { repository: 'e2e-platform', issue: 10, label: 'E2E físico entre hosts' },
-  { repository: 'desktop-pc24x7-runtime', issue: 31, label: 'Readiness do Desktop' },
-  { repository: 'noteri-runtime', issue: 42, label: 'Worker Pool Noteri' },
-  { repository: 'reqsys-v2-enterprise-real', issue: 3096, label: 'Desktop Admin Broker' },
-  { repository: 'engineering-worker-pool', issue: 61, label: 'CAS e Validator pré-PR' }
-];
+const TARGETS: Target[] = [...APPROVED_SOURCES];
 const unknown = (target: Target, error = 'Não consultado'): Snapshot =>
   ({ target, state: 'unknown', title: '', updated: '', checked: '', error });
 let memo: { time: number; items: Snapshot[] } | undefined;
 async function inspect(target: Target, signal: AbortSignal): Promise<Snapshot> {
-  // Lista de destinos fixa; nunca consumir URL arbitrária nem tokens do navegador.
-  const path = 'https://api.github.com/repos/ericson-j-santos/' + target.repository + '/issues/' + target.issue;
-  const response = await fetch(path, { signal, cache: 'no-store',
-    headers: { Accept: 'application/vnd.github+json' } });
-  if (!response.ok) throw Error('HTTP ' + response.status + ' (sem leitura confirmada)');
-  const data: unknown = await response.json();
-  if (!data || typeof data !== 'object') throw Error('Contrato JSON inválido');
-  const value = data as Record<string, unknown>;
-  if (value.number !== target.issue || (value.state !== 'open' && value.state !== 'closed')
-    || typeof value.updated_at !== 'string' || typeof value.title !== 'string') {
-    throw Error('Resposta inconsistente');
-  }
-  return { target, state: value.state, title: value.title.slice(0, 170),
-    updated: value.updated_at, checked: new Date().toISOString(), error: '' };
+  const snapshot = await readPublicIssue(target, fetch, signal);
+  return { target, ...snapshot, error: '' };
 }
 function date(iso: string) {
   if (!iso) return 'Não verificada';
@@ -88,7 +71,7 @@ export default function PublicGithubReadOnly() {
               {x.state === 'open' ? 'Issue aberta' : x.state === 'closed' ? 'Issue fechada' : 'Indisponível'}
             </span>
             <a target="_blank" rel="noreferrer"
-              href={'https://github.com/ericson-j-santos/' + x.target.repository + '/issues/' + x.target.issue}>Abrir fonte</a>
+              href={sourceLink(x.target)}>Abrir fonte</a>
           </div>
         </div>)}
       </div>
