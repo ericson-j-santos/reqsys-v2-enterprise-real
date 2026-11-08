@@ -272,6 +272,30 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(meta["selected_pr_numbers"], [103, 102, 101])
         self.assertEqual({item["pull_requests"][0]["number"] for item in runs}, {101, 102, 103})
 
+    def test_recent_pr_fallback_keeps_empty_sample_blocked(self):
+        def fake_api(path: str, token: str):
+            self.assertEqual(token, 'token')
+            if '/pulls?state=all' in path:
+                return [
+                    {'number': 201, 'created_at': '2026-09-22T12:00:00Z',
+                     'updated_at': '2026-09-22T15:20:00Z'},
+                ]
+            if '/pulls/201/commits' in path:
+                return [{'sha': 'sha-201'}]
+            if 'head_sha=sha-201' in path:
+                return {'workflow_runs': []}
+            raise AssertionError(path)
+
+        runs, meta = fetch_recent_pr_sample(
+            'owner', 'repo', 'token',
+            fixed_start_at=START, end_at=END,
+            min_sample_prs=3, max_age_days=7, api_get=fake_api,
+        )
+        self.assertEqual(runs, [])
+        self.assertEqual(meta['observed_prs'], 0)
+        self.assertEqual(meta['selected_pr_numbers'], [])
+        self.assertFalse(meta['target_met'])
+
     def test_incomplete_global_collection_uses_bounded_recent_pr_fallback(self):
         fallback_runs = [
             run(
