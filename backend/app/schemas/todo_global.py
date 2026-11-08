@@ -68,3 +68,25 @@ class TodoGlobalUpsertResponse(BaseModel):
     effect: Literal['created', 'updated', 'unchanged']
     canonical_status: TodoStatus
     readback_verified: bool
+
+
+# Projeção de leitura privada, sem segredos e sem equivalência a prontidão física.
+class TodoGlobalQueueItem(BaseModel):
+    id: str = Field(min_length=1, max_length=300)
+    title: str = Field(min_length=1, max_length=500)
+    project: str | None = Field(default=None, max_length=200)
+    status: Literal['PENDENTE', 'EM ANDAMENTO', 'BLOQUEADO']
+    priority: TodoPriority | None = None
+    blocker: str | None = Field(default=None, max_length=2000)
+    next_action: str | None = Field(default=None, max_length=2000)
+    evidence_url: str | None = Field(default=None, max_length=2000)
+    updated_at: datetime
+
+
+class TodoGlobalQueueResponse(BaseModel):
+    items: list[TodoGlobalQueueItem] = Field(max_length=100)
+    has_more: bool
+    next_cursor: str | None = Field(default=None, max_length=256)
+    source: Literal['notion']
+    read_only: Literal[True]
+    host_admitted: Literal[False]
