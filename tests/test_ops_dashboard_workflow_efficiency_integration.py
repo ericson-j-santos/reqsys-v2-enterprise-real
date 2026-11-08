@@ -62,6 +62,23 @@ class OpsDashboardWorkflowEfficiencyIntegrationTests(unittest.TestCase):
         self.assertLess(packaging, homologation)
         self.assertLess(homologation, publishing)
 
+    def test_real_pr_fallback_precedes_metrics_and_preserves_fail_closed(self):
+        content = WORKFLOW.read_text(encoding='utf-8')
+        collector = content.index('gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100"')
+        fallback = content.index('from enrich_ci_pr_efficiency import fetch_recent_pr_sample')
+        builder = content.index('python scripts/build_pr_workflow_run_metrics.py')
+        gate = content.index('sem amostra real de PRs: proibido fabricar indicador Workflow Efficiency')
+        self.assertLess(collector, fallback)
+        self.assertLess(fallback, builder)
+        self.assertLess(builder, gate)
+        self.assertIn("if build_metrics(original)['summary']['pr_count'] == 0:", content)
+        self.assertIn("if recovered and sample['target_met']:", content)
+        self.assertIn('min_sample_prs=3', content)
+        self.assertIn('max_age_days=7', content)
+        self.assertIn("snapshot.with_name('workflow-runs-global.json').write_bytes", content)
+        self.assertIn("'source': 'github_pr_commit_runs'", content)
+        self.assertNotIn('Generate synthetic Pareto source', content)
+
     def test_parallel_workflow_was_removed(self):
         self.assertFalse(
             DEDICATED_WORKFLOW.exists(),
