@@ -83,7 +83,13 @@ jobs:
           python -m py_compile scripts/homologate_workflow_efficiency_artifact.py
           python -m unittest tests/test_workflow_efficiency_visual_card.py
           python -m unittest tests/test_ops_dashboard_workflow_efficiency_integration.py
-          python -m unittest tests/test_build_pr_workflow_run_metrics.py
+          # Executar o controle negativo real; unittest não descobre funções de pytest.
+          python - <<'PY'
+          from runpy import run_path
+          tests = run_path('tests/test_build_pr_workflow_run_metrics.py')
+          tests['test_build_metrics_without_real_pr_sample_never_reports_green']()
+          print('Workflow Efficiency negative sample check: passed')
+          PY
           python -m unittest tests/scripts/test_enrich_ci_pr_efficiency.py
           python -m unittest tests/test_enrich_reqsys_state_workflow_efficiency.py
           python -m unittest tests/test_homologate_workflow_efficiency_artifact.py
