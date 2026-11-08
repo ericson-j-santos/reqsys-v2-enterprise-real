@@ -189,3 +189,76 @@ class NotionTodoGlobalClient:
             canonical_status=event.todo.status,
             readback_verified=True,
         )
+
+
+    async def read_queue(self, page_size: int = 50, cursor: str | None = None) -> dict[str, Any]:
+        """Projeção privada read-only. Nunca admite host nem atualiza TODO."""
+        if not isinstance(page_size, int) or not 1 <= page_size <= 100:
+            raise NotionTodoGlobalError('todo_read_invalid_page_size')
+        if cursor is not None and (
+            not isinstance(cursor, str)
+            or not 1 <= len(cursor) <= 256
+            or not all(character.isalnum() or character in '-_' for character in cursor)
+        ):
+            raise NotionTodoGlobalError('todo_read_invalid_cursor')
+
+        payload: dict[str, Any] = {
+            'page_size': page_size,
+            'filter': {
+                'or': [
+                    {'property': 'Status', 'select': {'equals': status}}
+                    for status in ('PENDENTE', 'EM ANDAMENTO', 'BLOQUEADO')
+                ]
+            },
+            'sorts': [{'timestamp': 'last_edited_time', 'direction': 'descending'}],
+        }
+        if cursor:
+            payload['start_cursor'] = cursor
+        data = await self._request(
+            'POST', f'/v1/data_sources/{self._data_source_id}/query', payload
+        )
+        results = data.get('results')
+        if not isinstance(results, list) or len(results) > page_size:
+            raise NotionTodoGlobalError('todo_read_invalid_results')
+        has_more = data.get('has_more')
+        next_cursor = data.get('next_cursor')
+        if not isinstance(has_more, bool):
+            raise NotionTodoGlobalError('todo_read_invalid_pagination')
+        if has_more:
+            if not isinstance(next_cursor, str) or not next_cursor:
+                raise NotionTodoGlobalError('todo_read_invalid_pagination')
+        elif next_cursor is not None:
+            raise NotionTodoGlobalError('todo_read_invalid_pagination')
+
+        output: list[dict[str, Any]] = []
+        for page in results:
+            if not isinstance(page, dict) or page.get('object') != 'page':
+                raise NotionTodoGlobalError('todo_read_invalid_page')
+            page_id = page.get('id')
+            updated = page.get('last_edited_time')
+            fields = self._projection_from_page(page)
+            if not isinstance(page_id, str) or not page_id:
+                raise NotionTodoGlobalError('todo_read_invalid_page_id')
+            if not isinstance(updated, str) or not updated:
+                raise NotionTodoGlobalError('todo_read_invalid_updated_at')
+            if fields['Status'] not in {'PENDENTE', 'EM ANDAMENTO', 'BLOQUEADO'}:
+                raise NotionTodoGlobalError('todo_read_unexpected_status')
+            if not isinstance(fields['Título'], str) or not fields['Título']:
+                raise NotionTodoGlobalError('todo_read_missing_title')
+            if fields['Prioridade'] not in {'P0', 'P1', 'P2', 'P3', None}:
+                raise NotionTodoGlobalError('todo_read_unexpected_priority')
+            output.append({
+                'id': page_id,
+                'title': fields['Título'],
+                'project': fields['Projeto'],
+                'status': fields['Status'],
+                'priority': fields['Prioridade'],
+                'blocker': fields['Bloqueio'],
+                'next_action': fields['Próxima ação'],
+                'evidence_url': fields['Evidência URL'],
+                'updated_at': updated,
+            })
+        return {
+            'items': output, 'has_more': has_more, 'next_cursor': next_cursor,
+            'source': 'notion', 'read_only': True, 'host_admitted': False,
+        }
