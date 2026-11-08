@@ -1,34 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import PublicGithubReadOnly from './PublicGithubReadOnly';
 import {
-  Activity,
   AlertCircle,
-  ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
   Ban,
-  BookOpen,
   Check,
-  CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
-  ClipboardCheck,
   Clock3,
   CloudOff,
-  Code2,
   Database,
   Download,
   ExternalLink,
   FileCheck2,
   FileClock,
-  FilePlus2,
   FileText,
   Filter,
   GitBranch,
-  GitPullRequest,
-  HardDrive,
   History,
   House,
   Info,
@@ -48,7 +37,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Upload,
-  Users,
   X,
   Zap,
 } from 'lucide-react';
@@ -577,11 +565,8 @@ function App() {
     [data.demands, query, priority, stateFilter]
   );
   const blocked = data.demands.filter(d => d.state === 'BLOQUEADA').length;
-  const human = data.demands.filter(d => d.human).length;
   const gatesCount = (h: Host) =>
     GATES.filter(g => h.gates[g[0]] === 'declarado').length;
-  const ready = (_h: Host) => false; // Sem integração com autoridade do host: declaração jamais homologa readiness.
-  const nextReady = data.hosts.filter(ready);
   const flow = data.flow;
   const flowValid = Boolean(
     flow.first &&
