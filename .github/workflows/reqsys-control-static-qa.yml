@@ -1,0 +1,42 @@
+name: ReqSys Control static QA - no dispatch
+on:
+  push:
+    branches:
+      - feature/reqsys-control-readonly-dashboard-20261108
+    paths:
+      - 'tools/reqsys-control/**'
+      - '.github/workflows/reqsys-control-static-qa.yml'
+  pull_request:
+    paths:
+      - 'tools/reqsys-control/**'
+      - '.github/workflows/reqsys-control-static-qa.yml'
+permissions:
+  contents: read
+concurrency:
+  group: reqsys-control-static-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qa:
+    name: Typecheck build and read-only contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: tools/reqsys-control
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies without artifacts
+        run: npm install --no-audit --fund=false
+      - name: TypeScript strict verification
+        run: npx tsc --noEmit
+      - name: React/Vite production build
+        run: npm run build
+      - name: Read-only fail-closed contract
+        run: node scripts/verify-contract.mjs
