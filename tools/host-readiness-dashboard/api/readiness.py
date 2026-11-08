@@ -111,9 +111,10 @@ def snapshots(db_path, key, rules_sha, now=None):
     """Histórico append-only relido; banco ausente bloqueia sem criar arquivo."""
     path = Path(db_path)
     if not path.exists():
-        return [], []
-    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
-        rows = db.execute("SELECT event_id,host_id,observed_at,digest,payload FROM evidence ORDER BY observed_at DESC,event_id DESC LIMIT 1000").fetchall()
+        rows = []
+    else:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+            rows = db.execute("SELECT event_id,host_id,observed_at,digest,payload FROM evidence ORDER BY observed_at DESC,event_id DESC LIMIT 1000").fetchall()
     history = []
     current = now or datetime.now(timezone.utc)
     for event_id, host_id, observed_at, digest, raw in rows:
@@ -238,7 +239,8 @@ def main(argv=None):
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        pass
+        # Encerramento intencional: o servidor será fechado no bloco finally.
+        return 0
     finally:
         server.server_close()
     return 0

@@ -99,7 +99,9 @@ class EvidenceTests(unittest.TestCase):
     def test_missing_db_always_blocked(self):
         hosts, hist = snapshots(self.db, KEY, RULES)
         self.assertEqual(hist, [])
-        self.assertEqual(sum(x["ready_for_work"] for x in hosts), 0)
+        self.assertEqual(len(hosts), 3)
+        self.assertTrue(all(h["ready_for_work"] is False for h in hosts))
+        self.assertTrue(all(h["reason"] == "NO_EXTERNAL_EVIDENCE" for h in hosts))
         self.assertFalse(self.db.exists())
 
     def test_conflicting_event_rejected(self):
