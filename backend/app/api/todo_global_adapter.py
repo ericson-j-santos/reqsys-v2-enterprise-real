@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.secrets import get_secret
 from app.core.service_tokens import require_admin_or_service_token
-from app.schemas.todo_global import TodoGlobalUpsertRequest, TodoGlobalUpsertResponse
+from app.schemas.todo_global import (
+    TodoGlobalQueueResponse,
+    TodoGlobalUpsertRequest,
+    TodoGlobalUpsertResponse,
+)
 from app.services.todo_global_notion import (
     NotionTodoGlobalClient,
     NotionTodoGlobalError,
@@ -47,4 +51,26 @@ async def upsert_todo_global(
         try:
             return await notion.upsert(payload)
         except NotionTodoGlobalError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+
+
+# Escopo separado do upsert; um token apenas de leitura jamais grava no Notion.
+require_read_auth = require_admin_or_service_token('todo_global:read')
+
+
+@router.get('/queue', response_model=TodoGlobalQueueResponse)
+async def read_todo_global_queue(
+    page_size: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, min_length=1, max_length=256),
+    _ctx=Depends(require_read_auth),
+) -> TodoGlobalQueueResponse:
+    token, data_source_id = _notion_config()
+    async with httpx.AsyncClient(base_url='https://api.notion.com', timeout=20.0) as client:
+        notion = NotionTodoGlobalClient(client, token, data_source_id)
+        try:
+            result = await notion.read_queue(page_size=page_size, cursor=cursor)
+            return TodoGlobalQueueResponse.model_validate(result)
+        except NotionTodoGlobalError as exc:
+            if str(exc) in {'todo_read_invalid_cursor', 'todo_read_invalid_page_size'}:
+                raise HTTPException(status_code=422, detail=str(exc)) from None
             raise HTTPException(status_code=502, detail=str(exc)) from None
