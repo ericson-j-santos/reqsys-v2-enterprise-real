@@ -44,6 +44,14 @@ def test_build_metrics_groups_workflows_by_pr() -> None:
     assert payload["pull_requests"][1]["failed_runs"] == 1
 
 
+def test_build_metrics_without_real_pr_sample_never_reports_green() -> None:
+    for runs in ([], [{'name': 'Schedule Only', 'status': 'completed', 'conclusion': 'success'}]):
+        report = build_metrics(runs)
+        assert report['summary']['pr_count'] == 0
+        assert report['summary']['pareto_status'] == 'insufficient_data'
+        assert report['summary']['average_workflows_per_pr'] == 0
+        assert not report['pull_requests']
+
 def test_load_runs_accepts_workflow_runs_shape(tmp_path: Path) -> None:
     input_path = tmp_path / "runs.json"
     input_path.write_text(
