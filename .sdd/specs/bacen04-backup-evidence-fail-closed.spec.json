@@ -3,14 +3,14 @@
   "feature_name": "bacen04-backup-evidence-fail-closed",
   "project": "ReqSys v2 Enterprise — BACEN-04",
   "created_at": "2026-11-03",
-  "updated_at": "2026-11-03",
+  "updated_at": "2026-11-07",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": false,
     "tasks": false
   },
-  "description": "Não aprovar evidência BACEN-04 quando a data do ponto de recuperação, o hash da cópia, o RTO ou o estado da quota não são válidos. Este incremento altera apenas o contrato de evidência, não liga backup nem migra ativos legados.",
+  "description": "Não aprovar evidência BACEN-04 quando a data do ponto de recuperação, o hash da cópia, o RTO ou o estado da quota não são válidos. Este incremento altera apenas o contrato de evidência, não liga backup nem migra ativos legados. O mesmo gerador agora produz um corpo rastreável para a Issue #1162, de autoria humana, mantendo evidências desconhecidas explicitamente desconhecidas e sem converter pendências em sucesso.",
   "scope": "bacen04-evidence-contract",
   "files": [
     "scripts/reqsys_free_tier_backup.py",
@@ -22,7 +22,7 @@
     "tests": [
       "tests/test_reqsys_free_tier_backup.py"
     ],
-    "evidence_contract": "Em DEV/STG, RPO desconhecido, fuso ausente, timestamp futuro, hash SHA-256 inválido, RTO inválido ou quota sem métricas numéricas válidas/consistentes, status != healthy ou estatísticas Restic inválidas tornam result=failed; valores inválidos são serializados como null, nunca 0. Teste positivo preserva result=passed com dados válidos. PROD continua desabilitado. CI e testes não substituem restauração isolada real."
+    "evidence_contract": "Em DEV/STG, RPO desconhecido, fuso ausente, timestamp futuro, hash SHA-256 inválido, RTO inválido ou quota sem métricas numéricas válidas/consistentes, status != healthy ou estatísticas Restic inválidas tornam result=failed; valores inválidos são serializados como null, nunca 0. Teste positivo preserva result=passed com dados válidos. PROD continua desabilitado. CI e testes não substituem restauração isolada real. O dashboard BACEN-04 publicado na Issue #1162 mantém as seções obrigatórias de governança de uma Issue humana (13/13 campos incluindo título), com estados de backup e lacunas medidos e sem marcador de exceção de painel de bot; a suíte valida o resultado em amostra sintética."
   },
   "risk": {
     "production": false,
@@ -41,6 +41,8 @@
     "Quota em warning/critical/unknown, sem total/warn/hard numéricos íntegros, com limite inconsistente ou estatísticas Restic inválidas não produz result=passed.",
     "Caso positivo válido continua aprovado, teste negativo falha fechado, teste repetido mantém resultado e não grava dados reais.",
     "READY_FOR_PR, CI e revisão independente pertencem ao HEAD exato; E2E físico DEV e STG de backup externo continuam bloqueados até origem/destino e custo zero comprovados.",
-    "PROD mantém enabled=false, não é habilitado, não recebe segredo nem execução ou autorização implícita."
+    "PROD mantém enabled=false, não é habilitado, não recebe segredo nem execução ou autorização implícita.",
+    "Issue #1162 gerada pela função markdown() é conforme ao contrato de governança para autoria User, mantendo 13 campos, independentemente da ausência de backup real; não aplica a exceção reservada a painéis de bot.",
+    "Testes sintéticos e negativos preservam rollout_pending/unknown, as regras de PROD desabilitado, nenhum valor RPO/RTO inventado e nenhuma reativação Fly.io; READY_FOR_PR, PR, CI e readback exigidos no SHA final."
   ]
 }
