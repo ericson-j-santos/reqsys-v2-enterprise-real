@@ -133,3 +133,56 @@ async def test_queue_api_converte_falha_em_502_sem_expor_token(monkeypatch):
 def test_read_scope_distinto_do_upsert():
     assert api.require_read_auth is not api.require_upsert_auth
     assert api.read_todo_global_queue.__name__ == 'read_todo_global_queue'
+
+
+@pytest.mark.asyncio
+async def test_queue_rejeita_metadados_inconsistentes():
+    base = _page()
+    wrong_timestamp = {**base, 'last_edited_time': 'sem-timezone'}
+    wrong_properties = {**base, 'properties': []}
+    for row, expected in [
+        (wrong_timestamp, 'invalid_updated_at'),
+        (wrong_properties, 'invalid_properties'),
+    ]:
+        data = {'results': [row], 'has_more': False, 'next_cursor': None}
+        async with httpx.AsyncClient(base_url='https://api.notion.com',
+                                     transport=_transport(data, [])) as client:
+            with pytest.raises(NotionTodoGlobalError, match=expected):
+                await NotionTodoGlobalClient(client, 'secret-test', 'ds-test').read_queue()
+
+    malformed_cursor = {'results': [], 'has_more': True, 'next_cursor': 'https://invalid'}
+    async with httpx.AsyncClient(base_url='https://api.notion.com',
+                                 transport=_transport(malformed_cursor, [])) as client:
+        with pytest.raises(NotionTodoGlobalError, match='invalid_pagination'):
+            await NotionTodoGlobalClient(client, 'secret-test', 'ds-test').read_queue()
+
+
+@pytest.mark.asyncio
+async def test_queue_api_publica_apenas_projecao_no_escopo_leitura(monkeypatch):
+    class FakeNotion:
+        def __init__(self, _client, token, data_source_id):
+            assert token == 'secret-test'
+            assert data_source_id == 'ds-test'
+
+        async def read_queue(self, page_size, cursor):
+            assert page_size == 10
+            assert cursor is None
+            return {
+                'items': [{
+                    'id': 'page-001', 'title': 'Host Noteri', 'project': 'Runtime',
+                    'status': 'BLOQUEADO', 'priority': 'P0',
+                    'blocker': 'Sem Gateway', 'next_action': 'Preflight',
+                    'evidence_url': None, 'updated_at': '2026-11-08T10:30:00Z',
+                }],
+                'has_more': False, 'next_cursor': None,
+                'source': 'notion', 'read_only': True, 'host_admitted': False,
+            }
+
+    monkeypatch.setattr(api, '_notion_config', lambda: ('secret-test', 'ds-test'))
+    monkeypatch.setattr(api, 'NotionTodoGlobalClient', FakeNotion)
+    result = await api.read_todo_global_queue(
+        page_size=10, cursor=None, _ctx={'kind': 'admin'}
+    )
+    assert result.items[0].status == 'BLOQUEADO'
+    assert result.host_admitted is False
+    assert 'secret-test' not in result.model_dump_json()
