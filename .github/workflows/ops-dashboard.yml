@@ -266,6 +266,42 @@ jobs:
           mkdir -p artifacts/github-actions
           gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100" \
             > artifacts/github-actions/workflow-runs.json
+          python - <<'PY'
+          # A API global pode não incluir os números das PRs na lista de runs.
+          import json
+          import os
+          import sys
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          sys.path.insert(0, 'scripts')
+          from build_pr_workflow_run_metrics import build_metrics, load_runs
+          from enrich_ci_pr_efficiency import fetch_recent_pr_sample
+
+          snapshot = Path('artifacts/github-actions/workflow-runs.json')
+          original = load_runs(snapshot)
+          if build_metrics(original)['summary']['pr_count'] == 0:
+              owner, repo = os.environ['GITHUB_REPOSITORY'].split('/', 1)
+              now = datetime.now(timezone.utc)
+              recovered, sample = fetch_recent_pr_sample(
+                  owner, repo, os.environ['GH_TOKEN'],
+                  fixed_start_at=now - timedelta(hours=1),
+                  end_at=now,
+                  min_sample_prs=3,
+                  max_age_days=7,
+              )
+              if recovered and sample['target_met']:
+                  snapshot.with_name('workflow-runs-global.json').write_bytes(snapshot.read_bytes())
+                  snapshot.write_text(
+                      json.dumps(
+                          {'workflow_runs': recovered, 'sampling': sample, 'source': 'github_pr_commit_runs'},
+                          ensure_ascii=False, indent=2,
+                      ) + '\n', encoding='utf-8',
+                  )
+                  print(f"Workflow Efficiency: PRs reais recuperadas={sample['observed_prs']}")
+              else:
+                  print('Workflow Efficiency: sem amostra real suficiente no fallback de 7 dias; gate preservado')
+          PY
           python scripts/build_pr_workflow_run_metrics.py
           python - <<'PY'
           import json
