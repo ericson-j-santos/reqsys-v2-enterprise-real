@@ -58,12 +58,12 @@ def _resolver_token(db: Session, token_bruto: str) -> ServiceToken | None:
     return registro
 
 
-def _tem_escopo(registro: ServiceToken, escopo: str) -> bool:
+def _tem_escopo(registro: ServiceToken, escopo: str, *, aceitar_curinga: bool = True) -> bool:
     escopos = json.loads(registro.scopes)
-    return '*' in escopos or escopo in escopos
+    return escopo in escopos or (aceitar_curinga and '*' in escopos)
 
 
-def require_admin_or_service_token(escopo: str):
+def require_admin_or_service_token(escopo: str, *, aceitar_curinga: bool = True):
     """Dependency factory: aceita JWT com papel=admin OU X-Service-Token com o escopo pedido."""
 
     def dependency(
@@ -75,7 +75,7 @@ def require_admin_or_service_token(escopo: str):
             registro = _resolver_token(db, x_service_token)
             if registro is None:
                 raise HTTPException(status_code=401, detail='Token de serviço inválido, expirado ou revogado')
-            if not _tem_escopo(registro, escopo):
+            if not _tem_escopo(registro, escopo, aceitar_curinga=aceitar_curinga):
                 raise HTTPException(status_code=403, detail=f'Token de serviço sem escopo para "{escopo}"')
             registro.last_used_at = datetime.now(timezone.utc)
             db.add(registro)

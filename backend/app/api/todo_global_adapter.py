@@ -51,11 +51,11 @@ async def upsert_todo_global(
         try:
             return await notion.upsert(payload)
         except NotionTodoGlobalError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from None
+            raise HTTPException(status_code=502, detail='Falha na integração com TODO Global') from None
 
 
 # Escopo separado do upsert; um token apenas de leitura jamais grava no Notion.
-require_read_auth = require_admin_or_service_token('todo_global:read')
+require_read_auth = require_admin_or_service_token('todo_global:read', aceitar_curinga=False)
 
 
 @router.get('/queue', response_model=TodoGlobalQueueResponse)
@@ -72,5 +72,5 @@ async def read_todo_global_queue(
             return TodoGlobalQueueResponse.model_validate(result)
         except NotionTodoGlobalError as exc:
             if str(exc) in {'todo_read_invalid_cursor', 'todo_read_invalid_page_size'}:
-                raise HTTPException(status_code=422, detail=str(exc)) from None
-            raise HTTPException(status_code=502, detail=str(exc)) from None
+                raise HTTPException(status_code=422, detail='Parâmetros de consulta inválidos') from None
+            raise HTTPException(status_code=502, detail='Falha na integração com TODO Global') from None
