@@ -50,7 +50,7 @@ async def upsert_todo_global(
         notion = NotionTodoGlobalClient(client, token, data_source_id)
         try:
             return await notion.upsert(payload)
-        except NotionTodoGlobalError as exc:
+        except NotionTodoGlobalError:
             raise HTTPException(status_code=502, detail='Falha na integração com TODO Global') from None
 
 

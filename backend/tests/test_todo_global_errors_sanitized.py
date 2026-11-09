@@ -3,7 +3,6 @@ import ast
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
 
 SOURCE = Path(__file__).resolve().parents[1] / 'app/api/todo_global_adapter.py'
 
