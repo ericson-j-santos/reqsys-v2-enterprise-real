@@ -9,7 +9,24 @@ const tests = JSON.parse(read('../tests/tests.json'));
 const targets = [...adapter.matchAll(/repository: '([^']+)', issue: (\d+)/g)];
 assert.equal(targets.length, 5);
 assert.equal(new Set(targets.map(v => v[1] + '/' + v[2])).size, 5);
-assert.match(adapter, /https:\/\/api\.github\.com\/repos\/ericson-j-santos/);
+// Compara a declaração completa do origin: prefixos/sufixos maliciosos não passam.
+function assertExactOrigin(source, symbol, expectedUrl) {
+  const declarations = source.split(/\r?\n/).filter(line => line.startsWith(`const ${symbol} = `));
+  assert.deepEqual(declarations, [`const ${symbol} = '${expectedUrl}';`]);
+}
+const trustedApi = 'https://api.github.com/repos/ericson-j-santos';
+assertExactOrigin(adapter, 'ORIGIN', trustedApi);
+assertExactOrigin(adapter, 'HTML_ORIGIN', 'https://github.com/ericson-j-santos');
+// Negativos obrigatórios: host semelhante e sufixo hostil falham fechado.
+const originDeclaration = `const ORIGIN = '${trustedApi}';`;
+for (const hostileUrl of [
+  'https://api.github.com.evil.invalid/repos/ericson-j-santos',
+  'https://api.github.com/repos/ericson-j-santos.evil.invalid',
+]) {
+  const changed = adapter.replace(originDeclaration, `const ORIGIN = '${hostileUrl}';`);
+  assert.notEqual(changed, adapter);
+  assert.throws(() => assertExactOrigin(changed, 'ORIGIN', trustedApi));
+}
 assert.match(adapter, /cache: 'no-store'/);
 assert.match(adapter, /if \(!response\?\.ok\)/);
 assert.match(adapter, /data\.number !== source\.issue/);
