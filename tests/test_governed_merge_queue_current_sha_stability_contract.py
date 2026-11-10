@@ -57,3 +57,32 @@ def test_base_head_stability_is_fail_closed() -> None:
     assert "branch_sha" in workflow
     assert "compare_status" in workflow
     assert "PR atrasada ou divergente" in workflow
+
+
+
+def test_missing_context_never_calls_issue_zero() -> None:
+    """An absent or cancelled context must not drive issue/0 labels API."""
+    workflow = workflow_path().read_text(encoding="utf-8")
+    sync = workflow.partition("      - name: Sincronizar label de elegibilidade")[2].partition(
+        "      - name: Publicar evidência de política"
+    )[0]
+    assert "needs.resolve-context.result == 'success'" in sync
+    assert "needs.resolve-context.outputs.pr_number != ''" in sync
+    assert "needs.resolve-context.outputs.pr_number != '0'" in sync
+    assert "Number.isSafeInteger(prNumber)" in sync
+    assert "prNumber < 1" in sync
+    assert "return;" in sync
+    assert "issue_number: prNumber" in sync
+
+
+def test_missing_pr_number_does_not_create_false_eligibility() -> None:
+    """Absent PR number becomes null in the failure receipt; gate remains red."""
+    workflow = workflow_path().read_text(encoding="utf-8")
+    policy = workflow.partition("      - name: Consolidar política e elegibilidade")[2].partition(
+        "      - name: Sincronizar label de elegibilidade"
+    )[0]
+    assert "pr_number: (try ($pr_number | tonumber) catch null)" in policy
+    assert 'if [ "$SDD" != "success" ]' in policy
+    assert 'CI_STATUS="red"' in policy
+    assert 'if [ "$ELIGIBLE" != "true" ]; then' in policy
+    assert "exit 1" in policy

@@ -479,7 +479,7 @@ jobs:
             --slurpfile sha_stability artifacts/governed-merge-queue/current-sha-stability.json \
             '{
               correlation_id: $correlation_id,
-              pr_number: ($pr_number | tonumber),
+              pr_number: (try ($pr_number | tonumber) catch null),
               head_sha: $head_sha,
               base_ref: $base_ref,
               base_sha: $base_sha,
@@ -538,12 +538,17 @@ jobs:
           fi
 
       - name: Sincronizar label de elegibilidade
-        if: always()
+        # Sem contexto resolvido, jamais acessar issues/0 ou alterar labels.
+        if: ${{ always() && needs.resolve-context.result == 'success' && needs.resolve-context.outputs.pr_number != '' && needs.resolve-context.outputs.pr_number != '0' }}
         continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
             const prNumber = Number('${{ needs.resolve-context.outputs.pr_number }}');
+            if (!Number.isSafeInteger(prNumber) || prNumber < 1) {
+              core.warning('Número de PR inválido; sincronização de labels ignorada.');
+              return;
+            }
             const eligible = '${{ steps.policy.outputs.eligible }}' === 'true';
             const label = 'merge-queue:eligible';
             const { owner, repo } = context.repo;

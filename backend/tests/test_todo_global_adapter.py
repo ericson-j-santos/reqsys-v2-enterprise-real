@@ -304,7 +304,7 @@ async def test_adapter_upsert_converte_falha_notion_em_502(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         await adapter_api.upsert_todo_global(event, _ctx={'kind': 'service_token'})
     assert exc_info.value.status_code == 502
-    assert exc_info.value.detail == 'notion_transport_error'
+    assert exc_info.value.detail == 'Falha na integração com TODO Global'
 
 
 def test_router_interno_resolve_e_exige_autenticacao():

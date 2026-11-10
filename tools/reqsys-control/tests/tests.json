@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Bloqueio conservador na tela principal",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "painel operacional",
+      "fila Pareto",
+      "bloqueio de readiness",
+      "ausência de controles remotos",
+      "consulta read-only de issues públicas",
+      "falha fechada de fonte indisponível"
+    ],
+    "description": "Comprova que o painel inicial mostra demandas e hosts sem liberar nenhum executor.",
+    "steps": [
+      "Abrir Visão geral e conferir contadores de demandas e hosts",
+      "Acessar Prontidão dos hosts",
+      "Comparar ready_for_work para Desktop, Lenovo, Noteri e OptiPlex e procurar controles de dispatch/reboot",
+      "Abrir Fontes GitHub, aguardar consulta e inspecionar data/hora ou erro em cada fonte"
+    ],
+    "expected": "Todos os hosts mostram ready_for_work=false; existe uma próxima ação de revalidação documental, sem botões de dispatch ou reboot. A página Fontes GitHub informa data de consulta ou indisponibilidade, sem alterar ready_for_work."
+  },
+  {
+    "name": "Criar demanda e preservá-la após atualização",
+    "viewport": "desktop",
+    "covers": [
+      "cadastro de demanda",
+      "prioridade Pareto",
+      "filtro de fila",
+      "persistência local"
+    ],
+    "description": "Verifica inclusão de demanda auditável e filtro, mantendo o registro no navegador após recarregar.",
+    "steps": [
+      "Abrir Nova demanda, preencher título 'Teste de prontidão DEV', repositório 'ericson-j-santos/reqsys-v2-enterprise-real', evidências exigidas 'Run SHA e readback' e próxima ação 'Inspecionar runner sem mutação'",
+      "Salvar a demanda e abrir Fila de demandas",
+      "Filtrar prioridade P1, confirmar que a nova demanda aparece, e atualizar a página"
+    ],
+    "expected": "A demanda permanece na fila filtrável após o reload, com status aguardando e sem qualquer host liberado."
+  },
+  {
+    "name": "Registrar revalidação sem conceder readiness",
+    "viewport": "mobile",
+    "covers": [
+      "registro de revalidação",
+      "histórico local",
+      "classificação de bloqueio",
+      "fail-closed de autodeclaração",
+      "responsividade"
+    ],
+    "description": "Garante que um formulário manual jamais converte 11/11 requisitos em autorização operacional.",
+    "steps": [
+      "Abrir Prontidão dos hosts e selecionar Noteri",
+      "Abrir Nova revalidação, informar fonte 'run-sintetico-123', observação 'Bloqueio sintético de teste' e declarar todos os gates como OK",
+      "Salvar e consultar Histórico e comparação de hosts"
+    ],
+    "expected": "O histórico contém a declaração, mas Noteri continua com ready_for_work=false e indicação de não homologado."
+  },
+  {
+    "name": "Registrar evidência em uma demanda",
+    "viewport": "desktop",
+    "covers": [
+      "detalhes de demanda",
+      "catálogo de evidências",
+      "validação de URL HTTPS",
+      "trilha de evidência não homologada"
+    ],
+    "description": "Valida registro de fonte, apresentação e preservação do gate independente.",
+    "steps": [
+      "Na Fila, selecionar a demanda E2E Platform Issue #10",
+      "Clicar Registrar evidência, preencher descrição 'Canário informado sem readback' e URL 'https://github.com/ericson-j-santos/e2e-platform/issues/10'",
+      "Salvar e conferir o registro associado à demanda"
+    ],
+    "expected": "A evidência aparece no detalhe com fonte HTTPS e indicação não homologada; o estado da demanda não é liberado."
+  },
+  {
+    "name": "Impedir certificação falsa de continuidade",
+    "viewport": "mobile",
+    "covers": [
+      "guia E2E entre hosts",
+      "distinção de identidade física",
+      "checkpoint e idempotência",
+      "readback independente",
+      "controle negativo"
+    ],
+    "description": "Confirma que selecionar o mesmo computador ou preencher manualmente dados não declara E2E real.",
+    "steps": [
+      "Abrir Fluxo E2E e selecionar o mesmo Desktop em Host A e Host B",
+      "Conferir aviso de identidades idênticas e gate bloqueado",
+      "Trocar Host B para Lenovo e observar que ainda faltam os requisitos externos"
+    ],
+    "expected": "A continuidade física permanece Não comprovada, o executor permanece NÃO liberado, e o painel explicita necessidade de Validator/readback."
+  }
+]
