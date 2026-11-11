@@ -1,5 +1,7 @@
 """Teste de interface estática: não equivale ao E2E físico ou à validação de CI."""
 from pathlib import Path
+import os
+import shutil
 from playwright.sync_api import sync_playwright
 
 HTML = Path(__file__).resolve().parents[1] / 'index.html'
@@ -7,7 +9,7 @@ HTML = Path(__file__).resolve().parents[1] / 'index.html'
 
 def test_preview():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, executable_path=os.environ.get('REQSYS_TEST_CHROMIUM') or shutil.which('chromium') or None)
         page = browser.new_page(viewport={'width': 1300, 'height': 800})
         errors = []
         external = []
