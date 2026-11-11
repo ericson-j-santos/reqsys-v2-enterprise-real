@@ -1,0 +1,88 @@
+[
+  {
+    "name": "Navegar da visão geral ao bloqueio do Broker",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "navegação",
+      "fila Pareto",
+      "detalhes, dependências e próximos passos"
+    ],
+    "description": "Comprova o fluxo principal informativo, sem execução remota.",
+    "steps": [
+      "Abrir Fila Pareto",
+      "Selecionar Recuperar atualização permanente do Broker",
+      "Verificar a issue #3096, o host e o roteiro de preflight"
+    ],
+    "expected": "Detalhes da issue e próxima ação segura aparecem; não há botão de dispatch."
+  },
+  {
+    "name": "Salvar decisão documental com confirmação e persistência",
+    "viewport": "desktop",
+    "covers": [
+      "criação de registro",
+      "confirmação antes de alterar estado local",
+      "logs e persistência após recarga"
+    ],
+    "description": "Comprova registro local intencional e sua retenção no navegador.",
+    "steps": [
+      "Abrir Evidências e comandos e clicar Novo registro",
+      "Escolher Decisão, informar título Teste QA e detalhes Somente leitura",
+      "Clicar Revisar e registrar e confirmar",
+      "Recarregar e conferir Teste QA nos registros e logs"
+    ],
+    "expected": "Teste QA permanece visível, marcado como registro local sem execução em host."
+  },
+  {
+    "name": "Rejeitar SHA malformado no celular",
+    "viewport": "mobile",
+    "covers": [
+      "validação negativa",
+      "responsividade",
+      "bloqueio de readiness automático"
+    ],
+    "description": "Verifica entrada malformada e evita falso positivo.",
+    "steps": [
+      "Abrir Novo registro no celular",
+      "Preencher título Teste inválido, descrição Teste e SHA ABC123",
+      "Tentar registrar, observar erro e fechar o formulário",
+      "Abrir Hosts autorizados"
+    ],
+    "expected": "SHA inválido é rejeitado e todos os hosts permanecem ready_for_work = false."
+  },
+  {
+    "name": "Abrir roteiro de host e etapas E2E",
+    "viewport": "desktop",
+    "covers": [
+      "painel de hosts",
+      "comandos manuais documentais",
+      "etapas preflight a encerramento",
+      "distinção pickup/E2E"
+    ],
+    "description": "Comprova o fluxo seguro sem mutação técnica.",
+    "steps": [
+      "Abrir Hosts autorizados e Registrar comando do Desktop",
+      "Conferir o comando apenas documental e cancelar",
+      "Abrir Fluxo guiado e selecionar Preflight somente leitura",
+      "Conferir gate, cancelar formulário e ler a comparação pickup/E2E"
+    ],
+    "expected": "Roteiros e gates permanecem documentais e nenhum comando é executado."
+  },
+  {
+    "name": "Exportar JSON e hash com limite de prova",
+    "viewport": "desktop",
+    "covers": [
+      "exportação JSON",
+      "cálculo de SHA-256",
+      "limite do checkpoint local"
+    ],
+    "description": "Verifica artefato exportável e mensagem de que não houve sincronização com TODO Global.",
+    "steps": [
+      "Abrir Logs e decisões",
+      "Clicar Exportar JSON + SHA-256",
+      "Verificar a solicitação de download e o digest apresentado",
+      "Conferir que a mensagem nega readback do TODO Global"
+    ],
+    "expected": "JSON exportável com digest SHA-256 exibido; nenhuma integração externa é declarada."
+  }
+]

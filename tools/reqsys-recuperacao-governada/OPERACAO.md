@@ -1,0 +1,3 @@
+# ReqSys Recuperação Governada
+
+Aplicação estática. Sem backend, ações remotas, segredos, mutações físicas ou Docker. Registros são locais e exportados como JSON+SHA-256. GitHub e TODO Global permanecem canônicos. Fonte: chatgpt-operational-rules v1.6.21 main SHA 58dcd4200f412a866278027ba9e433439a03f3b3, projects/reqsys.md e issues #3096, #3138, e2e #10, desktop #31 e noteri #42. Nenhum host é promovido a pronto por declaração local. Custo adicional zero.
