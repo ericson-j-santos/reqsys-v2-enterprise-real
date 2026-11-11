@@ -21,3 +21,5 @@ No SHA `d2fecddd0e4ff3fff4596f11dc7cdd0b7a479aee`, os workflows GitHub Actions `
 
 ## Risco e rollback
 O Chrome do runner pode diferir da revisão de Chromium embarcada pelo Playwright. Os testes reais e regressões do próprio workflow permanecem obrigatórios. Reverter somente estas alterações em PR após revisão, sem rebaixar gates.
+
+- O contrato legado `tests/test_native_postgres_ci_contract.py` também deve exigir a versão binária, a importação de pyodbc e a chamada real do gerenciador; testes negativos rejeitam a remoção de cada verificação. Esse ajuste é reparo do teste da própria dependência alterada, não redução de cobertura.
