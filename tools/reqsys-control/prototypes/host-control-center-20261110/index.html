@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Painel local de planejamento e acompanhamento governado do ReqSys. Nenhum comando é executado nos hosts.">
+  <title>ReqSys Control Center · Execução governada</title>
+  <style>
+:root{--ink:#16273e;--muted:#748196;--line:#e6ebf1;--paper:#fff;--surface:#f5f7fb;--navy:#111f32;--blue:#175ee5;--blue-soft:#ecf3ff;--red:#bd4451;--amber:#af7218;--green:#147b62;--shadow:0 6px 24px rgba(25,43,77,.045)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--surface);color:var(--ink);font:14px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}a{color:inherit}button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #88aeff;outline-offset:2px}.sr-only{position:absolute;width:1px;height:1px;clip:rect(0,0,0,0);overflow:hidden}.shell{min-height:100vh;display:grid;grid-template-columns:253px minmax(0,1fr)}.sidebar{background:var(--navy);color:#b8c5d8;padding:28px 15px 22px;display:flex;flex-direction:column;min-height:100vh}.brand{display:flex;align-items:center;gap:11px;padding:0 14px;color:#fff;margin-bottom:38px}.brand-icon{background:#2e69ef;width:37px;height:37px;display:grid;place-items:center;border-radius:11px;font-size:24px;font-weight:900;position:relative}.brand-icon span{font-size:7px;position:absolute;bottom:9px;right:5px;color:#76f4c2}.brand strong{display:block;font-size:20px;line-height:1.1;letter-spacing:-.5px}.brand small{font-size:8.6px;letter-spacing:2px;color:#7d91ab;font-weight:700}.environment{margin:0 8px 29px;padding:13px 10px;display:flex;gap:10px;align-items:flex-start;border:1px solid #2e405a;background:#182a41;border-radius:9px}.environment b{color:#e0eaf7;display:block;font-size:12px}.environment small{font-size:10px;color:#92a6c0;line-height:1.3;display:block}.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;background:#94a3b8}.dot.amber{background:#e5a44d;box-shadow:0 0 0 3px rgba(229,164,77,.14)}.nav-label{font-size:10px;letter-spacing:1.45px;font-weight:800;color:#7185a0;padding:0 17px;margin-bottom:10px}.sidebar nav{display:flex;flex-direction:column;gap:3px}.nav-link{display:flex;align-items:center;gap:12px;padding:10px 14px;color:#a8b9cf;text-decoration:none;font-weight:550;font-size:12.8px;border-radius:8px}.nav-link:hover,.nav-link.active{color:#fff;background:#263c59}.nav-link.active{box-shadow:inset 3px 0 #5190ff}.nav-symbol{font-size:17px;display:inline-block;text-align:center;width:18px;color:#89a8cf}.nav-number{margin-left:auto;background:#354966;color:#d2e4f9;padding:0 7px;font-size:10px;border-radius:8px}.sidebar-bottom{margin-top:auto}.policy-card{border:1px solid #34465f;background:#1c3049;border-radius:10px;padding:14px;margin:0 7px 12px}.mini-shield{background:#29466b;color:#8bbbff;border-radius:7px;display:inline-grid;place-items:center;width:24px;height:24px;font-size:12px;margin-right:6px}.policy-card strong{font-size:12px;color:#edf4ff}.policy-card p{color:#a8bbd2;font-size:11.5px;line-height:1.6;margin:10px 0}.policy-card small{color:#7993af}.sidebar-external{display:flex;justify-content:space-between;padding:9px 14px;font-size:12px;text-decoration:none;color:#93aac5}.main{min-width:0}.topbar{min-height:74px;border-bottom:1px solid var(--line);background:#fff;display:flex;justify-content:space-between;align-items:center;padding:13px 40px}.breadcrumb{font-size:12px;color:#8792a5}.breadcrumb b{color:#344861;font-weight:650}.breadcrumb span{padding:0 10px;color:#c2ccd8}.topbar-actions{display:flex;align-items:center;gap:20px}.connection{font-size:11px;color:#8e662e;white-space:nowrap}.connection .dot{margin-right:7px}.avatar{background:#e6edff;color:#2650ab;width:31px;height:31px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800}.content{padding:34px 40px 22px;max-width:1680px;margin:0 auto}.page-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px}.eyebrow,.mini-heading{font-size:10px;color:#376bd3;letter-spacing:1.25px;font-weight:800}.page-heading h1{font-size:27px;letter-spacing:-.8px;margin:5px 0 4px;line-height:1.2;font-weight:760}.page-heading p{margin:0;color:var(--muted);font-size:12px}.heading-actions{display:flex;align-items:center;gap:10px}.btn{border:1px solid transparent;display:inline-flex;gap:9px;align-items:center;justify-content:center;padding:9px 14px;font-weight:700;font-size:11.7px;border-radius:8px;min-height:36px;white-space:nowrap;transition:background .15s}.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:#0d4bc1}.btn-light{background:#fff;color:#354863;border-color:#dfe5ed}.btn-light:hover{background:#f5f8fc}.btn-disabled{background:#e8edf3;border-color:#d9e0e8;color:#97a4b4}.pill{display:inline-block;border-radius:30px;padding:5px 10px;font-size:10px;font-weight:750;letter-spacing:.1px;white-space:nowrap}.soft-amber{background:#fff5e4;color:#a8711c}.soft-blue{background:#ebf2ff;color:#3166c8}.soft-purple{background:#f1edff;color:#7562b9}.soft-red{background:#fbeded;color:#a33d49}.soft-grey{background:#f1f3f7;color:#6d7b8c}.notice{display:flex;align-items:center;gap:13px;background:#fff9ec;border:1px solid #f1dfb8;padding:12px 17px;border-radius:10px;margin-bottom:24px}.notice-icon{width:22px;height:22px;border-radius:50%;background:#f5dfaa;color:#91651e;display:grid;place-items:center;font-weight:bold;flex-shrink:0}.notice strong{font-size:12px;color:#785a2b}.notice p{font-size:11px;color:#987947;margin:1px 0 0}.notice-tag{margin-left:auto;font-size:9px;font-weight:800;color:#ae7f30;letter-spacing:.7px;white-space:nowrap}.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin-bottom:19px}.stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:17px 19px;box-shadow:var(--shadow)}.stat-label{display:flex;align-items:center;justify-content:space-between;color:#748299;font-size:11.3px;font-weight:650}.stat-icon{width:25px;height:25px;border-radius:7px;background:#f2f5fb;color:#8da0ba;display:grid;place-items:center;font-size:16px}.stat-value{font-size:30px;line-height:1.2;font-weight:780;letter-spacing:-1px;color:#1b314e;margin:9px 0 7px}.stat-small{font-size:17px;color:#a4afbd;font-weight:500}.stat-value.currency{font-size:25px}.stat-foot{font-size:10px;color:#96a1b0}.stat-foot.caution{color:#b07622}.two-col{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-bottom:19px}.panel{background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);margin-bottom:19px;overflow:hidden}.two-col .panel{margin:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:21px 22px 13px}.panel h2{font-size:16px;margin:4px 0 0;letter-spacing:-.25px;font-weight:760}.panel h3{font-size:13px;margin:12px 0 8px}.text-link{color:#2163d2;background:transparent;border:0;padding:4px 0;font-size:11px;font-weight:720;white-space:nowrap}.text-link:hover{text-decoration:underline}.compact-item{display:flex;gap:12px;align-items:center;padding:12px 22px;border-top:1px solid #f0f2f6}.priority{font-weight:800;font-size:10px;background:#fff0e9;color:#b75c39;border-radius:5px;padding:4px 6px}.priority.p1{background:#edf3ff;color:#3c73cb}.priority.p2{background:#f3f4f6;color:#748196}.compact-item .item-body{flex:1;min-width:0}.compact-item b{font-size:11.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compact-item small{color:#8c97a8;font-size:10px}.compact-item button{border:0;background:transparent;color:#3c76ce;font-weight:800}.gate-list{padding:0 22px}.gate{padding:10px 0;display:flex;align-items:center;gap:9px;border-top:1px solid #f1f3f7;font-size:11.3px;color:#40536b}.gate-mark{color:#b6843d;font-weight:750}.gate-state{margin-left:auto;font-size:10px;color:#ac7b35}.panel-footer{padding:12px 21px;border-top:1px solid #edf0f5;background:#fafbfd;font-size:10.5px;color:#8a98a9}.host-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:4px 22px 22px}.strip-host{border:1px solid #e7ebf1;border-radius:9px;padding:14px;min-width:0;display:flex;align-items:center;gap:10px}.host-symbol{background:#eaf0f9;border-radius:9px;display:grid;place-items:center;height:36px;width:36px;color:#4b71a9;font-size:16px;flex-shrink:0}.strip-host strong{display:block;font-size:11px;overflow-wrap:anywhere}.strip-host small{font-size:9px;color:#a06d2a}.muted{font-size:11px;color:var(--muted);margin:5px 0}.toolbar{display:flex;gap:8px}.toolbar input,.toolbar select,.form-field input,.form-field select{border:1px solid #dbe3ee;background:#fff;border-radius:7px;min-height:35px;padding:7px 10px;color:#38516c;max-width:100%}.toolbar input{width:215px}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}th{background:#f8fafc;color:#8692a3;text-align:left;letter-spacing:.3px;font-size:10px;font-weight:800;padding:13px 17px}td{border-top:1px solid #eef1f5;padding:15px 17px;color:#50617a;vertical-align:middle}td:first-child{min-width:235px}td:last-child{white-space:normal;min-width:180px}tr.clickable{cursor:pointer}tr.clickable:hover{background:#f8faff}td b{color:#1c304c}td small{display:block;color:#96a3b1;font-size:10px}.table-link{color:#2767d0;text-decoration:none}.table-link:hover{text-decoration:underline}.details{padding:21px 23px}.details h2{margin:0 0 8px}.details-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}.detail-field{font-size:11px}.detail-field small{color:#8f9dae;display:block;margin-bottom:5px}.detail-field b{font-weight:700;overflow-wrap:anywhere}.detail-actions{display:flex;gap:9px;flex-wrap:wrap}.section-intro{background:#eef4ff;border:1px solid #dae7ff;padding:15px 18px;border-radius:10px;color:#4c6386;font-size:12px;margin-bottom:18px}.hosts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:20px}.host-card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:20px;box-shadow:var(--shadow)}.host-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.host-top strong{font-size:15px;overflow-wrap:anywhere}.host-top small{display:block;color:#8a96a6;font-size:10.3px}.host-rows{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}.host-check{border:1px solid #eff2f6;border-radius:7px;padding:9px 10px;font-size:10px;color:#6b7a8b;display:flex;justify-content:space-between;gap:9px}.host-check em{font-size:10px;color:#b48a4f;font-style:normal;white-space:nowrap}.host-bottom{border-top:1px solid #e9edf3;margin-top:15px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:#8c98aa;font-size:10px}.comparison{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:6px 22px 22px}.comparison>div{padding:19px;background:#fbfcff;border:1px solid #edf0f6;border-radius:10px}.comparison p{color:#6d7b8d;font-size:11px}.status-no{color:#a66337;font-size:10px;font-weight:650}.flow-steps{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;padding:18px 22px 27px}.flow-step{position:relative;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;color:#697991;font-size:10px;font-weight:650}.flow-step::after{content:'';position:absolute;left:calc(50% + 18px);right:calc(-50% + 18px);height:2px;background:#e8edf4;top:15px}.flow-step:last-child::after{display:none}.flow-step-number{height:32px;width:32px;display:grid;place-items:center;border-radius:50%;border:1px solid #d6dfe9;background:#f4f6fa;color:#a2aeba;font-weight:800;z-index:1}.flow-config{display:grid;grid-template-columns:1.2fr 1.2fr 1fr;gap:14px;padding:14px 22px;border-top:1px solid #f0f2f6}.form-field{min-width:0}.form-field label{display:block;font-size:10px;color:#7d8ca0;font-weight:700;margin-bottom:6px}.form-field select,.form-field input{width:100%}.form-field input[readonly]{background:#f8fafd;color:#8f9aab}.flow-actions{display:flex;gap:9px;padding:7px 22px 20px;flex-wrap:wrap}.decision{background:#fff9f1;border-top:1px solid #f0e0cb;padding:19px 22px;font-size:11px}.decision strong{color:#a26e2b}.decision p{margin:4px 0}.decision ul{padding-left:20px;margin:8px 0 0}.decision li{margin:3px 0}.automation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin-bottom:19px}.automation-card{background:#fff;padding:19px;border:1px solid var(--line);border-radius:11px;display:flex;flex-direction:column;box-shadow:var(--shadow)}.automation-icon{background:#ebf1ff;color:#3971ca;width:36px;height:36px;display:grid;place-items:center;border-radius:9px;font-size:17px}.automation-card h3{margin:15px 0 5px;font-size:13px}.automation-card p{font-size:11px;color:#7e8ba0;margin:0 0 15px;flex:1}.automation-card footer{display:flex;align-items:center;justify-content:space-between;gap:8px}.automation-card footer small{font-size:9px;color:#9e7281}.code-output{background:#101e30;color:#d0e0f7;padding:18px 20px;margin:0 22px 10px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 ui-monospace,Consolas,monospace;max-height:430px;overflow:auto}.audit-layout{grid-template-columns:1.1fr .9fr}.audit-list{padding:5px 23px 22px;min-height:190px;max-height:400px;overflow:auto}.audit-entry{display:flex;gap:12px;border-top:1px solid #eef0f5;padding:12px 0}.audit-entry .event-dot{width:9px;height:9px;border:2px solid #839ac0;border-radius:50%;margin-top:6px;flex-shrink:0}.audit-entry b{font-size:11px}.audit-entry p{font-size:10.5px;color:#7e8da2;margin:1px 0}.audit-entry small{font-size:9px;color:#99a6b7}.upload-zone{margin:15px 22px;cursor:pointer;min-height:137px;border:1.5px dashed #bacde9;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#f9fbff;color:#3766b4}.upload-zone span{font-size:28px}.upload-zone strong{font-size:11px}.upload-zone small{font-size:9px;color:#91a0b4}.upload-result{font-size:11px;padding:0 22px;color:#9b661f}.privacy-note{font-size:10.5px;color:#7c8899;background:#f7f8fb;margin:12px 22px 22px;padding:13px;border-radius:8px}.schema-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:5px 22px 23px}.schema-grid>div{background:#f8fafd;border-radius:8px;padding:14px}.schema-grid b{font-size:11px}.schema-grid p{font-size:10px;color:#8290a4;margin:7px 0 0}.footer{display:flex;justify-content:space-between;gap:12px;color:#99a5b6;font-size:10px;padding:15px 0}.footer code{font-size:9px}
+@media(max-width:1200px){.shell{grid-template-columns:210px 1fr}.content{padding:29px 25px}.topbar{padding:12px 25px}.stats-grid{grid-template-columns:repeat(2,1fr)}.host-strip{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr}.automation-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:780px){.shell{display:block}.sidebar{min-height:0;display:block;padding:12px 14px}.brand{margin:0 0 10px;padding:0}.environment,.sidebar-bottom,.nav-label{display:none}.sidebar nav{display:flex;flex-direction:row;overflow-x:auto;gap:4px}.nav-link{padding:8px 10px;white-space:nowrap}.nav-symbol{display:none}.nav-number{display:none}.topbar{padding:10px 14px;min-height:56px}.connection{display:none}.topbar-actions{gap:10px}.content{padding:22px 14px}.page-heading{align-items:flex-start;flex-direction:column}.page-heading h1{font-size:23px}.heading-actions{width:100%;justify-content:space-between}.stats-grid{gap:9px}.stat{padding:13px}.stat-value{font-size:26px}.notice-tag{display:none}.panel-head{padding:16px}.host-strip{padding:5px 16px 16px}.hosts-grid{grid-template-columns:1fr}.flow-steps{grid-template-columns:repeat(4,1fr);row-gap:16px}.flow-step:nth-child(4)::after{display:none}.flow-config{grid-template-columns:1fr;padding:14px 16px}.flow-actions{padding:10px 16px 17px}.comparison{grid-template-columns:1fr;padding:6px 16px 16px}.schema-grid{grid-template-columns:repeat(2,1fr);padding:5px 16px 16px}.footer{flex-direction:column}.stack-on-mobile{align-items:flex-start;flex-direction:column}.toolbar{width:100%}.toolbar input{width:100%}.toolbar select{width:95px}.automation-grid{grid-template-columns:1fr}.code-output{margin:0 16px 10px}.upload-zone{margin:12px 16px}.privacy-note{margin:12px 16px 16px}.host-bottom{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){.stats-grid,.host-strip{grid-template-columns:1fr}.host-rows{grid-template-columns:1fr}.page-heading h1{font-size:21px}.connection{display:none}.topbar .btn{font-size:10px}.notice{align-items:flex-start}.stat-value{font-size:27px}}
+
+.blocker-grid{padding:6px 22px 22px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.blocker-grid>div{border:1px solid #e9edf4;border-radius:9px;padding:15px;background:#fbfcff}.blocker-grid p{font-size:11px;line-height:1.6;color:#6c7a8d;margin:11px 0 9px}.blocker-grid small{color:#9cabbc;font-size:10px}
+@media(max-width:1000px){.blocker-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:530px){.blocker-grid{grid-template-columns:1fr;padding:6px 16px 16px}}
+
+</style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Menu principal">
+      <div class="brand"><div class="brand-icon">R<span>●</span></div><div><strong>ReqSys</strong><small>CONTROL CENTER</small></div></div>
+      <div class="environment"><span class="dot amber"></span><div><b>Ambiente DEV</b><small>Integração operacional não conectada</small></div></div>
+      <div class="nav-label">VISÃO OPERACIONAL</div>
+      <nav id="sidebar-nav">
+        <a class="nav-link active" href="#visao" data-page="visao"><span class="nav-symbol">◫</span> Visão geral</a>
+        <a class="nav-link" href="#fila" data-page="fila"><span class="nav-symbol">☷</span> Fila Pareto <span class="nav-number" id="nav-queue-count">4</span></a>
+        <a class="nav-link" href="#hosts" data-page="hosts"><span class="nav-symbol">▣</span> Prontidão dos hosts</a>
+        <a class="nav-link" href="#fluxo" data-page="fluxo"><span class="nav-symbol">◇</span> Orquestração</a>
+        <a class="nav-link" href="#automacoes" data-page="automacoes"><span class="nav-symbol">⌘</span> Automações seguras</a>
+        <a class="nav-link" href="#auditoria" data-page="auditoria"><span class="nav-symbol">▤</span> Auditoria & evidências</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="policy-card"><span class="mini-shield">◆</span><strong>Política ativa</strong><p>Fail-closed · Custo adicional R$ 0,00 · Sem comandos diretos</p><small>Regras v1.6.21</small></div>
+        <a href="https://github.com/ericson-j-santos/chatgpt-operational-rules" target="_blank" rel="noopener noreferrer" class="sidebar-external">Regras canônicas <span>↗</span></a>
+      </div>
+    </aside>
+    <main class="main" id="principal">
+      <header class="topbar"><div class="breadcrumb">Plataforma de engenharia <span>/</span> <b id="breadcrumb-current">Visão geral</b></div><div class="topbar-actions"><span class="connection"><span class="dot amber"></span> Plano de controle desconectado</span><button id="export-global" class="btn btn-light" type="button">↓ Exportar relatório</button><div class="avatar" title="Operador local; identidade não autenticada">OP</div></div></header>
+      <div class="content">
+        <div class="page-heading"><div><div class="eyebrow">WORKSPACE / REQSYS ENTERPRISE</div><h1 id="page-title">Centro de execução governada</h1><p id="page-subtitle">Priorização, prontidão e rastreabilidade em uma única visão — sem despacho automático.</p></div><div class="heading-actions"><span class="pill soft-amber">Pré-operacional</span><button class="btn btn-primary" id="open-flow" type="button">Abrir fluxo guiado <span>→</span></button></div></div>
+        <div class="notice"><span class="notice-icon">!</span><div><strong>Modo seguro: apenas leitura, planejamento e preparação.</strong><p>Sem autenticação, gateway, lease e evidência independente, nenhuma tarefa é despachada. Registros no navegador não constituem checkpoint durável nem prontidão certificada.</p></div><span class="notice-tag">FAIL-CLOSED</span></div>
+        <section data-section="visao" id="page-visao">
+          <div class="stats-grid">
+            <article class="stat"><div class="stat-label">Demandas mapeadas <span class="stat-icon">☷</span></div><div class="stat-value" id="stat-tasks">4</div><div class="stat-foot">Referências verificadas no GitHub</div></article>
+            <article class="stat"><div class="stat-label">Hosts certificados <span class="stat-icon">▣</span></div><div class="stat-value">0 <span class="stat-small">/ 4</span></div><div class="stat-foot caution">● Sem atestado confiável de prontidão</div></article>
+            <article class="stat"><div class="stat-label">Despachos autorizados <span class="stat-icon">⇥</span></div><div class="stat-value">0</div><div class="stat-foot">Nenhum executor conectado</div></article>
+            <article class="stat"><div class="stat-label">Custo adicional permitido <span class="stat-icon">◉</span></div><div class="stat-value currency">R$ 0,00</div><div class="stat-foot">Custo desconhecido bloqueia a ação</div></article>
+          </div>
+          <div class="two-col">
+            <section class="panel"><div class="panel-head"><div><div class="mini-heading">PRIORIDADE PARETO</div><h2>Demandas em acompanhamento</h2></div><button class="text-link" data-goto="fila">Ver fila completa →</button></div><div id="overview-queue" class="compact-queue"></div></section>
+            <section class="panel"><div class="panel-head"><div><div class="mini-heading">INTEGRIDADE OPERACIONAL</div><h2>Gates para iniciar trabalho</h2></div><span class="pill soft-amber">0 / 8</span></div><div id="gate-summary" class="gate-list"></div><div class="panel-footer">A execução começa somente após verificação externa de todos os gates obrigatórios.</div></section>
+          </div>
+          <section class="panel"><div class="panel-head"><div><div class="mini-heading">CAPACIDADE DISPONÍVEL</div><h2>Hosts autorizados</h2></div><button class="text-link" data-goto="hosts">Comparar hosts →</button></div><div id="host-strip" class="host-strip"></div></section>
+        </section>
+        <section data-section="fila" id="page-fila" hidden>
+          <div class="panel"><div class="panel-head stack-on-mobile"><div><div class="mini-heading">FONTE / GITHUB · PROJEÇÃO LOCAL</div><h2>Fila de demandas — Pareto proposto</h2><p class="muted">Prioridades propostas para triagem; TODO Global ainda não conectado. Issue aberta não comprova o bloqueio nem a prontidão atual.</p></div><div class="toolbar"><label class="sr-only" for="queue-search">Pesquisar demandas</label><input id="queue-search" type="search" placeholder="Buscar issue, repositório..." autocomplete="off"><label class="sr-only" for="queue-filter">Filtrar classificação</label><select id="queue-filter"><option value="todos">Todas</option><option value="p0">P0</option><option value="p1">P1</option><option value="p2">P2</option></select></div></div><div class="table-scroll"><table><thead><tr><th>Pareto / Demanda</th><th>Origem</th><th>SHA admitido</th><th>Execução</th><th>Host</th><th>Condição</th><th>Próxima ação</th></tr></thead><tbody id="queue-body"></tbody></table></div><div class="panel-footer">Custo de todas as demandas: <b>desconhecido até comprovação</b> — bloqueado para execução; teto autorizado R$ 0,00.</div></div>
+          <section id="selected-task" class="panel details" aria-live="polite"></section>
+        </section>
+        <section data-section="hosts" id="page-hosts" hidden>
+          <div class="section-intro"><strong>Prontidão não é disponibilidade presumida.</strong> Os quatro computadores entram como candidatos; sem identidade atestada, SESSION_LAUNCH_OK, Gateway e exclusividade comprovada, permanecem não aptos.</div>
+          <div id="hosts-grid" class="hosts-grid"></div>
+          <div class="panel"><div class="panel-head"><div><div class="mini-heading">CRITÉRIO DE ACEITE</div><h2>Pickup individual × Continuidade entre hosts</h2></div></div><div class="comparison"><div><span class="pill soft-blue">Pickup individual</span><h3>Uma tarefa em um único host</h3><p>Exige executor identificado, SHA correto, sessão isolada, Gateway, resultado e readback independente naquele computador.</p><span class="status-no">Não comprovado neste painel</span></div><div><span class="pill soft-purple">Continuidade E2E</span><h3>Retomada por um segundo host físico</h3><p>Exige duas identidades físicas distintas, checkpoint durável fora do executor, transferência de lease sem concorrência, replay idempotente e verificação independente.</p><span class="status-no">Não comprovada neste painel</span></div></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="mini-heading">CLASSIFICAÇÃO DO IMPEDIMENTO</div><h2>Quatro estados que não devem ser confundidos</h2></div></div><div class="blocker-grid">
+            <div><span class="pill soft-red">Bloqueio técnico</span><p>Falha reproduzida do Gateway, dependência ou sessão. Registrar erro sanitizado, host, SHA e causa.</p><small>Exige reparo e reteste real</small></div>
+            <div><span class="pill soft-purple">Ação humana</span><p>Consentimento ou permissão não delegável. Preparar diagnóstico e prévia antes da confirmação.</p><small>Exige aprovação explícita por alvo</small></div>
+            <div><span class="pill soft-amber">Falta de evidência</span><p>Fonte, atestado, validação independente ou readback ausentes. Não presumir falha de runtime.</p><small>Exige coleta e verificação</small></div>
+            <div><span class="pill soft-grey">Runner indisponível</span><p>Estado offline ou sem label obtido por API atual. Diferente de erro de código ou pickup.</p><small>Exige reconciliação de readiness</small></div>
+          </div></div>
+        </section>
+        <section data-section="fluxo" id="page-fluxo" hidden>
+          <div class="panel"><div class="panel-head"><div><div class="mini-heading">EXECUTION LANE · MODO PLANEJAMENTO</div><h2>Orquestração em oito gates</h2></div><span class="pill soft-amber">Despacho bloqueado</span></div><div class="flow-steps" id="flow-steps"></div><div class="flow-config"><div class="form-field"><label for="flow-task">Demanda</label><select id="flow-task"></select></div><div class="form-field"><label for="flow-host">Estratégia de host</label><select id="flow-host"><option value="auto">Seleção automática (somente se atestado)</option><option value="DESKTOP-PDQK954">DESKTOP-PDQK954</option><option value="Noteri">Noteri</option><option value="DESKTOP-RP23OGS">DESKTOP-RP23OGS</option><option value="Dell OptiPlex 7080 Micro">Dell OptiPlex 7080 Micro</option></select></div><div class="form-field"><label for="flow-mode">Modo</label><input id="flow-mode" readonly value="DRY_RUN / sem execução real"></div></div><div class="flow-actions"><button id="evaluate-flow" class="btn btn-primary" type="button">Validar pré-condições</button><button id="download-plan" class="btn btn-light" type="button" disabled>↓ Baixar plano JSON</button><button id="dispatch-blocked" class="btn btn-disabled" type="button" disabled title="Gateway não conectado, custo e readiness não comprovados">Despachar tarefa (bloqueado)</button></div><div class="decision" id="flow-decision" aria-live="polite"><strong>Aguardando validação local.</strong><p>O verificador produzirá um diagnóstico, sem executar comandos, reservar leases ou alterar sistemas.</p></div></div>
+        </section>
+        <section data-section="automacoes" id="page-automacoes" hidden>
+          <div class="section-intro">As automações abaixo geram <b>intenções tipadas para revisão</b>. Não enviam requisições para GitHub, hosts ou gateways. A reconciliação administrativa de labels exige confirmação explícita e canal autorizado.</div><div id="automation-grid" class="automation-grid"></div><div class="panel"><div class="panel-head"><div><div class="mini-heading">INTENÇÃO CONTROLADA</div><h2>Prévia da ação</h2></div><span class="pill soft-blue">Sem mutação</span></div><pre id="automation-output" class="code-output" aria-live="polite">Selecione uma automação para gerar o contrato de ação em modo dry-run.</pre><div class="flow-actions"><button id="download-intent" class="btn btn-light" type="button" disabled>↓ Baixar intenção</button><button id="execute-intent" class="btn btn-disabled" type="button" disabled>Execução real indisponível</button></div></div>
+        </section>
+        <section data-section="auditoria" id="page-auditoria" hidden>
+          <div class="two-col audit-layout"><div class="panel"><div class="panel-head"><div><div class="mini-heading">REGISTRO LOCAL · NÃO CANÔNICO</div><h2>Histórico de decisões</h2></div><button class="text-link" id="export-log">Exportar JSON ↓</button></div><div class="audit-list" id="audit-list"></div></div><div class="panel"><div class="panel-head"><div><div class="mini-heading">EVIDÊNCIA & RASTREABILIDADE</div><h2>Importação controlada</h2></div></div><p class="muted">Importe um manifesto JSON de evidência para inspeção local. A importação valida apenas a estrutura, <b>não</b> autentica a origem e nunca libera um host.</p><label class="upload-zone" for="evidence-file"><span>↑</span><strong>Selecionar manifesto JSON</strong><small>Máximo 256 KB · sem segredos e sem dados pessoais</small></label><input type="file" id="evidence-file" accept="application/json,.json" hidden><div id="evidence-result" class="upload-result" role="status"></div><div class="privacy-note"><b>LGPD:</b> não inserir CPF, e-mail, credenciais, token, dados de usuários ou logs brutos. O navegador guarda apenas histórico operacional sintético local. Use exportação e armazenamento governado para persistência externa.</div></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="mini-heading">PROVENIÊNCIA</div><h2>Contrato de evidência necessário</h2></div></div><div class="schema-grid"><div><b>Identidade</b><p>host_id, physical_id, ambiente, labels verificadas, issuer confiável</p></div><div><b>Execução</b><p>issue, base_sha, produced_sha, session_id, worktree, lease_generation</p></div><div><b>Checkpoint</b><p>digest, CAS externo, readback integral, correlation_id, idempotency_key</p></div><div><b>Validação</b><p>Validator independente, gates, custos atestados, E2E e timestamp</p></div></div></div>
+        </section>
+        <footer class="footer"><span>ReqSys Control Center · Entrega local para homologação · Sem conexão com runtime</span><span>Regras <code>58dcd4200f41…</code> · PT-BR · LGPD</span></footer>
+      </div>
+    </main>
+  </div>
+  <script>
+'use strict';
+
+/*
+ * ReqSys Control Center — PROJEÇÃO LOCAL, sem transportador operacional.
+ * Nunca transformar texto importado em comando ou autorização.
+ * Fonte canônica: GitHub e TODO Global; este painel não os substitui.
+ */
+const RULES_SHA = '58dcd4200f412a866278027ba9e433439a03f3b3';
+const STORAGE_KEY = 'reqsys-control-center-audit-v1';
+const TASKS = [
+  {
+    id: 'E2E-10', priority: 'P0', title: 'Certificar retomada física entre hosts',
+    repository: 'ericson-j-santos/e2e-platform', ref: '#10', kind: 'E2E cross-host',
+    url: 'https://github.com/ericson-j-santos/e2e-platform/issues/10',
+    sourceState: 'open', sha: null, host: null,
+    dependencies: 'Dois hosts distintos com readiness validado, lease exclusivo e transporte CAS',
+    evidence: 'physical_id de ambos; SESSION_LAUNCH_OK; checkpoint e digest; readback; replay sem duplicidade',
+    next: 'Reconciliar readiness dos dois hosts somente por leitura'
+  },
+  {
+    id: 'EWP-61', priority: 'P0', title: 'Admissão pré-PR CAS/Validator para Noteri',
+    repository: 'ericson-j-santos/engineering-worker-pool', ref: '#61', kind: 'Feature / pré-PR',
+    url: 'https://github.com/ericson-j-santos/engineering-worker-pool/issues/61',
+    sourceState: 'open', sha: null, host: 'Noteri (candidato)',
+    dependencies: 'Aceite versionado, base SHA, CAS imutável, Validator independente e gate READY_FOR_PR',
+    evidence: 'Issue autorizada; diff real; digest de CAS; testes positivos/negativos; replay; SHA relido',
+    next: 'Validar aceite e ausência da capacidade no SHA corrente'
+  },
+  {
+    id: 'RS-1705', priority: 'P1', title: 'Gateway allowlisted para ações governadas',
+    repository: 'ericson-j-santos/reqsys-v2-enterprise-real', ref: '#1705', kind: 'Gateway / governança',
+    url: 'https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1705',
+    sourceState: 'open', sha: null, host: 'PC24x7 (preferência)',
+    dependencies: 'Capacidade governada atestada, autorização e plano de recuperação',
+    evidence: 'Preflight; contrato allowlisted; assinatura/autorização; logs; validação do efeito e readback',
+    next: 'Ler contrato e gates atuais sem executar comandos'
+  },
+  {
+    id: 'RS-3133', priority: 'P2', title: 'Renovação preventiva do Dashboard Teams',
+    repository: 'ericson-j-santos/reqsys-v2-enterprise-real', ref: '#3133', kind: 'Publicação / governada',
+    url: 'https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3133',
+    sourceState: 'open', sha: null, host: 'Não aplicável antes da autorização',
+    dependencies: 'Gate #1705, SHA esperado, artefato validado, autorização de deploy específica',
+    evidence: 'Artefato íntegro; autorização DEPLOY_PAGES; HTTPS; schema; SHA; idade e cache',
+    next: 'Verificar somente o SHA, o artefato e os gates atuais'
+  }
+];
+const HOSTS = [
+  { id: 'DESKTOP-PDQK954', short: 'Desktop principal', family: 'PC24x7 / Windows', expectedLabels: 'pc24x7 · desktop-runtime · runtime-dev' },
+  { id: 'Noteri', short: 'Notebook autorizado', family: 'Windows / WSL2', expectedLabels: 'A confirmar na política canônica' },
+  { id: 'DESKTOP-RP23OGS', short: 'Desktop Lenovo', family: 'Windows / runner a validar', expectedLabels: 'A confirmar na política canônica' },
+  { id: 'Dell OptiPlex 7080 Micro', short: 'Host IA local candidato', family: 'Windows / Ollama a validar', expectedLabels: 'A confirmar na política canônica' }
+];
+const GATES = [
+  'Identidade física e labels atuais', 'Perfil NORMAL e versão admitida',
+  'SESSION_LAUNCH_OK + state_validated', 'Command Gateway e allowlist',
+  'Worktree limpo e sessão exclusiva', 'Lease exclusivo + fencing',
+  'Custo zero com hard stop comprovado', 'SHA atual + aceite/autorização'
+];
+const STEPS = ['Preflight', 'Seleção do host', 'Execução', 'Checkpoint', 'Validator', 'Replay', 'Readback SHA', 'Encerramento'];
+const AUTOMATIONS = [
+  { id: 'labels', name: 'Reconciliação de labels', icon: '≡', description: 'Comparar labels desejadas e observadas; propor alteração apenas com aprovação administrativa.', type: 'host.labels.reconcile.preview.v1', human: true },
+  { id: 'readiness', name: 'Validação de prontidão', icon: '▣', description: 'Solicitar atestados de identidade, sessão, Gateway, worktree, runner e lease.', type: 'host.readiness.inspect.v1', human: false },
+  { id: 'evidence', name: 'Coleta de evidências', icon: '▤', description: 'Preparar manifesto com hashes, correlation_id, fontes e readback independente.', type: 'evidence.manifest.prepare.v1', human: false },
+  { id: 'cost', name: 'Monitoramento de custos', icon: '◉', description: 'Verificar franquia, limites e bloqueio de overage antes de qualquer execução.', type: 'cost.preflight.inspect.v1', human: false },
+  { id: 'resume', name: 'Retomada controlada', icon: '⇄', description: 'Planejar a transferência de lease e validação do checkpoint em outro host físico.', type: 'execution.resume.prepare.v1', human: false },
+  { id: 'todo', name: 'TODO Global', icon: '☷', description: 'Preparar evento idempotente, sem afirmar entrega à fila ou ao consumidor.', type: 'todo.event.prepare.v1', human: false }
+];
+const PAGE_TEXT = {
+  visao: ['Visão geral', 'Centro de execução governada', 'Priorização, prontidão e rastreabilidade em uma única visão — sem despacho automático.'],
+  fila: ['Fila Pareto', 'Fila de prioridades', 'Demandas rastreáveis com evidências exigidas e próximos passos seguros.'],
+  hosts: ['Prontidão dos hosts', 'Comparativo de computadores', 'Identidade física, isolamento, runner e gates antes de qualquer distribuição.'],
+  fluxo: ['Orquestração', 'Fluxo guiado de execução', 'Seleção e simulação de decisões sem efeitos operacionais reais.'],
+  automacoes: ['Automações seguras', 'Catálogo de automações', 'Ações tipadas e preparadas em modo dry-run; sem executor conectado.'],
+  auditoria: ['Auditoria e evidências', 'Trilha de decisões e evidências', 'Projeção local; para durabilidade real, conectar o gateway e o TODO Global.']
+};
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const readableNow = () => new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+let selectedTask = TASKS[0];
+let currentPlan = null;
+let currentIntent = null;
+let audit = readAudit();
+
+function readAudit() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((r) => r && typeof r.kind === 'string' && typeof r.at === 'string').slice(-80);
+  } catch (_) { return []; }
+}
+function newCorrelation() {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID() : 'local-' + Date.now().toString(36);
+}
+function logEvent(kind, summary, ref = null) {
+  const event = { at: new Date().toISOString(), kind, summary, ref, correlation_id: newCorrelation(), source: 'local_untrusted', rules_sha: RULES_SHA };
+  audit.push(event);
+  audit = audit.slice(-80);
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(audit)); } catch (_) { /* Privacidade/navegação restrita: não inferir persistência. */ }
+  renderAudit();
+}
+function saveJSON(filename, payload) {
+  const content = JSON.stringify(payload, null, 2) + '\n';
+  const objectURL = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = objectURL;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
+}
+function el(tag, className, text) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (text !== undefined) e.textContent = String(text);
+  return e;
+}
+function addField(root, label, value) {
+  const box = el('div', 'detail-field');
+  box.append(el('small', '', label), el('b', '', value));
+  root.append(box);
+}
+function setPage(name) {
+  const page = Object.hasOwn(PAGE_TEXT, name) ? name : 'visao';
+  $$('[data-section]').forEach((s) => { s.hidden = s.dataset.section !== page; });
+  $$('.nav-link').forEach((n) => n.classList.toggle('active', n.dataset.page === page));
+  $('#breadcrumb-current').textContent = PAGE_TEXT[page][0];
+  $('#page-title').textContent = PAGE_TEXT[page][1];
+  $('#page-subtitle').textContent = PAGE_TEXT[page][2];
+  if (location.hash !== '#' + page) location.hash = page;
+  if (page === 'fila') renderQueue();
+  if (page === 'auditoria') renderAudit();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+function priorityTag(priority) {
+  const span = el('span', 'priority ' + priority.toLowerCase(), priority);
+  return span;
+}
+function renderOverview() {
+  $('#stat-tasks').textContent = String(TASKS.length);
+  $('#nav-queue-count').textContent = String(TASKS.length);
+  const root = $('#overview-queue'); root.replaceChildren();
+  TASKS.forEach((task) => {
+    const row = el('div', 'compact-item');
+    row.append(priorityTag(task.priority));
+    const middle = el('div', 'item-body');
+    middle.append(el('b', '', task.title), el('small', '', `${task.repository}  ·  ${task.ref}`));
+    const b = el('button', '', '→'); b.type = 'button'; b.setAttribute('aria-label', 'Ver ' + task.id);
+    b.addEventListener('click', () => { selectedTask = task; setPage('fila'); renderDetail(); });
+    row.append(middle, b); root.append(row);
+  });
+  const gates = $('#gate-summary'); gates.replaceChildren();
+  GATES.forEach((name) => {
+    const row = el('div', 'gate');
+    row.append(el('span', 'gate-mark', '○'), el('span', '', name), el('span', 'gate-state', 'Não atestado'));
+    gates.append(row);
+  });
+  const strip = $('#host-strip'); strip.replaceChildren();
+  HOSTS.forEach((host) => {
+    const row = el('div', 'strip-host');
+    const block = el('div', ''); block.append(el('strong', '', host.id), el('small', '', '● Readiness não comprovado'));
+    row.append(el('span', 'host-symbol', '▣'), block); strip.append(row);
+  });
+}
+function renderQueue() {
+  const body = $('#queue-body'); body.replaceChildren();
+  const search = ($('#queue-search').value || '').trim().toLowerCase();
+  const filter = $('#queue-filter').value;
+  const filtered = TASKS.filter((task) => (filter === 'todos' || task.priority.toLowerCase() === filter) &&
+    `${task.title} ${task.repository} ${task.ref} ${task.id}`.toLowerCase().includes(search));
+  filtered.forEach((task) => {
+    const tr = el('tr', 'clickable'); tr.tabIndex = 0;
+    const first = el('td'); const line = el('div'); line.append(priorityTag(task.priority), document.createTextNode('  '), el('b', '', task.title));
+    first.append(line, el('small', '', task.id + ' · estado operacional: pendente de comprovação'));
+    const ref = el('td'); const link = el('a', 'table-link', task.repository.split('/')[1] + ' ' + task.ref); link.href = task.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    link.addEventListener('click', (event) => event.stopPropagation()); ref.append(link, el('small', '', 'Issue aberta (GitHub)'));
+    const cells = [first, ref, el('td', '', 'Não admitido'), el('td', '', task.kind), el('td', '', task.host || 'A selecionar'), el('td'), el('td', '', task.next)];
+    cells[5].append(el('span', 'pill soft-amber', 'Evidência ausente'));
+    cells.forEach((cell) => tr.append(cell));
+    tr.addEventListener('click', () => { selectedTask = task; renderDetail(); });
+    tr.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectedTask = task; renderDetail(); } });
+    body.append(tr);
+  });
+  if (!filtered.length) { const tr = el('tr'); const td = el('td', '', 'Nenhuma demanda corresponde ao filtro.'); td.colSpan = 7; tr.append(td); body.append(tr); }
+  renderDetail();
+}
+function renderDetail() {
+  const root = $('#selected-task'); root.replaceChildren();
+  root.append(el('div', 'mini-heading', 'DETALHE / ' + selectedTask.id), el('h2', '', selectedTask.title));
+  const grid = el('div', 'details-grid');
+  addField(grid, 'Repositório', selectedTask.repository);
+  addField(grid, 'Issue / PR', selectedTask.ref + ' · Issue aberta');
+  addField(grid, 'SHA admitido', 'Nenhum — conferir base e HEAD');
+  addField(grid, 'Tipo de execução', selectedTask.kind);
+  addField(grid, 'Host selecionado', selectedTask.host || 'Nenhum elegível');
+  addField(grid, 'Custo', 'Desconhecido / bloqueado; teto R$ 0,00');
+  addField(grid, 'Dependências', selectedTask.dependencies);
+  addField(grid, 'Evidências exigidas', selectedTask.evidence);
+  addField(grid, 'Próxima ação segura', selectedTask.next);
+  root.append(grid);
+  const actions = el('div', 'detail-actions');
+  const open = el('a', 'btn btn-light', 'Abrir issue no GitHub ↗'); open.href = selectedTask.url; open.rel = 'noopener noreferrer'; open.target = '_blank';
+  const simulate = el('button', 'btn btn-primary', 'Preparar fluxo seguro →'); simulate.type = 'button';
+  simulate.addEventListener('click', () => { $('#flow-task').value = selectedTask.id; setPage('fluxo'); });
+  actions.append(open, simulate); root.append(actions);
+}
+function renderHosts() {
+  const grid = $('#hosts-grid'); grid.replaceChildren();
+  HOSTS.forEach((host) => {
+    const c = el('article', 'host-card');
+    const top = el('div', 'host-top'); const name = el('div');
+    name.append(el('strong', '', host.id), el('small', '', `${host.short} · ${host.family}`));
+    top.append(name, el('span', 'pill soft-amber', 'Não certificado')); c.append(top);
+    const checks = el('div', 'host-rows');
+    [
+      ['Identidade física', 'Sem atestado'], ['Labels', 'Não lidas'],
+      ['Perfil NORMAL', 'Não aferido'], ['SESSION_LAUNCH_OK', 'Sem prova'],
+      ['Gateway / allowlist', 'Sem prova'], ['Worktree isolado', 'Sem prova'],
+      ['Lease exclusivo', 'Sem prova'], ['Runner / versão', 'Não aferido']
+    ].forEach(([label, value]) => { const row = el('div', 'host-check'); row.append(el('span', '', label), el('em', '', value)); checks.append(row); });
+    c.append(checks);
+    const bottom = el('div', 'host-bottom');
+    bottom.append(el('span', '', 'Labels esperadas: ' + host.expectedLabels), el('b', '', 'ready_for_work = false'));
+    c.append(bottom); grid.append(c);
+  });
+}
+function renderFlow() {
+  const root = $('#flow-steps'); root.replaceChildren();
+  STEPS.forEach((step, index) => { const item = el('div', 'flow-step'); item.append(el('span', 'flow-step-number', index + 1), el('span', '', step)); root.append(item); });
+  const task = $('#flow-task'); task.replaceChildren();
+  TASKS.forEach((item) => { const option = el('option', '', item.priority + ' · ' + item.id + ' · ' + item.title); option.value = item.id; task.append(option); });
+}
+function generatePlan() {
+  const task = TASKS.find((t) => t.id === $('#flow-task').value) || TASKS[0];
+  const requested = $('#flow-host').value;
+  const blockers = [
+    'A fonte canônica TODO Global não está conectada e a autorização do item não foi validada',
+    'Nenhum host possui atestado confiável de identidade física, labels, sessão, Gateway, worktree e lease',
+    'SHA de base e HEAD admitidos não foram verificados',
+    'Custo incremental R$ 0,00 e hard stop não foram comprovados',
+    'Checkpoint CAS externo e Validator independente não estão conectados',
+    'Inexistência de credencial e rota de execução governada para dispatch, replay e readback'
+  ];
+  if (requested !== 'auto') blockers.unshift('Host solicitado ' + requested + ' não foi atestado no ambiente atual');
+  currentPlan = {
+    schema_version: 'reqsys.execution-plan.v1', status: 'BLOCKED_PREFLIGHT',
+    dry_run: true, dispatch_allowed: false, at: new Date().toISOString(),
+    correlation_id: newCorrelation(), request_id: 'PLAN-' + task.id,
+    idempotency_key: `reqsys:plan:${task.repository}:${task.ref}`,
+    rules_sha: RULES_SHA, repository: task.repository, issue: task.ref,
+    base_sha: null, expected_head_sha: null, host_strategy: requested,
+    selected_host: null, cost_ceiling_brl: 0, cost_status: 'COST_UNKNOWN_BLOCKED',
+    blockers, next_safe_action: task.next,
+    stages: STEPS.map((name) => ({ name, state: 'BLOCKED_NOT_ATTESTED' })),
+    notice: 'Documento de planejamento. NÃO é autorização, execução, checkpoint durável ou evidência validada.'
+  };
+  const box = $('#flow-decision'); box.replaceChildren();
+  box.append(el('strong', '', 'Bloqueado: pré-condições ainda não comprovadas.'));
+  box.append(el('p', '', 'Seleção automática: nenhum host elegível. Nenhum efeito operacional foi produzido.'));
+  const ul = el('ul'); blockers.forEach((b) => ul.append(el('li', '', b))); box.append(ul);
+  $('#download-plan').disabled = false;
+  logEvent('PLANEJAMENTO', 'Pré-condições analisadas em modo dry-run: ' + task.id, task.url);
+}
+function renderAutomations() {
+  const grid = $('#automation-grid'); grid.replaceChildren();
+  AUTOMATIONS.forEach((action) => {
+    const card = el('article', 'automation-card');
+    card.append(el('div', 'automation-icon', action.icon), el('h3', '', action.name), el('p', '', action.description));
+    const footer = el('footer'); footer.append(el('small', '', action.human ? 'Aprovação administrativa' : 'Leitura / preparação'));
+    const btn = el('button', 'btn btn-light', 'Gerar prévia →'); btn.type = 'button'; btn.addEventListener('click', () => previewAutomation(action)); footer.append(btn);
+    card.append(footer); grid.append(card);
+  });
+}
+function previewAutomation(action) {
+  currentIntent = {
+    schema_version: 'reqsys.automation-intent.v1', action_type: action.type,
+    dry_run: true, mutation_allowed: false, dispatch_allowed: false,
+    target_environment: 'DEV', target_host: null,
+    correlation_id: newCorrelation(),
+    idempotency_key: 'reqsys:automation:' + action.id + ':dev',
+    expected_head_sha: null, rule_sha: RULES_SHA,
+    administrative_approval_required: action.human,
+    current_status: 'PREPARED_ONLY',
+    requested_at: new Date().toISOString(),
+    safety: { cost_ceiling_brl: 0, cost_verified: false, read_only: true, no_gui: true, no_docker: true, no_reboot: true, no_merge: true },
+    prerequisites: ['Configuração de executor confiável', 'Autorização por alvo e ambiente', 'Readback independente e idempotência', 'Gates e custo comprovados'],
+    comment: 'Prévia local; nunca converter este documento diretamente em comando de shell.'
+  };
+  $('#automation-output').textContent = JSON.stringify(currentIntent, null, 2);
+  $('#download-intent').disabled = false;
+  logEvent('AUTOMAÇÃO', 'Intenção preparada (sem execução): ' + action.name);
+}
+function renderAudit() {
+  const root = $('#audit-list'); root.replaceChildren();
+  if (!audit.length) { root.append(el('p', 'muted', 'Sem registros. Execute uma validação local para produzir um evento auditável nesta sessão.')); return; }
+  audit.slice().reverse().forEach((event) => {
+    const line = el('div', 'audit-entry');
+    const body = el('div'); body.append(el('b', '', event.kind + ' · ' + event.summary),
+      el('p', '', event.ref || 'Fonte: navegador local; não sincronizado com TODO Global'),
+      el('small', '', new Date(event.at).toLocaleString('pt-BR') + ' · ' + event.correlation_id));
+    line.append(el('div', 'event-dot'), body); root.append(line);
+  });
+}
+async function importEvidence(event) {
+  const file = event.target.files && event.target.files[0];
+  const result = $('#evidence-result');
+  result.textContent = '';
+  if (!file) return;
+  try {
+    if (file.size > 262144) throw Error('Arquivo excede 256 KB.');
+    if (!file.name.toLowerCase().endsWith('.json')) throw Error('Apenas JSON é permitido.');
+    const raw = await file.text();
+    if (/"(?:secret|token|password|credential|cpf|senha|authorization|api_key)"\s*:/i.test(raw)) throw Error('Possível dado sensível detectado: importação recusada.');
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Manifesto deve ser um objeto JSON.');
+    if (value.schema_version !== 'reqsys.host-evidence.v1') throw Error('schema_version diferente de reqsys.host-evidence.v1.');
+    if (typeof value.host_id !== 'string' || !HOSTS.some((h) => h.id === value.host_id)) throw Error('host_id não pertence à lista autorizada.');
+    if (typeof value.observed_at !== 'string' || !Number.isFinite(Date.parse(value.observed_at))) throw Error('observed_at inválido ou ausente.');
+    if (!value.claims || typeof value.claims !== 'object' || Array.isArray(value.claims)) throw Error('claims deve ser objeto.');
+    result.textContent = 'Estrutura aceita para inspeção. Origem NÃO autenticada, conteúdo em quarentena e ready_for_work permanece false.';
+    logEvent('EVIDÊNCIA NÃO ATESTADA', 'Manifesto recebido para ' + value.host_id + ' (somente esquema)');
+  } catch (error) {
+    result.textContent = 'Importação recusada: ' + (error instanceof Error ? error.message : 'erro desconhecido');
+    logEvent('IMPORTAÇÃO RECUSADA', 'Manifesto não passou na verificação de formato');
+  } finally { event.target.value = ''; }
+}
+function exportReport() {
+  const report = {
+    schema_version: 'reqsys.dashboard-projection.v1',
+    exported_at: new Date().toISOString(), timezone: 'America/Sao_Paulo',
+    rules_sha: RULES_SHA, source: 'painel local não canônico',
+    live_integration: false, dispatch_count: 0, certified_hosts: 0,
+    cost_ceiling_brl: 0, cost_proof: 'not_available',
+    tasks: TASKS.map((t) => ({...t, status: 'EVIDENCE_PENDING', cost_status: 'COST_UNKNOWN_BLOCKED'})),
+    hosts: HOSTS.map((h) => ({...h, ready_for_work: false, attested: false})),
+    audit_local: audit,
+    notice: 'Não comprova execução, atestação, readback, integração TODO Global ou checkpoint durável.'
+  };
+  saveJSON('reqsys-control-center-relatorio.json', report);
+  logEvent('EXPORTAÇÃO', 'Relatório de projeção local exportado');
+}
+function wire() {
+  $$('.nav-link').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); setPage(link.dataset.page); }));
+  $$('[data-goto]').forEach((link) => link.addEventListener('click', () => setPage(link.dataset.goto)));
+  $('#open-flow').addEventListener('click', () => setPage('fluxo'));
+  $('#export-global').addEventListener('click', exportReport);
+  $('#queue-search').addEventListener('input', renderQueue);
+  $('#queue-filter').addEventListener('change', renderQueue);
+  $('#evaluate-flow').addEventListener('click', generatePlan);
+  $('#flow-task').addEventListener('change', () => { currentPlan = null; $('#download-plan').disabled = true; });
+  $('#flow-host').addEventListener('change', () => { currentPlan = null; $('#download-plan').disabled = true; });
+  $('#download-plan').addEventListener('click', () => { if (currentPlan) saveJSON('reqsys-plano-seguro.json', currentPlan); });
+  $('#download-intent').addEventListener('click', () => { if (currentIntent) saveJSON('reqsys-intencao-dry-run.json', currentIntent); });
+  $('#export-log').addEventListener('click', () => saveJSON('reqsys-auditoria-local.json', { source: 'local_untrusted', rules_sha: RULES_SHA, audit }));
+  $('#evidence-file').addEventListener('change', importEvidence);
+  window.addEventListener('hashchange', () => setPage(location.hash.slice(1)));
+}
+function init() {
+  renderOverview(); renderHosts(); renderFlow(); renderAutomations(); renderQueue(); renderAudit(); wire();
+  setPage(location.hash.slice(1) || 'visao');
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+
+</script>
+</body>
+</html>

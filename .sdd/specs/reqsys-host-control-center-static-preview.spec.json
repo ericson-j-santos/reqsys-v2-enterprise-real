@@ -1,0 +1,24 @@
+{
+  "feature_name": "reqsys-host-control-center-static-preview",
+  "project": "ReqSys Produto / Engineering Control Plane",
+  "created_at": "2026-11-10",
+  "updated_at": "2026-11-10",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Preservar a referência estática do painel de execução governada sem substituir interfaces canônicas, habilitar despacho ou declarar prontidão física.",
+  "sdd_gate": {
+    "tests": [
+      "tools/reqsys-control/prototypes/host-control-center-20261110/tests/test_static_preview.py"
+    ],
+    "evidence_contract": "HTML deve manter 4 hosts ready_for_work=false, botões de despacho desabilitados, estado COST_UNKNOWN_BLOCKED e ausência de chamadas externas. Validação local não comprova E2E físico. CI e READY_FOR_PR devem ser revalidados no novo SHA antes de qualquer PR."
+  },
+  "evidence": [
+    "Issue de aceite preexistente #3139, criada antes do commit 0cba093272025923b455d7218827d533195c3802.",
+    "Pre-PR run 42942327501 no commit 0cba093272025923b455d7218827d533195c3802 bloqueou por SDD_SPEC_REQUIRED; CI falho, não dispensado.",
+    "E2E físico e TODO Global pendentes; nenhuma autorização de merge, deploy, alteração administrativa ou gasto."
+  ]
+}
