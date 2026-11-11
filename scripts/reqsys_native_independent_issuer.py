@@ -11,6 +11,9 @@ import hashlib
 import hmac
 import json
 import re
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -74,11 +77,14 @@ def _verify_witness(witness: dict[str, Any], *, key: bytes,
     sig = witness.get("signature")
     _require(isinstance(p, dict) and set(p) == WITNESS_FIELDS,
              "witness_fields_invalid")
-    _require(isinstance(sig, str) and re.fullmatch(r"[0-9a-f]{64}", sig) is not None,
+    _require(isinstance(sig, str) and re.fullmatch(r"[0-9a-f]{128}", sig) is not None,
              "witness_signature_format_invalid")
-    _require(hmac.compare_digest(sig, hmac.new(key, _canonical_bytes(p),
-                                      hashlib.sha256).hexdigest()),
-             "witness_signature_invalid")
+    try:
+        # A assinatura e verificada com chave publica; o emissor nao assina witness.
+        Ed25519PublicKey.from_public_bytes(key).verify(
+            bytes.fromhex(sig), _canonical_bytes(p))
+    except (InvalidSignature, ValueError, TypeError):
+        raise NativeAdmissionBlocked("witness_signature_invalid") from None
     _require(p["schema_version"] == 1 and p["issuer"] == WITNESS_ISSUER and
              p["source"] == WITNESS_SOURCE and p["repo"] == ALLOWED_REPO,
              "witness_issuer_invalid")
@@ -131,9 +137,8 @@ def issue_independent_receipt(
              execution_context.get("GITHUB_REPOSITORY") == ALLOWED_REPO and
              execution_context.get("GITHUB_SHA") == expected_sha,
              "independent_execution_context_required")
-    _require(isinstance(witness_verifier_key, bytes) and len(witness_verifier_key) >= 32 and
-             isinstance(issuer_signing_key, bytes) and len(issuer_signing_key) >= 32 and
-             not hmac.compare_digest(witness_verifier_key, issuer_signing_key),
+    _require(isinstance(witness_verifier_key, bytes) and len(witness_verifier_key) == 32
+             and isinstance(issuer_signing_key, bytes) and len(issuer_signing_key) >= 32,
              "independent_key_custody_invalid")
     _require(isinstance(expected_sha, str) and SHA40.fullmatch(expected_sha) is not None and
              isinstance(expected_runner_instance_id, str) and
@@ -289,7 +294,12 @@ def main(argv: list[str] | None = None) -> int:
         data = load(args.evidence)
         _require(set(data) == {"launcher", "gateway", "gateway_audit", "checkpoint_readback",
                                "witness"}, "evidence_envelope_invalid")
-        witness_key = os.environ.get("REQSYS_NATIVE_GATEWAY_WITNESS_KEY", "").encode()
+        # Somente chave PUBLICA Ed25519; chave privada do observador pertence a outro dominio.
+        public_hex = os.environ.get("REQSYS_NATIVE_GATEWAY_WITNESS_PUBLIC_KEY", "")
+        try:
+            witness_key = bytes.fromhex(public_hex) if len(public_hex) == 64 else b""
+        except ValueError:
+            witness_key = b""
         signing_key = os.environ.get("REQSYS_NATIVE_VALIDATOR_KEY", "").encode()
         token = os.environ.get("REQSYS_NATIVE_GITHUB_READ_TOKEN", "")
         result = issue_independent_receipt(

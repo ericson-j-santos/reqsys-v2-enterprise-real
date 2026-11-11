@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -21,7 +23,8 @@ NOW = datetime(2026, 11, 11, 16, 0, tzinfo=timezone.utc)
 SHA = "a" * 40
 PC = "reqsys-pc-a1b2c3d4"
 HOST = "host-physical-a1b2c3d4"
-WITNESS_KEY = b"fixture-observer-secret-never-use-in-prod-1"
+WITNESS_PRIVATE = Ed25519PrivateKey.from_private_bytes(b"\x01" * 32)
+WITNESS_PUBLIC = WITNESS_PRIVATE.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
 ISSUER_KEY = b"fixture-issuer-secret-never-use-in-prod-2"
 TOKEN = "github-fake-token-only-for-tests-000000"
 LABELS = ["self-hosted", "Windows", "X64", "reqsys-dev", "reqsys-dev-base-v1",
@@ -38,9 +41,8 @@ def digest(data):
     return hashlib.sha256(_canonical_bytes(data)).hexdigest()
 
 
-def signed(data, key=WITNESS_KEY):
-    return {"payload": data, "signature": hmac.new(key, _canonical_bytes(data),
-                                                   hashlib.sha256).hexdigest()}
+def signed(data, key=WITNESS_PRIVATE):
+    return {"payload": data, "signature": key.sign(_canonical_bytes(data)).hex()}
 
 
 def fixtures():
@@ -103,7 +105,7 @@ def responses():
     }
 
 
-def attempt(*, changes=None, api=None, context=None, witness_key=WITNESS_KEY,
+def attempt(*, changes=None, api=None, context=None, witness_key=WITNESS_PUBLIC,
             issuer_key=ISSUER_KEY, at=NOW):
     launcher, gateway, audit, checkpoint, witness = fixtures()
     x = {"launcher": launcher, "gateway": gateway, "audit": audit,
@@ -141,7 +143,7 @@ def test_verified_external_witness_and_official_github_readback():
     assert result["ready_for_work"] is False
     assert result["dispatch_allowed"] is False
     assert result["continuity_certified"] is False
-    assert all(z not in json.dumps(result) for z in (TOKEN, WITNESS_KEY.decode(), ISSUER_KEY.decode()))
+    assert all(z not in json.dumps(result) for z in (TOKEN, WITNESS_PUBLIC.hex(), ISSUER_KEY.decode()))
 
 
 def test_replay_is_deterministic_and_never_dispatches():
@@ -161,7 +163,7 @@ def test_replay_is_deterministic_and_never_dispatches():
      "gateway_audit_origin_mismatch"),
     (lambda x: x["checkpoint"].update({"lease_exclusive": False}),
      "checkpoint_source_mismatch"),
-    (lambda x: x["witness"].update({"signature": "0"*64}),
+    (lambda x: x["witness"].update({"signature": "0"*128}),
      "witness_signature_invalid"),
     (lambda x: x["witness"]["payload"]["gates"].update({"cost_zero_confirmed": False}),
      "witness_signature_invalid"),
@@ -207,15 +209,16 @@ def test_other_context_cannot_issue(field,value):
 
 
 def test_keys_must_exist_be_distinct_and_outside_host():
-    for key1, key2 in ((b"",ISSUER_KEY), (WITNESS_KEY,b""),
-                       (ISSUER_KEY,ISSUER_KEY)):
+    for key1, key2 in ((b"", ISSUER_KEY), (WITNESS_PUBLIC, b""),
+                       (ISSUER_KEY, ISSUER_KEY)):
         with pytest.raises(NativeAdmissionBlocked, match="independent_key_custody_invalid"):
             attempt(witness_key=key1, issuer_key=key2)
 
 
 def test_self_signed_host_cannot_pose_as_independent_witness():
     def changed(x):
-        x["witness"] = signed(x["witness"]["payload"], ISSUER_KEY)
+        x["witness"] = signed(
+            x["witness"]["payload"], Ed25519PrivateKey.from_private_bytes(b"\x02" * 32))
     with pytest.raises(NativeAdmissionBlocked, match="witness_signature_invalid"):
         attempt(changes=changed)
 
@@ -247,6 +250,30 @@ def test_absent_trust_proof_stops_before_github_query():
     assert calls == []
 
 
+
+def test_public_key_only_verifies_ed25519_without_signing_capability():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    witness = fixtures()[-1]
+    Ed25519PublicKey.from_public_bytes(WITNESS_PUBLIC).verify(
+        bytes.fromhex(witness["signature"]), _canonical_bytes(witness["payload"]))
+    wrong = Ed25519PrivateKey.from_private_bytes(b"\x03" * 32)
+    public = wrong.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    with pytest.raises(NativeAdmissionBlocked, match="witness_signature_invalid"):
+        attempt(witness_key=public)
+
+
+def test_legacy_hmac_and_bad_public_key_fail_closed():
+    for key in (b"", b"x" * 31, b"x" * 33):
+        with pytest.raises(NativeAdmissionBlocked, match="independent_key_custody_invalid"):
+            attempt(witness_key=key)
+    def old_symmetric_witness(x):
+        payload = x["witness"]["payload"]
+        x["witness"] = {"payload": payload, "signature": hmac.new(
+            ISSUER_KEY, _canonical_bytes(payload), hashlib.sha256).hexdigest()}
+    with pytest.raises(NativeAdmissionBlocked, match="witness_signature_format_invalid"):
+        attempt(changes=old_symmetric_witness)
+
+
 def test_cli_missing_keys_does_not_write_receipt_or_contact_network(tmp_path,monkeypatch,capsys):
     p=tmp_path/"policy.json"
     p.write_text(json.dumps(policy()),encoding="utf-8")
@@ -256,7 +283,7 @@ def test_cli_missing_keys_does_not_write_receipt_or_contact_network(tmp_path,mon
                              "gateway_audit":audit,"checkpoint_readback":checkpoint,
                              "witness":witness}),encoding="utf-8")
     out=tmp_path/"receipt.json"
-    for key in ("REQSYS_NATIVE_GATEWAY_WITNESS_KEY","REQSYS_NATIVE_VALIDATOR_KEY",
+    for key in ("REQSYS_NATIVE_GATEWAY_WITNESS_PUBLIC_KEY","REQSYS_NATIVE_VALIDATOR_KEY",
                 "REQSYS_NATIVE_GITHUB_READ_TOKEN"):
         monkeypatch.delenv(key,raising=False)
     for key,value in CTX.items():
@@ -280,7 +307,7 @@ def test_cli_rejects_self_report_without_signed_witness(tmp_path,monkeypatch,cap
                              "gateway_audit":audit,"checkpoint_readback":checkpoint,
                              "witness":{"self_reported":True}}),encoding="utf-8")
     out=tmp_path/"receipt.json"
-    for key,value in {"REQSYS_NATIVE_GATEWAY_WITNESS_KEY":WITNESS_KEY.decode(),
+    for key,value in {"REQSYS_NATIVE_GATEWAY_WITNESS_PUBLIC_KEY":WITNESS_PUBLIC.hex(),
                       "REQSYS_NATIVE_VALIDATOR_KEY":ISSUER_KEY.decode(),
                       "REQSYS_NATIVE_GITHUB_READ_TOKEN":TOKEN, **CTX}.items():
         monkeypatch.setenv(key,value)
