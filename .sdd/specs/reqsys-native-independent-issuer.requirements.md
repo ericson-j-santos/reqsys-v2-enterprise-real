@@ -9,7 +9,7 @@
 5. Não ativar executor físico, workflow, segredos, labels, Docker ou deployment por esta alteração. O operador externo **não está implantado** até registro seguro de custódia e integração física.
 6. O CI de PR deve usar Chrome pré-instalado e validar versão antes dos testes reais dos workflows UX Evidence e CI E2E. Não converter falhas em sucesso/skipped, nem reduzir suíte de testes.
 
-## Aceite incremental
+## Critérios de aceite (Acceptance Criteria)
 
 - Testes positivos com witness e API GitHub simulados e controles negativos por alteração da assinatura, chave, host, SHA, runner, lease, checkpoint, origem, expiração e custo.
 - CLI bloqueia antes de gravar recibo em contexto sem credenciais/sem witness; saída sanitizada e restrita.

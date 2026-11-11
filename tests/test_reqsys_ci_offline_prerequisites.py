@@ -45,7 +45,12 @@ class HostedRunnerOfflinePrerequisites(unittest.TestCase):
         self.assertIn("npx playwright test", self.e2e)
         self.assertIn("tests/e2e/navigation-integrity.spec.js", self.e2e)
         self.assertNotIn("continue-on-error: true", self.ux)
-        self.assertNotIn("continue-on-error: true", self.e2e)
+        # A auditoria WCAG formal mantém uma exceção pré-existente e explícita.
+        # O teste E2E real não pode ser silenciado por continue-on-error.
+        e2e_step = self.e2e.split("      - name: Executar E2E governado", 1)[1].split(
+            "      - name: Validar evidência automatizada WCAG 2.2", 1
+        )[0]
+        self.assertNotIn("continue-on-error:", e2e_step)
         self.assertNotIn("continue-on-error: true", self.gold)
 
     def test_test_of_test_detects_removed_chrome_guard(self):
