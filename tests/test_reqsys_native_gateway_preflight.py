@@ -28,7 +28,7 @@ RUN_ID = 987654321
 
 
 def policy():
-    return json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+    return json.loads((ROOT / "config/reqsys-native-dev-profile.json").read_text(encoding="utf-8"))
 
 
 def signed(payload):
