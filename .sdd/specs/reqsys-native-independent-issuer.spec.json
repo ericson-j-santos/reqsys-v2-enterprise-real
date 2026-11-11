@@ -1,0 +1,18 @@
+{
+  "feature_name": "reqsys-native-independent-issuer",
+  "project": "ReqSys / Runtime Platform / TODO Global",
+  "created_at": "2026-11-11",
+  "updated_at": "2026-11-11",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": false, "tasks": false},
+  "description": "Emissão fail-closed de recibo externo com testemunho criptográfico de Gateway/CAS e consulta oficial GitHub; compatibilidade Chrome dos jobs UX/E2E.",
+  "sdd_gate": {
+    "tests": ["tests/test_reqsys_native_independent_issuer.py", "tests/test_reqsys_ci_offline_prerequisites.py"],
+    "evidence_contract": "Emissão depende de witness externo original, GET oficial GitHub, chaves separadas, SHA, CAS, Gateway e custo confirmado. Resultados não autorizam dispatch ou prontidão física. UX/E2E preservam testes reais sem apt/Chrome download."
+  },
+  "evidence": [
+    "Issue #3138 aberta e PR #3141 draft, base main@ea8cc3a26c65fd84f3abf462fa3f1400ed316e05.",
+    "Workflows UX Evidence Smoke #43054556238 e CI E2E Governado #43054555641 falharam antes dos testes por DNS de apt azure.archive.ubuntu.com.",
+    "Testes usam fixtures locais; autenticação física do emissor e handoff entre hosts não efetuados."
+  ]
+}
