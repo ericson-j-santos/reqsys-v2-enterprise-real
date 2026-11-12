@@ -54,3 +54,8 @@ Reverter `docs/architecture/trilha-a/`, ADR-036, workflow e wrapper; manter `run
 - `docs/runbooks/trilha-a-runtime-publico.md`
 - `docs/agents/runtime-public/README.md`
 - `docs/architecture/trilhas/trilhas-registry.json`
+
+
+## Aditivo — 12/11/2026 (sem substituir o histórico)
+
+O serviço Fly.io foi aposentado. O validador antigo `scripts/runtime_public_validator.py` permanece permanentemente desabilitado. Para o fluxo DEV atual, `scripts/trilha_a_runtime_publico.py` consulta somente o manifesto `infra/public-access-urls.json` (GitHub Pages, localizador assinado, Cloudflare, PC24x7). O novo workflow é somente de relatórios, sem Docker e sem prova de disponibilidade. `passed_with_warnings` aponta falta de confirmação física; nunca serve isoladamente como autorização de merge, deploy ou promoção de HML/PROD. Ver [issue #3145](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3145).

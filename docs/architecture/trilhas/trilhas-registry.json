@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "updated_at": "2026-06-27T18:30:00Z",
+  "updated_at": "2026-11-12T00:00:00Z",
   "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
   "mode": "report_only",
   "governance": {
@@ -15,7 +15,7 @@
       "id": "trilha-a",
       "letter": "A",
       "name": "Runtime Público",
-      "focus": "Fly.io boot resiliente, healthcheck em camadas e validador consolidado",
+      "focus": "DEV GitHub Pages, localizador assinado, Cloudflare, PC24x7; verificacao fisica separada",
       "adr": "docs/adr/ADR-036-trilha-a-runtime-publico.md",
       "runbook": "docs/runbooks/trilha-a-runtime-publico.md",
       "workflow": ".github/workflows/trilha-a-runtime-publico.yml",

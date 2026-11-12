@@ -1,0 +1,26 @@
+{
+  "feature_name": "reqsys-trilhas-pc24x7-no-fly-repair",
+  "project": "ReqSys Produto / Engineering Control Plane",
+  "created_at": "2026-11-12",
+  "updated_at": "2026-11-12",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Reparo do workflow consolidado A-E desativado e Trilha A acoplada a Fly.io; substitui apenas validador estatico por manifesto PC24x7.",
+  "change_type": "repair",
+  "base_sha": "bf1f637eb945e70b27d1b4ea298105ee925aad77",
+  "issue_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3145",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_dev_runtime_manifest.py"
+    ],
+    "evidence_contract": "Teste positivo mais negativos no manifesto, sem E2E; CI report-only passed_with_warnings em configuração estática e failed em erros."
+  },
+  "evidence": [
+    "Trilhas A e A-E em if: false em main e run #43292406878 skipped.",
+    "runtime_public_validator.py retorna PERMANENTLY_RETIRED para Fly.io; contrato DEV em infra/public-access-urls.json."
+  ]
+}

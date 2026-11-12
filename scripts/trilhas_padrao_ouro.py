@@ -97,18 +97,20 @@ def run_validator(trail: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         text=True,
         check=False,
     )
-    if proc.stdout.strip():
-        try:
-            payload = json.loads(proc.stdout)
-            status = payload.get("status", "unknown")
-            if status == "failed":
-                return "failed", payload
-            if status == "passed_with_warnings":
-                return "passed_with_warnings", payload
-            return "passed", payload
-        except json.JSONDecodeError:
-            pass
-    return "failed" if proc.returncode != 0 else "passed", {"exit_code": proc.returncode}
+    if proc.returncode != 0:
+        return "failed", {"exit_code": proc.returncode, "stderr": proc.stderr[-500:]}
+    if not proc.stdout.strip():
+        return "failed", {"reason": "validator_output_missing"}
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return "failed", {"reason": "validator_output_not_json"}
+    if not isinstance(payload, dict):
+        return "failed", {"reason": "validator_payload_not_object"}
+    status = payload.get("status")
+    if status not in ("passed", "passed_with_warnings"):
+        return "failed", {"reason": "validator_status_untrusted", "reported_status": status}
+    return status, payload
 
 
 def trail_status(criteria: dict[str, bool], missing: list[str], report_status: str) -> str:
