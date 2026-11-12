@@ -116,7 +116,7 @@ def run_validator(trail: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
 def trail_status(criteria: dict[str, bool], missing: list[str], report_status: str) -> str:
     if missing:
         return "failed"
-    if report_status in ("failed", "skipped"):
+    if report_status not in ("passed", "passed_with_warnings"):
         return "failed"
     if report_status == "passed_with_warnings":
         return "passed_with_warnings"
