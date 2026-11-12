@@ -2,7 +2,6 @@
 from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import pytest
 from scripts.reqsys_native_workerpool_readback import (
     WorkerPoolGET, read_workerpool_checkpoint,
@@ -60,19 +59,27 @@ def test_positive_and_replay():
     ("lease_expires_at","2020-01-01T00:00:00+00:00"),
 ])
 def test_task_tamper(field,invalid):
-    t,d,c=records();t[field]=invalid
-    with pytest.raises(NativeAdmissionBlocked):observed(t=t)
+    t,d,c=records()
+    t[field]=invalid
+    with pytest.raises(NativeAdmissionBlocked):
+        observed(t=t)
 
 def test_read_only_diagnostics_required():
-    t,d,c=records();d["read_mode"]="sqlite_mode_ro"
-    with pytest.raises(NativeAdmissionBlocked):observed(d=d)
+    t,d,c=records()
+    d["read_mode"]="sqlite_mode_ro"
+    with pytest.raises(NativeAdmissionBlocked):
+        observed(d=d)
 
 def test_diagnostics_race_rejected():
-    t,d,c=records();d["task"]["lease_expires_at"]="2030-01-01T00:00:00+00:00"
-    with pytest.raises(NativeAdmissionBlocked):observed(d=d)
+    t,d,c=records()
+    d["task"]["lease_expires_at"]="2030-01-01T00:00:00+00:00"
+    with pytest.raises(NativeAdmissionBlocked):
+        observed(d=d)
 
 def test_lease_changed_during_readback():
-    t,d,c=records();after=deepcopy(t);after["lease_generation"]=3
+    t,d,c=records()
+    after=deepcopy(t)
+    after["lease_generation"]=3
     with pytest.raises(NativeAdmissionBlocked,match="workerpool_concurrent_change"):
         observed(after=after)
 
@@ -81,8 +88,10 @@ def test_lease_changed_during_readback():
     {"task_id":"cwp-"+"d"*24},{"effect_state":"pending"},{"effect_state":"unknown"},
 ])
 def test_checkpoint_tamper(mutation):
-    t,d,c=records();c["checkpoint"].update(mutation)
-    with pytest.raises(NativeAdmissionBlocked):observed(c=c)
+    t,d,c=records()
+    c["checkpoint"].update(mutation)
+    with pytest.raises(NativeAdmissionBlocked):
+        observed(c=c)
 
 def test_no_network_auth_without_token(tmp_path):
     with pytest.raises(NativeAdmissionBlocked,match="workerpool_token_unavailable"):
@@ -90,13 +99,15 @@ def test_no_network_auth_without_token(tmp_path):
 
 def test_private_token_permissions(tmp_path):
     token=tmp_path/"token"
-    token.write_text("Q"*32);token.chmod(0o644)
+    token.write_text("Q"*32)
+    token.chmod(0o644)
     with pytest.raises(NativeAdmissionBlocked,match="workerpool_token_permissions"):
         WorkerPoolGET(origin="https://api.example.org",token_file=token)
 
 def test_no_unapproved_routes(tmp_path):
     token=tmp_path/"token"
-    token.write_text("Q"*32);token.chmod(0o600)
+    token.write_text("Q"*32)
+    token.chmod(0o600)
     client=WorkerPoolGET(origin="https://api.example.org",token_file=token)
     with pytest.raises(NativeAdmissionBlocked,match="workerpool_route_forbidden"):
         client.get("/v1/tasks")

@@ -6,6 +6,7 @@ falsos explicitamente; prova física exige fontes reais homologadas fora do host
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import ssl
@@ -42,6 +43,14 @@ def origin_checked(origin: str) -> str:
             and p.netloc == host and port is None
             and not (p.path or p.query or p.fragment or p.username or p.password),
             "external_origin_invalid")
+    # Reject numeric IP addresses even when they contain dots; only DNS names
+    # admitted by the independent controller can be used as mTLS origins.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise NativeAdmissionBlocked("external_origin_invalid")
     return origin
 
 

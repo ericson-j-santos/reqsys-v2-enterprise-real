@@ -53,7 +53,7 @@ def test_positive_and_replay_do_not_claim_readiness():
 
 
 @pytest.mark.parametrize("bad", [
-    "http://audit.example.org", "https://localhost", "https://127.0.0.1",
+    "http://audit.example.org", "https://localhost", "https://127.0.0.1", "https://192.168.0.1", "https://8.8.8.8",
     "https://audit.example.org/path", "https://audit.example.org?query=1",
     "https://audit.example.org:443", "https://user:pass@audit.example.org",
     "https://audit.example.org/", "",
