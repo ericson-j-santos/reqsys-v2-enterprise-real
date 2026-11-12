@@ -18,9 +18,9 @@ GOVERNANCE_FILES = [
     "docs/runbooks/trilha-a-runtime-publico.md",
     ".github/workflows/trilha-a-runtime-publico.yml",
     "docs/contracts/trilha-a-runtime-publico.schema.json",
-    "scripts/runtime_public_validator.py",
+    "scripts/validate_dev_runtime_manifest.py",
     "scripts/runtime_url_policy.py",
-    "scripts/validate_publication_sync.py",
+    "infra/public-access-urls.json",
 ]
 
 CAPABILITIES = ["boot_resiliente", "healthcheck_camadas", "validador_consolidado", "probe_publico"]
@@ -48,33 +48,47 @@ def validate() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     else:
         issues.append({"severity": "error", "type": "missing_aac", "target": str(AAC)})
 
-    validator = ROOT / "scripts" / "runtime_public_validator.py"
-    tracks_ok = 0
-    if validator.exists():
+    validator = ROOT / "scripts" / "validate_dev_runtime_manifest.py"
+    if validator.is_file():
         proc = subprocess.run(
-            [sys.executable, str(validator), "--artifact-root", ".", "--skip-docker"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
+            [sys.executable, str(validator)],
+            cwd=ROOT, capture_output=True, text=True, check=False,
         )
-        if proc.stdout.strip():
-            try:
-                payload = json.loads(proc.stdout)
-                tracks = payload.get("tracks", [])
-                tracks_ok = sum(1 for t in tracks if t.get("ok"))
-                summary["validator_ok"] = payload.get("ok", False)
-                summary["operational_status"] = payload.get("summary", {}).get("operational_status")
-                summary["tracks_ok"] = tracks_ok
-                summary["tracks_total"] = len(tracks)
-                if proc.returncode != 0 and not payload.get("ok"):
-                    issues.append({"severity": "warning", "type": "validator_blocking", "target": "runtime_public_validator"})
-            except json.JSONDecodeError:
-                issues.append({"severity": "warning", "type": "validator_output_invalid", "target": "runtime_public_validator"})
-        elif proc.returncode != 0:
-            issues.append({"severity": "warning", "type": "validator_exit_nonzero", "target": proc.stderr[-500:]})
+        try:
+            payload = json.loads(proc.stdout)
+            valid = (
+                proc.returncode == 0
+                and isinstance(payload, dict)
+                and payload.get("ok") is True
+                and payload.get("status") == "passed_with_warnings"
+            )
+            summary["validator_ok"] = valid
+            if isinstance(payload, dict) and isinstance(payload.get("summary"), dict):
+                summary.update(payload["summary"])
+            if not valid:
+                issues.append({
+                    "severity": "error",
+                    "type": "dev_manifest_validation_failed",
+                    "target": "infra/public-access-urls.json",
+                })
+            else:
+                issues.append({
+                    "severity": "warning",
+                    "type": "physical_runtime_and_locator_not_verified",
+                    "target": "PC24x7 / Cloudflare / signed locator",
+                })
+        except (ValueError, TypeError):
+            issues.append({
+                "severity": "error",
+                "type": "dev_manifest_output_untrusted",
+                "target": "scripts/validate_dev_runtime_manifest.py",
+            })
     else:
-        issues.append({"severity": "error", "type": "validator_missing", "target": str(validator)})
+        issues.append({
+            "severity": "error",
+            "type": "dev_manifest_validator_missing",
+            "target": "scripts/validate_dev_runtime_manifest.py",
+        })
 
     return issues, summary
 
