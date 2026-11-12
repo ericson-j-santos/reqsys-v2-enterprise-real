@@ -99,7 +99,7 @@
     { "id": "ADR-PR-AUTO-RECOVERY-V2", "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V2.md", "topic": "ci-cd" },
     { "id": "ADR-PR-AUTO-RECOVERY-V3", "path": "docs/adr/ADR-PR-AUTO-RECOVERY-V3.md", "topic": "ci-cd" },
     { "id": "ADR-USER-FINAL-SHELL", "path": "docs/adr/ADR-USER-FINAL-SHELL-001.md", "topic": "ux" },
-    { "id": "ADR-0001-ENTERPRISE", "path": "docs/ADR/ADR-0001-padrao-ouro-enterprise.md", "topic": "governanca" }
+    { "id": "ADR-0001-ENTERPRISE", "path": "docs/adr/ADR-0001-padrao-ouro-enterprise.md", "topic": "governanca" }
   ],
   "diagrams": [
     { "id": "arquitetura-geral", "source": "docs/architecture/trilha-e/diagrams.json", "legacy": "docs/arquitetura/index.html#diagram-1" },

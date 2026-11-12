@@ -29,7 +29,7 @@ jobs:
 
           arquivos_obrigatorios=(
             "docs/governanca/PADRAO_OURO_ENTERPRISE.md"
-            "docs/ADR/ADR-0001-padrao-ouro-enterprise.md"
+            "docs/adr/ADR-0001-padrao-ouro-enterprise.md"
             ".github/pull_request_template.md"
           )
 
@@ -40,6 +40,11 @@ jobs:
             fi
           done
 
+      - name: Impedir colisao de nomes no checkout Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/test_reqsys_windows_casefold_tree.py
       - name: Validar termos mínimos de governança
         shell: bash
         run: |
