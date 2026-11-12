@@ -1,7 +1,10 @@
 """Tests for existing Worker Pool GET readback. Fixtures are NOT physical proof."""
 from __future__ import annotations
+
+import os
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+
 import pytest
 from scripts.reqsys_native_workerpool_readback import (
     WorkerPoolGET, read_workerpool_checkpoint,
@@ -94,20 +97,36 @@ def test_checkpoint_tamper(mutation):
         observed(c=c)
 
 def test_no_network_auth_without_token(tmp_path):
-    with pytest.raises(NativeAdmissionBlocked,match="workerpool_token_unavailable"):
+    expected = (
+        "workerpool_token_unavailable"
+        if os.name == "posix"
+        else "workerpool_external_posix_required"
+    )
+    with pytest.raises(NativeAdmissionBlocked, match=expected):
         WorkerPoolGET(origin="https://api.example.org",token_file=tmp_path/"missing")
 
 def test_private_token_permissions(tmp_path):
     token=tmp_path/"token"
     token.write_text("Q"*32)
     token.chmod(0o644)
-    with pytest.raises(NativeAdmissionBlocked,match="workerpool_token_permissions"):
+    expected = (
+        "workerpool_token_permissions"
+        if os.name == "posix"
+        else "workerpool_external_posix_required"
+    )
+    with pytest.raises(NativeAdmissionBlocked, match=expected):
         WorkerPoolGET(origin="https://api.example.org",token_file=token)
 
 def test_no_unapproved_routes(tmp_path):
     token=tmp_path/"token"
     token.write_text("Q"*32)
     token.chmod(0o600)
+    if os.name != "posix":
+        with pytest.raises(
+            NativeAdmissionBlocked, match="workerpool_external_posix_required"
+        ):
+            WorkerPoolGET(origin="https://api.example.org", token_file=token)
+        return
     client=WorkerPoolGET(origin="https://api.example.org",token_file=token)
     with pytest.raises(NativeAdmissionBlocked,match="workerpool_route_forbidden"):
         client.get("/v1/tasks")
