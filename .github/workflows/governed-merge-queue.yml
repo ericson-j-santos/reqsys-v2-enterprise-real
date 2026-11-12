@@ -409,6 +409,52 @@ jobs:
           )
           PY
 
+      - name: Exigir prova fisica independente para mudancas no perfil nativo
+        id: native_physical
+        env:
+          EXPECTED_PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = Number(process.env.EXPECTED_PR_NUMBER);
+            const expectedHead = process.env.EXPECTED_HEAD_SHA;
+            core.setOutput('admitted', 'false');
+            core.setOutput('reason', 'native_physical_unverified');
+            if (!Number.isSafeInteger(prNumber) || prNumber < 1 ||
+                !/^[a-f0-9]{40}$/.test(expectedHead || '')) {
+              core.setFailed('NATIVE_PHYSICAL_TARGET_INVALID');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.state !== 'open' || pr.head.sha !== expectedHead) {
+              core.setFailed('NATIVE_PHYSICAL_HEAD_CHANGED');
+              return;
+            }
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            if (!Array.isArray(files) || files.length === 0) {
+              core.setFailed('NATIVE_PHYSICAL_FILES_UNAVAILABLE');
+              return;
+            }
+            const isNativeRuntimeChange = (filename) =>
+              typeof filename === 'string' && (
+                filename === 'config/reqsys-native-dev-profile.json' ||
+                filename === 'scripts/validate_reqsys_native_dev_profile.py' ||
+                filename.startsWith('.github/actions/reqsys-native-') ||
+                (filename.startsWith('scripts/reqsys_native_') && filename.endsWith('.py'))
+              );
+            if (files.some((file) => isNativeRuntimeChange(file.filename))) {
+              // Nao existe emissor externo autenticado, nem E2E fisico comprovado.
+              // CI verde nao libera prontidao, etiqueta ou merge desta capacidade.
+              core.setOutput('reason', 'BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED');
+              core.warning('BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED');
+              return;
+            }
+            core.setOutput('reason', 'not_applicable');
+            core.setOutput('admitted', 'true');
       - name: Consolidar política e elegibilidade
         id: policy
         env:
@@ -426,6 +472,9 @@ jobs:
           CI_STATUS="green"
           RUNTIME_SMOKE="green"
           CONTRACTS="green"
+          if [ "${{ steps.native_physical.outputs.admitted }}" != "true" ]; then
+            CONTRACTS="red"
+          fi
 
           if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ] || [ "$BASE_STABILITY" != "success" ]; then
             CI_STATUS="red"
@@ -467,6 +516,7 @@ jobs:
             --arg base_ref "${{ needs.resolve-context.outputs.base_ref }}" \
             --arg base_sha "${{ needs.resolve-context.outputs.base_sha }}" \
             --arg eligible "$ELIGIBLE" \
+            --arg native_physical_gate "${{ steps.native_physical.outputs.reason }}" \
             --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
             --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
             --arg sdd_contract_result "$SDD" \
@@ -484,6 +534,7 @@ jobs:
               base_ref: $base_ref,
               base_sha: $base_sha,
               eligible: ($eligible == "true"),
+              native_physical_gate: $native_physical_gate,
               allow_auto_merge: ($allow_auto_merge == "true"),
               native_auto_merge_available: ($native_auto_merge_available == "true"),
               merge_path: $merge_path,
@@ -540,7 +591,6 @@ jobs:
       - name: Sincronizar label de elegibilidade
         # Sem contexto resolvido, jamais acessar issues/0 ou alterar labels.
         if: ${{ always() && needs.resolve-context.result == 'success' && needs.resolve-context.outputs.pr_number != '' && needs.resolve-context.outputs.pr_number != '0' }}
-        continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |

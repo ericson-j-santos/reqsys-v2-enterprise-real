@@ -1,0 +1,32 @@
+name: ReqSys DEV native candidate preflight (read-only)
+description: Valida manifesto nativo; nao certifica host ou libera despacho sem Validator externo.
+inputs:
+  manifest-path:
+    description: Caminho absoluto do manifesto DEV user-scoped, sem segredo
+    required: true
+  expected-sha:
+    description: SHA integral do checkout atestado por controlador
+    required: true
+  runner-instance-id:
+    description: ID opaco da instancia, nao o hostname nem o id do GitHub
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Conferir apenas candidato local nativo (sem Docker)
+      shell: powershell
+      env:
+        NATIVE_MANIFEST: ${{ inputs.manifest-path }}
+        NATIVE_EXPECTED_SHA: ${{ inputs.expected-sha }}
+        NATIVE_INSTANCE_ID: ${{ inputs.runner-instance-id }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:GITHUB_SHA -cne $env:NATIVE_EXPECTED_SHA) { throw 'NATIVE_CHECKOUT_SHA_MISMATCH' }
+        python "${{ github.action_path }}\..\..\..\scripts\reqsys_native_gateway_preflight.py" `
+          --mode local `
+          --policy "${{ github.action_path }}\..\..\..\config\reqsys-native-dev-profile.json" `
+          --manifest $env:NATIVE_MANIFEST `
+          --expected-sha $env:NATIVE_EXPECTED_SHA `
+          --runner-instance-id $env:NATIVE_INSTANCE_ID
+        if ($LASTEXITCODE -ne 0) { throw 'NATIVE_LOCAL_PREFLIGHT_BLOCKED' }
+        # O comando retorna apenas LOCAL_PREFLIGHT_ONLY. Jamais aplica labels ou despacha.

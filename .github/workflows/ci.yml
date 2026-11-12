@@ -310,26 +310,21 @@ jobs:
       - name: Test native PostgreSQL helper and workflow contracts offline
         working-directory: .
         run: python -m unittest discover -s tests -p 'test_native_postgres_ci*.py' -v
-      - name: Install ODBC driver (pyodbc dependency)
+      - name: Validate pyodbc binary distribution and ODBC manager (no apt)
         timeout-minutes: 4
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
           set -euo pipefail
-          if dpkg-query -W -f='${Status}' unixodbc-dev 2>/dev/null | grep -q "ok installed"; then
-            echo "unixodbc-dev já está instalado no runner."
-            exit 0
-          fi
-          timeout 120s sudo -E apt-get \
-            -o Acquire::Retries=3 \
-            -o Acquire::http::Timeout=20 \
-            -o Acquire::https::Timeout=20 \
-            update -qq
-          timeout 120s sudo -E apt-get \
-            -o DPkg::Lock::Timeout=60 \
-            -o Acquire::Retries=3 \
-            install -y --no-install-recommends unixodbc-dev
-          dpkg-query -W unixodbc-dev
+          # GitHub-hosted Ubuntu may lose apt DNS; use the pinned upstream wheel.
+          # Do not skip: fail closed if a wheel or runtime driver manager is absent.
+          python -m pip install --only-binary=:all: 'pyodbc==5.2.0'
+          python - <<'PY'
+          import pyodbc
+          if pyodbc.version != '5.2.0':
+              raise SystemExit('PYODBC_VERSION_MISMATCH')
+          if not isinstance(pyodbc.drivers(), list):
+              raise SystemExit('ODBC_MANAGER_INVALID')
+          print('PYODBC_BINARY_AND_ODBC_MANAGER_VALIDATED')
+          PY
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Verificar encoding UTF-8 (anti-mojibake)
@@ -458,8 +453,17 @@ jobs:
             playwright-${{ runner.os }}-
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Validate preinstalled Google Chrome for Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [[ -z "$chrome" || ! -x "$chrome" ]]; then
+            echo "::error::CHROME_PREINSTALLED_MISSING"
+            exit 1
+          fi
+          "$chrome" --version
+          echo "REQSYS_SYSTEM_CHROME=1" >> "$GITHUB_ENV"
       - name: Start Vite dev server
         env:
           VITE_API_URL: /api
