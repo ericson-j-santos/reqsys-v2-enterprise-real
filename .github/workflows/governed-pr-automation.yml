@@ -332,6 +332,24 @@ jobs:
               return;
             }
 
+            const nativeFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            if (!Array.isArray(nativeFiles) || nativeFiles.length === 0) {
+              core.setFailed('NATIVE_PHYSICAL_FILES_UNAVAILABLE');
+              return;
+            }
+            const isNativeRuntimeChange = (filename) =>
+              typeof filename === 'string' && (
+                filename === 'config/reqsys-native-dev-profile.json' ||
+                filename === 'scripts/validate_reqsys_native_dev_profile.py' ||
+                filename.startsWith('.github/actions/reqsys-native-') ||
+                (filename.startsWith('scripts/reqsys_native_') && filename.endsWith('.py'))
+              );
+            if (nativeFiles.some((file) => isNativeRuntimeChange(file.filename))) {
+              core.setFailed('BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED: no authenticated host/lease/checkpoint/E2E receipt');
+              return;
+            }
             const { data: baseRef } = await github.rest.git.getRef({
               owner,
               repo,
@@ -643,6 +661,21 @@ jobs:
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
 
             const failures = [];
+            const nativeFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const isNativeRuntimeChange = (filename) =>
+              typeof filename === 'string' && (
+                filename === 'config/reqsys-native-dev-profile.json' ||
+                filename === 'scripts/validate_reqsys_native_dev_profile.py' ||
+                filename.startsWith('.github/actions/reqsys-native-') ||
+                (filename.startsWith('scripts/reqsys_native_') && filename.endsWith('.py'))
+              );
+            if (!Array.isArray(nativeFiles) || nativeFiles.length === 0) {
+              failures.push('NATIVE_PHYSICAL_FILES_UNAVAILABLE');
+            } else if (nativeFiles.some((file) => isNativeRuntimeChange(file.filename))) {
+              failures.push('BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED: no authenticated host/lease/checkpoint/E2E receipt');
+            }
             if (pr.state !== 'open') failures.push(`PR precisa estar aberto. Estado atual: ${pr.state}`);
             if (pr.draft) failures.push('PR ainda esta em draft.');
             if (!pr.mergeable) failures.push(`PR nao esta mergeable. Valor atual: ${pr.mergeable}`);
