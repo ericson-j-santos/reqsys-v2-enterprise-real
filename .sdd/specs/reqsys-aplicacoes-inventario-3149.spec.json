@@ -9,7 +9,7 @@
     "design": false,
     "tasks": false
   },
-  "description": "Incluir catálogo inicial somente leitura no Painel de Projetos original com identificação de versão/acesso e estado não comprovado, sem substituir ou publicar aplicações externas.",
+  "description": "Incluir catálogo inicial somente leitura no Painel de Projetos original com identificação de versão/acesso e estado não comprovado, sem substituir ou publicar aplicações externas. A rota no frontend passou a negar token sem usuario e prevenir loop se faltar dashboard:read.",
   "origin": {
     "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
     "kind": "feature",
@@ -22,14 +22,18 @@
   "requirements": ".sdd/specs/reqsys-aplicacoes-inventario-3149.requirements.md",
   "sdd_gate": {
     "tests": [
-      "frontend/src/components/__tests__/CatalogoAplicacoes.test.js"
+      "frontend/src/components/__tests__/CatalogoAplicacoes.test.js",
+      "frontend/src/router/catalogoAcesso.spec.js",
+      "frontend/src/router/painelProjetosRoute.spec.js",
+      "frontend/src/stores/__tests__/auth.test.js",
+      "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "Deve impedir que estado de implantação ou código seja exposto como sucesso E2E. Testes positivo/negativo, unicidade, HTTPS seguro e replay; CI/READY_FOR_PR no HEAD, revisão independente e testes E2E reais ainda necessários antes de PR/merge/deploy."
+    "evidence_contract": "Vitest real no Pre-PR HEAD: cinco testes do inventário, cinco testes de navegação RBAC e regressões de rota/auth. Gate executa testes SDD declarados após npm ci/build; teste Python cobre seleção positiva/negativa. Prova real de autenticação servidor e E2E externo continuam pendentes."
   },
   "controls": {
     "new_public_route": false,
     "new_backend": false,
-    "access_control": "route dashboard:read existing, external sites not audited",
+    "access_control": "Route dashboard:read guard with fail-closed missing identity and no root redirect loop; backend RBAC and external sites not validated.",
     "todo_global": "Notion readback under key reqsys:site-catalog:inventory:v1; no automatic consumer",
     "production": false,
     "deploy": false,
