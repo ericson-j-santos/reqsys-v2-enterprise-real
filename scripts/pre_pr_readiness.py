@@ -477,7 +477,7 @@ def frontend_vitest_candidates(files: list[str], root: Path) -> list[str]:
         path = Path(rel)
         if path.is_absolute() or ".." in path.parts or not rel.startswith("frontend/src/"):
             return
-        if not re.search(r"\\.(?:test|spec)\\.[cm]?[jt]sx?$", rel):
+        if not re.search(r"\.(?:test|spec)\.[cm]?[jt]sx?$", rel):
             return
         if (root / path).is_file():
             candidates.add(path.relative_to("frontend").as_posix())
