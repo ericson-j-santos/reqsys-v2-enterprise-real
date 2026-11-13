@@ -466,6 +466,63 @@ def frontend_build(root: Path) -> CheckResult:
     return _timed_check("frontend:build", ["npm", "run", "build"], cwd=frontend)
 
 
+def frontend_vitest_candidates(files: list[str], root: Path) -> list[str]:
+    """Seleciona testes Vitest alterados ou declarados no SDD, sem testes E2E."""
+    candidates: set[str] = set()
+
+    def add_candidate(value: object) -> None:
+        if not isinstance(value, str):
+            return
+        rel = value.replace("\\", "/")
+        path = Path(rel)
+        if path.is_absolute() or ".." in path.parts or not rel.startswith("frontend/src/"):
+            return
+        if not re.search(r"\\.(?:test|spec)\\.[cm]?[jt]sx?$", rel):
+            return
+        if (root / path).is_file():
+            candidates.add(path.relative_to("frontend").as_posix())
+
+    for rel in files:
+        add_candidate(rel)
+        if not (rel.startswith(".sdd/specs/") and rel.endswith(".spec.json")):
+            continue
+        try:
+            payload = json.loads((root / rel).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        gate = payload.get("sdd_gate", {})
+        if not isinstance(gate, dict):
+            continue
+        declared = gate.get("pre_pr_tests", gate.get("tests", []))
+        if isinstance(declared, list):
+            for value in declared:
+                add_candidate(value)
+    return sorted(candidates)
+
+
+def frontend_vitest_checks(files: list[str], root: Path, frontend_build_result: CheckResult) -> list[CheckResult]:
+    """Só declara aprovação após Vitest real no mesmo checkout/HEAD."""
+    candidates = frontend_vitest_candidates(files, root)
+    if not candidates:
+        return []
+    if frontend_build_result.status != "passed":
+        return [
+            CheckResult(
+                "frontend:vitest:targeted",
+                "failed",
+                "build ou instalação falhou; testes Vitest obrigatórios não executados",
+                0.0,
+            )
+        ]
+    return [
+        _timed_check(
+            "frontend:vitest:targeted",
+            ["npm", "run", "test:unit", "--", *candidates],
+            cwd=root / "frontend",
+        )
+    ]
+
+
 def self_test_negative() -> bool:
     with tempfile.TemporaryDirectory(prefix="reqsys-pre-pr-negative-") as tmp:
         root = Path(tmp)
@@ -625,7 +682,9 @@ def main() -> int:
         checks.extend(operational_fast_checks(root))
 
     if "frontend" in profiles:
-        checks.append(frontend_build(root))
+        frontend_result = frontend_build(root)
+        checks.append(frontend_result)
+        checks.extend(frontend_vitest_checks(files, root, frontend_result))
 
     if "backend" in profiles:
         warnings.append("backend alterado: este gate v1 antecipa sintaxe/testes diretamente relacionados; suíte integrada permanece no CI da PR")
