@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#17283c">
+  <meta name="description" content="Painel governado de validação física do ReqSys: hosts, Pareto, evidências, continuidade e readback.">
+  <title>ReqSys · Validação física</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Menu principal">
+      <div class="brand"><div class="brand-icon" aria-hidden="true">R<span>✓</span></div><div><strong>ReqSys</strong><small>VALIDAÇÃO FÍSICA</small></div></div>
+      <div class="sidebar-label">CENTRAL OPERACIONAL</div>
+      <nav id="menu" class="menu" aria-label="Seções">
+        <button class="navitem active" data-view="overview" aria-current="page"><span class="navico">▦</span>Visão geral</button>
+        <button class="navitem" data-view="queue"><span class="navico">☷</span>Fila Pareto</button>
+        <button class="navitem" data-view="hosts"><span class="navico">▤</span>Hosts autorizados</button>
+        <button class="navitem" data-view="cycle"><span class="navico">◎</span>Ciclo E2E</button>
+        <button class="navitem" data-view="evidence"><span class="navico">▧</span>Evidências e logs</button>
+        <button class="navitem" data-view="timeline"><span class="navico">◷</span>Linha do tempo</button>
+        <button class="navitem" data-view="safety"><span class="navico">♧</span>Governança</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="side-status"><span class="dot"></span>Execução remota desativada</div><p>Sem Docker · Sem GUI · Sem comandos automáticos</p><div class="rule-ref">REGRAS 1.6.21<br><span>main @ 58dcd420…</span></div></div>
+    </aside>
+    <main id="conteudo" class="main">
+      <header class="topbar"><div class="path">OPERAÇÕES <span>/</span> <strong id="breadcrumb">VISÃO GERAL</strong></div><div class="top-actions"><span class="live-pill"><span class="dot"></span>Registro local · sem conexão física</span><button id="btnExport" class="btn btn-outline btn-small">↓ Exportar JSON</button></div></header>
+      <div class="page">
+        <section class="page-head"><div><div class="eyebrow">REQSYS / RUNTIME PLATFORM</div><h1 id="pageTitle">Validação física de ponta a ponta</h1><p id="pageSub">Uma visão da execução real, das provas que faltam e das próximas ações seguras.</p></div><div class="head-right"><span class="pill pill-warning">BLOQUEADO PARA HOMOLOGAÇÃO</span><span class="date" id="todayLabel"></span></div></section>
+        <div class="notice" role="status"><span class="notice-icon">!</span><div><strong>Sem comprovação física autenticada nesta sessão.</strong> Os campos abaixo são registros locais. Mesmo quando preenchidos, não tornam um host apto nem encerram o ciclo sem readback independente e evidência canônica no ambiente real.</div></div>
+        <div id="screen" aria-live="polite"></div>
+        <footer class="footer"><span>ReqSys · Painel de governança local</span><span>Sem envio automático · Sem custos adicionais contratados · LGPD: não inserir dados pessoais ou credenciais</span></footer>
+      </div>
+    </main>
+  </div>
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle"><form method="dialog" class="dialog-body"><div class="dialog-symbol">!</div><h2 id="confirmTitle">Confirmar alteração local</h2><p id="confirmMessage"></p><label class="field">Digite <strong id="confirmWordLabel">CONFIRMAR</strong> para prosseguir<input id="confirmInput" type="text" autocomplete="off" maxlength="15" spellcheck="false"></label><div class="dialog-actions"><button class="btn btn-outline" value="cancel">Cancelar</button><button id="confirmOk" class="btn btn-primary" value="ok" disabled>Confirmar</button></div></form></dialog>
+  <input hidden type="file" id="importFile" accept=".json,application/json">
+</body>
+</html>
