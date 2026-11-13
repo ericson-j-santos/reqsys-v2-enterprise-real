@@ -381,3 +381,68 @@ def test_targeted_tests_need_backend_profile_ignores_root_test_sem_backend(tmp_p
 def test_workflow_usa_inferencia_transitiva_para_instalar_backend() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "targeted_tests_need_backend_profile" in workflow
+
+def test_frontend_vitest_targets_changed_and_sdd_declared(tmp_path: Path) -> None:
+    changed_test = tmp_path / "frontend" / "src" / "components" / "__tests__" / "CatalogoAplicacoes.test.js"
+    declared_test = tmp_path / "frontend" / "src" / "router" / "painelProjetosRoute.spec.js"
+    changed_test.parent.mkdir(parents=True)
+    declared_test.parent.mkdir(parents=True)
+    changed_test.write_text("it('ok', () => {})", encoding="utf-8")
+    declared_test.write_text("it('ok', () => {})", encoding="utf-8")
+
+    spec = tmp_path / ".sdd" / "specs" / "catalogo.spec.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps({
+            "sdd_gate": {
+                "tests": [
+                    "frontend/src/router/painelProjetosRoute.spec.js",
+                    "frontend/tests/e2e/nao-vitest.spec.js",
+                    "../frontend/src/router/painelProjetosRoute.spec.js",
+                ]
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    result = MODULE.frontend_vitest_candidates(
+        [
+            "frontend/src/components/__tests__/CatalogoAplicacoes.test.js",
+            ".sdd/specs/catalogo.spec.json",
+        ],
+        tmp_path,
+    )
+    assert result == [
+        "src/components/__tests__/CatalogoAplicacoes.test.js",
+        "src/router/painelProjetosRoute.spec.js",
+    ]
+
+
+def test_frontend_vitest_blocks_when_install_or_build_failed(tmp_path: Path) -> None:
+    test_file = tmp_path / "frontend" / "src" / "foo.test.js"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("it('ok', () => {})", encoding="utf-8")
+    failed_build = MODULE.CheckResult("frontend:build", "failed", "npm failed", 1.0)
+    checks = MODULE.frontend_vitest_checks(["frontend/src/foo.test.js"], tmp_path, failed_build)
+    assert len(checks) == 1
+    assert checks[0].status == "failed"
+    assert "não executados" in checks[0].detail
+
+
+def test_frontend_vitest_executes_selected_tests_without_implicit_package_download(monkeypatch, tmp_path: Path) -> None:
+    test_file = tmp_path / "frontend" / "src" / "foo.test.js"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("it('ok', () => {})", encoding="utf-8")
+    calls: list[tuple[str, list[str], Path | None]] = []
+
+    def fake_timed_check(name: str, command: list[str], *, cwd: Path | None = None):
+        calls.append((name, command, cwd))
+        return MODULE.CheckResult(name, "passed", "1 test passed", 1.0)
+
+    monkeypatch.setattr(MODULE, "_timed_check", fake_timed_check)
+    ok_build = MODULE.CheckResult("frontend:build", "passed", "ok", 1.0)
+    results = MODULE.frontend_vitest_checks(["frontend/src/foo.test.js"], tmp_path, ok_build)
+    assert len(results) == 1
+    assert calls == [
+        ("frontend:vitest:targeted", ["npm", "run", "test:unit", "--", "src/foo.test.js"], tmp_path / "frontend")
+    ]
