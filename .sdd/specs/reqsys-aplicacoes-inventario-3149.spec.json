@@ -1,0 +1,50 @@
+{
+  "feature_name": "reqsys-aplicacoes-inventario-3149",
+  "project": "ReqSys Produto",
+  "created_at": "2026-11-13",
+  "updated_at": "2026-11-13",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Incluir catálogo inicial somente leitura no Painel de Projetos original com identificação de versão/acesso e estado não comprovado, sem substituir ou publicar aplicações externas.",
+  "origin": {
+    "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
+    "kind": "feature",
+    "source_mode": "assisted",
+    "model_calls": 0,
+    "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+    "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
+    "idempotency_key": "reqsys:site-catalog:inventory:v1"
+  },
+  "requirements": ".sdd/specs/reqsys-aplicacoes-inventario-3149.requirements.md",
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/components/__tests__/CatalogoAplicacoes.test.js"
+    ],
+    "evidence_contract": "Deve impedir que estado de implantação ou código seja exposto como sucesso E2E. Testes positivo/negativo, unicidade, HTTPS seguro e replay; CI/READY_FOR_PR no HEAD, revisão independente e testes E2E reais ainda necessários antes de PR/merge/deploy."
+  },
+  "controls": {
+    "new_public_route": false,
+    "new_backend": false,
+    "access_control": "route dashboard:read existing, external sites not audited",
+    "todo_global": "Notion readback under key reqsys:site-catalog:inventory:v1; no automatic consumer",
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "extra_cost_brl": 0
+  },
+  "acceptance_criteria": [
+    "15 IDs únicos com fonte, código, estado e próximo passo.",
+    "8 URLs AppDeploy exibidas como publicadas sem E2E.",
+    "Filtro e renderização com estado vazio e link externo seguro.",
+    "Rota de Painel de Projetos preservada sem autenticação nova.",
+    "Vitest e build aprovados no SHA final.",
+    "Pre-PR readiness e SDD aprovados no SHA final.",
+    "E2E operacional e validação independente exigidos antes da integração/publicação.",
+    "TODO Global sincronizado por chave sem duplicação."
+  ]
+}
