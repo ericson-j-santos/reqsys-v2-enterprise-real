@@ -134,14 +134,26 @@ router.beforeEach(async (to) => {
     const redirect = destinoSeguroParaLogin(to)
     return { path: '/login', query: redirect ? { redirect } : {} }
   }
-  if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) {
+  // Um token salvo sem usuario/permissoes nao equivale a sessao admitida.
+  if (!to.meta.public && auth.autenticado && !auth.usuario) {
+    try {
+      await auth.atualizarSessao()
+    } catch {
+      // Sem recibo autenticado atualizado, negar a rota (fail-closed).
+    }
+    if (!auth.autenticado || !auth.usuario) {
+      return { path: '/login', query: { redirect: to.fullPath, reset: 'security' } }
+    }
+  }
+  if (to.meta.recurso && !auth.pode(to.meta.recurso)) {
     try {
       await auth.atualizarSessao()
     } catch {
       // 401 é tratado como reset de sessão; demais falhas preservam fail-closed.
     }
     if (auth.pode(to.meta.recurso)) return true
-    if (!auth.autenticado) {
+    // A pagina raiz tambem exige dashboard:read: evite redirecionamento circular.
+    if (!auth.autenticado || to.path === '/') {
       return { path: '/login', query: { redirect: to.fullPath, reset: 'security' } }
     }
     return {
