@@ -129,3 +129,23 @@ def test_responsivo_sem_rolagem_horizontal(page):
     navegar(page, 'hosts')
     assert page.locator('.host-card').count() == 3
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+
+def test_importacao_html_malicioso_nao_executa_script(page):
+    """Entrada externa continua texto: nenhuma tag/handler pode ser executada."""
+    payload = page.evaluate('ReqSysPainelTeste.state()')
+    ataque = '<img src=x onerror="window.__ataque=1"><script>window.__ataque=1</script>'
+    payload['events'] = [{
+        'id': 'EV-NEG', 'title': ataque, 'kind': 'diagnostico',
+        'at': '2026-11-13T10:00:00Z', 'step': 1, 'host': 'Noteri',
+        'command': ataque, 'result': ataque,
+    }]
+    page.locator('#importFile').set_input_files({
+        'name': 'dados-negativos.json', 'mimeType': 'application/json',
+        'buffer': json.dumps(payload).encode('utf-8'),
+    })
+    confirmar(page, 'SUBSTITUIR')
+    navegar(page, 'timeline')
+    assert page.locator('#timelineResults').locator('img, script, iframe, svg').count() == 0
+    assert page.evaluate('window.__ataque ?? null') is None
+    assert '<img src=x onerror=' in page.locator('#timelineResults').inner_text()
+    assert page.evaluate('ReqSysPainelTeste.accepted()') == 0

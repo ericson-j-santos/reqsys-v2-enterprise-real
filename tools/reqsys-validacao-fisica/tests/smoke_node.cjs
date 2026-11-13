@@ -4,13 +4,19 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const code=fs.readFileSync(require('node:path').join(__dirname,'../app.js'),'utf8');
 const events=new Map();
-function elem(id){return {id,innerHTML:'',textContent:'',value:'',dataset:{},classList:{toggle(){}},addEventListener(event,cb){events.set(id+':'+event,cb);},setAttribute(){},removeAttribute(){},scrollIntoView(){},click(){},appendChild(){},remove(){},style:{},focus(){}};}
+function elem(id){return {id,innerHTML:'',textContent:'',value:'',dataset:{},classList:{toggle(){}},addEventListener(event,cb){events.set(id+':'+event,cb);},setAttribute(){},removeAttribute(){},scrollIntoView(){},click(){},appendChild(){},replaceChildren(f){this.innerHTML=f.items.map(n=>n.nodeValue||'').join('');},remove(){},style:{},focus(){}};}
 const elems=new Map();
 const get=id=>{if(!elems.has(id))elems.set(id,elem(id));return elems.get(id);};
 const navs=['overview','queue','hosts','cycle','evidence','timeline','safety'].map(v=>{const x=elem('nav-'+v);x.dataset.view=v;return x;});
-const doc={querySelector:get,querySelectorAll(sel){if(sel==='.navitem')return navs;return[];},createElement:elem,body:{appendChild(){}}};
+// VM isolada: simula apenas o transporte do conteúdo. O parser e a segurança
+// do DOM real são exercitados separadamente por Chromium/Playwright.
+class DOMParser {parseFromString(html){const texto=html.slice('<main>'.length,-'</main>'.length);return {body:{firstElementChild:{childNodes:[{nodeType:3,nodeValue:texto}]}}};}}
+const doc={querySelector:get,querySelectorAll(sel){if(sel==='.navitem')return navs;return[];},
+  createElement:elem,createTextNode(v){return {nodeType:3,nodeValue:v};},
+  createDocumentFragment(){return {items:[],appendChild(n){this.items.push(n);}};},body:{appendChild(){}}};
+
 const local=new Map();
-const c={document:doc,window:{},localStorage:{getItem:k=>local.get(k)||null,setItem:(k,v)=>local.set(k,v)},Intl,Date,Math,JSON,Number,String,Array,Set,RegExp,Object,URL,Blob,FormData,console,setTimeout(){},clearTimeout(){}};
+const c={document:doc,DOMParser,window:{},localStorage:{getItem:k=>local.get(k)||null,setItem:(k,v)=>local.set(k,v)},Intl,Date,Math,JSON,Number,String,Array,Set,RegExp,Object,URL,Blob,FormData,console,setTimeout(){},clearTimeout(){}};
 vm.createContext(c);vm.runInContext(code,c);
 let initial=get('#screen').innerHTML;
 assert.match(initial,/Ciclo operacional/);

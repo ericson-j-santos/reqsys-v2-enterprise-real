@@ -48,3 +48,11 @@ def test_lista_estagios_e_hosts_definida():
     for h in ['DESKTOP-PDQK954','DESKTOP-RP23OGS','Noteri']:
         assert h in JS
     assert len(re.findall(r'^\[\'[^\']+\',\'[^\']+\'\]', JS,flags=re.M)) >= 9
+
+def test_construcao_dom_seguranca_sem_html_ativo():
+    assert '.innerHTML=' not in JS
+    assert 'new DOMParser().parseFromString' in JS
+    assert 'SAFE_TAGS' in JS and 'SAFE_ATTRS' in JS
+    assert 'node.setAttribute(nome,attr.value)' in JS
+    assert 'renderSeguro(el(\'#screen\')' in JS
+    assert 'renderSeguro(el(\'#timelineResults\')' in JS

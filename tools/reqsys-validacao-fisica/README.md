@@ -34,7 +34,11 @@ Todos os comandos são texto. Não há `fetch`, chamadas a API, dispatch, reboot
 
 ## Testes
 
-`node --check app.js`, `node tests/smoke_node.cjs`, `python -m pytest -q tests/test_static.py` e `python -m pytest -q tests/test_browser_offline.py`. **Resultados de 13/11/2026:** 12 verificações lógicas JS, 7 testes estáticos e 6 testes de interação no Chromium sem rede aprovados. A suíte `tests/test_site.py` tenta abrir o site por HTTP em `127.0.0.1`, mas essa navegação foi bloqueada pela política do ambiente; os testes offline não substituem E2E HTTP em servidor, nem E2E físico nos hosts. Não contornar a política.
+`node --check app.js`, `node tests/smoke_node.cjs`, `python -m pytest -q tests/test_static.py` e `python -m pytest -q tests/test_browser_offline.py`. **Resultados de 13/11/2026:** 12 verificações lógicas JS, 8 testes estáticos e 7 testes de interação no Chromium sem rede aprovados. A suíte `tests/test_site.py` tenta abrir o site por HTTP em `127.0.0.1`, mas essa navegação foi bloqueada pela política do ambiente; os testes offline não substituem E2E HTTP em servidor, nem E2E físico nos hosts. Não contornar a política.
+
+## Correção preventiva de segurança e especificação
+
+A renderização usa parser inerte e uma lista restrita de elementos/atributos do navegador, reconstruindo o DOM sem executar HTML recebido. URLs, eventos embutidos, SVG e scripts não são aceitos. Existe teste negativo que importa texto malicioso e confirma que não há execução, e teste para impedir o retorno de `.innerHTML` dinâmico. Especificação SDD versionada em `.sdd/specs/reqsys-validacao-fisica.*`; os gates do GitHub ainda devem ser confirmados no commit final. Nenhuma mudança de dados locais pode autenticar evidência física.
 
 ## Próximo passo para comprovação real
 

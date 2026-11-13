@@ -1,0 +1,26 @@
+{
+  "feature_name": "reqsys-validacao-fisica",
+  "project": "ReqSys Produto / Runtime Platform",
+  "created_at": "2026-11-13",
+  "updated_at": "2026-11-13",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Site estático PT-BR de acompanhamento da validação física ReqSys, sem executar comandos, autenticar hosts ou transformar relatos locais em aceite.",
+  "sdd_gate": {
+    "tests": [
+      "tools/reqsys-validacao-fisica/tests/test_static.py",
+      "tools/reqsys-validacao-fisica/tests/test_browser_offline.py"
+    ],
+    "evidence_contract": "Issue #3147; SHA completo, regras v1.6.21, readback GitHub; testes positivos/negativos e importação maliciosa em Chromium. O painel nunca declara host pronto ou etapa física aceita a partir de dados locais. E2E físico e conexão a testemunho externo autenticado permanecem PENDENTES. Pre-PR, PR, merge e deploy exigem gates próprios no SHA atual; não presumir custos gratuitos em host remoto."
+  },
+  "evidence": [
+    "Issue #3147 aberta antes do primeiro commit do site.",
+    "Commit inicial a5741e4de32b9e573cd298b29da1e5a2a769adb0 publicado na branch isolada, leitura de oito arquivos confirmada.",
+    "Pre-PR run 43412168993 bloqueado por SDD_SPEC_REQUIRED e security:changed-diff risco 05 (HTML dinâmico); correção atual adiciona manifesto e renderização por DOM permitido, sem desativar o scanner.",
+    "Validação independente física do ReqSys, publicação canônica, TODO Global e operação inter-host ainda pendentes."
+  ]
+}
