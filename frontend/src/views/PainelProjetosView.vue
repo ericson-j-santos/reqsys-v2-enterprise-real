@@ -56,6 +56,8 @@
       </article>
     </section>
 
+    <CatalogoAplicacoes />
+
     <section class="portfolio-card">
       <div class="section-title"><div><h2>Soluções em destaque</h2><p>Capacidades dos requisitos ligados aos projetos atuais.</p></div></div>
       <div class="solutions"><article v-for="solucao in solucoes" :key="solucao.name"><div><strong>{{ solucao.name }}</strong><small>{{ solucao.projects }} projeto(s) · {{ solucao.owner }}</small></div><div class="progress-cell"><v-progress-linear :model-value="solucao.progress" color="success" height="8" rounded/><span>{{ solucao.progress }}%</span></div></article></div>
@@ -67,6 +69,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../services/api'
 import { buildPulsoPortfolio } from '../services/painelProjetos'
+import CatalogoAplicacoes from '../components/CatalogoAplicacoes.vue'
 
 const ambiente = (import.meta.env.VITE_APP_ENVIRONMENT || 'DEV').toUpperCase()
 const projetos = ref([]), solucoes = ref([]), busca = ref(''), selecionado = ref(null), erro = ref(''), carregando = ref(false), sincronizado = ref(null), itensSemProjeto = ref(0)
