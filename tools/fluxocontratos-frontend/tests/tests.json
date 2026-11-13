@@ -1,0 +1,118 @@
+[
+  {
+    "name": "Cadastro persiste e intervalo duplicado é bloqueado",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "POST /api/lotes",
+      "GET /api/lotes",
+      "autenticação",
+      "fila de lotes",
+      "idempotência"
+    ],
+    "description": "Criar e ler planejamento sem duplicar o mesmo intervalo.",
+    "steps": [
+      "Entrar com uma conta",
+      "Criar lote 1 a 25, com origem Teste A, destino Teste B e responsável Equipe QA",
+      "Recarregar e conferir o lote de 25",
+      "Cadastrar novamente 1 a 25 com outra chave"
+    ],
+    "expected": "Existe apenas um lote 1 a 25; a tentativa duplicada é recusada."
+  },
+  {
+    "name": "Salvar evidência e histórico com checkpoint",
+    "viewport": "desktop",
+    "covers": [
+      "PUT /api/lotes/:id",
+      "checkpoint",
+      "histórico antes/depois",
+      "controle de revisão",
+      "reconciliação declarada de arquivos"
+    ],
+    "description": "Atualização com registro persistente e leitura após reload.",
+    "setup": [
+      "Criar lote 1001 a 1010, origem QA A, destino QA B, responsável Equipe QA"
+    ],
+    "steps": [
+      "Abrir lote 1001 a 1010",
+      "Informar checkpoint cp-revisao-001, evidência Registro de prova em homologação, manter fase Entrada, responsável Equipe QA, rollback Restaurar revisão anterior e próxima ação Validar integração",
+      "Salvar e recarregar",
+      "Consultar a aba Histórico",
+      "Informar 10 encontrados na origem, 9 no servidor interno e 0 publicados; salvar e verificar diferença registrada"
+    ],
+    "expected": "Revisão aumenta e histórico apresenta antes, depois, evidência e responsável."
+  },
+  {
+    "name": "Bloqueio negativo de encerramento sem prova",
+    "viewport": "mobile",
+    "covers": [
+      "validação negativa",
+      "proteção de encerramento",
+      "controle de publicação",
+      "visualização móvel"
+    ],
+    "description": "Conclusão não deve ocorrer sem SHA, leitura independente e confirmação.",
+    "setup": [
+      "Criar lote 2001 a 2005, origem QA A, destino QA B, responsável Equipe QA"
+    ],
+    "steps": [
+      "Abrir lote 2001 a 2005",
+      "Selecionar Encerramento e Encerrado",
+      "Preencher checkpoint cp-teste-001 e evidência Conferência parcial não autenticada",
+      "Tentar salvar sem SHA, readback ou frase de confirmação",
+      "Recarregar e revisar o estado"
+    ],
+    "expected": "O erro de bloqueio aparece dentro do diálogo; o lote continua Planejado após recarregar, sem encerramento falso."
+  },
+  {
+    "name": "Configuração e script verificado",
+    "viewport": "desktop",
+    "covers": [
+      "GET /api/config",
+      "PUT /api/config",
+      "GET /api/scripts",
+      "POST /api/scripts",
+      "SHA-256",
+      "controle de hash divergente"
+    ],
+    "description": "Configuração persistente e cadastro de script com identidade coincidente.",
+    "steps": [
+      "Abrir Scripts e limites",
+      "Alterar tamanho de lote para 100 e salvar",
+      "Recarregar e confirmar 100",
+      "Baixar o modelo .sh e selecionar este arquivo",
+      "Confirmar que SHA divergente impede registro",
+      "Informar SHA calculado como esperado e cadastrar"
+    ],
+    "expected": "Limite permanece 100, versão do script é cadastrada e nada é executado."
+  },
+  {
+    "name": "Relatório exportável e erro de leitura visível",
+    "viewport": "desktop",
+    "covers": [
+      "relatório .eml sem envio",
+      "tratamento de erro de API",
+      "LGPD",
+      "GET /api/lotes",
+      "DLQ lógica de falhas definitivas"
+    ],
+    "description": "Falhas devem aparecer e relatório não deve enviar e-mail.",
+    "qa_faults": [
+      {
+        "method": "GET",
+        "path": "/api/lotes",
+        "status": 503,
+        "body_json": {
+          "error": "simulated_failure"
+        }
+      }
+    ],
+    "steps": [
+      "Entrar e observar aviso ao ocorrer falha de carregamento",
+      "Clicar em Exportar relatório",
+      "Conferir download do arquivo .eml sem envio",
+      "Abrir a opção Fila de falhas (DLQ), que diferencia a quarentena registrada da fila real no Linux"
+    ],
+    "expected": "Erro visível e relatório baixado, com indicação de homologação e sem disparo de e-mail."
+  }
+]
