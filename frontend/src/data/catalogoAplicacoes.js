@@ -123,7 +123,7 @@ export const CATALOGO_APLICACOES = [
     "proximaAcao": "Integrar inventário como seção do painel existente, sem nova rota pública."
   },
   {
-    "repositorio": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "repositorio": "ericson-j-santos/pdf-cnpj-processor",
     "gitShaFonte": "7fa0dae0c7b98669c398707b43af068e43805242",
     "ambiente": "NAO_COMPROVADO",
     "acesso": "NAO_AUDITADO",

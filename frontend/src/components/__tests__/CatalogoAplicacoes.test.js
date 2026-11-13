@@ -63,4 +63,15 @@ describe('Inventário de aplicações — governança e segurança', () => {
     await input.setValue('')
     expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(15)
   })
+
+  it('confirma proveniência do código da central de lotes sem atribuir ao ReqSys', () => {
+    const contratos = CATALOGO_APLICACOES.filter(item => item.id === 'REQ-CONTRACTS')
+    expect(contratos).toHaveLength(1)
+    expect(contratos[0]).toMatchObject({
+      repositorio: 'ericson-j-santos/pdf-cnpj-processor',
+      gitShaFonte: '7fa0dae0c7b98669c398707b43af068e43805242',
+      caminho: 'feat/central-lotes-contratos-site-20261112',
+    })
+    expect(contratos[0].repositorio).not.toBe('ericson-j-santos/reqsys-v2-enterprise-real')
+  })
 })

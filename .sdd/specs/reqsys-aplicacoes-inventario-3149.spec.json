@@ -28,7 +28,7 @@
       "frontend/src/stores/__tests__/auth.test.js",
       "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "Vitest real no Pre-PR HEAD: cinco testes do inventário, cinco testes de navegação RBAC e regressões de rota/auth. Gate executa testes SDD declarados após npm ci/build; teste Python cobre seleção positiva/negativa. Prova real de autenticação servidor e E2E externo continuam pendentes."
+    "evidence_contract": "Vitest real no Pre-PR HEAD: seis testes do inventário (incluindo proveniência de contratos), cinco testes de navegação RBAC e regressões de rota/auth. Gate executa testes SDD declarados após npm ci/build; teste Python cobre seleção positiva/negativa. Prova real de autenticação servidor e E2E externo continuam pendentes."
   },
   "controls": {
     "new_public_route": false,
