@@ -5,7 +5,7 @@ Várias interfaces ReqSys/contratos foram criadas e publicadas separadamente; n�
 
 ## Tipo e origem
 - `feature` complementar ao Painel de Projetos existente: inclusão de inventário de aplicações (a rota de projetos já existe, não é reparo).
-- Fonte: issue #3149 criada antes do início da branch. Autoria assistida, `source_mode=assisted`, `model_calls=0`; não alegar Builder/Validator independente.
+- Fonte: issue #3149 criada antes do início da branch. Autoria assistida; a reconciliação de 14/11/2026 foi preparada por `gpt-5.6-sol` com uma chamada de Builder nesta execução. O identificador dos pesos não está disponível. A validação independente anterior pertence ao SHA `457f8ea26a190f2a4321effed79868100a649d07` e deve ser refeita no novo HEAD.
 - Base: `main@a05e64bbc58a15314b42cfa9314f1d415535b05b`; regras `main@58dcd4200f412a866278027ba9e433439a03f3b3`.
 - Escopo limitado ao frontend: dados estáticos classificados, componente de leitura e inclusão em `/painel-projetos` (permissão `dashboard:read` existente).
 
