@@ -4,8 +4,8 @@ import CatalogoAplicacoes from '../CatalogoAplicacoes.vue'
 import { CATALOGO_APLICACOES, filtrarCatalogoAplicacoes } from '../../data/catalogoAplicacoes'
 
 describe('Inventário de aplicações — governança e segurança', () => {
-  it('preserva 15 identidades únicas e dados mínimos, sem declarar E2E indevido', () => {
-    expect(CATALOGO_APLICACOES).toHaveLength(15)
+  it('preserva 18 identidades únicas e dados mínimos, sem declarar E2E indevido', () => {
+    expect(CATALOGO_APLICACOES).toHaveLength(18)
     expect(new Set(CATALOGO_APLICACOES.map(item => item.id)).size).toBe(CATALOGO_APLICACOES.length)
     for (const item of CATALOGO_APLICACOES) {
       expect(item.id).toMatch(/^[A-Z][A-Z0-9-]+$/)
@@ -18,7 +18,7 @@ describe('Inventário de aplicações — governança e segurança', () => {
   })
 
   it('aceita apenas destinos públicos conhecidos e nenhum segredo na URL', () => {
-    const publicados = CATALOGO_APLICACOES.filter(item => item.url)
+    const publicados = CATALOGO_APLICACOES.filter(item => item.url && item.ambiente === 'PUBLICO_APPDEPLOY')
     expect(publicados).toHaveLength(8)
     for (const item of publicados) {
       const destino = new URL(item.url)
@@ -42,7 +42,7 @@ describe('Inventário de aplicações — governança e segurança', () => {
 
   it('exibe a lista sem elevar implantação a funcionamento e mantém links externos seguros', () => {
     const wrapper = mount(CatalogoAplicacoes)
-    expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(15)
+    expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(18)
     expect(wrapper.text()).toContain('funcionamento não comprovado')
     expect(wrapper.text()).toContain('Não comprovado')
     const links = wrapper.findAll('a[href*=".v2.appdeploy.ai"]')
@@ -61,7 +61,24 @@ describe('Inventário de aplicações — governança e segurança', () => {
     expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(0)
     expect(wrapper.text()).toContain('Nenhuma aplicação encontrada')
     await input.setValue('')
-    expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(15)
+    expect(wrapper.findAll('[data-testid="catalogo-item"]')).toHaveLength(18)
+  })
+
+  it('inclui três Sites privados relacionados sem elevar publicação a operação', () => {
+    const sites = CATALOGO_APLICACOES.filter(item => item.ambiente === 'CHATGPT_SITES_PRIVADO')
+    expect(sites).toHaveLength(3)
+    expect(sites.map(item => item.id).sort()).toEqual(['SITE-PESQUISAS', 'SITE-SSRS', 'SITE-TEAMS-GATEWAY'])
+    for (const item of sites) {
+      const destino = new URL(item.url)
+      expect(destino.protocol).toBe('https:')
+      expect(destino.hostname).toMatch(/^[a-z0-9-]+\.ericsonjsantos\.chatgpt\.site$/)
+      expect(item.acesso).toBe('ACESSO_CUSTOM_OWNER')
+      expect(item.estado).toBe('PUBLICADO_SEM_E2E')
+      expect(item.e2eComprovado).toBe(false)
+      expect(item.gitShaFonte).toMatch(/^[a-f0-9]{40}$/)
+      expect(item.repositorio).toBe('NAO_VINCULADO_A_REPOSITORIO')
+    }
+    expect(CATALOGO_APLICACOES.some(item => item.nome === 'Divulgação de Evoluções')).toBe(false)
   })
 
   it('confirma proveniência do código da central de lotes sem atribuir ao ReqSys', () => {
