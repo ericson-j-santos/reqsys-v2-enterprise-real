@@ -14,10 +14,14 @@
     "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
     "kind": "feature",
     "source_mode": "assisted",
-    "model_calls": 0,
+    "model_calls": 1,
     "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
     "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
-    "idempotency_key": "reqsys:site-catalog:inventory:v1"
+    "idempotency_key": "reqsys:site-catalog:inventory:v1",
+    "builder_model": "gpt-5.6-sol",
+    "builder_weights_digest": "unavailable",
+    "previous_independent_validator_sha": "457f8ea26a190f2a4321effed79868100a649d07",
+    "validator_status_for_current_head": "pending"
   },
   "requirements": ".sdd/specs/reqsys-aplicacoes-inventario-3149.requirements.md",
   "sdd_gate": {
