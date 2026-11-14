@@ -257,6 +257,57 @@ export const CATALOGO_APLICACOES = [
     "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
     "estado": "PUBLICADO_SEM_E2E",
     "proximaAcao": "Validar checkpoint/retomada física; interface pública não certifica E2E."
+  },
+  {
+    "id": "SITE-TEAMS-GATEWAY",
+    "nome": "Teams Gateway Control Center",
+    "tipo": "SITE_CHATGPT",
+    "repositorio": "NAO_VINCULADO_A_REPOSITORIO",
+    "gitShaFonte": "8baf59a4126f84270a06cae6800faa8269c1ad18",
+    "caminho": "",
+    "url": "https://teams-gateway-control.ericsonjsantos.chatgpt.site/",
+    "versaoPublicada": "Sites v5",
+    "ambiente": "CHATGPT_SITES_PRIVADO",
+    "acesso": "ACESSO_CUSTOM_OWNER",
+    "e2eComprovado": false,
+    "responsavel": "ReqSys / Integrações",
+    "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
+    "estado": "PUBLICADO_SEM_E2E",
+    "proximaAcao": "Vincular o repositório da fonte e validar autenticação, RBAC, mensagem real e readback antes de recomendar uso."
+  },
+  {
+    "id": "SITE-SSRS",
+    "nome": "Gerenciador de Assinaturas SSRS",
+    "tipo": "SITE_CHATGPT",
+    "repositorio": "NAO_VINCULADO_A_REPOSITORIO",
+    "gitShaFonte": "a0bb38ce2606a6661e8bb63b6b65cd9d98de3f92",
+    "caminho": "",
+    "url": "https://gerenciador-assinaturas-ssrs.ericsonjsantos.chatgpt.site/",
+    "versaoPublicada": "Sites v2",
+    "ambiente": "CHATGPT_SITES_PRIVADO",
+    "acesso": "ACESSO_CUSTOM_OWNER",
+    "e2eComprovado": false,
+    "responsavel": "Responsável a confirmar",
+    "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
+    "estado": "PUBLICADO_SEM_E2E",
+    "proximaAcao": "Confirmar responsável, vínculo com o ReqSys e testar acesso autorizado e negado sem usar credenciais no frontend."
+  },
+  {
+    "id": "SITE-PESQUISAS",
+    "nome": "Central de Pesquisas Habitacionais",
+    "tipo": "SITE_CHATGPT",
+    "repositorio": "NAO_VINCULADO_A_REPOSITORIO",
+    "gitShaFonte": "a7b5780b9df84ac11aa57587ab508a63f5591758",
+    "caminho": "",
+    "url": "https://central-pesquisas-habitacionais.ericsonjsantos.chatgpt.site/",
+    "versaoPublicada": "Sites v12",
+    "ambiente": "CHATGPT_SITES_PRIVADO",
+    "acesso": "ACESSO_CUSTOM_OWNER",
+    "e2eComprovado": false,
+    "responsavel": "Responsável a confirmar",
+    "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
+    "estado": "PUBLICADO_SEM_E2E",
+    "proximaAcao": "Confirmar relação com o ReqSys, proprietário funcional, fontes de dados, LGPD e uso real antes de classificar."
   }
 ]
 
