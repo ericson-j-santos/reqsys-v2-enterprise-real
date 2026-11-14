@@ -16,13 +16,14 @@ Várias interfaces ReqSys/contratos foram criadas e publicadas separadamente; n�
 4. Links externos devem usar HTTPS, `target="_blank"` e `rel="noopener noreferrer"`; navegação não deve vazar tokens.
 5. A busca filtra registros por texto e apresenta estado vazio; não altera nem sincroniza TODO Global automaticamente.
 6. Preservar a rota e a autenticação existentes, sem criar site paralelo, autenticação falsa ou backend fictício.
-7. A lista é um **inventário inicial não exaustivo**, com data da fonte, issue de referência e sinalização explícita de falta de prova.
-8. Manter o ciclo cadastro → comparação → reaproveitamento → validação → integração aprovada → acompanhamento → consolidação com histórico, na issue #3149 e TODO Global.
-9. Não incluir segredos nem informações privadas no frontend público. A permissão de leitura da rota é visual; controle efetivo de serviços externos requer auditoria separada.
+7. A lista é um **inventário inicial não exaustivo**, com data da fonte, issue de referência e sinalização explícita de falta de prova. O Site “Divulgação de Evoluções” permanece fora do escopo por não ter vínculo comprovado com o ReqSys ou projeto relacionado.
+8. Sites privados permanecem sem E2E e o acesso do proprietário não equivale a RBAC funcional comprovado.
+9. Manter o ciclo cadastro → comparação → reaproveitamento → validação → integração aprovada → acompanhamento → consolidação com histórico, na issue #3149 e TODO Global.
+10. Não incluir segredos nem informações privadas no frontend público. A permissão de leitura da rota é visual; controle efetivo de serviços externos requer auditoria separada.
 
 ## Critérios de aceite
-1. IDs únicos e 15 registros iniciais reproduzidos a partir das fontes conferidas em 13/11/2026.
-2. Oito URLs AppDeploy conhecidas marcadas como publicadas **sem E2E**, nenhuma marcada operacional.
+1. IDs únicos e 18 registros iniciais reproduzidos a partir das fontes conferidas em 13/11/2026.
+2. Oito URLs AppDeploy e três Sites privados relacionados conhecidos, todos marcados como publicadas **sem E2E**, nenhuma marcada operacional.
 3. Links externos HTTPS seguros e nenhum token, senha, usuário ou parâmetro sensível.
 4. Filtro positivo, negativo, case-insensitive e repetição idempotente, com estado vazio.
 5. Componente renderiza os registros em `/painel-projetos` sem criar nova rota; manter política existente.
