@@ -2,14 +2,14 @@
   "feature_name": "reqsys-aplicacoes-inventario-3149",
   "project": "ReqSys Produto",
   "created_at": "2026-11-13",
-  "updated_at": "2026-11-13",
+  "updated_at": "2026-11-14",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": false,
     "tasks": false
   },
-  "description": "Incluir catálogo inicial somente leitura no Painel de Projetos original com identificação de versão/acesso e estado não comprovado, sem substituir ou publicar aplicações externas. A rota no frontend passou a negar token sem usuario e prevenir loop se faltar dashboard:read.",
+  "description": "Consolidar no Painel de Projetos o inventário inicial somente leitura de código, oito publicações AppDeploy e três Sites privados relacionados, sem criar outro site nem elevar publicação a funcionamento.",
   "origin": {
     "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3149",
     "kind": "feature",
@@ -28,7 +28,7 @@
       "frontend/src/stores/__tests__/auth.test.js",
       "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "Vitest real no Pre-PR HEAD: seis testes do inventário (incluindo proveniência de contratos), cinco testes de navegação RBAC e regressões de rota/auth. Gate executa testes SDD declarados após npm ci/build; teste Python cobre seleção positiva/negativa. Prova real de autenticação servidor e E2E externo continuam pendentes."
+    "evidence_contract": "Vitest real no Pre-PR HEAD: sete testes do inventário (incluindo proveniência de contratos), cinco testes de navegação RBAC e regressões de rota/auth. Gate executa testes SDD declarados após npm ci/build; teste Python cobre seleção positiva/negativa. Prova real de autenticação servidor e E2E externo continuam pendentes."
   },
   "controls": {
     "new_public_route": false,
@@ -42,8 +42,9 @@
     "extra_cost_brl": 0
   },
   "acceptance_criteria": [
-    "15 IDs únicos com fonte, código, estado e próximo passo.",
-    "8 URLs AppDeploy exibidas como publicadas sem E2E.",
+    "18 IDs únicos com fonte, código, estado e próximo passo.",
+    "8 URLs AppDeploy e 3 Sites privados relacionados exibidos como publicados sem E2E.",
+    "Site de divulgação excluído do escopo com justificativa explícita de ausência de vínculo comprovado.",
     "Filtro e renderização com estado vazio e link externo seguro.",
     "Rota de Painel de Projetos preservada sem autenticação nova.",
     "Vitest e build aprovados no SHA final.",
