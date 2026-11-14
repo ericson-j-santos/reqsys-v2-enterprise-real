@@ -24,7 +24,7 @@
         <thead><tr><th scope="col">Aplicação</th><th scope="col">Fonte / versão</th><th scope="col">Acesso</th><th scope="col">Estado</th><th scope="col">Teste real</th><th scope="col">Responsável e próxima ação</th></tr></thead>
         <tbody>
           <tr v-for="item in filtrados" :key="item.id" data-testid="catalogo-item">
-            <td><strong>{{ item.nome }}</strong><small>{{ item.id }} · {{ item.tipo === 'SITE_PUBLICADO' ? 'Site externo' : 'Código identificado' }}</small></td>
+            <td><strong>{{ item.nome }}</strong><small>{{ item.id }} · {{ item.url ? 'Site externo' : 'Código identificado' }}</small></td>
             <td>
               <code>{{ item.caminho || 'Versão Git do site não vinculada' }}</code>
               <small>{{ item.gitShaFonte ? 'Fonte Git: ' + item.gitShaFonte.slice(0, 12) : 'SHA da versão publicada não confirmado' }}</small>
@@ -34,7 +34,7 @@
               <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer"
                  :aria-label="'Abrir site externo ' + item.nome">{{ item.url.replace('https://', '').replace(/\/$/, '') }}</a>
               <span v-else>Sem endereço publicado verificado</span>
-              <small>{{ item.acesso === 'ROTA_INTERNA_COM_PERMISSAO' ? 'Rota interna do ReqSys; acesso operacional não testado' : 'Autenticação e permissões não auditadas' }}</small>
+              <small>{{ acessoPorExtenso(item.acesso) }}</small>
             </td>
             <td><span class="catalogo-estado">{{ estadoPorExtenso(item.estado) }}</span><small>{{ ambientePorExtenso(item.ambiente) }}</small></td>
             <td><strong class="catalogo-pendente">{{ item.e2eComprovado ? 'Comprovado' : 'Não comprovado' }}</strong></td>
@@ -60,8 +60,15 @@ function estadoPorExtenso(estado) {
     PUBLICADO_SEM_E2E: 'Publicado; funcionamento não comprovado',
   })[estado] || 'Sem classificação'
 }
+function acessoPorExtenso(acesso) {
+  if (acesso === 'ROTA_INTERNA_COM_PERMISSAO') return 'Rota interna do ReqSys; acesso operacional não testado'
+  if (acesso === 'ACESSO_CUSTOM_OWNER') return 'Acesso privado do proprietário; RBAC funcional não testado'
+  return 'Autenticação e permissões não auditadas'
+}
 function ambientePorExtenso(ambiente) {
-  return ambiente === 'PUBLICO_APPDEPLOY' ? 'Publicação AppDeploy (não homologada)' : 'Ambiente não comprovado'
+  if (ambiente === 'PUBLICO_APPDEPLOY') return 'Publicação AppDeploy (não homologada)'
+  if (ambiente === 'CHATGPT_SITES_PRIVADO') return 'Publicação privada no Sites (não homologada)'
+  return 'Ambiente não comprovado'
 }
 </script>
 
