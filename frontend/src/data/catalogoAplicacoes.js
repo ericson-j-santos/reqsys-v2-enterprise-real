@@ -1,7 +1,7 @@
 // Inventário inicial, leitura apenas. Não é TODO Global nem prova de operação.
-// Verificação das fontes: 2026-11-13; issue canônica: #3149.
+// Verificação das fontes: 2026-11-14; issue canônica: #3149.
 // Alterações devem preservar ID estável e evidências; nunca inferir E2E de site publicado.
-export const CATALOGO_VERIFICADO_EM = '2026-11-13'
+export const CATALOGO_VERIFICADO_EM = '2026-11-14'
 export const CATALOGO_APLICACOES = [
   {
     "repositorio": "ericson-j-santos/reqsys-v2-enterprise-real",
