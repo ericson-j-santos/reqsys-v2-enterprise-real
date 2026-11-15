@@ -12,6 +12,21 @@
       Sites publicados podem ser públicos e não têm acesso auditado. Não registre segredos ou dados pessoais neles.
       Status de implantação, existência de código e testes reais são fatos diferentes.
     </p>
+    <section class="catalogo-lacunas" data-testid="catalogo-lacunas" aria-labelledby="catalogo-lacunas-titulo">
+      <h3 id="catalogo-lacunas-titulo">O que falta integrar</h3>
+      <p>Diagnóstico do inventário local; não representa leitura autenticada de Redmine, TODO, GitHub nem dos computadores.</p>
+      <p role="status">{{ diagnostico.comLacunas }} de {{ diagnostico.total }} registros exigem verificação. Operação comprovada: não mensurável com este inventário.</p>
+      <details>
+        <summary>Examinar primeiras pendências por ativo</summary>
+        <ul>
+          <li v-for="(item, indice) in diagnostico.registros" :key="item.id + '-' + indice">
+            <strong>{{ item.nome }}</strong>: {{ item.primeiroImpedimento?.explicacao || 'Aguardando leitura independente' }}.
+            <span> Próxima ação: {{ item.proximaAcao }}.</span>
+          </li>
+        </ul>
+      </details>
+      <p>Sem vínculo no inventário não significa ausência na fonte oficial. Nenhuma conclusão ou mutação é autorizada por este painel.</p>
+    </section>
     <div class="catalogo-acoes">
       <label for="busca-catalogo-aplicacoes">Buscar aplicação, projeto ou código</label>
       <input id="busca-catalogo-aplicacoes" v-model="buscaCatalogo" type="search"
@@ -37,7 +52,7 @@
               <small>{{ acessoPorExtenso(item.acesso) }}</small>
             </td>
             <td><span class="catalogo-estado">{{ estadoPorExtenso(item.estado) }}</span><small>{{ ambientePorExtenso(item.ambiente) }}</small></td>
-            <td><strong class="catalogo-pendente">{{ item.e2eComprovado ? 'Comprovado' : 'Não comprovado' }}</strong></td>
+            <td><strong class="catalogo-pendente">{{ item.e2eComprovado ? 'Declarado no cadastro; sem prova independente' : 'Não comprovado' }}</strong></td>
             <td><strong>{{ item.responsavel }}</strong><small>{{ item.proximaAcao }}</small></td>
           </tr>
           <tr v-if="!filtrados.length"><td colspan="6">Nenhuma aplicação encontrada com esse filtro.</td></tr>
@@ -50,9 +65,11 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { CATALOGO_APLICACOES, CATALOGO_VERIFICADO_EM, filtrarCatalogoAplicacoes } from '../data/catalogoAplicacoes'
+import { analisarLacunasCatalogo } from '../data/diagnosticoIntegracoes.mjs'
 
 const buscaCatalogo = ref('')
 const filtrados = computed(() => filtrarCatalogoAplicacoes(CATALOGO_APLICACOES, buscaCatalogo.value))
+const diagnostico = computed(() => analisarLacunasCatalogo(CATALOGO_APLICACOES))
 function estadoPorExtenso(estado) {
   return ({
     CODIGO_IDENTIFICADO: 'Código identificado',
@@ -82,4 +99,8 @@ function ambientePorExtenso(ambiente) {
 .catalogo-tabela th{white-space:nowrap}.catalogo-tabela td strong,.catalogo-tabela td small{display:block}
 .catalogo-tabela code{overflow-wrap:anywhere;white-space:normal}.catalogo-tabela td a{overflow-wrap:anywhere}
 .catalogo-pendente{color:#b16c0b}.catalogo-estado{font-weight:600}
+.catalogo-lacunas{border:1px solid #b38a36;border-radius:8px;padding:12px;display:grid;gap:8px}
+.catalogo-lacunas h3,.catalogo-lacunas p{margin:0}.catalogo-lacunas summary{cursor:pointer;font-weight:600}
+.catalogo-lacunas ul{margin:8px 0 0;padding-left:22px;max-height:310px;overflow-y:auto}
+.catalogo-lacunas li{margin-bottom:8px;overflow-wrap:anywhere}
 </style>
