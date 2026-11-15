@@ -30,7 +30,7 @@ export function analisarLacunasCatalogo(itens) {
     if (url && urls.get(url) > 1) adicionar('URL_COMPARTILHADA_NO_SNAPSHOT', 'A mesma URL aparece em mais de um registro; pode ser legítimo', 'Comparar finalidade e origem sem excluir', 'SOBREPOSICAO_POTENCIAL')
 
     const repositorio = texto(item?.repositorio)
-    if (!repositorio || repositorio === 'NAO_VINCULADO_A_REPOSITORIO') {
+    if (!repositorio || repositorio.startsWith('NAO_VINCULADO_')) {
       adicionar('ORIGEM_NAO_VINCULADA', 'O repositório original não está vinculado ao registro', 'Identificar repositório, caminho e versão na origem')
     }
     if (!texto(item?.responsavel)) adicionar('RESPONSAVEL_NAO_VERIFICADO', 'Responsável não registrado', 'Confirmar proprietário do ativo')

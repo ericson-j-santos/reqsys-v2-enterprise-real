@@ -36,6 +36,19 @@ describe('Diagnóstico anti-lacunas do catálogo (snapshot não autenticado)', (
     expect(resultado.registros[0].avisos.map(a => a.codigo)).toContain('TODO_CONCLUIDO_SEM_PROVA')
     expect(resultado.registros[0].conclusaoOperacionalAutorizada).toBe(false)
   })
+  it('identifica todas as origens não vinculadas e mantém a análise idempotente', () => {
+    for (const repositorio of ['NAO_VINCULADO_A_REPOSITORIO', 'NAO_VINCULADO_A_VERSAO_PUBLICADA']) {
+      const entrada = [{ ...ativo(), repositorio }]
+      const antes = JSON.stringify(entrada)
+      const primeira = analisarLacunasCatalogo(entrada)
+      expect(primeira.registros[0].avisos.map(a => a.codigo)).toContain('ORIGEM_NAO_VINCULADA')
+      expect(primeira.registros[0].conclusaoOperacionalAutorizada).toBe(false)
+      expect(analisarLacunasCatalogo(entrada)).toEqual(primeira)
+      expect(JSON.stringify(entrada)).toBe(antes)
+    }
+    expect(analisarLacunasCatalogo([ativo()]).registros[0].avisos.map(a => a.codigo)).not.toContain('ORIGEM_NAO_VINCULADA')
+  })
+
   it('nega carga inválida', () => {
     expect(() => analisarLacunasCatalogo(null)).toThrow(TypeError)
   })
