@@ -1,0 +1,27 @@
+{
+  "feature_name": "reqsys-windows-adr-casefold-repair",
+  "project": "ReqSys Produto / compatibilidade de checkout Windows / Runtime Platform",
+  "created_at": "2026-11-12",
+  "updated_at": "2026-11-12",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Reparar colisão física de caminhos docs/ADR vs docs/adr em checkout Windows mantendo conteúdo Git, validação de caminhos e referências sem contornar gates de sessão.",
+  "change_type": "repair",
+  "issue_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3138",
+  "base_sha": "bf1f637eb945e70b27d1b4ea298105ee925aad77",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_windows_casefold_tree.py"
+    ],
+    "evidence_contract": "Ausência de colisão por casefold em árvore HEAD de Git; duas renomeações preservam SHA de blob; Governança Padrão Ouro e Pre-PR executados no HEAD atual. Nenhum atestado físico ou merge autorizado."
+  },
+  "evidence": [
+    "Regressão real Noteri reportada na issue #3138 comentário #6832066702: SESSION_LAUNCH_BLOCKED; git status exato desconhecido.",
+    "Pre-PR workflow_run 43290266667, job 131434332419, SHA d6863d2d2bddc608d041435767c4fb861f6448fe bloqueou por SDD_SPEC_REQUIRED; testes prévios do gate passaram.",
+    "Reparo de renomeação realizado na branch isolada, sem alteração na main e sem E2E físico."
+  ]
+}
