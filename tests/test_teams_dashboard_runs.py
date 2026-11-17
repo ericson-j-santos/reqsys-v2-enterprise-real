@@ -51,13 +51,15 @@ def test_rejects_permanent_auth_error_without_retry():
     assert len(calls) == 1
 
 
-def test_rejects_out_of_order_pages():
+def test_normalizes_out_of_order_items_within_page():
     def runner(command, **kwargs):
         return subprocess.CompletedProcess(command, 0, stdout=json.dumps([
             item("2026-11-01T00:00:00Z"), item("2026-11-02T00:00:00Z")
         ]), stderr="")
-    with pytest.raises(WorkflowRunQueryError, match="fora de ordem"):
-        collect_recent_workflow_runs("user/repo", "delivery.yml", CUTOFF, runner=runner)
+    result = collect_recent_workflow_runs("user/repo", "delivery.yml", CUTOFF, runner=runner)
+    assert [run["created_at"] for run in result] == [
+        "2026-11-02T00:00:00Z", "2026-11-01T00:00:00Z"
+    ]
 
 
 def test_rejects_incomplete_horizon():
