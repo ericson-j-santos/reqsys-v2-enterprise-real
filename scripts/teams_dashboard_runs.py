@@ -26,15 +26,16 @@ def collect_recent_workflow_runs(
 ) -> list[dict]:
     """Consulta páginas recentes até a primeira data anterior ao corte.
 
-    Falha explicitamente diante de respostas inválidas, erros permanentes,
-    ordenação inesperada e limite de páginas: nunca calcula SLO parcial.
+    Falha explicitamente diante de respostas inválidas, erros permanentes e
+    limite de páginas: nunca calcula SLO parcial. A API de Actions pode
+    devolver páginas com empates/reordenação entre consultas; por isso a
+    ordenação é normalizada localmente antes do corte do horizonte.
     """
     if cutoff.tzinfo is None or max_pages < 1 or max_elapsed_seconds <= 0:
         raise ValueError("cutoff deve ter fuso e limites devem ser positivos")
 
     runs: list[dict] = []
     started_at = clock()
-    previous_created: datetime | None = None
     for page in range(1, max_pages + 1):
         if clock() - started_at >= max_elapsed_seconds:
             raise WorkflowRunQueryError(f"Prazo de coleta excedido: {filename}, page={page}")
@@ -69,6 +70,7 @@ def collect_recent_workflow_runs(
         if not items:
             return runs
 
+        parsed_items: list[tuple[datetime, dict]] = []
         for item in items:
             if not isinstance(item, dict) or not isinstance(item.get("created_at"), str):
                 raise WorkflowRunQueryError(f"Run sem timestamp: {filename}, page={page}")
@@ -78,9 +80,9 @@ def collect_recent_workflow_runs(
                 raise WorkflowRunQueryError(f"Timestamp inválido: {filename}, page={page}") from exc
             if created.tzinfo is None:
                 raise WorkflowRunQueryError(f"Timestamp sem fuso: {filename}, page={page}")
-            if previous_created is not None and created > previous_created:
-                raise WorkflowRunQueryError(f"Runs fora de ordem: {filename}, page={page}")
-            previous_created = created
+            parsed_items.append((created, item))
+
+        for created, item in sorted(parsed_items, key=lambda pair: pair[0], reverse=True):
             if created < cutoff:
                 return runs
             if item.get("status") == "completed":
