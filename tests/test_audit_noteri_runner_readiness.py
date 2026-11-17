@@ -108,7 +108,7 @@ class RunnerWorkflowBindingTests(unittest.TestCase):
 
     def test_owner_main_and_schedule_or_manual_read_only_mode(self):
         self.assertIn("noteri-runner-readiness", self.workflow)
-        self.assertIn("github.event_name == 'schedule'", self.job)
+        self.assertNotIn("github.event_name == 'schedule'", self.job)
         self.assertIn("inputs.mode == 'noteri-runner-readiness'", self.job)
         self.assertIn("github.ref == 'refs/heads/main'", self.job)
         self.assertIn("github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'", self.job)
@@ -131,3 +131,24 @@ class RunnerWorkflowBindingTests(unittest.TestCase):
         self.assertIn("NOTERI_RUNNER_ADMIN_READ_UNAVAILABLE", self.job)
         self.assertIn("--paginate --slurp", self.job)
         self.assertIn("set -euo pipefail", self.job)
+
+    def test_manual_readonly_mode_cannot_enqueue_old_physical_runner_jobs(self):
+        probe = self.workflow.split("\n  probe-pool:\n", 1)[1].split(
+            "\n  monitor-pool:\n", 1)[0]
+        monitor = self.workflow.split("\n  monitor-pool:\n", 1)[1].split(
+            "\n  runner-pool-label-reconcile:\n", 1)[0]
+        for name, body in (("probe-pool", probe), ("monitor-pool", monitor)):
+            with self.subTest(job=name):
+                self.assertIn("inputs.mode != 'noteri-runner-readiness'", body)
+        self.assertIn("github.event_name == 'workflow_dispatch'", self.job)
+        self.assertNotIn("github.event_name == 'schedule'", self.job)
+
+    def test_original_portable_lease_jobs_remain_report_only_for_default_mode(self):
+        probe = self.workflow.split("\n  probe-pool:\n", 1)[1].split(
+            "\n  monitor-pool:\n", 1)[0]
+        monitor = self.workflow.split("\n  monitor-pool:\n", 1)[1].split(
+            "\n  runner-pool-label-reconcile:\n", 1)[0]
+        self.assertIn("github.event_name != 'pull_request'", probe)
+        self.assertIn("github.event_name != 'pull_request'", monitor)
+        self.assertIn("ReqSys DEV runner lease probe", probe)
+        self.assertIn("audit_reqsys_dev_runner_pool.py", monitor)

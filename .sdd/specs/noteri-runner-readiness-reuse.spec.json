@@ -23,7 +23,9 @@
     "token_permissions": "administration:read, target noteri-runtime only",
     "app_installation_verified": false,
     "new_workflow_surface": false,
-    "reuses_schedule": true
+    "reuses_schedule": false,
+    "preserves_existing_schedule": true,
+    "manual_mode_only": true
   },
   "safety": {
     "modifies_runner_registry": false,
@@ -32,7 +34,8 @@
     "host_installation": false,
     "raw_admin_inventory_uploaded": false,
     "future_pickup_guaranteed_by_snapshot": false,
-    "production_touched": false
+    "production_touched": false,
+    "existing_physical_probe_suppressed_for_readonly_mode": true
   },
   "sdd_gate": {
     "tests": [
@@ -40,7 +43,7 @@
       "tests/test_reqsys_dev_runner_pool_monitor.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "The new job is read-only with GitHub App administration:read limited to noteri-runtime; the existing lease monitor remains github.token/actions:read without administration; no dispatch, secrets, runner mutation, host or production effects."
+    "evidence_contract": "The new job is read-only with GitHub App administration:read limited to noteri-runtime; the existing lease monitor remains github.token/actions:read without administration; no dispatch, secrets, runner mutation, host or production effects. New manual mode must never enqueue the two preexisting physical runner lease jobs; schedule only executes legacy jobs and not the new unadmitted App read."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-runner-readiness-reuse.requirements.md",

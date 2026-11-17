@@ -69,10 +69,9 @@ jobs:
     if: >-
       github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' &&
-        github.actor == 'ericson-j-santos' &&
-        inputs.mode == 'noteri-runner-readiness'))
+      github.event_name == 'workflow_dispatch' &&
+      github.actor == 'ericson-j-santos' &&
+      inputs.mode == 'noteri-runner-readiness'
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     permissions:
@@ -173,7 +172,7 @@ jobs:
 
   probe-pool:
     name: ReqSys DEV runner lease probe (${{ matrix.slot }})
-    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    if: github.event_name != 'pull_request' && inputs.mode != 'noteri-runner-readiness' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
     strategy:
       fail-fast: false
       matrix:
@@ -202,7 +201,7 @@ jobs:
 
   monitor-pool:
     name: Audit ReqSys DEV runner lease evidence
-    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    if: github.event_name != 'pull_request' && inputs.mode != 'noteri-runner-readiness' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
