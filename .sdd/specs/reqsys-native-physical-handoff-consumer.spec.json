@@ -1,0 +1,17 @@
+{
+  "feature_name": "reqsys-native-physical-handoff-consumer",
+  "project": "ReqSys / E2E Platform",
+  "created_at": "2026-11-17",
+  "updated_at": "2026-11-17",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Consumidor fail-closed do contrato físico multi-host da E2E Platform, fixado por SHA e hash.",
+  "sdd_gate": {
+    "tests": ["tests/test_reqsys_native_physical_handoff_consumer.py"],
+    "evidence_contract": "E2E Platform 29278bbf9e84f851edbe66cd36ef0ca924521f7b; dois hosts distintos; mesma task; CAS; retomada; readback; replay negativo; custo zero; nenhuma autorização operacional."
+  },
+  "evidence": [
+    "Contrato publicado em branch isolada da E2E Platform; execução física continua dependente de recibo real.",
+    "Testes usam fixtures sintéticas apenas para regressão do consumidor e não certificam hosts."
+  ]
+}
