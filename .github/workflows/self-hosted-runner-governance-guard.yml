@@ -12,6 +12,8 @@ on:
       - "scripts/check_self_hosted_runner_governance.py"
       - "tests/test_reqsys_dev_runner_pool_monitor.py"
       - "tests/test_self_hosted_runner_governance.py"
+      - "scripts/audit_noteri_runner_readiness.py"
+      - "tests/test_audit_noteri_runner_readiness.py"
   push:
     branches: [main]
     paths:
@@ -24,6 +26,8 @@ on:
       - "scripts/check_self_hosted_runner_governance.py"
       - "tests/test_reqsys_dev_runner_pool_monitor.py"
       - "tests/test_self_hosted_runner_governance.py"
+      - "scripts/audit_noteri_runner_readiness.py"
+      - "tests/test_audit_noteri_runner_readiness.py"
   workflow_dispatch:
     inputs:
       mode:
@@ -33,6 +37,7 @@ on:
         default: report
         options:
           - report
+          - noteri-runner-readiness
           - runner-pool-label-reconcile-noteri
           - runner-pool-label-reconcile-pc24x7
           - runner-pool-label-reconcile-pc24x7-runtime
@@ -57,6 +62,81 @@ permissions:
   issues: read
 
 jobs:
+  # Safe inventory: GitHub App token already managed by this control plane.
+  # The snapshot is not a lease and does NOT dispatch a physical workflow.
+  noteri_runner_readiness:
+    name: Noteri-runtime registered runner readiness (read-only)
+    if: >-
+      github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.actor == 'ericson-j-santos' &&
+      inputs.mode == 'noteri-runner-readiness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable control-plane source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Reuse existing GitHub App credential reference
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo 'NOTERI_RUNNER_APP_CREDENTIAL_REFERENCE_MISSING' >&2
+            exit 2
+          fi
+
+      - name: Create short-lived Noteri administration read-only token
+        id: noteri-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: noteri-runtime
+          permission-administration: read
+
+      - name: Read current registration, labels and busy state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.noteri-app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'NOTERI_RUNNER_APP_TOKEN_MISSING' >&2
+            exit 2
+          fi
+          # Fail closed on 401/403/404; do not print or store admin inventory.
+          if ! gh api --paginate --slurp \
+            "repos/ericson-j-santos/noteri-runtime/actions/runners?per_page=100" \
+            > "$RUNNER_TEMP/noteri-runner-inventory.json" 2>/dev/null; then
+            echo 'NOTERI_RUNNER_ADMIN_READ_UNAVAILABLE' >&2
+            exit 2
+          fi
+          if ! noteri_sha="$(gh api \
+            "repos/ericson-j-santos/noteri-runtime/branches/main" \
+            --jq '.commit.sha' 2>/dev/null)"; then
+            echo 'NOTERI_RUNNER_MAIN_SHA_UNAVAILABLE' >&2
+            exit 2
+          fi
+          python3 -B scripts/audit_noteri_runner_readiness.py \
+            --inventory "$RUNNER_TEMP/noteri-runner-inventory.json" \
+            --noteri-sha "$noteri_sha" \
+            --control-plane-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --observed-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo 'Runner state was sampled successfully; this is NOT a dispatch or lease.'
+
   governance:
     if: ${{ !startsWith(inputs.mode, 'runner-pool-label-reconcile-') }}
     name: Validate self-hosted runner governance
@@ -73,8 +153,8 @@ jobs:
 
       - name: Compile and test
         run: |
-          python -m py_compile scripts/check_self_hosted_runner_governance.py
-          python -m unittest tests/test_self_hosted_runner_governance.py
+          python -m py_compile scripts/check_self_hosted_runner_governance.py scripts/audit_noteri_runner_readiness.py
+          python -m unittest tests/test_self_hosted_runner_governance.py tests/test_audit_noteri_runner_readiness.py
 
       - name: Validate repository policy
         run: |
@@ -92,7 +172,7 @@ jobs:
 
   probe-pool:
     name: ReqSys DEV runner lease probe (${{ matrix.slot }})
-    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    if: github.event_name != 'pull_request' && inputs.mode != 'noteri-runner-readiness' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
     strategy:
       fail-fast: false
       matrix:
@@ -121,7 +201,7 @@ jobs:
 
   monitor-pool:
     name: Audit ReqSys DEV runner lease evidence
-    if: github.event_name != 'pull_request' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
+    if: github.event_name != 'pull_request' && inputs.mode != 'noteri-runner-readiness' && !startsWith(inputs.mode, 'runner-pool-label-reconcile-')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

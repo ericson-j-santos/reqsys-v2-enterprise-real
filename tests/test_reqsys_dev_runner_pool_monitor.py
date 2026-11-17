@@ -95,7 +95,10 @@ def test_monitor_workflow_is_scheduled_read_only_and_evidence_backed():
     assert "ReqSys DEV runner lease probe" in raw
     assert "matrix:" in raw
     assert "slot: [1, 2]" in raw
-    assert "permission-administration: read" not in raw
+    # Keep the existing portable lease monitor independent from admin inventory.
+    lease_jobs = raw.split("\n  probe-pool:\n", 1)[1].split(
+        "\n  runner-pool-label-reconcile:\n", 1)[0]
+    assert "permission-administration: read" not in lease_jobs
     assert "GH_TOKEN: ${{ github.token }}" in raw
     assert "/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" in raw
     assert "GH_PAT_ACTIONS" not in raw

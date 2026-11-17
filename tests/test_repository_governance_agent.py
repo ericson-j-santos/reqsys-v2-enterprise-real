@@ -67,7 +67,7 @@ def test_agent_limits_ci_fanout() -> None:
 def test_agent_reads_current_base_branch_sha_instead_of_pr_snapshot_sha() -> None:
     text = _text()
 
-    assert text.count("github.rest.repos.getBranch") == 2
+    assert text.count("github.rest.repos.getBranch") == 4
     assert "branch: current.base.ref" in text
     assert "const baseSha = baseBranch.commit.sha;" in text
     assert "const baseSha = current.base.sha;" not in text
@@ -325,3 +325,44 @@ def test_recovered_draft_queue_is_serial_and_explicit() -> None:
     assert "(observed.draft && !recoveredDraft)" in text
     assert "(current.draft && !currentRecoveredDraft)" in text
     assert "draft_not_recovered" in text
+
+
+
+def test_readonly_preflight_precedes_app_token_and_preserves_noop() -> None:
+    text = _text()
+    self_sync = text.split("sync-current-pr:", maxsplit=1)[1].split(
+        "sync-open-prs:", maxsplit=1
+    )[0]
+    global_sync = text.split("sync-open-prs:", maxsplit=1)[1]
+
+    for job in (self_sync, global_sync):
+        before = job.index("id: readonly-preflight")
+        config = job.index("name: Validar configuração da GitHub App")
+        token = job.index("id: app-token")
+        mutation = job.index("APP_TOKEN: ${{ steps.app-token.outputs.token }}")
+        assert before < config < token < mutation
+        assert job.count("if: steps.readonly-preflight.outputs.needs_write == 'true'") == 3
+        assert "github-token: ${{ github.token }}" in job
+        assert "core.setOutput('needs_write', String(" in job
+        assert "pr.head.repo?.full_name !== repository" in job
+        assert "(pr.draft && !recovered)" in job
+        assert "pr.mergeable !== true" in job
+        assert "Number(comparison.behind_by || 0) > 0" in job
+
+    assert text.count("permission-contents: write") == 2
+    assert text.count("id: readonly-preflight") == 2
+    assert text.count("permission-contents: read") == 0
+    assert "github.rest.pulls.merge" not in text
+    assert "--force" not in text
+
+
+def test_readonly_preflight_keeps_existing_compare_and_sync_fencing() -> None:
+    text = _text()
+    assert text.count("github.rest.repos.getBranch") == 4
+    assert text.count("const { data: base } = await github.rest.repos.getBranch") == 2
+    assert text.count("const baseSha = baseBranch.commit.sha;") == 2
+    assert text.count("current.head.sha !== expectedHeadSha") == 2
+    assert text.count("remoteHead !== expectedHeadSha") == 2
+    assert text.count("remoteBase !== baseSha") == 2
+    assert text.count("return { result: 'blocked', reason: 'post_read_base_not_ancestor' };") == 2
+    assert "item.reason === 'post_read_base_not_ancestor'" in text

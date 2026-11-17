@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri runner read-only GitHub App readiness preflight",
+  "status": "implementation",
+  "updated_at": "2026-11-17",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": {
+    "issue": "ericson-j-santos/noteri-runtime#42",
+    "todo": "TODO-69",
+    "environment": "dev",
+    "code_repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "target_repository": "ericson-j-santos/noteri-runtime",
+    "mode": "report-only; no dispatch or host activation",
+    "additional_cost_brl_max": 0
+  },
+  "architecture": {
+    "workflow": ".github/workflows/self-hosted-runner-governance-guard.yml",
+    "script": "scripts/audit_noteri_runner_readiness.py",
+    "tests": "tests/test_audit_noteri_runner_readiness.py",
+    "app": "existing REQSYS_STACK_REBASE_APP_ID / REQSYS_STACK_REBASE_PRIVATE_KEY references",
+    "token_permissions": "administration:read, target noteri-runtime only",
+    "app_installation_verified": false,
+    "new_workflow_surface": false,
+    "reuses_schedule": false,
+    "preserves_existing_schedule": true,
+    "manual_mode_only": true
+  },
+  "safety": {
+    "modifies_runner_registry": false,
+    "creates_secrets": false,
+    "host_dispatch": false,
+    "host_installation": false,
+    "raw_admin_inventory_uploaded": false,
+    "future_pickup_guaranteed_by_snapshot": false,
+    "production_touched": false,
+    "existing_physical_probe_suppressed_for_readonly_mode": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_audit_noteri_runner_readiness.py",
+      "tests/test_reqsys_dev_runner_pool_monitor.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "The new job is read-only with GitHub App administration:read limited to noteri-runtime; the existing lease monitor remains github.token/actions:read without administration; no dispatch, secrets, runner mutation, host or production effects. New manual mode must never enqueue the two preexisting physical runner lease jobs; schedule only executes legacy jobs and not the new unadmitted App read."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/noteri-runner-readiness-reuse.requirements.md",
+    "source_issue": "https://github.com/ericson-j-santos/noteri-runtime/issues/42"
+  }
+}

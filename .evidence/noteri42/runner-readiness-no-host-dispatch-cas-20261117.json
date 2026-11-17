@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "task": "ericson-j-santos/noteri-runtime#42/TODO-69",
+  "idempotency_key": "noteri42-runner-availability-pr3153-safety-fix-v1",
+  "correlation_id": "noteri42-runner-availability-pr3153-safety-fix",
+  "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
+  "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+  "previous_sha": "cd0d5a0d4f0cfac81127afbefe7a525aa84cdecb",
+  "produced_sha": "7335259406576ed6210eccf2f16dcf4d5fcf4eb9",
+  "reason": "Prevent manual read-only mode from triggering existing self-hosted physical probes and avoid automatic scheduled admin queries before GitHub App cross-repo permission confirmed.",
+  "negative_criteria": [
+    "new read-only mode excludes probe-pool and monitor-pool",
+    "new job manual only and owner guarded",
+    "legacy schedule stays unchanged",
+    "app token admin read scoped to noteri-runtime only"
+  ],
+  "prepr_previous_success": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/44151956269",
+  "validation": "new final SHA revalidation pending",
+  "files": [
+    {
+      "path": ".github/workflows/self-hosted-runner-governance-guard.yml",
+      "before_blob_sha": "a88956bed77acfe184317f38b3ce48fa4e9d1627",
+      "after_blob_sha": "33345210a2093685dcd2a29b704daa9355d73ae6",
+      "before_sha256": "47b3706e3ccd79fb3426631e8be198e92dc7c8e30e0ea3a4fe252e7c2c5eb9a6",
+      "after_sha256": "b72ae7c2fabf7e96d2a4a85727668a3c95592c983f53e6931da9f810649f4d9e"
+    },
+    {
+      "path": "tests/test_audit_noteri_runner_readiness.py",
+      "before_blob_sha": "b786245c97507b333ed80828c581c2ce98d18fdd",
+      "after_blob_sha": "c4a9fee841ce29ec41c3d1009e183b2e941965e7",
+      "before_sha256": "b62dee812d5d1681dc0d54905b21a426512829b14b9f203d689b3a383c95b856",
+      "after_sha256": "41f09b388d7a57ee2b8315638953659a26e47a3e0c3a193e51046c4363b82a08"
+    },
+    {
+      "path": ".sdd/specs/noteri-runner-readiness-reuse.requirements.md",
+      "before_blob_sha": "c3e3e03acdc8b673e250b02f86dd07bd05bc2898",
+      "after_blob_sha": "17be7e4dae6d61883cf429863c2b63a384f9cbea",
+      "before_sha256": "9b67f27a88664c13e0630e8a4a9ae2811b57065aa805b73e01a1d24945f92731",
+      "after_sha256": "e9c0da5d7c3520802b2e18f51813b06a95f22ee8efcf75ba3227b062aa642e6a"
+    },
+    {
+      "path": ".sdd/specs/noteri-runner-readiness-reuse.spec.json",
+      "before_blob_sha": "ef243973565698d3bc6d64588eaec55c7a786da0",
+      "after_blob_sha": "dd761d0b89ef2525d6a96c0064b9e11f6a7a9019",
+      "before_sha256": "9f89bc2f7d29654f81b95c23f80aa9f906a11d9cc462207cb1d5ec2bad7b1ff5",
+      "after_sha256": "0c5ebff509c0bcac260ee77bd7bac6abb5c1f5cbc7af3a6d2d26ff1f405b8d79"
+    }
+  ],
+  "patch_sha256": "b7881803522e05fa6c91de586d538d4b9a238c5f087e4422dbfb3dfcf6f486c3",
+  "patch_format": "sha256(JSON.stringify(sorted array of {path,before_sha256,after_sha256}))",
+  "physical_host_invoked": false,
+  "runner_labels_changed": false,
+  "credential_mutated": false,
+  "merge_executed": false
+}

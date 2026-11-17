@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "issue": "noteri-runtime#42",
+  "request_id": "noteri42-readiness-20261117",
+  "idempotency_key": "noteri42-readiness-sdd-repair-20261117",
+  "correlation_id": "noteri42-readiness-sdd-repair-20261117",
+  "source_mode": "assisted",
+  "model_calls": 0,
+  "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+  "previous_published_sha": "4479b16c1814e7383bd099e65c8a86934988a3f6",
+  "produced_sha": "2485d4e4cd236613a001a98bf6e9938b52fc8d38",
+  "failed_run": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/44150929787",
+  "reproduced_defects": [
+    "SDD_SPEC_REQUIRED",
+    "Legacy runner-pool test incorrectly asserted admin-read prohibition across the entire shared workflow"
+  ],
+  "repair_contract": "Separate new GitHub App scoped read-only monitor from existing portable job, keeping the portable monitor forbidden from administrative access.",
+  "files": [
+    {
+      "path": "tests/test_reqsys_dev_runner_pool_monitor.py",
+      "before_git_blob": "1e1a35d77b0d1922326dd145bb7c84fd6009ecea",
+      "before_sha256": "e22cf84176712ee86bd69094198376fee46cc05001428057699235c2451639c4",
+      "after_git_blob": "f336467128d727efcb640ea2a0273d9c54c8ff06",
+      "after_sha256": "ba51497da437dc9d527824dc16223bbfb4fdfaa7bff6fc47820413683f60ef9d"
+    },
+    {
+      "path": ".sdd/specs/noteri-runner-readiness-reuse.requirements.md",
+      "before_git_blob": null,
+      "before_sha256": null,
+      "after_git_blob": "c3e3e03acdc8b673e250b02f86dd07bd05bc2898",
+      "after_sha256": "9b67f27a88664c13e0630e8a4a9ae2811b57065aa805b73e01a1d24945f92731"
+    },
+    {
+      "path": ".sdd/specs/noteri-runner-readiness-reuse.spec.json",
+      "before_git_blob": null,
+      "before_sha256": null,
+      "after_git_blob": "ef243973565698d3bc6d64588eaec55c7a786da0",
+      "after_sha256": "9f89bc2f7d29654f81b95c23f80aa9f906a11d9cc462207cb1d5ec2bad7b1ff5"
+    }
+  ],
+  "patch_sha256": "8ba2805c078ee5865206d1881f305c228aab88f8c7b673c740f0a36d0cc30f56",
+  "patch_hash_method": "SHA-256 over JSON.stringify(sorted array of {path,before_sha256,after_sha256})",
+  "validation": "awaiting fresh Pre-PR readiness SHA-bound execution",
+  "main_mutated": false,
+  "host_dispatched": false,
+  "cost_extra_brl_authorized": 0
+}
