@@ -42,6 +42,17 @@ def test_smoke_script_disables_lane_and_proves_no_execution() -> None:
     assert "checkout_sha_mismatch" in raw
     assert "resolve_token_file" in raw
     assert "token_file_from_env" not in raw
+    assert "--completion-timeout-seconds" in raw
+    assert "completion_timeout_seconds_must_be_between_75_and_900" in raw
+    assert '"progress_stage": "independent_readback_complete"' in raw
+
+
+def test_smoke_workflow_exposes_bounded_completion_timeout() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "completion_timeout_seconds:" in raw
+    assert "default: '75'" in raw
+    assert "75–900 s" in raw
+    assert '"$env:COMPLETION_TIMEOUT_SECONDS"' in raw
 
 
 def test_gateway_and_policy_allow_only_fixed_worker_pool_smoke() -> None:
@@ -63,3 +74,4 @@ def test_sdd_registers_runtime_smoke_and_tests() -> None:
     assert ".github/workflows/codex-worker-pool-smoke-dev.yml" in spec["files"]
     assert "scripts/codex_worker_pool_smoke_dev.py" in spec["files"]
     assert "tests/test_codex_worker_pool_smoke_dev.py" in spec["sdd_gate"]["tests"]
+
