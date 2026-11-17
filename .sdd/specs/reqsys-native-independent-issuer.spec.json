@@ -1,0 +1,26 @@
+{
+  "feature_name": "reqsys-native-independent-issuer",
+  "project": "ReqSys / Runtime Platform / TODO Global",
+  "created_at": "2026-11-11",
+  "updated_at": "2026-11-11",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Emissor fail-closed com testemunho Ed25519 externo verificado apenas por chave pública, readback oficial GitHub e CAS.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_native_independent_issuer.py",
+      "tests/test_reqsys_ci_offline_prerequisites.py"
+    ],
+    "evidence_contract": "Assinatura Ed25519 usa chave privada no observador e exclusivamente chave pública no emissor; rejeitar HMAC legado, chave pública incorreta, adulteração, SHA/host/lease divergente. Não permitir dispatch nem certificar host sem fonte física independente real."
+  },
+  "evidence": [
+    "Issue #3138 aberta e PR #3141 draft, base main@ea8cc3a26c65fd84f3abf462fa3f1400ed316e05.",
+    "Workflows UX Evidence Smoke #43054556238 e CI E2E Governado #43054555641 falharam antes dos testes por DNS de apt azure.archive.ubuntu.com.",
+    "Testes usam fixtures locais; autenticação física do emissor e handoff entre hosts não efetuados.",
+    "A verificação HMAC anterior permitia forjar witness no emissor detentor da chave; correção Ed25519 separa capacidade de assinar e verificar."
+  ]
+}

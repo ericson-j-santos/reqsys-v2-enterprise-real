@@ -1,0 +1,25 @@
+{
+  "feature_name": "reqsys-native-dev-gateway-preflight",
+  "project": "ReqSys / Runtime Platform / TODO Global",
+  "created_at": "2026-11-11",
+  "updated_at": "2026-11-11",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Preflight nativo em action isolada e consumidor de provas do Session Launcher/Gateway com verificação fora do host, sem emitir atestado ou alterar executor.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_native_gateway_preflight.py",
+      "tests/test_reqsys_native_github_readback.py"
+    ],
+    "evidence_contract": "O preflight local devolve ready_for_work=false. O verificador externo precisa de HMAC e vínculo cryptográfico a observações do Gateway, Launcher e API oficial GitHub; nenhuma saída habilita dispatch. Sem emissor externo real e E2E físico o estado é ADOPTION_PENDING."
+  },
+  "evidence": [
+    "Issue #3138 preexistente; PR draft #3141 preservada sem recriação.",
+    "Gateway canônico em chatgpt-operational-rules/main@58dcd4200f412a866278027ba9e433439a03f3b3.",
+    "Nenhuma alteração de secrets, labels, runner, Docker, Azure ou workflow operacional."
+  ]
+}

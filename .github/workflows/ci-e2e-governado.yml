@@ -146,8 +146,17 @@ jobs:
             playwright-${{ runner.os }}-
       - name: Instalar dependências
         run: npm ci
-      - name: Instalar Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Validar Chrome pré-instalado no runner (sem apt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [[ -z "$chrome" || ! -x "$chrome" ]]; then
+            echo "::error::CHROME_PREINSTALLED_MISSING"
+            exit 1
+          fi
+          "$chrome" --version
+          echo "REQSYS_SYSTEM_CHROME=1" >> "$GITHUB_ENV"
       - name: Subir Vite
         env:
           GATEWAY_PORT: "5173"

@@ -1,0 +1,22 @@
+{
+  "feature_name": "reqsys-native-dev-readiness-contract",
+  "project": "ReqSys / Runtime Platform / TODO Global",
+  "created_at": "2026-11-11",
+  "updated_at": "2026-11-11",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Contrato de validação nativa read-only e prova assinada para futuro perfil DEV sem Docker. Não modifica workflow, labels, runner ou execução física.",
+  "sdd_gate": {
+    "tests": ["tests/test_reqsys_native_dev_profile.py"],
+    "evidence_contract": "Política validada não é host pronto. Só recibo assinado por Validator externo com SHA/host/lease/gates atuais pode ser aceito. No código atual dispatch_allowed=false em todos os resultados, e E2E físico segue pendente. Testes sintéticos não certificam host."
+  },
+  "evidence": [
+    "Issue #3138 aberta na base ReqSys main@ea8cc3a26c65fd84f3abf462fa3f1400ed316e05, feature/assisted com origem e aceites anteriores; nenhuma implementação native_runtime no policy existente.",
+    "Regras chatgpt-operational-rules/main@58dcd4200f412a866278027ba9e433439a03f3b3 (v1.6.21).",
+    "Este incremento é isolado, não faz deploy, labels, dispatch, segredos nem integração com o Gateway real."
+  ]
+}

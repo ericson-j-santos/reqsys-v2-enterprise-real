@@ -1,0 +1,25 @@
+{
+  "feature_name": "reqsys-ci-hosted-runner-offline-prerequisites",
+  "project": "ReqSys CI / #3138",
+  "created_at": "2026-11-11",
+  "updated_at": "2026-11-11",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Remover dependência de apt para pré-requisitos de testes no runner hospedado sem dispensar testes ou criar status falso.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_ci_offline_prerequisites.py",
+      "tests/test_native_postgres_ci_contract.py"
+    ],
+    "evidence_contract": "Run 43050487916/43050487947 comprova falhas de apt/DNS. Wheel binário pyodbc e Chrome preinstalado devem falhar fechado, e pytest/Playwright continuar efetivos."
+  },
+  "evidence": [
+    "Issue #3138 e PR #3141 com bloqueio CI SHA-bound.",
+    "GitHub runner Ubuntu 24.04 software manifest inclui Google Chrome e Chromium.",
+    "E2E físico não executado; PR permanece draft sem merge."
+  ]
+}

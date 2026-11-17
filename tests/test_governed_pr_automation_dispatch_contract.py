@@ -129,3 +129,19 @@ def test_recovered_draft_is_promoted_to_ready_before_any_merge() -> None:
     assert "pullRequestId: currentDraft.node_id" in block
     assert "Merge: não executado neste ciclo" in block
     assert block.index("markPullRequestReadyForReview") < block.index("github.rest.pulls.merge({")
+
+
+def test_native_runtime_remains_blocked_on_automated_ready_and_manual_merge() -> None:
+    """Toda rota para promover ou integrar exige mais que CI verde."""
+    text = _text()
+    auto = text.split("auto-merge-after-governed-queue:", maxsplit=1)[1].split("  governed-pr-check:", maxsplit=1)[0]
+    manual = text.split("  governed-pr-check:", maxsplit=1)[1]
+    assert "github.rest.pulls.listFiles" in auto
+    assert "BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED" in auto
+    assert "NATIVE_PHYSICAL_FILES_UNAVAILABLE" in auto
+    assert auto.index("BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED") < auto.index("markPullRequestReadyForReview")
+    assert auto.index("BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED") < auto.index("github.rest.pulls.merge({")
+    assert "github.rest.pulls.listFiles" in manual
+    assert "BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED" in manual
+    assert "NATIVE_PHYSICAL_FILES_UNAVAILABLE" in manual
+    assert manual.index("BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED") < manual.index("core.setOutput('eligible'")

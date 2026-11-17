@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "profile": "native_runtime",
+  "environment": "dev",
+  "profile_label": "reqsys-dev-native-runtime-v1",
+  "required_runner_labels": ["self-hosted", "Windows", "X64", "reqsys-dev", "reqsys-dev-base-v1", "reqsys-dev-native-runtime-v1"],
+  "required_tools": ["git", "python", "node"],
+  "allowed_repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "receipt_issuer": "reqsys-governed-independent-validator-v1",
+  "max_receipt_age_seconds": 300,
+  "required_evidence": ["SESSION_LAUNCH_OK", "state_validated", "gateway_validated", "worktree_exclusive", "lease_exclusive", "native_dependencies_validated", "cost_zero_confirmed"],
+  "forbidden_execution": ["docker", "compose", "container", "reboot", "deploy", "merge", "auto_merge", "gui_automation"],
+  "managed_labels_may_change": false,
+  "dispatch_allowed": false,
+  "requires_independent_receipt": true
+}

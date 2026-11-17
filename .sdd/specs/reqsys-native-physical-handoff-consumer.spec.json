@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "reqsys-native-physical-handoff-consumer",
+  "increment_type": "feature",
+  "status": "implementation",
+  "project": "ReqSys / E2E Platform",
+  "created_at": "2026-11-17",
+  "updated_at": "2026-11-17",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Consumidor fail-closed do contrato físico multi-host da E2E Platform, fixado por SHA e hash.",
+  "sdd_gate": {
+    "tests": ["tests/test_reqsys_native_physical_handoff_consumer.py"],
+    "evidence_contract": "E2E Platform 29278bbf9e84f851edbe66cd36ef0ca924521f7b; dois hosts distintos; mesma task; CAS; retomada; readback; replay negativo; custo zero; nenhuma autorização operacional."
+  },
+  "evidence": [
+    "Contrato publicado em branch isolada da E2E Platform; execução física continua dependente de recibo real.",
+    "Testes usam fixtures sintéticas apenas para regressão do consumidor e não certificam hosts."
+  ],
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "scope": "physical-handoff-evidence-consumer"
+  },
+  "acceptance_criteria": [
+    "O consumidor aceita somente o checkout da E2E Platform no SHA publicado e com o hash SHA-256 esperado do validador oficial.",
+    "A evidência é vinculada ao repositório, PR, HEAD, ambiente, workflow run, job e tentativa esperados.",
+    "A admissão exige dois hosts físicos distintos, a mesma task, checkpoint CAS, retomada, readback externo, replay negativo e custo zero confirmado.",
+    "Qualquer divergência de resultado, SHA, tentativa, identidade dos hosts ou hash do validador falha fechado.",
+    "Uma evidência válida pode admitir somente a comprovação física; dispatch, merge e deploy permanecem explicitamente não autorizados.",
+    "Fixtures sintéticas testam apenas a regressão do consumidor e nunca certificam uma execução física real."
+  ]
+}

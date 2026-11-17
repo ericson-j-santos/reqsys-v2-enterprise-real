@@ -86,3 +86,30 @@ def test_missing_pr_number_does_not_create_false_eligibility() -> None:
     assert 'CI_STATUS="red"' in policy
     assert 'if [ "$ELIGIBLE" != "true" ]; then' in policy
     assert "exit 1" in policy
+
+
+def test_native_runtime_requires_independent_physical_e2e_before_merge_label() -> None:
+    """CI verde e arquivos nativos modificados nunca bastam para a fila."""
+    workflow = workflow_path().read_text(encoding="utf-8")
+    native = workflow.partition("      - name: Exigir prova fisica independente para mudancas no perfil nativo")[2].partition(
+        "      - name: Consolidar política e elegibilidade"
+    )[0]
+    assert native
+    assert "github.rest.pulls.listFiles" in native
+    assert "config/reqsys-native-dev-profile.json" in native
+    assert "scripts/reqsys_native_" in native
+    assert "core.setOutput('admitted', 'false')" in native
+    assert "BLOCKED_NATIVE_PHYSICAL_E2E_NOT_VERIFIED" in native
+    assert "core.setOutput('admitted', 'true')" in native
+    assert native.index("files.some((file) => isNativeRuntimeChange") < native.index("core.setOutput('admitted', 'true')")
+    policy = workflow.partition("      - name: Consolidar política e elegibilidade")[2].partition(
+        "      - name: Sincronizar label de elegibilidade"
+    )[0]
+    assert 'if [ "${{ steps.native_physical.outputs.admitted }}" != "true" ]; then' in policy
+    assert 'CONTRACTS="red"' in policy
+    assert "native_physical_gate: $native_physical_gate" in policy
+    sync = workflow.partition("      - name: Sincronizar label de elegibilidade")[2].partition(
+        "      - name: Publicar evidência de política"
+    )[0]
+    assert "continue-on-error: true" not in sync
+    assert "if (hasLabel)" in sync and "github.rest.issues.removeLabel" in sync
