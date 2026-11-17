@@ -23,7 +23,38 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verificar necessidade de escrita da PR (somente leitura)
+        id: readonly-preflight
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+            const number = Number(context.payload.pull_request?.number);
+            if (!Number.isSafeInteger(number) || number <= 0) {
+              core.setFailed('invalid_pull_request_number');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const labels = (pr.labels || []).map(label => label.name);
+            const recovered = pr.draft && labels.includes('ci:recuperado');
+            if (
+              pr.state !== 'open' || (pr.draft && !recovered) ||
+              pr.base.ref !== 'main' || pr.head.repo?.full_name !== repository ||
+              pr.mergeable !== true || pr.mergeable_state === 'dirty'
+            ) {
+              core.notice('PR sem necessidade admissível de escrita.');
+              core.setOutput('needs_write', 'false');
+              return;
+            }
+            const { data: base } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: base.commit.sha + '...' + pr.head.sha,
+            });
+            core.setOutput('needs_write', String(Number(comparison.behind_by || 0) > 0));
       - name: Validar configuração da GitHub App
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -36,6 +67,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -46,6 +78,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar PR atual com proteção por HEAD
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -296,7 +329,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Verificar necessidade de sincronizar branches (somente leitura)
+        id: readonly-preflight
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', per_page: 100,
+              sort: 'updated', direction: 'asc',
+            });
+            const recoveredPulls = pulls
+              .filter(pr => (pr.labels || []).some(label => label.name === 'ci:recuperado'))
+              .sort((a, b) => Number(a.number) - Number(b.number));
+            const candidates = recoveredPulls.length ? recoveredPulls.slice(0, 1) : pulls;
+            let needsWrite = false;
+            for (const summary of candidates) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner, repo, pull_number: Number(summary.number),
+              });
+              const labels = (pr.labels || []).map(label => label.name);
+              const recovered = pr.draft && labels.includes('ci:recuperado');
+              if (
+                pr.state !== 'open' || (pr.draft && !recovered) ||
+                pr.base.ref !== 'main' || pr.head.repo?.full_name !== repository ||
+                pr.mergeable !== true || pr.mergeable_state === 'dirty'
+              ) continue;
+              const { data: base } = await github.rest.repos.getBranch({
+                owner, repo, branch: 'main',
+              });
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: base.commit.sha + '...' + pr.head.sha,
+              });
+              if (Number(comparison.behind_by || 0) > 0) {
+                needsWrite = true;
+                break;
+              }
+            }
+            core.setOutput('needs_write', String(needsWrite));
       - name: Validar configuração da GitHub App
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -309,6 +383,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -319,6 +394,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar branches com proteção por HEAD
+        if: steps.readonly-preflight.outputs.needs_write == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           MAX_BRANCH_SYNCS: "3"
