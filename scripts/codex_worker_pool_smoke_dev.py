@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,7 @@ def run_smoke(
     correlation_id: str,
     pool_url: str,
     token_file: Path | None,
+    completion_timeout_seconds: int,
 ) -> dict[str, Any]:
     expected_sha = expected_sha.strip().lower()
     if not SHA40.fullmatch(expected_sha):
@@ -56,6 +58,8 @@ def run_smoke(
         raise BridgeError("checkout_sha_mismatch")
     if not correlation_id.strip():
         raise BridgeError("correlation_id_invalid")
+    if not 75 <= completion_timeout_seconds <= 900:
+        raise BridgeError("completion_timeout_seconds_must_be_between_75_and_900")
 
     pool_url = validate_pool_url(pool_url)
     token = read_token(token_file)
@@ -140,6 +144,9 @@ def run_smoke(
         "secrets_exposed": False,
         "production_touched": False,
         "deploy_executed": False,
+        "completion_timeout_seconds": completion_timeout_seconds,
+        "progress_stage": "independent_readback_complete",
+        "progress_observed_at_epoch": time.time(),
     }
 
 
@@ -152,6 +159,7 @@ def main() -> int:
         default=os.getenv("CODEX_WORKER_POOL_URL", "http://127.0.0.1:8097"),
     )
     parser.add_argument("--token-file", type=Path)
+    parser.add_argument("--completion-timeout-seconds", type=int, default=75)
     parser.add_argument(
         "--output",
         type=Path,
@@ -166,6 +174,7 @@ def main() -> int:
             correlation_id=args.correlation_id,
             pool_url=args.pool_url,
             token_file=token_file,
+            completion_timeout_seconds=args.completion_timeout_seconds,
         )
         write_evidence(args.output, result)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
@@ -185,3 +194,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

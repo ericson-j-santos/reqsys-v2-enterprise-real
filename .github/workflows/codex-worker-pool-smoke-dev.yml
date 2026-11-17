@@ -20,6 +20,11 @@ on:
           - backup-volume-restore
           - candidate-canary
           - restore-rehearsal
+      completion_timeout_seconds:
+        description: Limite do probe físico de conclusão (75–900 s)
+        required: false
+        default: '75'
+        type: string
 
 permissions:
   contents: read
@@ -38,6 +43,7 @@ jobs:
       CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
       CORRELATION_ID: codex-worker-pool-smoke-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_FILE: artifacts/codex-worker-pool-smoke-dev/evidence.json
+      COMPLETION_TIMEOUT_SECONDS: ${{ inputs.completion_timeout_seconds || '75' }}
 
     steps:
       - name: Checkout SHA imutável
@@ -60,6 +66,7 @@ jobs:
           python scripts/codex_worker_pool_smoke_dev.py `
             --expected-sha "${{ github.sha }}" `
             --correlation-id "$env:CORRELATION_ID" `
+            --completion-timeout-seconds "$env:COMPLETION_TIMEOUT_SECONDS" `
             --output "$env:EVIDENCE_FILE"
 
       - name: Validar evidência independente
@@ -1533,3 +1540,4 @@ jobs:
           path: ${{ steps.session.outputs.target_path }}\artifacts\pc24x7-worker-pool-real-restore-dev\evidence.json
           if-no-files-found: error
           retention-days: 30
+
