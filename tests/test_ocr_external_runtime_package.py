@@ -149,3 +149,31 @@ def test_technical_ocr_reports_retention_preserves_evidence_and_runtime_bundle()
     bundle = next(step for step in bundle_steps if step.get("name") == "Publicar bundle OCR reproduzível")
     assert bundle["with"]["retention-days"] == "90"
     assert bundle["with"]["if-no-files-found"] == "error"
+
+def test_benchmark_has_native_isolated_runtime_without_weakening_image_contract() -> None:
+    steps = _yaml(BENCHMARK_WORKFLOW)["jobs"]["external-package-contract"]["steps"]
+    names = [step.get("name", "") for step in steps]
+    native = "Validar instalação OCR nativa isolada e controle negativo"
+    assert names.count(native) == 1
+    assert names.index("Validar evidência durável do pacote OCR") < names.index(native) < names.index(
+        "Publicar bundle OCR reproduzível"
+    )
+    run = steps[names.index(native)]["run"]
+    for token in (
+        "ocr_distribution_evidence.py",
+        "OCR_NATIVE_TAMPER_REJECTED",
+        "size_mismatch|sha256_mismatch",
+        "python -m venv",
+        "env -u PYTHONPATH",
+        "importlib.util.find_spec",
+        "--no-index --no-deps",
+        "ocr_native_module_origin_not_isolated",
+        "ocr_native_module_version_mismatch",
+        "ocr_native_wheel_metadata_version_mismatch",
+        "OCR_NATIVE_ISOLATED_RUNTIME_OK",
+    ):
+        assert token in run
+    assert "docker " not in run.lower()
+    image_steps = _yaml(BENCHMARK_WORKFLOW)["jobs"]["external-runtime-image-contract"]["steps"]
+    assert any("docker build" in step.get("run", "") for step in image_steps)
+    assert any("docker run" in step.get("run", "") for step in image_steps)

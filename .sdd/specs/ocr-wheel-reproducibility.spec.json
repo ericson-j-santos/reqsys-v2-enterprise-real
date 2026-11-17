@@ -55,5 +55,15 @@
     ],
     "fail_closed": true,
     "independent_download_required": true
+  },
+  "native_runtime_isolation_contract": {
+    "job": "external-package-contract",
+    "step": "Validar instalação OCR nativa isolada e controle negativo",
+    "package_version": "1.2.0",
+    "positive": "venv_site_packages_import",
+    "negative": "tampered_wheel_sha_rejected",
+    "image_contract_preserved": true,
+    "image_equivalence_claimed": false,
+    "production_allowed": false
   }
 }

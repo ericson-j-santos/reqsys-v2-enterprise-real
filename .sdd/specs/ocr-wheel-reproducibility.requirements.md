@@ -68,3 +68,16 @@ ou reprodução do backend histórico desconhecido.
 23. A mudança vale apenas para artefatos novos, não apaga evidência histórica, não altera produção, não utiliza corpus institucional, não concede autorização de merge ou deploy e não elimina testes.
 
 **Validação operacional:** observar execução do workflow no SHA final, confirmar por API as datas de expiração dos relatórios e medir armazenamento real antes/depois, preservando o custo adicional máximo de R$ 0,00.
+
+## Extensão — validação nativa isolada sem Docker (17/11/2026)
+
+### Critérios de aceite adicionais
+
+24. No job `external-package-contract`, reutilizar o wheel externo verificado e o código `ocr_distribution_evidence.py` já obtido na preparação por SHA fixo, sem criar novo serviço ou descarregar outro artefato.
+25. O verificador deve rejeitar uma cópia do wheel adulterada antes da instalação, com falha específica `size_mismatch` ou `sha256_mismatch`; a verificação do bundle íntegro deve passar.
+26. Criar um ambiente virtual Python isolado fora do checkout: antes de instalar, o pacote `ocr_evidencia` não deve estar acessível; depois de instalar com `--no-index --no-deps`, a origem deve estar dentro do `site-packages` desse ambiente e a versão e metadados devem ser `1.2.0`.
+27. Preservar `external-runtime-image-contract`, seus controles negativo e positivo de imagem e o requisito do contrato original; o teste nativo é complementar e **não comprova funcionamento de imagem**.
+28. `tests/test_ocr_external_runtime_package.py` deve proteger ordem, isolamento, falha negativa, versão e preservação dos demais jobs. A prova de CI nativa no SHA corrente deve ser conferida independentemente.
+29. Sem Docker na execução nativa, sem novas permissões, sem dados pessoais, sem alterar deploy/produção, sem upload adicional e sem declarar `READY_FOR_MERGE` por testes estáticos.
+
+**Nota de alcance:** a proibição operacional de Docker impede executar `external-runtime-image-contract`; até existir arquitetura nativa completa e aceite E2E independente, o gate de imagem/deploy continua bloqueado. Não marcar `skipped` como sucesso.

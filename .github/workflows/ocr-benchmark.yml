@@ -237,6 +237,66 @@ jobs:
           )
           PY
 
+      - name: Validar instalação OCR nativa isolada e controle negativo
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.ocr-package.outputs.ocr-sha }}" = "$OCR_ENGINE_SHA"
+          bundle="$GITHUB_WORKSPACE/backend/vendor/ocr-evidence-engine"
+          wheel=( "$bundle"/*.whl )
+          test "${#wheel[@]}" -eq 1
+          verify=".external/ocr-evidence-engine-a/scripts/ocr_distribution_evidence.py"
+          python "$verify" verify \
+            --bundle-dir "$bundle" \
+            --expected-repository ericson-j-santos/ocr-evidence-engine \
+            --expected-git-sha "$OCR_ENGINE_SHA"
+
+          native="$RUNNER_TEMP/ocr-native-isolated"
+          mkdir -p "$native"
+          cp -a "$bundle" "$native/adulterado"
+          printf '\\n' >> "$native/adulterado/"*.whl
+          set +e
+          python "$verify" verify \
+            --bundle-dir "$native/adulterado" \
+            --expected-repository ericson-j-santos/ocr-evidence-engine \
+            --expected-git-sha "$OCR_ENGINE_SHA" > "$native/negative.log" 2>&1
+          negative_rc=$?
+          set -e
+          test "$negative_rc" -eq 2
+          grep -Eq 'size_mismatch|sha256_mismatch' "$native/negative.log"
+          echo "OCR_NATIVE_TAMPER_REJECTED"
+
+          python -m venv "$native/venv"
+          (
+            cd "$native"
+            env -u PYTHONPATH "$native/venv/bin/python" -I -c '
+          import importlib.util
+          if importlib.util.find_spec("ocr_evidencia") is not None:
+              raise SystemExit("ocr_native_unexpected_preinstalled_module")
+          '
+          )
+          "$native/venv/bin/python" -m pip install \
+            --disable-pip-version-check --no-index --no-deps "${wheel[0]}"
+          (
+            cd "$native"
+            env -u PYTHONPATH "$native/venv/bin/python" -I - <<'PY'
+          import importlib.metadata
+          import sys
+          from pathlib import Path
+          import ocr_evidencia
+
+          origin = Path(ocr_evidencia.__file__).resolve()
+          venv_root = Path(sys.prefix).resolve()
+          if "site-packages" not in origin.parts or not origin.is_relative_to(venv_root):
+              raise SystemExit("ocr_native_module_origin_not_isolated")
+          if ocr_evidencia.__version__ != "1.2.0":
+              raise SystemExit("ocr_native_module_version_mismatch")
+          if importlib.metadata.version("ocr-evidence-engine") != "1.2.0":
+              raise SystemExit("ocr_native_wheel_metadata_version_mismatch")
+          print("OCR_NATIVE_ISOLATED_RUNTIME_OK version=1.2.0")
+          PY
+          )
+
       - name: Publicar bundle OCR reproduzível
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
