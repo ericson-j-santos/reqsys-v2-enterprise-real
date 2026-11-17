@@ -364,4 +364,5 @@ def test_readonly_preflight_keeps_existing_compare_and_sync_fencing() -> None:
     assert text.count("current.head.sha !== expectedHeadSha") == 2
     assert text.count("remoteHead !== expectedHeadSha") == 2
     assert text.count("remoteBase !== baseSha") == 2
-    assert text.count("post_read_base_not_ancestor") == 2
+    assert text.count("return { result: 'blocked', reason: 'post_read_base_not_ancestor' };") == 2
+    assert "item.reason === 'post_read_base_not_ancestor'" in text
