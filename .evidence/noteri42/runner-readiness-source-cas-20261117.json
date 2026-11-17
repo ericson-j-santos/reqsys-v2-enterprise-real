@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "noteri42-readiness-ghapp-source-20261117",
+  "correlation_id": "noteri42-runner-readiness-20261117",
+  "task": "noteri-runtime#42/TODO-69",
+  "classification": "feature",
+  "source_mode": "assisted",
+  "model_calls": 0,
+  "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+  "produced_sha": "f6cdd6db771bba5544cf868d6b7b291b0dc8d514",
+  "artifact_ref": "git+https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/commit/f6cdd6db771bba5544cf868d6b7b291b0dc8d514",
+  "patch_sha256": "09ef8546e1e5c800a4f56a2db7bd5cbc0c7559b8d97012dcfa0b8f3105277707",
+  "patch_sha256_canonicalization": "sha256(UTF-8 json.dumps(files sorted by path, sort_keys=True, separators=(',', ':'), ensure_ascii=False)), entries have path/before_sha256/after_sha256",
+  "files": [
+    {
+      "path": ".github/workflows/self-hosted-runner-governance-guard.yml",
+      "git_blob_sha": "a88956bed77acfe184317f38b3ce48fa4e9d1627",
+      "before_sha256": "ef8c624c64076e0ebf2818706e0979fa2c7431bdac99384c1d513d699a9bb176",
+      "after_sha256": "47b3706e3ccd79fb3426631e8be198e92dc7c8e30e0ea3a4fe252e7c2c5eb9a6"
+    },
+    {
+      "path": "scripts/audit_noteri_runner_readiness.py",
+      "git_blob_sha": "d254ce79d76894acaddf6dc736e020233705c8d4",
+      "before_sha256": null,
+      "after_sha256": "aaf8fca2e021b2466d278ea2e51b9237fb68526cf7aecc10fa19265f74e95a0a"
+    },
+    {
+      "path": "tests/test_audit_noteri_runner_readiness.py",
+      "git_blob_sha": "b786245c97507b333ed80828c581c2ce98d18fdd",
+      "before_sha256": null,
+      "after_sha256": "b62dee812d5d1681dc0d54905b21a426512829b14b9f203d689b3a383c95b856"
+    }
+  ],
+  "operational_constraints": {
+    "extra_cost_brl_max": 0,
+    "no_new_secret": true,
+    "no_paid_tier": true,
+    "no_host_dispatch": true,
+    "no_runner_label_mutation": true,
+    "no_host_activation": true,
+    "read_only_scope": "GitHub Admin read",
+    "app_installation_not_verified": true
+  },
+  "provenance": "Source main and blob hashes independently re-read before publishing branch. Status is snapshot only; not a lease or operation receipt.",
+  "independent_validation": "pending GitHub Actions Pre-PR gate and SHA-bound fresh checkout"
+}
