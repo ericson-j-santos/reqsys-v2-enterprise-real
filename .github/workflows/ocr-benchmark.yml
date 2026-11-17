@@ -342,6 +342,7 @@ jobs:
           name: ocr-benchmark
           path: artifacts/ocr-benchmark.json
           if-no-files-found: error
+          retention-days: 14
   evidence-v2:
     runs-on: ubuntu-latest
     timeout-minutes: 18
@@ -367,3 +368,4 @@ jobs:
           name: ocr-evidence-v2
           path: artifacts/ocr-evidence-v2.json
           if-no-files-found: error
+          retention-days: 14
