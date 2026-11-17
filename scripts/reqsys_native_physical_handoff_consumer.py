@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import subprocess
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 from scripts.validate_reqsys_native_dev_profile import NativeAdmissionBlocked
 
