@@ -160,3 +160,24 @@ também possui monitor próprio, com 22 runs e taxa de 54,55% em 7 dias.
     autorização própria e nunca é consequência deste ajuste.
 12. Custo incremental zero; não alterar segredos, destinatários ou ambientes
     produtivos. Evidenciar READY_FOR_PR no SHA, CI/contratos e TODO Global.
+
+
+## Evolução #3150 — ordenação não determinística da API de Actions (17/11/2026)
+
+O run 44180300657 abortou a geração do dashboard na página 32 com
+`Runs fora de ordem`. A API retornou uma página válida, com timestamps válidos,
+mas não monotônica. O monitor 44180306063 confirmou que a ausência de um novo
+artefato manteve os dados públicos fora da janela de frescor.
+
+### Requisitos adicionais
+
+13. O coletor deve validar todos os itens e timestamps recebidos e ordenar cada
+    página localmente por `created_at` decrescente antes de aplicar o corte da
+    janela. Reordenação dentro da página não é perda de dados e não deve abortar
+    a coleta. JSON inválido, timestamp ausente/inválido/sem fuso, erro permanente,
+    timeout, página fora do contrato e horizonte incompleto continuam falhando
+    fechado.
+14. O teste direcionado deve reproduzir itens fora de ordem e comprovar retorno
+    determinístico decrescente, preservando os testes negativos existentes.
+15. Após integração, reexecutar o gerador, o publicador governado e o monitor;
+    encerrar #3150 somente com HTTP 200, contrato válido e idade inferior a 48h.
