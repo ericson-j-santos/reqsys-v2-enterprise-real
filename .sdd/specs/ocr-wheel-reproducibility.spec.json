@@ -30,6 +30,17 @@
     "merge": false,
     "secrets": false
   },
+  "technical_report_retention_contract": {
+    "applies_to": "new_artifacts_only",
+    "technical_reports": {
+      "ocr-benchmark": 14,
+      "ocr-evidence-v2": 14
+    },
+    "reproducible_bundle_retention_days": 90,
+    "preserve_existing_upload_steps": true,
+    "preserve_negative_controls": true,
+    "institutional_certification": false
+  },
   "durable_artifact_contract": {
     "job": "external-package-contract",
     "name": "ocr-runtime-package-${{ github.sha }}",

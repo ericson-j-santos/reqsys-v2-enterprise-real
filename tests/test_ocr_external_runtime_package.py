@@ -126,3 +126,26 @@ def test_benchmark_publishes_complete_reproducible_runtime_bundle() -> None:
         "artifacts/ocr-build-toolchain.json",
         "artifacts/ocr-reproducibility-report.json",
     }
+
+
+def test_technical_ocr_reports_retention_preserves_evidence_and_runtime_bundle() -> None:
+    jobs = _yaml(BENCHMARK_WORKFLOW)["jobs"]
+    reports = (
+        ("synthetic-smoke", "ocr-benchmark", "artifacts/ocr-benchmark.json"),
+        ("evidence-v2", "ocr-evidence-v2", "artifacts/ocr-evidence-v2.json"),
+    )
+    for job_id, artifact_name, report_path in reports:
+        steps = jobs[job_id]["steps"]
+        uploads = [step for step in steps if step.get("with", {}).get("name") == artifact_name]
+        assert len(uploads) == 1
+        upload = uploads[0]
+        assert upload["if"] == "always()"
+        assert upload["uses"] == "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        assert upload["with"]["path"] == report_path
+        assert upload["with"]["if-no-files-found"] == "error"
+        assert upload["with"]["retention-days"] == "14"
+
+    bundle_steps = jobs["external-package-contract"]["steps"]
+    bundle = next(step for step in bundle_steps if step.get("name") == "Publicar bundle OCR reproduzível")
+    assert bundle["with"]["retention-days"] == "90"
+    assert bundle["with"]["if-no-files-found"] == "error"

@@ -56,3 +56,15 @@ controles de integridade nem a verificação de download independente.
 
 O teste não demonstra baseline 92, corpus documental real, isolamento total de rede
 ou reprodução do backend histórico desconhecido.
+
+## Extensão — retenção seletiva dos relatórios técnicos OCR (17/11/2026)
+
+### Critérios de aceite
+
+19. No job `synthetic-smoke`, o arquivo `artifacts/ocr-benchmark.json` continua publicado pelo upload `ocr-benchmark`, com `if-no-files-found: error`, `if: always()` e `retention-days: 14`.
+20. No job `evidence-v2`, o arquivo `artifacts/ocr-evidence-v2.json` continua publicado pelo upload `ocr-evidence-v2`, com `if-no-files-found: error`, `if: always()` e `retention-days: 14`.
+21. O job `external-package-contract` continua publicando o pacote reproduzível completo e verificável por 90 dias, com validação de hashes, proveniência, controle negativo e readback independente exigido.
+22. O teste `tests/test_ocr_external_runtime_package.py` protege os três prazos e a existência dos uploads; adulteração ou remoção de um prazo causa falha.
+23. A mudança vale apenas para artefatos novos, não apaga evidência histórica, não altera produção, não utiliza corpus institucional, não concede autorização de merge ou deploy e não elimina testes.
+
+**Validação operacional:** observar execução do workflow no SHA final, confirmar por API as datas de expiração dos relatórios e medir armazenamento real antes/depois, preservando o custo adicional máximo de R$ 0,00.
