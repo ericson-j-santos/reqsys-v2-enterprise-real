@@ -15,7 +15,8 @@ def main():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
   page=browser.new_page(viewport={'width':1280,'height':900})
-  errors=[];requests=[]
+  errors=[]
+  requests=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
   def mock(route):
    req=route.request
@@ -30,14 +31,19 @@ def main():
    repo=next((r for r in REPOS if path.startswith('/repos/'+r+'/')),None)
    assert repo is not None,path
    tail=path.split('/repos/'+repo+'/')[1]
-   if tail=='branches/main': data={'name':'main','commit':{'sha':SHA},'protected':True}
+   if tail=='branches/main':
+    data={'name':'main','commit':{'sha':SHA},'protected':True}
    elif tail in ('issues/3126','issues/42'):
-    ident=int(tail.split('/')[1]);data={'number':ident,'html_url':'https://github.com/'+repo+'/issues/'+str(ident),'state':'open','title':'Teste público da issue','updated_at':'2026-11-19T01:00:00Z'}
+    ident=int(tail.split('/')[1])
+    data={'number':ident,'html_url':'https://github.com/'+repo+'/issues/'+str(ident),'state':'open','title':'Teste público da issue','updated_at':'2026-11-19T01:00:00Z'}
    elif tail=='actions/runs/'+RUN_ID:
     data={'id':int(RUN_ID),'repository':{'full_name':repo},'html_url':'https://github.com/'+repo+'/actions/runs/'+RUN_ID,'head_sha':SHA,'status':'completed','conclusion':'success','run_attempt':1,'event':'workflow_dispatch','created_at':'2026-11-19T01:00:00Z','updated_at':'2026-11-19T01:02:00Z'}
-   elif tail=='actions/runs/'+RUN_ID+'/jobs': data={'total_count':1,'jobs':[{'name':'Builder real — exemplo de teste','runner_name':'Desktop-TESTE','status':'completed','conclusion':'success'}]}
-   elif tail=='actions/runs/'+RUN_ID+'/artifacts': data={'total_count':1,'artifacts':[{'name':'checkpoint-TESTE','id':12345,'expired':False,'digest':'sha256:'+'b'*64}]}
-   else: raise AssertionError('Rota GET não esperada: '+req.url)
+   elif tail=='actions/runs/'+RUN_ID+'/jobs':
+    data={'total_count':1,'jobs':[{'name':'Builder real — exemplo de teste','runner_name':'Desktop-TESTE','status':'completed','conclusion':'success'}]}
+   elif tail=='actions/runs/'+RUN_ID+'/artifacts':
+    data={'total_count':1,'artifacts':[{'name':'checkpoint-TESTE','id':12345,'expired':False,'digest':'sha256:'+'b'*64}]}
+   else:
+    raise AssertionError('Rota GET não esperada: '+req.url)
    route.fulfill(status=200,body=json.dumps(data),content_type='application/json',headers={'access-control-allow-origin':'*'})
   page.route('https://api.github.com/**',mock)
   page.set_content((BASE/'index.html').read_text(),wait_until='load')
@@ -101,6 +107,7 @@ def main():
   browser.close()
   print('PASS: GET público explícito, seis vínculos, issues/main, run/jobs/artifacts, SHA, não-mutação, CORS simulado, bloqueios e rate limit')
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+ main()
 
 # Escopo: teste de interface local; nao certifica ambiente ReqSys nem host fisico.

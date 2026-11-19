@@ -1,0 +1,24 @@
+{
+  "feature_name": "codex-local-execution-evidence-site",
+  "project": "ReqSys Produto — painel complementar de evidências",
+  "created_at": "2026-11-19",
+  "updated_at": "2026-11-19",
+  "phase": "implementation",
+  "description": "Painel local apenas de anotação e consulta pública GET para acompanhar o fluxo do Codex/Ollama/Qwen, reaproveitando ReqSys #3126 e Noteri #42, sem fonte de verdade paralela e sem operação remota.",
+  "issue_links": [
+    "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/3126",
+    "https://github.com/ericson-j-santos/noteri-runtime/issues/42"
+  ],
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tools/codex-local-online/central-execucoes/test_site.py",
+      "tools/codex-local-online/central-execucoes/test_sources.py"
+    ],
+    "evidence_contract": "Testes de Chromium local com dados simulados e negativos; não demonstram Builder, Validator, ReqSys DEV, CAS físico, runner/lease ou deploy no SHA corrente. READY_FOR_PR exige gate real no HEAD."
+  }
+}

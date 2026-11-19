@@ -60,3 +60,8 @@ O módulo local está implementado e testado; a **leitura via navegador permanec
 - **GREEN local:** para essa fixture, o progresso passa a 17% (2/12 etapas ainda válidas), o avanço posterior é bloqueado e o checkpoint inconsistente é recusado. Testes de interface e de fontes (GET simulado) passaram após o reparo.
 - **Autoria:** correção assistida sem Builder Ollama (`model_calls=0`); não usar como evidência da cadeia Qwen→Validator físico.
 - **Rollback:** restaurar commit anterior na mesma branch, com autorização de escrita e releitura de SHA; exportar registros antes de trocar a versão. Sem deploy/merge.
+
+## Correção do bloqueio Pre-PR (19/11/2026)
+- Execução real do gate [#44508084603](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/44508084603), no SHA `1ba285413500d82bc5429b12bb7af9b37312a271`, retornou **failure**: erros `Ruff E701` no `test_sources.py` e `SDD_SPEC_REQUIRED`. Não era falha de runner.
+- Menor reparo: transformar suítes condicionais de uma linha em blocos Python válidos para lint, sem alterar o contrato GET, e versionar o SDD específico desta interface com testes reais mapeados. O SDD documenta a intenção, mas não concede `READY_FOR_PR`.
+- Revalidar o Pre-PR Readiness após push no SHA novo, sem PR enquanto gate obrigatório estiver bloqueado.
