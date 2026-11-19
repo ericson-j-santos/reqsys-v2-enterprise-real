@@ -64,8 +64,28 @@ def run():
         page.locator('#stage-state').select_option('documentada')
         page.locator('#field-evidence').fill('evidencia-de-encerramento-externo')
         page.get_by_role('button',name='Registrar transição').click()
-        assert 'Encerramento bloqueado' in page.locator('.modal [role="alert"]').inner_text()
+        assert 'Sequência bloqueada' in page.locator('.modal [role="alert"]').inner_text()
         page.locator('#modal-close').click()
+        # Negativo: impedir avanço fora de ordem.
+        page.locator('#flow-list .step-card').nth(3).get_by_role('button',name='Detalhar').click()
+        page.locator('#stage-state').select_option('documentada')
+        page.locator('#field-evidence').fill('https://github.com/evidencia-externa/4')
+        page.get_by_role('button',name='Registrar transição').click()
+        assert 'Sequência bloqueada' in page.locator('.modal [role="alert"]').inner_text()
+        page.locator('#modal-close').click()
+        # Negativo: admissão precisa de campos de controle.
+        page.locator('#flow-list .step-card').nth(1).get_by_role('button',name='Detalhar').click()
+        page.locator('#stage-state').select_option('documentada')
+        page.locator('#field-evidence').fill('https://github.com/evidencia-externa/2')
+        page.get_by_role('button',name='Registrar transição').click()
+        assert 'Campos indispensáveis' in page.locator('.modal [role="alert"]').inner_text()
+        page.locator('#modal-close').click()
+        # Controle negativo: mesma chave de idempotência impede duplicidade mesmo com correlação diferente.
+        assert page.evaluate("""() => hasDuplicate(
+          [{repo:'x/y',id:'1',issuePr:'#1',correlation:'corr-1',idempotency:'chave-x'}],
+          {repo:'x/y',id:'2',issuePr:'#2',correlation:'corr-2',idempotency:'chave-x'})""") is True
+        # Somente um prefixo contínuo pode compor o percentual documentado.
+        assert page.evaluate("""() => {const r={...db.runs[0],stages:db.runs[0].stages.map((s,i)=>i===4 ? {status:'documentada',evidence:'etapa fora de ordem'} : s)};return prefixDocumented(r)===1&&progress(r)===8}""") is True
         # Adiciona evidência com origem rastreável
         page.locator('[data-page="evidences"]').click()
         page.get_by_role('button',name='+ Nova evidência').click()
@@ -96,6 +116,18 @@ def run():
         page.wait_for_timeout(300)
         assert 'SHA-256 divergente' in page.locator('#toast').inner_text()
         assert page.evaluate('db.runs.length')==old_count
+        # Evento duplicado em checkpoint com hash válido: importar deve ser operação atômica.
+        fakeevent={'id':'evt-duplicado','when':'2026-11-19T00:00:00Z','action':'teste','runId':'','correlation':'','detail':'sem segredo'}
+        envelope['dataset']['audit']=[fakeevent,fakeevent]
+        envelope['digest_sha256']=hashlib.sha256(json.dumps(envelope['dataset'],ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+        duplicate=BASE/'_checkpoint_duplicate_test.json'
+        duplicate.write_text(json.dumps(envelope,ensure_ascii=False))
+        before=page.evaluate('JSON.stringify(db)')
+        page.locator('#import-file').set_input_files(str(duplicate))
+        page.wait_for_timeout(300)
+        assert 'event_id duplicado' in page.locator('#toast').inner_text()
+        assert page.evaluate('JSON.stringify(db)')==before
+        duplicate.unlink()
         # Controles negativos puros: SHA inválido, divergente e mesmo host físico
         gate=page.evaluate('''() => {
           const base={...db.runs[0],expectedSha:'a'.repeat(40),confirmedSha:'b'.repeat(40),classification:'Fato comprovado (informado)'};
@@ -107,7 +139,42 @@ def run():
         assert 'divergente' in gate[0].lower(), gate
         assert '40 caracteres' in gate[1], gate
         assert 'segundo host' in gate[2].lower(), gate
+        # Positivo de lógica local: todos os gates documentais satisfeitos.
+        # Fixture não é prova externa, apenas verifica o comportamento da interface.
+        flow_controls=page.evaluate("""() => {
+          const fixture={...db.runs[0],todo:'REQ-TESTE',correlation:'corr-a',idempotency:'idem-a',
+            expectedSha:'a'.repeat(40),confirmedSha:'a'.repeat(40),host:'HOST-A',recoveryHost:'HOST-B',
+            lease:'lease-g1',recoveryLease:'lease-g2',worktree:'isolado',model:'qwen:teste',digest:'digest-do-modelo',
+            builder:'finalizou teste local',validator:'testado separadamente',before:'antes',after:'depois',
+            checkpoint:'ref-cas-teste',artifactHash:'b'.repeat(64),failure:'interrupcao do ensaio',
+            tests:'positivo negativo regressao',cost:'COST_ZERO_CONFIRMED - fonte de teste',
+            authorization:'autorizacao de ensaio local',realProof:'destino de teste',rollback:'reversao planejada',
+            stages:STAGES.map((_,i)=>({status:i===11?'pendente':'documentada',evidence:'ref-controle-local-'+i})),
+            evidences:['Teste positivo','Teste negativo','Replay idempotente','Efeito no destino real',
+              'Artefato recuperável','Hash / leitura de bytes','Autorização específica'].map(kind=>({kind,reference:'teste',title:'teste'}))};
+          const ok=flowGate(fixture,11);
+          const noCost=flowGate({...fixture,cost:'COST_UNKNOWN_BLOCKED'},11);
+          const wrongLease=flowGate({...fixture,recoveryLease:'lease-g1'},11);
+          const wrongSha=flowGate({...fixture,confirmedSha:'c'.repeat(40)},11);
+          const missingProof=flowGate({...fixture,evidences:[]},11);
+          const missingPrevious=flowGate({...fixture,stages:fixture.stages.map((st,i)=>i===5?{status:'pendente',evidence:''}:st)},11);
+          return {ok,noCost,wrongLease,wrongSha,missingProof,missingPrevious};
+        }""")
+        assert flow_controls['ok']=='',flow_controls
+        assert 'Custo não admitido' in flow_controls['noCost'],flow_controls
+        assert 'lease' in flow_controls['wrongLease'].lower(),flow_controls
+        assert 'SHA' in flow_controls['wrongSha'],flow_controls
+        assert 'faltam referências' in flow_controls['missingProof'],flow_controls
+        assert '11 etapas' in flow_controls['missingPrevious'],flow_controls
+        # Retirar aprovação anterior deve tirar a etapa do percentual, preservando o histórico.
+        page.locator('[data-page="flow"]').click()
+        page.locator('#flow-list .step-card').first.get_by_role('button',name='Detalhar').click()
+        page.locator('#stage-state').select_option('bloqueada')
+        page.get_by_role('button',name='Registrar transição').click()
+        assert page.evaluate('progress(db.runs[0])')==0
+        assert page.evaluate('db.audit.at(-1).action').startswith('Transição')
         # Responsividade e ausência de dependências remotas
+        page.locator('[data-page="dashboard"]').click()
         page.set_viewport_size({'width':390,'height':844})
         assert page.get_by_role('heading',name='Visão operacional').is_visible()
         assert not errors,errors
@@ -116,7 +183,7 @@ def run():
         dest.unlink()
         corrupt.unlink()
         browser.close()
-        print('PASS: abertura, inclusão, vínculo, antidupe, antissegredo, progressão, encerramento bloqueado, evidência, exportação SHA, replay de importação, corrupção, mobile, sem requisições remotas')
+        print('PASS: interface, deduplicação, sequência, gates positivos/negativos, SHA, custo, lease, rollback de progresso, importação atômica, mobile, sem requisições remotas')
 
 
 if __name__=='__main__':
