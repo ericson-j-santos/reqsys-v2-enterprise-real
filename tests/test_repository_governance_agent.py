@@ -417,7 +417,7 @@ const pr = {
 };
 const calls = {compare: 0};
 const github = {
-  paginate: async () => [pr],
+  paginate: async () => options.empty ? [] : [pr],
   rest: {
     pulls: {list: () => {}, get: async () => ({data: pr})},
     repos: {
@@ -425,7 +425,7 @@ const github = {
       compareCommitsWithBasehead: async () => {
         calls.compare += 1;
         if (options.compareFailure) throw new Error('COMPARE_UNAVAILABLE');
-        return {data: {behind_by: options.behind ?? 0}};
+        return {data: {behind_by: options.invalidComparison ? null : (options.behind ?? 0)}};
       },
     },
   },
@@ -486,3 +486,35 @@ def test_preflight_positive_negative_and_api_failure_both_lanes() -> None:
                 "comparisons": comparisons,
                 "error": error,
             }, f"lane={lane} options={options!r} observed={observed!r}"
+
+
+def test_global_preflight_empty_list_is_noop_and_idempotent() -> None:
+    expected = {"eligible": "false", "comparisons": 0, "error": None}
+    for _ in range(2):
+        assert _simulate_preflight("global", {"empty": True, "behind": 1}) == expected
+
+
+def test_preflight_invalid_behind_value_fails_closed() -> None:
+    for lane in ("self", "global"):
+        assert _simulate_preflight(
+            lane, {"behind": 1, "invalidComparison": True}
+        ) == {
+            "eligible": "false",
+            "comparisons": 1,
+            "error": "INVALID_BRANCH_COMPARISON",
+        }
+
+
+def test_guard_test_detects_unprotected_token_in_global_lane() -> None:
+    job = _job_with_preflight("global")
+    target = "Atualizar branches com proteção por HEAD"
+    assert _has_readonly_preflight_guard(job, target)
+    marker = (
+        "      - name: Gerar token temporário de branch sync\n"
+        "        if: steps.readonly_eligibility.outputs.eligible == 'true'\n"
+    )
+    assert marker in job
+    broken = job.replace(
+        marker, "      - name: Gerar token temporário de branch sync\n", 1
+    )
+    assert not _has_readonly_preflight_guard(broken, target)
