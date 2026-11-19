@@ -1,7 +1,7 @@
 # Codex Local — Central de Execuções (módulo local)
 
 ## Resultado
-Site estático, totalmente em português brasileiro, criado como **extensão local de inspeção**. Não cria sistema concorrente ao ReqSys, TODO Global, GitHub ou à central de acompanhamento já publicada. **Versão 1.2:** fluxo guiado com pré-condições e avanço sequencial fail-closed, importação de checkpoint atômica e consulta pública ao GitHub sob demanda (GET). Não executa mutações, publicação nem gastos incrementais. Custo da criação e testes locais: R$ 0,00.
+Site estático, totalmente em português brasileiro, criado como **extensão local de inspeção**. Não cria sistema concorrente ao ReqSys, TODO Global, GitHub ou à central de acompanhamento já publicada. **Versão 1.3:** fluxo guiado com revalidação contínua de pré-condições, avanço sequencial fail-closed, importação de checkpoint atômica e consulta pública ao GitHub sob demanda (GET). Não executa mutações, publicação nem gastos incrementais. Custo da criação e testes locais: R$ 0,00.
 
 ## Como usar
 1. Abra `index.html` no navegador moderno (Chrome/Edge/Firefox); não precisa instalar servidor, Docker ou dependências.
@@ -20,11 +20,11 @@ Site estático, totalmente em português brasileiro, criado como **extensão loc
 - `sessionStorage` evita perder o rascunho ao recarregar a mesma aba, mas **não garante durabilidade, segurança de dados pessoais nem compartilhamento**. Exporte o JSON para preservar o registro.
 - Entradas que aparentam conter tokens, segredos, cabeçalhos Authorization, e-mails e CPF são recusadas. Filtro textual é apenas defesa em profundidade: não cole material sensível.
 - O SHA-256 é a verificação de integridade **do JSON exportado**, não uma assinatura digital nem prova de origem. Qualquer pessoa capaz de modificar o arquivo pode recalcular o hash.
-- O progresso considera **somente o prefixo sequencial de etapas documentadas**; registros posteriores a um bloqueio não contam. Se uma etapa anterior é reaberta/bloqueada, etapas seguintes ficam bloqueadas mas preservam suas referências, com evento de histórico.
+- O progresso considera **somente o prefixo sequencial de etapas documentadas cujos gates ainda estão válidos**; registros posteriores a um bloqueio não contam. Alterar depois um campo obrigatório (como worktree ou SHA) revoga automaticamente o progresso correspondente, sem apagar a evidência histórica. Se uma etapa anterior é reaberta/bloqueada, etapas seguintes ficam bloqueadas mas preservam suas referências, com evento de histórico.
 - A etapa 6 exige motivo real de interrupção/falha (incluindo interrupção controlada para teste); a etapa 7 exige **segundo host físico e nova lease/generation distinta**. Não é permitido dispensar failover no aceite desta solução.
 - A etapa de admissão exige declaração de custo `COST_ZERO_CONFIRMED` com referência. `COST_UNKNOWN_BLOCKED` e valores sem origem bloqueiam avanço; isso **não certifica** o preço de qualquer host/serviço.
 - O encerramento requer referências por tipo (positivo, negativo, replay, efeito externo, artefato, hash, autorização), e todos os campos críticos. **Mesmo 12/12 documentado não significa execução homologada**.
-- A importação verifica SHA-256 e todos os IDs/eventos e conflitos **antes** de trocar o estado local; eventos repetidos em um mesmo lote são recusados. O JSON não representa CAS do Builder.
+- A importação verifica SHA-256, gates de cada etapa documentada, IDs/eventos e conflitos **antes** de trocar o estado local; eventos repetidos em um mesmo lote são recusados. O JSON não representa CAS do Builder.
 - O progresso representa documentação e **não** progresso real da entrega, homologação física ou SLA.
 - Importação limita tamanho (2 MB), quantidade de registros e eventos; dados importados nunca são executados ou injetados como HTML.
 - O valor `0` em ações remotas significa que o painel não acionou nenhuma; custo operacional do host e serviços externos não é calculado ou presumido.
@@ -53,3 +53,10 @@ O módulo local está implementado e testado; a **leitura via navegador permanec
 - **Depois:** guardas sequenciais, custeio fail-closed, duas leases distintas, avaliação da cadeia antes de encerramento, cálculo de progresso consecutivo, importação candidata atômica e controles positivos/negativos.
 - **Limitação demonstrada:** estes testes provam a interface local. Não existe `READY_FOR_PR` produzido por Builder Ollama, CAS físico, Validator independente no host nem E2E ReqSys DEV resultante desta alteração. A publicação em branch não é homologação ou deploy.
 - **Rollback:** restaurar o commit anterior da branch, mediante mudança governada; preservar checkpoint exportado antes de substituir a interface.
+
+## Alteração 1.3 — progresso fail-closed após edição/importação
+- **Falha reproduzida (RED, Chromium isolado):** registro de teste com as 12 etapas marcadas como documentadas e `worktree` obrigatório removido ainda mostrava 100%, aceitava avanço para etapa posterior e permitia importação do mesmo estado. Os três controles negativos foram observados antes do reparo (`staleProgress=100`, `lateGate=''`, `imported=''`).
+- **Correção mínima:** etapa subsequente verifica novamente todos os gates anteriores; progresso documental conta somente o prefixo com gates válidos; importação recusa declaração de etapa inválida antes de qualquer mutação local. Não executa nem certifica hosts/Builder.
+- **GREEN local:** para essa fixture, o progresso passa a 17% (2/12 etapas ainda válidas), o avanço posterior é bloqueado e o checkpoint inconsistente é recusado. Testes de interface e de fontes (GET simulado) passaram após o reparo.
+- **Autoria:** correção assistida sem Builder Ollama (`model_calls=0`); não usar como evidência da cadeia Qwen→Validator físico.
+- **Rollback:** restaurar commit anterior na mesma branch, com autorização de escrita e releitura de SHA; exportar registros antes de trocar a versão. Sem deploy/merge.

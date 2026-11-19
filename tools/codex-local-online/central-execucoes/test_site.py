@@ -158,7 +158,11 @@ def run():
           const wrongSha=flowGate({...fixture,confirmedSha:'c'.repeat(40)},11);
           const missingProof=flowGate({...fixture,evidences:[]},11);
           const missingPrevious=flowGate({...fixture,stages:fixture.stages.map((st,i)=>i===5?{status:'pendente',evidence:''}:st)},11);
-          return {ok,noCost,wrongLease,wrongSha,missingProof,missingPrevious};
+          const staleFields={...fixture,worktree:'',stages:STAGES.map((_,i)=>({status:'documentada',evidence:'ref-stale-duravel-'+i}))};
+          const forged={...staleFields,evidences:staleFields.evidences.map(e=>({...e,reference:'ref-teste-123456'})),id:'forjado-2',correlation:'corr-forjada',idempotency:'idem-forjada'};
+          const imported=safeImportEnvelope({schema:'codex-local-central/v1',dataset:{runs:[forged],audit:[]}}, {runs:[],audit:[]});
+          return {ok,noCost,wrongLease,wrongSha,missingProof,missingPrevious,
+                  staleProgress:progress(staleFields),lateGate:flowGate(staleFields,8),imported};
         }""")
         assert flow_controls['ok']=='',flow_controls
         assert 'Custo não admitido' in flow_controls['noCost'],flow_controls
@@ -166,6 +170,10 @@ def run():
         assert 'SHA' in flow_controls['wrongSha'],flow_controls
         assert 'faltam referências' in flow_controls['missingProof'],flow_controls
         assert '11 etapas' in flow_controls['missingPrevious'],flow_controls
+        # Regressão RED: campo necessário removido após documentação não pode preservar 100%.
+        assert flow_controls['staleProgress'] == 17,flow_controls
+        assert flow_controls['lateGate'],flow_controls
+        assert 'etapa' in flow_controls['imported'].lower(),flow_controls
         # Retirar aprovação anterior deve tirar a etapa do percentual, preservando o histórico.
         page.locator('[data-page="flow"]').click()
         page.locator('#flow-list .step-card').first.get_by_role('button',name='Detalhar').click()
