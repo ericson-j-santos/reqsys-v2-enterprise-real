@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -67,7 +68,7 @@ def test_agent_limits_ci_fanout() -> None:
 def test_agent_reads_current_base_branch_sha_instead_of_pr_snapshot_sha() -> None:
     text = _text()
 
-    assert text.count("github.rest.repos.getBranch") == 2
+    assert text.count("github.rest.repos.getBranch") == 4
     assert "branch: current.base.ref" in text
     assert "const baseSha = baseBranch.commit.sha;" in text
     assert "const baseSha = current.base.sha;" not in text
@@ -325,3 +326,163 @@ def test_recovered_draft_queue_is_serial_and_explicit() -> None:
     assert "(observed.draft && !recoveredDraft)" in text
     assert "(current.draft && !currentRecoveredDraft)" in text
     assert "draft_not_recovered" in text
+
+
+def _job_with_preflight(lane: str) -> str:
+    text = _text()
+    first, second = text.split("\n  sync-open-prs:\n", 1)
+    return first if lane == "self" else second
+
+
+def _preflight_script(lane: str) -> str:
+    job = _job_with_preflight(lane)
+    source = job.split("        id: readonly_eligibility\n", 1)[1]
+    source = source.split("          script: |\n", 1)[1]
+    source = source.split("\n      - name:", 1)[0]
+    return "\n".join(line[12:] for line in source.splitlines() if line.strip())
+
+
+def _has_readonly_preflight_guard(job: str, update_name: str) -> bool:
+    names = [
+        "Verificar elegibilidade somente leitura antes do token",
+        "Validar configuração da GitHub App",
+        "Gerar token temporário de branch sync",
+        update_name,
+    ]
+    markers = ["      - name: " + name + "\n" for name in names]
+    if not all(marker in job for marker in markers):
+        return False
+    if [job.index(marker) for marker in markers] != sorted(
+        job.index(marker) for marker in markers
+    ):
+        return False
+    condition = "        if: steps.readonly_eligibility.outputs.eligible == 'true'\n"
+    if not all(marker + condition in job for marker in markers[1:]):
+        return False
+    before_token = job.split(markers[0], 1)[1].split(markers[1], 1)[0]
+    return all(
+        required in before_token
+        for required in (
+            "github-token:",
+            "github.token",
+            "core.setOutput('eligible', 'false')",
+            "comparison.behind_by > 0",
+            "core.setOutput('eligible', 'true')",
+        )
+    ) and "APP_TOKEN" not in before_token and "PRIVATE_KEY" not in before_token
+
+
+def test_readonly_eligibility_precedes_token_request_both_lanes() -> None:
+    assert _has_readonly_preflight_guard(
+        _job_with_preflight("self"), "Atualizar PR atual com proteção por HEAD"
+    )
+    assert _has_readonly_preflight_guard(
+        _job_with_preflight("global"), "Atualizar branches com proteção por HEAD"
+    )
+
+
+def test_guard_test_detects_unprotected_token_step() -> None:
+    job = _job_with_preflight("self")
+    assert _has_readonly_preflight_guard(job, "Atualizar PR atual com proteção por HEAD")
+    original = (
+        "      - name: Gerar token temporário de branch sync\n"
+        "        if: steps.readonly_eligibility.outputs.eligible == 'true'\n"
+    )
+    assert original in job
+    broken = job.replace(
+        original, "      - name: Gerar token temporário de branch sync\n", 1
+    )
+    assert not _has_readonly_preflight_guard(
+        broken, "Atualizar PR atual com proteção por HEAD"
+    )
+
+
+_NODE_PREFLIGHT_HARNESS = r"""
+const fs = require('fs');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+const options = input.options;
+const owner = 'test-owner', repo = 'test-repo';
+const pr = {
+  number: 123,
+  state: options.closed ? 'closed' : 'open',
+  draft: !!options.draft,
+  labels: options.recovered ? [{name: 'ci:recuperado'}] : [],
+  base: {ref: options.nonMain ? 'develop' : 'main'},
+  head: {
+    sha: 'a'.repeat(40),
+    repo: {full_name: options.foreign ? 'other/fork' : owner + '/' + repo},
+  },
+  mergeable: options.unknown ? null : true,
+  mergeable_state: options.dirty ? 'dirty' : 'clean',
+};
+const calls = {compare: 0};
+const github = {
+  paginate: async () => [pr],
+  rest: {
+    pulls: {list: () => {}, get: async () => ({data: pr})},
+    repos: {
+      getBranch: async () => ({data: {commit: {sha: 'b'.repeat(40)}}}),
+      compareCommitsWithBasehead: async () => {
+        calls.compare += 1;
+        if (options.compareFailure) throw new Error('COMPARE_UNAVAILABLE');
+        return {data: {behind_by: options.behind ?? 0}};
+      },
+    },
+  },
+};
+const context = {repo: {owner, repo}, payload: {pull_request: {number: 123}}};
+const outputs = {};
+const core = {
+  setOutput: (key, value) => { outputs[key] = value; },
+  setFailed: (reason) => { throw new Error(reason); },
+  notice: () => {},
+};
+(async () => {
+  let error = null;
+  try {
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    await new AsyncFunction('github', 'context', 'core', input.source)(
+      github, context, core
+    );
+  } catch (exception) {
+    error = String(exception.message);
+  }
+  console.log(JSON.stringify({
+    eligible: outputs.eligible, comparisons: calls.compare, error,
+  }));
+})();
+"""
+
+
+def _simulate_preflight(lane: str, options: dict) -> dict:
+    result = subprocess.run(
+        ["node", "-e", _NODE_PREFLIGHT_HARNESS],
+        input=json.dumps({"source": _preflight_script(lane), "options": options}),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def test_preflight_positive_negative_and_api_failure_both_lanes() -> None:
+    cases = [
+        ({"behind": 1}, "true", 1, None),
+        ({"behind": 0}, "false", 1, None),
+        ({"draft": True, "behind": 1}, "false", 0, None),
+        ({"draft": True, "recovered": True, "behind": 1}, "true", 1, None),
+        ({"foreign": True, "behind": 1}, "false", 0, None),
+        ({"closed": True, "behind": 1}, "false", 0, None),
+        ({"unknown": True, "behind": 1}, "false", 0, None),
+        ({"dirty": True, "behind": 1}, "false", 0, None),
+        ({"nonMain": True, "behind": 1}, "false", 0, None),
+        ({"behind": 1, "compareFailure": True}, "false", 1, "COMPARE_UNAVAILABLE"),
+    ]
+    for lane in ("self", "global"):
+        for options, eligible, comparisons, error in cases:
+            observed = _simulate_preflight(lane, options)
+            assert observed == {
+                "eligible": eligible,
+                "comparisons": comparisons,
+                "error": error,
+            }, f"lane={lane} options={options!r} observed={observed!r}"

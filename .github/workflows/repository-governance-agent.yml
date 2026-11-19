@@ -23,7 +23,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verificar elegibilidade somente leitura antes do token
+        id: readonly_eligibility
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            core.setOutput('eligible', 'false');
+            const { owner, repo } = context.repo;
+            const number = Number(context.payload.pull_request?.number);
+            if (!Number.isSafeInteger(number) || number < 1) {
+              core.setFailed('INVALID_PR_NUMBER');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const recovered = (pr.labels || []).some((label) => label.name === 'ci:recuperado');
+            if (pr.state !== 'open' || (pr.draft && !recovered) ||
+                pr.base.ref !== 'main' || pr.head.repo?.full_name !== owner + '/' + repo) {
+              core.notice('BRANCH_SYNC_NOT_ELIGIBLE');
+              return;
+            }
+            if (pr.mergeable !== true || pr.mergeable_state === 'dirty') {
+              core.notice('BRANCH_SYNC_MERGEABILITY_NOT_READY');
+              return;
+            }
+            const { data: base } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: base.commit.sha + '...' + pr.head.sha,
+            });
+            if (!Number.isInteger(comparison.behind_by) || comparison.behind_by < 0) {
+              core.setFailed('INVALID_BRANCH_COMPARISON');
+              return;
+            }
+            if (comparison.behind_by > 0) core.setOutput('eligible', 'true');
+            else core.notice('BRANCH_SYNC_ALREADY_CURRENT');
       - name: Validar configuração da GitHub App
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -36,6 +71,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -46,6 +82,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar PR atual com proteção por HEAD
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -296,7 +333,46 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Verificar elegibilidade somente leitura antes do token
+        id: readonly_eligibility
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            core.setOutput('eligible', 'false');
+            const { owner, repo } = context.repo;
+            const summaries = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', per_page: 100,
+              sort: 'updated', direction: 'asc',
+            });
+            const recovered = summaries
+              .filter((item) => (item.labels || []).some((label) => label.name === 'ci:recuperado'))
+              .sort((a, b) => Number(a.number) - Number(b.number));
+            const candidates = recovered.length > 0 ? recovered.slice(0, 1) : summaries;
+            for (const summary of candidates) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner, repo, pull_number: Number(summary.number),
+              });
+              const recoveredDraft = (pr.labels || []).some((item) => item.name === 'ci:recuperado');
+              if (pr.state !== 'open' || (pr.draft && !recoveredDraft) ||
+                  pr.base.ref !== 'main' || pr.head.repo?.full_name !== owner + '/' + repo ||
+                  pr.mergeable !== true || pr.mergeable_state === 'dirty') continue;
+              const { data: base } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: base.commit.sha + '...' + pr.head.sha,
+              });
+              if (!Number.isInteger(comparison.behind_by) || comparison.behind_by < 0) {
+                core.setFailed('INVALID_BRANCH_COMPARISON');
+                return;
+              }
+              if (comparison.behind_by > 0) {
+                core.setOutput('eligible', 'true');
+                return;
+              }
+            }
+            core.notice('NO_ELIGIBLE_BRANCH_SYNC');
       - name: Validar configuração da GitHub App
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -309,6 +385,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -319,6 +396,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar branches com proteção por HEAD
+        if: steps.readonly_eligibility.outputs.eligible == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           MAX_BRANCH_SYNCS: "3"
