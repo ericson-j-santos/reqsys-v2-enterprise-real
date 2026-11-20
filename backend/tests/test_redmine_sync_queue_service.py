@@ -45,17 +45,25 @@ def test_limpar_reservas_travadas_libera_itens_presos(mock_list_rows, mock_updat
 def test_processar_fila_dry_run_nao_chama_redmine_nem_grava(mock_criar_issue, mock_update_row):
     async def _list_rows(_env, entity_set, *, filtro=None, select=None, top=50, orderby=None):
         if 'PROCESSING' in (filtro or ''):
-            return []
+            # Uma reserva vencida não pode ser modificada durante a simulação.
+            return [{'cr85a_redminequeueid': 'row-vencida', 'cr85a_correlationid': 'corr-anterior'}]
         if 'PENDING' in (filtro or ''):
             return [{'cr85a_redminequeueid': 'row-1', 'cr85a_correlationid': 'corr-1', 'cr85a_subject': 'HU-001'}]
         return []
 
-    with patch('app.services.redmine_sync_queue.dv.list_rows', new=AsyncMock(side_effect=_list_rows)):
+    with patch('app.services.redmine_sync_queue.dv.list_rows',
+               new=AsyncMock(side_effect=_list_rows)) as mock_list_rows:
         resultado = _run(module.processar_fila_redmine(ENV, dry_run=True))
+        replay = _run(module.processar_fila_redmine(ENV, dry_run=True))
 
     assert resultado['dry_run'] is True
     assert resultado['enviado'] is False
+    assert resultado['reservas_liberadas'] == 0
+    assert resultado == replay
     assert resultado['seriam_processados'] == [{'row_id': 'row-1', 'correlation_id': 'corr-1', 'subject': 'HU-001'}]
+    # Read-only significa não tocar nem consultar a rotina mutável de reservas.
+    assert all('PROCESSING' not in (call.kwargs.get('filtro') or '')
+               for call in mock_list_rows.await_args_list)
     mock_criar_issue.assert_not_called()
     mock_update_row.assert_not_awaited()
 
@@ -69,7 +77,7 @@ def test_processar_fila_sucesso_marca_sent_e_sincroniza_agilesync(mock_criar_iss
 
     async def _list_rows(_env, entity_set, *, filtro=None, select=None, top=50, orderby=None):
         if entity_set == 'cr85a_redminequeues' and 'PROCESSING' in (filtro or ''):
-            return []
+            return [{'cr85a_redminequeueid': 'row-vencida', 'cr85a_correlationid': 'corr-anterior'}]
         if entity_set == 'cr85a_redminequeues' and 'PENDING' in (filtro or ''):
             return [{
                 'cr85a_redminequeueid': 'row-1', 'cr85a_correlationid': 'corr-1',
@@ -84,6 +92,11 @@ def test_processar_fila_sucesso_marca_sent_e_sincroniza_agilesync(mock_criar_iss
 
     assert resultado['criados'] == 1
     assert resultado['falhas'] == 0
+    assert resultado['reservas_liberadas'] == 1
+    mock_update_row.assert_any_await(
+        ENV, 'cr85a_redminequeues', 'row-vencida',
+        {'cr85a_status': module.STATUS_PENDING, 'cr85a_reservedat': None},
+    )
     assert resultado['itens'][0]['redmine_issue_id'] == 42
     mock_criar_issue.assert_called_once_with(subject='HU-001', tracker_id=9)
 
