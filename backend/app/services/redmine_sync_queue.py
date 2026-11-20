@@ -158,7 +158,13 @@ async def processar_fila_redmine(
     chama o Redmine nem grava nada, para não correr o risco de um dry-run
     parecer estruturalmente igual a um sucesso real.
     """
-    reservas_liberadas = await limpar_reservas_travadas(environment_url, timeout_minutos=reserva_timeout_minutos, db=db)
+    # dry_run não pode recuperar reservas: limpar_reservas_travadas grava no Dataverse.
+    # Preserva a recuperação no processamento real e evita efeito colateral na simulação.
+    reservas_liberadas = 0
+    if not dry_run:
+        reservas_liberadas = await limpar_reservas_travadas(
+            environment_url, timeout_minutos=reserva_timeout_minutos, db=db,
+        )
     entity_set_queue = await dv.resolver_entity_set_name(environment_url, TABELA_REDMINE_QUEUE)
     pendentes = await dv.list_rows(
         environment_url, entity_set_queue,
