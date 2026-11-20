@@ -20,7 +20,7 @@ Dataverse: cr85a_redminequeue / cr85a_agilesync / cr85a_auditlog / cr85a_tracker
                          ▼
 ┌────────────────────────────────────────────────────────────┐
 │ backend/app/services/redmine_sync_queue.py                   │
-│  1. limpar_reservas_travadas (timeout 15min, log)             │
+│  1. Em execucao real: limpar_reservas_travadas (15min)        │
 │  2. processar_fila_redmine → le PENDING, reserva lote          │
 │  3. github_redmine.criar_issue_generica() por item             │
 │     (reusa retry + circuit-breaker existentes)                │
@@ -44,8 +44,10 @@ Dataverse: cr85a_redminequeue / cr85a_agilesync / cr85a_auditlog / cr85a_tracker
    Se o volume justificar automacao depois, o proximo passo documentado e um `X-Service-Token`
    + gatilho externo (cron/GitHub Actions/Power Automate Recurrence) — nao um loop silencioso
    dentro do processo.
-2. **`dry_run` estruturalmente distinto de execucao real** — decisao explicita para nunca
-   dar a falsa impressao de sucesso confirmado numa simulacao (memoria
+2. **`dry_run` estruturalmente distinto e sem gravacao no Dataverse** —
+   inclusive sem chamar recuperacao de reservas PROCESSING vencidas; retorna
+   reservas_liberadas=0, lista pendentes e nao aciona Redmine ou auditoria.
+   Uma simulacao nunca pode produzir sucesso nem efeitos reais (memoria
    `feedback_never_fake_dry_run_success`).
 3. **`EntitySetName` resolvido ao vivo via Metadata API**, nao hardcoded/adivinhado por
    pluralizacao — Dataverse nem sempre segue a regra simples de plural em ingles.

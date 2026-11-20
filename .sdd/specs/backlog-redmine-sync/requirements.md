@@ -23,6 +23,9 @@ de um loop automatico em producao.
    (nunca simular sucesso identico ao real).
 3. NAO DEVE existir loop de polling automatico em background — execucao e sempre explicita
    (decisao deliberada, ver design.md).
+4. dry_run=true e estritamente somente leitura, mesmo quando ha reservas PROCESSING vencidas:
+   nao recupera reservas nem chama update_row, Redmine ou auditlog. Deve retornar
+   reservas_liberadas=0 e manter replay sem gravacao ou duplicacao.
 
 ## Requirement 2 — Limpeza de reservas travadas antes de novo lote
 
@@ -31,8 +34,9 @@ no meio do processamento) sejam limpas automaticamente antes de reservar um novo
 que a fila nao fique permanentemente bloqueada.
 
 **Acceptance criteria:**
-1. `limpar_reservas_travadas` DEVE rodar antes de `processar_fila_redmine` reservar novas
-   linhas.
+1. `limpar_reservas_travadas` DEVE rodar apenas em processamento real
+   (`dry_run=false`), antes de reservar novas linhas. Em `dry_run=true`
+   nao pode liberar reservas nem alterar o Dataverse.
 2. Timeout padrao de reserva DEVE ser 15 minutos, configuravel via
    `REDMINE_SYNC_RESERVA_TIMEOUT_MINUTOS`.
 3. Quando uma limpeza ocorrer, DEVE ser registrada em log/auditoria.
