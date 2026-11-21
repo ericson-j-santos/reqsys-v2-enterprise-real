@@ -48,7 +48,6 @@ const RULE_SHA='58dcd4200f412a866278027ba9e433439a03f3b3';
 const $=id=>document.getElementById(id);
 const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const txt=(v,empty='Não informado')=>v===undefined||v===null||String(v).trim()===''?empty:h(v);
-const safeLink=v=>{try{let u=new URL(String(v));return u.protocol==='https:' && !u.username && !u.password ? u.href : null}catch(e){return null}};
 const iso=()=>new Date().toISOString();
 const typeDefs={fato:'Fato comprovado',hipotese:'Hipótese',diagnostico:'Diagnóstico sem efeito',acao:'Ação efetiva (somente local)',humana:'Ação humana',runner:'Falha de runner',gate:'Falha de gate',dependencia:'Erro de dependência',sync:'Divergência de sincronização',funcional:'Falha funcional'};
 const fieldDefs=[
