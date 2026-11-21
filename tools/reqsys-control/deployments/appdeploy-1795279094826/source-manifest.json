@@ -1,0 +1,75 @@
+{
+  "schema": "reqsys-appdeploy-source-snapshot-v1",
+  "app_id": "reqsys-control-1y8yvp",
+  "snapshot_version": "1795279094826",
+  "app_url": "https://reqsys-control-1y8yvp.v2.appdeploy.ai/",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "source_branch": "feat/reqsys-control-reconciliacao-3149-20261121",
+  "source_head_before_archive": "ceae13fd772a5546819474a54c3def94d8609d35",
+  "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+  "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
+  "issue": 3149,
+  "pull_request": 3160,
+  "kind": "source_archive_not_runtime",
+  "authentication": "none_in_public_frontend",
+  "external_mutations": false,
+  "note": "Copia imutavel dos 14 arquivos-fonte expostos pelo AppDeploy no snapshot. Nao substituir automaticamente o frontend evoluido da raiz do repo.",
+  "source_files": [
+    {
+      "path": "index.html",
+      "git_blob_sha": "243ba77b99821cb63e3519461405ff6c4d43d2ea"
+    },
+    {
+      "path": "package.json",
+      "git_blob_sha": "77a2f0b38b797120e6e477a2c69d20fa73c9e238"
+    },
+    {
+      "path": "vite.config.ts",
+      "git_blob_sha": "0e6954289b05aafdbffb560a573938442e7c007c"
+    },
+    {
+      "path": "tsconfig.json",
+      "git_blob_sha": "109f0ac2808f2bfa0a36d1306ad5bf79db60a5bc"
+    },
+    {
+      "path": "postcss.config.js",
+      "git_blob_sha": "2aa7205d4b402a1bdfbe07110c61df920b370066"
+    },
+    {
+      "path": "tailwind.config.js",
+      "git_blob_sha": "d1ba83b0a06c78dbf8bbaafbe9b2dae29c7139d7"
+    },
+    {
+      "path": "src/App.tsx",
+      "git_blob_sha": "119a5c9b93f9b7bc17bef3040ebc14a4987a35eb"
+    },
+    {
+      "path": "src/main.tsx",
+      "git_blob_sha": "a46835a4fc288594376924f7e83d723beb272478"
+    },
+    {
+      "path": "src/index.css",
+      "git_blob_sha": "2a420045404a79eb83667f73087d8abc4391fb5e"
+    },
+    {
+      "path": "src/GitHubReadOnly.css",
+      "git_blob_sha": "76e9a96d972882e0125db26708be7b8eb66564cf"
+    },
+    {
+      "path": "src/GitHubReadOnly.tsx",
+      "git_blob_sha": "a195c705a8cb2a7d0384a72a352081efcbd3e45c"
+    },
+    {
+      "path": "tests/tests.json",
+      "git_blob_sha": "afd76ff2a7671df89cfca4dd56ee87788e83d3d0"
+    },
+    {
+      "path": "src/ReqSysDashboard.tsx",
+      "git_blob_sha": "37309302def5db94d5537f0ea6a8b9f95ad0419d"
+    },
+    {
+      "path": "public/reconciliacao/index.html",
+      "git_blob_sha": "1b1203957ccbeefaec1a4417a854dbaadcca13b3"
+    }
+  ]
+}

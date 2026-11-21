@@ -1,0 +1,126 @@
+[
+  {
+    "name": "Bloqueio conservador na tela principal",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "painel operacional",
+      "fila Pareto",
+      "bloqueio de readiness",
+      "ausência de controles remotos"
+    ],
+    "description": "Comprova que o painel inicial mostra demandas e hosts sem liberar nenhum executor.",
+    "steps": [
+      "Abrir Visão geral e conferir contadores de demandas e hosts",
+      "Acessar Prontidão dos hosts",
+      "Comparar ready_for_work para Desktop, Lenovo, Noteri e OptiPlex e procurar controles de dispatch/reboot"
+    ],
+    "expected": "Todos os hosts mostram ready_for_work=false; existe uma próxima ação de revalidação documental, sem botões de dispatch ou reboot."
+  },
+  {
+    "name": "Criar demanda e preservá-la após atualização",
+    "viewport": "desktop",
+    "covers": [
+      "cadastro de demanda",
+      "prioridade Pareto",
+      "filtro de fila",
+      "persistência local"
+    ],
+    "description": "Verifica inclusão de demanda auditável e filtro, mantendo o registro no navegador após recarregar.",
+    "steps": [
+      "Abrir Nova demanda, preencher título 'Teste de prontidão DEV', repositório 'ericson-j-santos/reqsys-v2-enterprise-real', evidências exigidas 'Run SHA e readback' e próxima ação 'Inspecionar runner sem mutação'",
+      "Salvar a demanda e abrir Fila de demandas",
+      "Editar a demanda e mudar o estado para Em análise",
+      "Abrir Histórico e transições e confirmar a mudança Aguardando → Em análise",
+      "Atualizar a página e verificar a demanda e seu histórico"
+    ],
+    "expected": "A demanda e a transição documental persistem após reload, sem alterar ready_for_work ou sincronizar o TODO Global."
+  },
+  {
+    "name": "Registrar revalidação sem conceder readiness",
+    "viewport": "mobile",
+    "covers": [
+      "registro de revalidação",
+      "histórico local",
+      "classificação de bloqueio",
+      "fail-closed de autodeclaração",
+      "responsividade"
+    ],
+    "description": "Garante que um formulário manual jamais converte 11/11 requisitos em autorização operacional.",
+    "steps": [
+      "Abrir Prontidão dos hosts e selecionar Noteri",
+      "Abrir Nova revalidação, informar fonte 'run-sintetico-123', observação 'Bloqueio sintético de teste' e declarar todos os gates como OK",
+      "Salvar e consultar Histórico e comparação de hosts"
+    ],
+    "expected": "O histórico contém a declaração, mas Noteri continua com ready_for_work=false e indicação de não homologado."
+  },
+  {
+    "name": "Registrar evidência em uma demanda",
+    "viewport": "desktop",
+    "covers": [
+      "detalhes de demanda",
+      "catálogo de evidências",
+      "validação de URL HTTPS",
+      "trilha de evidência não homologada",
+      "consulta GitHub somente GET",
+      "validação de repositório permitido",
+      "readback de issue/PR e HEAD público",
+      "bloqueio de referência fora da allowlist",
+      "ausência de liberação de hosts",
+      "cancelamento de consulta anterior ao trocar demanda",
+      "erro de rede sem certificação"
+    ],
+    "description": "Valida registro de fonte, apresentação e preservação do gate independente.",
+    "steps": [
+      "Na Fila, selecionar a demanda E2E Platform Issue #10",
+      "Clicar Registrar evidência, preencher descrição 'Canário informado sem readback' e URL 'https://github.com/ericson-j-santos/e2e-platform/issues/10'",
+      "Salvar e conferir o registro associado à demanda",
+      "Abrir Fontes GitHub, selecionar E2E Platform #10 e consultar a fonte somente leitura",
+      "Confirmar título, estado e HEAD público da issue com origem e horário; verificar que isso não equivale a readiness",
+      "Criar demanda documental de teste para outra-conta/repositorio, abrir Fontes GitHub e conferir bloqueio da consulta",
+      "Conferir que todos os hosts continuam ready_for_work=false",
+      "Durante consulta ativa do GitHub para a issue #10, selecionar outra demanda e simular atraso ou falha da resposta anterior",
+      "Confirmar que o erro antigo não aparece na demanda nova",
+      "Desconectar a rede durante nova consulta e confirmar aviso de falha e nenhum readback homologado"
+    ],
+    "expected": "Evidência manual permanece não homologada; GET GitHub mantém proveniência quando disponível; repositório externo é bloqueado; cancelar consulta antiga não mostra erro na nova seleção; falha de rede não cria prova nem altera ready_for_work."
+  },
+  {
+    "name": "Impedir certificação falsa de continuidade",
+    "viewport": "mobile",
+    "covers": [
+      "guia E2E entre hosts",
+      "distinção de identidade física",
+      "checkpoint e idempotência",
+      "readback independente",
+      "controle negativo"
+    ],
+    "description": "Confirma que selecionar o mesmo computador ou preencher manualmente dados não declara E2E real.",
+    "steps": [
+      "Abrir Fluxo E2E e selecionar o mesmo Desktop em Host A e Host B",
+      "Conferir aviso de identidades idênticas e gate bloqueado",
+      "Trocar Host B para Lenovo e observar que ainda faltam checkpoint opaco, correlation_id, chave de idempotência e requisitos externos"
+    ],
+    "expected": "A continuidade física permanece Não comprovada com os campos adicionais ausentes; preencher declarações não libera executor nem certifica E2E."
+  },
+  {
+    "name": "Reconciliação: inspeção e bloqueio sem sincronização",
+    "viewport": "mobile",
+    "covers": [
+      "menu Reconciliação",
+      "dados fictícios identificados",
+      "SHA divergente",
+      "bloqueio de execução",
+      "confirmação local"
+    ],
+    "description": "Valida a nova tela e a ausência de permissão de execução por declarações locais.",
+    "steps": [
+      "Abrir Reconciliação e conferir o aviso Sem dados oficiais conectados",
+      "No painel interno, confirmar AMBIENTE DEMONSTRATIVO e abrir Demandas e rastreabilidade",
+      "Selecionar um cenário com SHA divergente e verificar alerta",
+      "Abrir Fluxo de execução governado e conferir Execução controlada como BLOQUEADA",
+      "Iniciar edição de registro e cancelar a confirmação, verificando que o registro permanece inalterado"
+    ],
+    "expected": "A interface mantém demonstração rotulada e não altera fontes oficiais nem libera execução."
+  }
+]
