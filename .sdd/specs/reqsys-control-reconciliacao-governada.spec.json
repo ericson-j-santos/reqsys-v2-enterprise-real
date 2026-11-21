@@ -1,0 +1,35 @@
+{
+  "feature_name": "reqsys-control-reconciliacao-governada",
+  "project": "ReqSys Produto / ReqSys Control",
+  "created_at": "2026-11-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Visualização de reconciliação Redmine/TODO/GitHub/hosts no ReqSys Control existente, com fonte demonstrativa isolada e bloqueio de execução externa.",
+  "traceability": {
+    "issue": "#3149",
+    "related_issues": [
+      "#1686",
+      "#3126"
+    ],
+    "kind": "feature",
+    "source_mode": "assisted",
+    "model_calls": 0,
+    "base_sha": "a05e64bbc58a15314b42cfa9314f1d415535b05b",
+    "rules_sha": "58dcd4200f412a866278027ba9e433439a03f3b3",
+    "correlation_id": "reqsys-control-reconciliacao-20261121",
+    "idempotency_key": "reqsys:control:reconciliacao:3149:v1"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tools/reqsys-control/scripts/reconciliacao-contract.test.mjs"
+    ],
+    "evidence_contract": "Sem acesso externo, leitura e importação apenas local, confirmação prévia, bloqueio negativo e XSS, readback do commit SHA, E2E físico e RBAC pendentes, nenhuma publicação."
+  },
+  "evidence": [
+    "Protótipo local: 10 testes Playwright e 5 testes Node aprovados; iframe sandbox positivo; não implica deploy nem E2E real."
+  ]
+}

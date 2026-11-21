@@ -41,7 +41,7 @@ import {
   Zap,
 } from 'lucide-react';
 
-type Page = 'overview' | 'queue' | 'hosts' | 'history' | 'e2e' | 'sources' | 'rules';
+type Page = 'overview' | 'queue' | 'hosts' | 'history' | 'e2e' | 'sources' | 'reconciliation' | 'rules';
 type GateState = 'nao_verificado' | 'declarado' | 'falhou';
 type Category =
   | 'runner'
@@ -466,6 +466,7 @@ const MenuItems: { id: Page; label: string; icon: typeof House }[] = [
   { id: 'history', label: 'Revalidações', icon: History },
   { id: 'e2e', label: 'Fluxo E2E', icon: GitBranch },
   { id: 'sources', label: 'Fontes GitHub', icon: RefreshCcw },
+  { id: 'reconciliation', label: 'Reconciliação', icon: Layers3 },
   { id: 'rules', label: 'Governança', icon: ShieldCheck },
 ];
 const blankDraft = (): Demand => ({
@@ -895,7 +896,7 @@ function App() {
             <span className="live-dot" />
             <span>Sem conexão com hosts</span>
           </div>
-          <div className="sidebar-version">Regras v1.6.20 · main@86abe65b</div>
+          <div className="sidebar-version">Regras v1.6.21 · main@58dcd420</div>
         </div>
       </aside>
       {sidebarOpen && (
@@ -2087,6 +2088,30 @@ function App() {
             </>
           )}
           {page === 'sources' && <PublicGithubReadOnly />}
+          {page === 'reconciliation' && (
+            <section className="panel" aria-labelledby="reconciliation-title" style={{ padding: 18 }}>
+              <div className="page-heading">
+                <div>
+                  <div className="eyebrow">FONTES / VÍNCULOS / COMPROVAÇÃO</div>
+                  <h1 id="reconciliation-title">Reconciliação governada</h1>
+                  <p>Visualização demonstrativa isolada no ReqSys Control existente. Não sincroniza nem autoriza mutações externas.</p>
+                </div>
+                <Badge tone="warning">Sem dados oficiais conectados</Badge>
+              </div>
+              <div className="banner banner-notice" role="status">
+                <ShieldAlert size={19} />
+                <div><strong>Operação real bloqueada</strong><span>Registros são fictícios ou importados manualmente. SHA, CI, E2E e recibos exigem leitura independente nas fontes oficiais.</span></div>
+              </div>
+              <iframe
+                title="Central demonstrativa de reconciliação ReqSys, Redmine, TODO e GitHub"
+                src="./reconciliacao/index.html?embed=1"
+                sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups"
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                style={{ width: '100%', height: '820px', minHeight: '75vh', border: '1px solid #dce5ed', borderRadius: 12, background: '#f4f7fa' }}
+              />
+            </section>
+          )}
           {page === 'rules' && (
             <>
               <div className="page-heading">
