@@ -1,0 +1,18 @@
+{
+  "feature_name": "bacen-nonprod-tolerance-renewal-20261123",
+  "project": "ReqSys v2 Enterprise — governança BACEN",
+  "created_at": "2026-11-23",
+  "updated_at": "2026-11-23",
+  "phase": "prepared",
+  "approvals": {
+    "requirements": true
+  },
+  "description": "Prepara somente a nova janela de 30 dias da tolerância BACEN para PR/DEV/STG, mediante autorização explícita, sem merge, deploy, alteração de status regulatório ou extensão da exceção #1505.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_generate_bacen_nonprod_tolerance_decision.py",
+      "tests/test_bacen_production_hard_gate_contract.py"
+    ],
+    "evidence_contract": "Issue #1615; janela 2026-11-23 a 2026-12-23; escopos pull_request/dev/stg; PROD bloqueado; controles partial preservados; proibição de aprovações fictícias e de promoção automática; expiração fail-closed após 2026-12-23; READY_FOR_PR SHA-bound obrigatório antes de qualquer PR; nenhum merge/deploy autorizado."
+  }
+}
