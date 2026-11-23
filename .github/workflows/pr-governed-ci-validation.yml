@@ -16,6 +16,8 @@ on:
       - ".github/workflows/ci-e2e-governado.yml"
       - ".github/workflows/ci-observability.yml"
       - ".github/workflows/pr-governed-ci-validation.yml"
+      - ".github/workflows/repository-governance-agent.yml"
+      - "tests/test_repository_governance_agent.py"
       - "scripts/select_backend_tests.py"
       - "docs/ci/CI_ACCELERATION_STRATEGY.md"
 
@@ -95,3 +97,199 @@ jobs:
           path: ci-validation-evidence/
           if-no-files-found: error
           retention-days: 30
+
+  validator-pr-governance:
+    name: Validator tecnico isolado / SHA-bound
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Preflight de identidade pela API oficial
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const {owner, repo} = context.repo;
+            const number = Number(context.payload.pull_request?.number);
+            if (!Number.isSafeInteger(number) || number < 1) throw new Error('INVALID_PR_NUMBER');
+            const {data: pr} = await github.rest.pulls.get({owner, repo, pull_number: number});
+            const {data: base} = await github.rest.repos.getBranch({owner, repo, branch: 'main'});
+            if (pr.state !== 'open' || pr.base.ref !== 'main' ||
+                pr.head.repo?.full_name !== owner + '/' + repo ||
+                pr.head.sha !== context.payload.pull_request.head.sha ||
+                pr.base.sha !== context.payload.pull_request.base.sha ||
+                base.commit.sha !== pr.base.sha) throw new Error('VALIDATOR_SHA_OR_IDENTITY_DRIFT');
+      - name: Checkout SHA exato da candidata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Checkout baseline confiavel em diretorio separado
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Confirmar checkouts imutaveis
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = "$BASE_SHA"
+          mkdir -p validator-evidence
+      - name: Instalar executor de testes versionado
+        run: python -m pip install --disable-pip-version-check 'pytest==8.3.5'
+      - name: Revisor confiavel da main consulta PR real
+        working-directory: baseline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/pr_quality_review_entry.py \
+            --repo "$GITHUB_REPOSITORY" --pr-number "$PR_NUMBER" \
+            --report-dir "$GITHUB_WORKSPACE/validator-evidence/quality"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = json.loads((Path(os.environ["GITHUB_WORKSPACE"]) / "validator-evidence/quality/pr-quality-review.json").read_text())
+          assert p["pr"]["head_sha"] == os.environ["EXPECTED_HEAD"], "REVIEW_FALLBACK_OR_HEAD_DRIFT"
+          assert p["pr"]["state"] == "open" and p["pr"]["base_ref"] == "main"
+          assert p["summary"]["severity"] != "critical", "CRITICAL_REVIEW_FINDING"
+          names = {item["filename"] for item in p["files"]}
+          assert ".github/workflows/repository-governance-agent.yml" in names
+          assert "tests/test_repository_governance_agent.py" in names
+          print("TRUSTED_BASE_REVIEW_SHA_CONFIRMED")
+          PY
+      - name: Testes positivos, negativos, concorrencia e replay da candidata
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_repository_governance_agent.py | tee "$GITHUB_WORKSPACE/validator-evidence/candidate-tests.log"
+      - name: Teste do teste rejeita a versao antiga
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp candidate/tests/test_repository_governance_agent.py baseline/tests/test_repository_governance_agent.py
+          if (cd baseline && python -m pytest -q tests/test_repository_governance_agent.py -k test_preflight_positive_negative_and_api_failure_both_lanes) > validator-evidence/baseline-negative.log 2>&1; then
+            echo "BASELINE_UNEXPECTEDLY_ACCEPTED" >&2
+            exit 1
+          fi
+          grep -q 'FAILED' validator-evidence/baseline-negative.log
+          grep -q 'readonly_eligibility' validator-evidence/baseline-negative.log
+          echo "NEGATIVE_CONTROL_REJECTED_BASELINE"
+      - name: Emitir recibo tecnico sem aprovar merge ou App
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          root = Path("validator-evidence")
+          positives = (root / "candidate-tests.log").read_text()
+          negatives = (root / "baseline-negative.log").read_text()
+          found = re.search(r"(?m)^(\d+) passed", positives)
+          if not found or "FAILED" not in negatives or int(found.group(1)) < 20:
+              raise SystemExit("VALIDATOR_TEST_EVIDENCE_INCOMPLETE")
+          src = Path("baseline/scripts/pr_quality_review_entry.py").read_bytes()
+          quality = json.loads((root / "quality/pr-quality-review.json").read_text())
+          report = {
+              "contract": "reqsys-governed-sha-bound-validator-v1",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "pr_number": int(os.environ["PR_NUMBER"]),
+              "head_sha": os.environ["HEAD_SHA"],
+              "base_sha": os.environ["BASE_SHA"],
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "validator_job": os.environ["GITHUB_JOB"],
+              "validator_process": "separate_github_hosted_runner",
+              "trusted_baseline_reviewer_sha256": hashlib.sha256(src).hexdigest(),
+              "candidate_tests_passed": int(found.group(1)),
+              "baseline_negative_control_rejected": True,
+              "risk_severity": quality["summary"]["severity"],
+              "technical_scope": "sha_bound_review_plus_regressions",
+              "github_app_real_sync_e2e": "NOT_EXECUTED",
+              "human_review": "NOT_CLAIMED",
+              "ready_for_merge": False,
+              "deploy_authorized": False,
+              "result": "TARGETED_TECHNICAL_VALIDATION_PASSED",
+          }
+          path = root / "technical-validator.json"
+          path.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+          (root / "technical-validator.sha256").write_text(
+              hashlib.sha256(path.read_bytes()).hexdigest() + "  technical-validator.json\n"
+          )
+          print("VALIDATOR_TECHNICAL_RECEIPT", json.dumps(report, sort_keys=True))
+          PY
+      - name: Publicar recibo pequeno e verificavel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: governance-validator-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: validator-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  validator-evidence-readback:
+    name: Leitura independente do recibo SHA-bound
+    needs: validator-pr-governance
+    if: github.event_name == 'pull_request' && needs.validator-pr-governance.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Baixar artifact da execucao corrente
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: governance-validator-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: validator-evidence
+      - name: Validar hash e reler HEAD/base na API oficial
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          cd validator-evidence
+          sha256sum -c technical-validator.sha256
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          p = json.loads(Path("technical-validator.json").read_text())
+          assert p["head_sha"] == os.environ["HEAD_SHA"]
+          assert p["base_sha"] == os.environ["BASE_SHA"]
+          assert p["pr_number"] == int(os.environ["PR_NUMBER"])
+          assert p["result"] == "TARGETED_TECHNICAL_VALIDATION_PASSED"
+          assert p["ready_for_merge"] is False
+          output = subprocess.run(
+              ["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR_NUMBER']}"],
+              check=True, text=True, capture_output=True, timeout=20
+          )
+          live = json.loads(output.stdout)
+          assert live["head"]["sha"] == p["head_sha"], "HEAD_DRIFT"
+          assert live["base"]["sha"] == p["base_sha"], "BASE_DRIFT"
+          assert live["state"] == "open" and live["merged"] is False
+          print("VALIDATOR_INDEPENDENT_READBACK_OK", p["run_id"], p["head_sha"])
+          PY

@@ -25,9 +25,15 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 13. O `GITHUB_TOKEN` nativo deve permanecer somente leitura (`contents: read`, `pull-requests: read`) e ser usado apenas para observação. A escrita deve usar token temporário da GitHub App governada `REQSYS_STACK_REBASE_APP_ID`/`REQSYS_STACK_REBASE_PRIVATE_KEY`, solicitando somente `contents: write`; não pode solicitar `pull-requests: write`, usar PAT ou usar o `GITHUB_TOKEN` como fallback de escrita.
 14. O self-sync deve usar `pull_request_target`, executando a definição confiável da `main`; o repositório Git efêmero deve ser `bare`, sem checkout da branch candidata.
 15. Execuções concorrentes devem usar lane determinística e cancelar execução obsoleta.
-16. Ausência da configuração da GitHub App ou incapacidade de emitir `contents: write` deve falhar fechado antes de qualquer mutação.
+16. Para **sincronização elegível** (`behind_by > 0` e demais controles aprovados), ausência da configuração da GitHub App ou incapacidade de emitir `contents: write` deve falhar fechado antes de qualquer mutação.
+17. Ambos os jobs devem executar pré-admissão **somente leitura antes do token de escrita**, sem checkout, contendo identidade same-repo, estado draft/`ci:recuperado`, mergeabilidade, SHA base corrente e `behind_by`. PR sem sincronização elegível deve encerrar com `noop`/aviso sem validar segredo ou pedir token. Erro/ausência de comparação deve falhar fechado; verificação de estado/HEAD/base deve ser refeita imediatamente antes da escrita.
 
 ## Controles negativos
+
+- PR `behind_by=0`, draft sem `ci:recuperado`, fork e conflito: **nenhum token solicitado**, sem mutação nem falso erro de identidade;
+- comparação de SHA indisponível: pré-admissão falha fechada sem chamar a App;
+- PR elegível e App sem instalação/permissão: falha de autenticação **não** é mascarada, sem fallback para `GITHUB_TOKEN`;
+- teste de regressão deve falhar se remover o guarda de emissão de token (test-of-test);
 
 - draft sem `ci:recuperado` => não atualiza; draft com `ci:recuperado` pode ser sincronizado, mas nunca integrado na `main` por este agente;
 - fork externo => não atualiza;
@@ -46,6 +52,9 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 
 ## Critérios de aceite
 
+- a pre-admissão de ambos os jobs executa antes do token, com 20 simulações positivas/negativas e controle de API indisponível; o token só pode ser gerado em caso `eligible=true`;
+- o PR gate deve validar o contrato SDD alterado no SHA final, além de YAML, Python, regressão e segurança;
+
 - `tests/test_repository_governance_agent.py` verde;
 - SDD Gate verde no HEAD final;
 - CI do PR verde no HEAD atual;
@@ -61,3 +70,13 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - PR com gate pendente pode ter branch sincronizada, mas não pode ser integrada na `main` por este agente;
 - leitura independente confirma que nenhuma PR foi integrada pelo `Repository Governance Agent`;
 - nenhuma ação de deploy/promoção é executada.
+
+## Extensão de validação técnica por processo independente — 23/11/2026
+
+- **Classificação:** capacidade adicional ausente no fluxo existente (review automatizado por SHA antes de eventual merge), solicitada pelo proprietário. Não substituir a revisão/identidade do Validator por comentário do autor.
+- **Reuso:** `.github/workflows/pr-governed-ci-validation.yml` (CI de PR já existente), acionado por `pull_request` somente quando houver mudanças no agente de sincronização ou nos seus testes; `.github/workflows/pr-quality-review.yml` é consultivo e permanece estritamente manual, conforme gate `validate_path_based_workflow_router.py`.
+- **Admissão:** PR aberta, same-repo, base main/head atuais lidos pela API; dois checkouts em diretórios distintos por SHAs completos; `GITHUB_TOKEN` somente leitura na validação e nas releituras.
+- **Execução:** revisão de risco por script preexistente da main (rejeitar fallback sem HEAD real), pytest da candidata, controle negativo que exige falha com o workflow anterior, digest SHA-256 do recibo em artifact de 30 dias, segunda execução isolada conferindo hash e HEAD/base ao vivo.
+- **Limites:** resultado `TARGETED_TECHNICAL_VALIDATION_PASSED` só comprova esses testes. Não libera merge/deploy, não assina parecer humano e não prova sincronização real da GitHub App (E2E pós-integração ainda pendente).
+- **Aceite deste incremento:** ambos os jobs executados em runners GitHub separados, artifact gerado e relido, HEAD exato do candidato confirmado, casos positivo/negativo e repetição cobertos, nenhuma escrita em main. Se qualquer precondição falhar, falhar fechado.
+- **Custo:** executor GitHub-hosted padrão em repositório público, sem novos serviços. Nenhuma autorização de cota paga, segredos ou ações administrativas.
