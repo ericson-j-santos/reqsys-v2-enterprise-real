@@ -74,7 +74,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 ## Extensão de validação técnica por processo independente — 23/11/2026
 
 - **Classificação:** capacidade adicional ausente no fluxo existente (review automatizado por SHA antes de eventual merge), solicitada pelo proprietário. Não substituir a revisão/identidade do Validator por comentário do autor.
-- **Reuso:** `.github/workflows/pr-quality-review.yml` (não criar outro workflow/serviço), acionado por `pull_request` somente quando houver mudanças no agente de sincronização ou nos seus testes; despacho manual pré-existente preservado.
+- **Reuso:** `.github/workflows/pr-governed-ci-validation.yml` (CI de PR já existente), acionado por `pull_request` somente quando houver mudanças no agente de sincronização ou nos seus testes; `.github/workflows/pr-quality-review.yml` é consultivo e permanece estritamente manual, conforme gate `validate_path_based_workflow_router.py`.
 - **Admissão:** PR aberta, same-repo, base main/head atuais lidos pela API; dois checkouts em diretórios distintos por SHAs completos; `GITHUB_TOKEN` somente leitura na validação e nas releituras.
 - **Execução:** revisão de risco por script preexistente da main (rejeitar fallback sem HEAD real), pytest da candidata, controle negativo que exige falha com o workflow anterior, digest SHA-256 do recibo em artifact de 30 dias, segunda execução isolada conferindo hash e HEAD/base ao vivo.
 - **Limites:** resultado `TARGETED_TECHNICAL_VALIDATION_PASSED` só comprova esses testes. Não libera merge/deploy, não assina parecer humano e não prova sincronização real da GitHub App (E2E pós-integração ainda pendente).

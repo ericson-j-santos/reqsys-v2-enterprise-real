@@ -521,10 +521,15 @@ def test_guard_test_detects_unprotected_token_in_global_lane() -> None:
 
 
 def test_governance_validator_workflow_is_readonly_and_sha_bound() -> None:
-    source = Path(".github/workflows/pr-quality-review.yml").read_text(encoding="utf-8")
+    advisory = Path(".github/workflows/pr-quality-review.yml").read_text(encoding="utf-8")
+    advisory_trigger = advisory.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in advisory_trigger
+    assert "\n  pull_request:\n" not in advisory_trigger
+    source = Path(".github/workflows/pr-governed-ci-validation.yml").read_text(encoding="utf-8")
     assert "\n  pull_request:\n" in source
     assert '      - ".github/workflows/repository-governance-agent.yml"' in source
-    assert "    if: github.event_name == 'workflow_dispatch'" in source
+    assert "  validate-pr-ci:" in source
+    assert "workflow_dispatch:" in source
     validator = source.split("\n  validator-pr-governance:\n", 1)[1]
     first_job, readback = validator.split("\n  validator-evidence-readback:\n", 1)
     assert "github.event.pull_request.head.repo.full_name == github.repository" in first_job
