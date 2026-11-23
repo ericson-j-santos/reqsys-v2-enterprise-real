@@ -518,3 +518,30 @@ def test_guard_test_detects_unprotected_token_in_global_lane() -> None:
         marker, "      - name: Gerar token temporário de branch sync\n", 1
     )
     assert not _has_readonly_preflight_guard(broken, target)
+
+
+def test_governance_validator_workflow_is_readonly_and_sha_bound() -> None:
+    source = Path(".github/workflows/pr-quality-review.yml").read_text(encoding="utf-8")
+    assert "\n  pull_request:\n" in source
+    assert '      - ".github/workflows/repository-governance-agent.yml"' in source
+    assert "    if: github.event_name == 'workflow_dispatch'" in source
+    validator = source.split("\n  validator-pr-governance:\n", 1)[1]
+    first_job, readback = validator.split("\n  validator-evidence-readback:\n", 1)
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in first_job
+    assert "permissions:\n      contents: read\n      pull-requests: read" in first_job
+    assert "ref: ${{ github.event.pull_request.head.sha }}" in first_job
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in first_job
+    assert "persist-credentials: false" in first_job
+    assert "VALIDATOR_SHA_OR_IDENTITY_DRIFT" in first_job
+    assert "REVIEW_FALLBACK_OR_HEAD_DRIFT" in first_job
+    assert "TRUSTED_BASE_REVIEW_SHA_CONFIRMED" in first_job
+    assert "pytest -q tests/test_repository_governance_agent.py" in first_job
+    assert "BASELINE_UNEXPECTEDLY_ACCEPTED" in first_job
+    assert "TARGETED_TECHNICAL_VALIDATION_PASSED" in first_job
+    assert '"ready_for_merge": False' in first_job
+    assert "retention-days: 30" in first_job
+    assert "sha256sum -c technical-validator.sha256" in readback
+    assert "VALIDATOR_INDEPENDENT_READBACK_OK" in readback
+    assert "contents: write" not in validator
+    assert "issues: write" not in validator
+    assert "pull-requests: write" not in validator

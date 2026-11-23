@@ -2,7 +2,7 @@
   "feature_name": "repository-governance-agent-branch-sync",
   "project": "ReqSys v2 Enterprise — GitHub Governance",
   "created_at": "2026-09-22",
-  "updated_at": "2026-11-19",
+  "updated_at": "2026-11-23",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -13,6 +13,7 @@
   "scope": "github-ci-dev",
   "files": [
     ".github/workflows/repository-governance-agent.yml",
+    ".github/workflows/pr-quality-review.yml",
     "tests/test_repository_governance_agent.py",
     "docs/runbooks/governed-merge-queue.md"
   ],
@@ -20,7 +21,7 @@
     "tests": [
       "tests/test_repository_governance_agent.py"
     ],
-    "evidence_contract": "Antes da validação e emissão de token App, ambos os jobs verificam em somente leitura PR aberta same-repo, estado draft/ci:recuperado, mergeabilidade, base main e behind_by>0. Draft sem recuperação, fork, conflito, base divergente, PR atualizada e ausência de candidatos não pedem token. Falha de comparação bloqueia; operação elegível sem App falha fechada. Releitura HEAD/base antes do push, merge-tree/commit-tree, push não forçado, pós-leitura behind_by=0, nenhum merge/deploy. Testes positivos/negativos e test-of-test em tests/test_repository_governance_agent.py."
+    "evidence_contract": "Antes da validação e emissão de token App, ambos os jobs verificam em somente leitura PR aberta same-repo, estado draft/ci:recuperado, mergeabilidade, base main e behind_by>0. Draft sem recuperação, fork, conflito, base divergente, PR atualizada e ausência de candidatos não pedem token. Falha de comparação bloqueia; operação elegível sem App falha fechada. Releitura HEAD/base antes do push, merge-tree/commit-tree, push não forçado, pós-leitura behind_by=0, nenhum merge/deploy. Testes positivos/negativos e test-of-test em tests/test_repository_governance_agent.py. Revisão técnica SHA-bound usa o PR Quality Review existente em runner isolado com fonte confiável na main, checkouts distintos head/base, API readback fail-closed, testes positivos e negativo contra baseline, recibo com hash e segundo job de leitura independente. Não constitui revisão humana, merge, deploy nem E2E real de sincronização App."
   },
   "risk": {
     "production": false,

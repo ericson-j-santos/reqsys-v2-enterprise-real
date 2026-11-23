@@ -70,3 +70,13 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - PR com gate pendente pode ter branch sincronizada, mas não pode ser integrada na `main` por este agente;
 - leitura independente confirma que nenhuma PR foi integrada pelo `Repository Governance Agent`;
 - nenhuma ação de deploy/promoção é executada.
+
+## Extensão de validação técnica por processo independente — 23/11/2026
+
+- **Classificação:** capacidade adicional ausente no fluxo existente (review automatizado por SHA antes de eventual merge), solicitada pelo proprietário. Não substituir a revisão/identidade do Validator por comentário do autor.
+- **Reuso:** `.github/workflows/pr-quality-review.yml` (não criar outro workflow/serviço), acionado por `pull_request` somente quando houver mudanças no agente de sincronização ou nos seus testes; despacho manual pré-existente preservado.
+- **Admissão:** PR aberta, same-repo, base main/head atuais lidos pela API; dois checkouts em diretórios distintos por SHAs completos; `GITHUB_TOKEN` somente leitura na validação e nas releituras.
+- **Execução:** revisão de risco por script preexistente da main (rejeitar fallback sem HEAD real), pytest da candidata, controle negativo que exige falha com o workflow anterior, digest SHA-256 do recibo em artifact de 30 dias, segunda execução isolada conferindo hash e HEAD/base ao vivo.
+- **Limites:** resultado `TARGETED_TECHNICAL_VALIDATION_PASSED` só comprova esses testes. Não libera merge/deploy, não assina parecer humano e não prova sincronização real da GitHub App (E2E pós-integração ainda pendente).
+- **Aceite deste incremento:** ambos os jobs executados em runners GitHub separados, artifact gerado e relido, HEAD exato do candidato confirmado, casos positivo/negativo e repetição cobertos, nenhuma escrita em main. Se qualquer precondição falhar, falhar fechado.
+- **Custo:** executor GitHub-hosted padrão em repositório público, sem novos serviços. Nenhuma autorização de cota paga, segredos ou ações administrativas.
